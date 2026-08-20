@@ -1418,15 +1418,14 @@ public class QuorumControllerTest {
         ) {
             QuorumController active = controlEnv.activeController();
 
-            // The active controller is always part of the voter set, but it gets a more specific error
-            assertEquals("Controller cannot unregister itself while it is active.",
+            // Controller 0 and 1 are part of the voter set
+            assertEquals("Cannot unregister controller 0 because it is part of the voter set.",
                 assertThrows(ExecutionException.class,
                     () -> active.unregisterController(ANONYMOUS_CONTEXT, 0).get()).getCause().getMessage());
 
-            // Controller 1 is part of the voter set
             assertEquals("Cannot unregister controller 1 because it is part of the voter set.",
-                assertThrows(ExecutionException.class,
-                    () -> active.unregisterController(ANONYMOUS_CONTEXT, 1).get()).getCause().getMessage());
+                    assertThrows(ExecutionException.class,
+                            () -> active.unregisterController(ANONYMOUS_CONTEXT, 1).get()).getCause().getMessage());
 
             // Controller 2 is not part of the voter set, so the voter set check passes
             assertEquals("Controller ID 2 is not currently registered.",

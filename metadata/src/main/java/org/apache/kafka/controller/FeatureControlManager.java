@@ -98,6 +98,7 @@ public class FeatureControlManager {
         }
 
         public FeatureControlManager build() {
+            // set reasonable defaults for fields when this object is built in testing
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (quorumFeatures == null) {

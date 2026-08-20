@@ -117,6 +117,7 @@ public final class QuorumFeatures {
     public boolean equals(Object o) {
         if (o == null || !(o.getClass().equals(QuorumFeatures.class))) return false;
         QuorumFeatures other = (QuorumFeatures) o;
+        // votersSupplier is deliberately excluded from this method
         return nodeId == other.nodeId &&
             localSupportedFeatures.equals(other.localSupportedFeatures);
     }

@@ -23,7 +23,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * Checks if the provided node id is a voter according to the raft client.
+ * Provides the latest set of voters according to the raft client.
  *
  * When the kraft.version == 0, the voter set comes from the {@code controller.quorum.voters}
  * configuration and never changes.

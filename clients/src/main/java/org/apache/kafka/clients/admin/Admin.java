@@ -1711,8 +1711,7 @@ public interface Admin extends AutoCloseable {
      *   <li>{@link org.apache.kafka.common.errors.NotControllerException}
      *   If the request does not arrive at the active controller.</li>
      *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
-     *   If the request tries to unregister the current active controller id or a controller id
-     *   which is part of the voter set.</li>
+     *   If the request tries to unregister a controller id which is part of the voter set.</li>
      *
      * </ul>
      * <p>

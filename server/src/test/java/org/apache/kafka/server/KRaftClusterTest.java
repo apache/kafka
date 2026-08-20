@@ -758,7 +758,7 @@ public class KRaftClusterTest {
                 assertFutureThrows(
                     InvalidRequestException.class,
                     admin.unregisterController(activeId).all(),
-                    "Controller cannot unregister itself while it is active."
+                        "Cannot unregister controller " + activeId + " because it is part of the voter set."
                 );
                 assertFutureThrows(
                     InvalidRequestException.class,
