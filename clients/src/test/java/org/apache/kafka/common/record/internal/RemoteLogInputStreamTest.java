@@ -17,10 +17,12 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -30,6 +32,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RemoteLogInputStreamTest {
@@ -99,7 +103,7 @@ public class RemoteLogInputStreamTest {
         }
 
         try (FileInputStream is = new FileInputStream(file)) {
-            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is);
+            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is, Integer.MAX_VALUE);
 
             RecordBatch firstBatch = logInputStream.nextBatch();
             assertGenericRecordBatchData(args, firstBatch, 0L, 3241324L, firstBatchRecord);
@@ -143,7 +147,7 @@ public class RemoteLogInputStreamTest {
         }
 
         try (FileInputStream is = new FileInputStream(file)) {
-            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is);
+            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is, Integer.MAX_VALUE);
 
             RecordBatch firstBatch = logInputStream.nextBatch();
             assertNoProducerData(firstBatch);
@@ -194,7 +198,7 @@ public class RemoteLogInputStreamTest {
         }
 
         try (FileInputStream is = new FileInputStream(file)) {
-            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is);
+            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is, Integer.MAX_VALUE);
 
             RecordBatch firstBatch = logInputStream.nextBatch();
             assertProducerData(firstBatch, producerId, producerEpoch, baseSequence, false, firstBatchRecords);
@@ -235,6 +239,28 @@ public class RemoteLogInputStreamTest {
             assertGenericRecordBatchData(args, firstBatch, 0L, 100L, firstBatchRecord);
 
             assertNull(logInputStream.nextBatch());
+        }
+    }
+
+    @Test
+    public void testNextBatchThrowsCorruptRecordExceptionWhenSizeExceedsMaxMessageSize() throws IOException {
+        SimpleRecord record = new SimpleRecord(100L, "foo".getBytes());
+
+        File file = tempFile();
+        try (FileRecords fileRecords = FileRecords.open(file)) {
+            fileRecords.append(MemoryRecords.withRecords(MAGIC_VALUE_V2, 0L, Compression.NONE, CREATE_TIME, record));
+            fileRecords.flush();
+        }
+
+        // Corrupt the on-disk size field so that it exceeds a deliberately small maxMessageSize.
+        try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
+            raf.seek(Records.SIZE_OFFSET);
+            raf.writeInt(1000);
+        }
+
+        try (FileInputStream is = new FileInputStream(file)) {
+            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is, 100);
+            assertThrows(CorruptRecordException.class, logInputStream::nextBatch);
         }
     }
 
