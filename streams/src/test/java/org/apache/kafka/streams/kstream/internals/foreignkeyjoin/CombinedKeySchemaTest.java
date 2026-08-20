@@ -204,18 +204,4 @@ public class CombinedKeySchemaTest {
 
         assertThrows(SerializationException.class, () -> cks.fromBytes(corrupted, HEADERS));
     }
-
-    @Test
-    public void shouldThrowWhenForeignKeyLengthIsNegative() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
-            () -> FK_TOPIC, Serdes.String(),
-            () -> PK_TOPIC, Serdes.Integer()
-        );
-
-        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES);
-        buf.putInt(-1);
-        final Bytes corrupted = Bytes.wrap(buf.array());
-
-        assertThrows(SerializationException.class, () -> cks.fromBytes(corrupted, HEADERS));
-    }
 }

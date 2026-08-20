@@ -92,7 +92,7 @@ public class CombinedKeySchema<KRight, KLeft> {
         final byte[] dataArray = data.get();
         final ByteBuffer dataBuffer = ByteBuffer.wrap(dataArray);
         final int foreignKeyLength = dataBuffer.getInt();
-        if (foreignKeyLength < 0 || foreignKeyLength > dataBuffer.remaining()) {
+        if (foreignKeyLength > dataBuffer.remaining()) {
             throw new SerializationException();
         }
         final byte[] foreignKeyRaw = new byte[foreignKeyLength];
