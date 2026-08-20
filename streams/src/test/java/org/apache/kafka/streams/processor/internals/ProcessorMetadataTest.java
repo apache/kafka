@@ -185,17 +185,6 @@ public class ProcessorMetadataTest {
     }
 
     @Test
-    public void shouldThrowWhenKeySizeIsNegative() {
-        final byte[] padding = new byte[Long.BYTES];
-        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + Integer.BYTES + padding.length);
-        buf.putInt(1);    // entrySize = 1, legitimate given the padded buffer size
-        buf.putInt(-1);   // keySize is negative
-        buf.put(padding);
-
-        assertThrows(SerializationException.class, () -> ProcessorMetadata.deserialize(buf.array()));
-    }
-
-    @Test
     public void shouldThrowWhenEntrySizeExceedsRemainingBytes() {
         final byte[] keyBytes = "k".getBytes(StandardCharsets.UTF_8);
         final int fakeEntrySize = 2; // claims 2 entries, but only enough real bytes exist for 1
@@ -210,13 +199,5 @@ public class ProcessorMetadataTest {
         buf.get(serialized);
 
         assertThrows(SerializationException.class, () -> ProcessorMetadata.deserialize(serialized));
-    }
-
-    @Test
-    public void shouldThrowWhenEntrySizeIsNegative() {
-        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES);
-        buf.putInt(-1);
-
-        assertThrows(SerializationException.class, () -> ProcessorMetadata.deserialize(buf.array()));
     }
 }

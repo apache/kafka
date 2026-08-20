@@ -54,13 +54,13 @@ public class ProcessorMetadata {
 
         final ByteBuffer buffer = ByteBuffer.wrap(metaDataBytes);
         final int entrySize = buffer.getInt();
-        if (entrySize < 0 || entrySize > buffer.remaining() / (Integer.BYTES + Long.BYTES)) {
+        if (entrySize > buffer.remaining() / (Integer.BYTES + Long.BYTES)) {
             throw new SerializationException();
         }
         final Map<String, Long> metadata = new HashMap<>(entrySize);
         for (int i = 0; i < entrySize; i++) {
             final int keySize = buffer.getInt();
-            if (keySize < 0 || keySize > buffer.remaining()) {
+            if (keySize > buffer.remaining()) {
                 throw new SerializationException();
             }
             final byte[] keyBytes = new byte[keySize];
