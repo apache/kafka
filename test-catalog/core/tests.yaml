@@ -956,10 +956,6 @@ kafka.network.DynamicConnectionQuotaTest:
 - testDynamicListenerConnectionQuota
 kafka.network.DynamicNumNetworkThreadsTest:
 - testDynamicNumNetworkThreads
-kafka.network.RequestConvertToJsonTest:
-- testRequestDesc
-- testRequestDescMetrics
-- testRequestHeaderNode
 kafka.network.SocketServerTest:
 - closingChannelSendFailure
 - closingChannelWithBufferedReceivesFailedSend

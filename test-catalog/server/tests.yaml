@@ -11,6 +11,9 @@ org.apache.kafka.network.RequestConvertToJsonTest:
 - testAllRequestTypesHandled
 - testAllResponseTypesHandled
 - testClientInfoNode
+- testRequestDesc
+- testRequestDescMetrics
+- testRequestHeaderNode
 org.apache.kafka.network.RequestTest:
 - testAlterRequests
 - testBuildEnvelopeResponse
