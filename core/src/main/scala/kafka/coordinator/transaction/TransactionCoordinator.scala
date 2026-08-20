@@ -716,6 +716,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     Note:
     PF = PRODUCER_FENCED
     ITS = INVALID_TXN_STATE
+    IPE = INVALID_PRODUCER_EPOCH
     NONE = No error and no epoch bump
     EB = No error and epoch bump
 
@@ -738,10 +739,17 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     +----------------+-------+---------+-------+---------+
     | Empty          | PF    | EB      | PF    | ITS     |
     +----------------+-------+---------+-------+---------+
-    | CompleteAbort  | NONE  | EB      | ITS   | ITS     |
+    | CompleteAbort  | NONE  | EB      | IPE   | ITS     |
     +----------------+-------+---------+-------+---------+
     | CompleteCommit | ITS   | EB      | NONE  | ITS     |
     +----------------+-------+---------+-------+---------+
+
+    CompleteAbort + Commit + Retry returns IPE rather than ITS because the coordinator may abort an open
+    transaction on its own (e.g. when it exceeds transaction.timeout.ms), bumping the epoch without the
+    producer's knowledge. A commit that was already in flight when such an abort completed arrives with the
+    pre-abort epoch and is indistinguishable from a retry. The commit is guaranteed not to have taken effect,
+    so the recoverable INVALID_PRODUCER_EPOCH is returned, matching the transaction V1 behavior for this race,
+    instead of the fatal INVALID_TXN_STATE (KAFKA-20785).
    */
 
   /**
@@ -880,7 +888,19 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     generateTxnTransitMetadataForTxnCompletion(TransactionState.PREPARE_ABORT, true)
                 } else {
                   // Commit.
-                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  if (isRetry) {
+                    // The commit raced with an abort the producer did not request (e.g. the coordinator aborted the
+                    // transaction after transaction.timeout.ms elapsed) and lost: the abort bumped the epoch, so the
+                    // commit arrives with the pre-abort epoch. The commit is guaranteed not to have taken effect, so
+                    // return the recoverable INVALID_PRODUCER_EPOCH, matching the transaction V1 behavior for this
+                    // race, rather than the fatal INVALID_TXN_STATE (KAFKA-20785).
+                    info(s"TransactionalId: $transactionalId's state is ${txnMetadata.state}, but received a COMMIT at " +
+                      s"the pre-abort epoch $producerEpoch. The transaction was likely aborted by the coordinator on " +
+                      s"timeout while the commit was in flight. Returning ${Errors.INVALID_PRODUCER_EPOCH}.")
+                    Left(Errors.INVALID_PRODUCER_EPOCH)
+                  } else {
+                    logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  }
                 }
               case TransactionState.PREPARE_COMMIT =>
                 if (txnMarkerResult == TransactionResult.COMMIT)
