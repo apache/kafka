@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -175,5 +176,45 @@ public class ChangedSerdeTest {
         assertThat(serialized, is(notNullValue()));
         final Change<String> deserialized = CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, serialized);
         assertThat(deserialized, is(data));
+    }
+
+    @Test
+    public void shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag2() {
+        final byte[] newData = STRING_SERIALIZER.serialize(TOPIC, nonNullNewValue);
+        final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, nonNullOldValue);
+        final int fakeNewDataLength = newData.length + oldData.length + ENCODING_FLAG_SIZE + 1; // one past what the buffer can actually back
+
+        final int capacity = MAX_VARINT_LENGTH + newData.length + oldData.length + ENCODING_FLAG_SIZE;
+        final ByteBuffer buf = ByteBuffer.allocate(capacity);
+        ByteUtils.writeVarint(fakeNewDataLength, buf);
+        buf.put(newData).put(oldData).put((byte) 2);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(
+            SerializationException.class,
+            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, serialized)
+        );
+    }
+
+    @Test
+    public void shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag5() {
+        final byte[] newData = STRING_SERIALIZER.serialize(TOPIC, nonNullNewValue);
+        final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, nonNullOldValue);
+        final int fakeNewDataLength = newData.length + oldData.length + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE + 1;
+
+        final int capacity = MAX_VARINT_LENGTH + newData.length + oldData.length + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE;
+        final ByteBuffer buf = ByteBuffer.allocate(capacity);
+        ByteUtils.writeVarint(fakeNewDataLength, buf);
+        buf.put(newData).put(oldData).put((byte) 1).put((byte) 5);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(
+            SerializationException.class,
+            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, serialized)
+        );
     }
 }
