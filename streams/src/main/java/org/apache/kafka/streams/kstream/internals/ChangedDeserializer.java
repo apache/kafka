@@ -82,7 +82,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             }
             case (byte) 2: {
                 final int newDataLength = ByteUtils.readVarint(buffer);
-                if (newDataLength < 0 || newDataLength > buffer.remaining()) {
+                if (newDataLength > buffer.remaining()) {
                     throw new SerializationException();
                 }
                 newData = new byte[newDataLength];
@@ -112,7 +112,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             }
             case (byte) 5: {
                 final int newDataLength = ByteUtils.readVarint(buffer);
-                if (newDataLength < 0 || newDataLength > buffer.remaining()) {
+                if (newDataLength > buffer.remaining()) {
                     throw new SerializationException();
                 }
                 newData = new byte[newDataLength];
