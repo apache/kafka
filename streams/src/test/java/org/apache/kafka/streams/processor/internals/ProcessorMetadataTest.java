@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.Test;
@@ -25,6 +29,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ProcessorMetadataTest {
@@ -159,5 +164,39 @@ public class ProcessorMetadataTest {
 
         assertEquals(metadata1, metadata2);
         assertEquals(metadata1.hashCode(), metadata2.hashCode());
+    }
+
+    @Test
+    public void shouldThrowWhenKeySizeExceedsRemainingBytes() {
+        final byte[] keyBytes = "key1".getBytes(StandardCharsets.UTF_8);
+        final int fakeKeySize = keyBytes.length + Long.BYTES + 1; // one past what's actually left for this entry
+
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + Integer.BYTES + keyBytes.length + Long.BYTES);
+        buf.putInt(1);              // entrySize = 1, legitimate
+        buf.putInt(fakeKeySize);    // keySize is too large
+        buf.put(keyBytes);
+        buf.putLong(1L);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(SerializationException.class, () -> ProcessorMetadata.deserialize(serialized));
+    }
+
+    @Test
+    public void shouldThrowWhenEntrySizeExceedsRemainingBytes() {
+        final byte[] keyBytes = "k".getBytes(StandardCharsets.UTF_8);
+        final int fakeEntrySize = 2; // claims 2 entries, but only enough real bytes exist for 1
+
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + Integer.BYTES + keyBytes.length + Long.BYTES);
+        buf.putInt(fakeEntrySize);    // entrySize too large
+        buf.putInt(keyBytes.length);  // keySize for the one real entry that follows
+        buf.put(keyBytes);
+        buf.putLong(1L);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(SerializationException.class, () -> ProcessorMetadata.deserialize(serialized));
     }
 }
