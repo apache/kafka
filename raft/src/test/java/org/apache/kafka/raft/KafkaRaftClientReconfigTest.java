@@ -2495,7 +2495,7 @@ public class KafkaRaftClientReconfigTest {
             .build();
 
         // waiting for FETCH requests until the UpdateRaftVoter request is sent
-        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), context.fetchTimeoutMs - 1, true);
+        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), true);
 
         context.pollUntilRequest();
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(
@@ -2548,7 +2548,7 @@ public class KafkaRaftClientReconfigTest {
             .build();
 
         // waiting for FETCH request until the UpdateRaftVoter request is set
-        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), context.fetchTimeoutMs - 1, true);
+        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), true);
 
         context.pollUntilRequest();
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(
@@ -2619,7 +2619,7 @@ public class KafkaRaftClientReconfigTest {
             .build();
 
         // waiting for FETCH request until the UpdateRaftVoter request is set
-        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), context.fetchTimeoutMs - 1, true);
+        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), true);
 
         context.pollUntilRequest();
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(
@@ -2647,7 +2647,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilResponse();
 
         // waiting for FETCH request until the UpdateRaftVoter request is set
-        context.advanceTimeAndCompleteFetch(newEpoch, voter1.id(), context.fetchTimeoutMs - 1, true);
+        context.advanceTimeAndCompleteFetch(newEpoch, voter1.id(), true);
 
         context.pollUntilRequest();
         updateRequest = context.assertSentUpdateVoterRequest(
@@ -2949,7 +2949,7 @@ public class KafkaRaftClientReconfigTest {
             .build();
 
         // waiting for FETCH request until the UpdateRaftVoter request is set
-        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), context.fetchTimeoutMs - 1, true);
+        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), true);
 
         // update voter should not be sent because the local listener is not different from the voter set
         context.pollUntilRequest();
@@ -2990,7 +2990,7 @@ public class KafkaRaftClientReconfigTest {
             .build();
 
         // waiting up to the last FETCH request before the UpdateRaftVoter request is set
-        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), context.fetchTimeoutMs - 1, false);
+        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), false);
 
         // expect one last FETCH request
         context.pollUntilRequest();
@@ -3051,7 +3051,7 @@ public class KafkaRaftClientReconfigTest {
             .build();
 
         // waiting for FETCH request until the UpdateRaftVoter request is set
-        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), context.fetchTimeoutMs - 1, true);
+        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), true);
 
         context.pollUntilRequest();
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(

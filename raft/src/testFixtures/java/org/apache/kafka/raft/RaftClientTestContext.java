@@ -1009,56 +1009,78 @@ public final class RaftClientTestContext {
     }
 
     /**
-     * Advance time and complete an empty fetch to reset the fetch timer.
-     * This is used to expire the update voter set timer without also expiring the fetch timer,
-     * which is needed for add, remove, and update voter tests.
-     * For voters and observers, polling after exiting this method expires the update voter set timer.
+     * Advance time far enough to expire the follower's update voter set period timer without also
+     * expiring its fetch timer, which is needed for add, remove, and update voter tests. For voters
+     * and observers, polling after exiting this method (with {@code expireUpdateVoterSetTimer} true)
+     * sends the pending add, remove, or update voter request.
      *
-     * For subsequent calls of this method that intend to also expire the update voter set timer,
-     * the initial sleep time must be less than what was previously used.
-     * This avoids expiring the fetch timer, but will expire the update voter set timer.
+     * <p>The update voter set period is {@code NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD}
+     * times the fetch timeout, so it spans several fetch intervals. Time is advanced in steps that
+     * are each just shorter than the follower's <em>remaining</em> fetch time, completing an empty
+     * fetch after each step to reset the fetch timer. Because the step is derived from the remaining
+     * fetch time, the fetch timer never expires regardless of how much was left on it when this
+     * method was called (for example on a subsequent call, when a previous call left it partly
+     * consumed), and the first step is long enough to let any in-flight request from a previous call
+     * time out. Keeping the fetch timer alive matters because its expiry would move the replica out
+     * of the Follower state (an observer to Unattached) before it can send its voter request.
      *
      * @param epoch - the current epoch
      * @param leaderId - the leader id
-     * @param initialSleepMs - the initial sleep time before the first fetch, which should
-     *                       be less than the fetch timeout to avoid expiring the fetch timer
-     * @param expireUpdateVoterSetTimer - if true, advance time again to expire this timer
+     * @param expireUpdateVoterSetTimer - if true, advance the final millisecond to expire the timer
      */
     void advanceTimeAndCompleteFetch(
         int epoch,
         int leaderId,
-        int initialSleepMs,
         boolean expireUpdateVoterSetTimer
     ) throws Exception {
-        for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD; i++) {
-            time.sleep(initialSleepMs);
-            pollUntilRequest();
-            final var fetchRequest = assertSentFetchRequest();
-            assertFetchRequestData(
-                fetchRequest,
-                epoch,
-                log.endOffset().offset(),
-                log.lastFetchedEpoch(),
-                client.highWatermark()
-            );
-
-            deliverResponse(
-                fetchRequest.correlationId(),
-                fetchRequest.destination(),
-                fetchResponse(
-                    epoch,
-                    leaderId,
-                    MemoryRecords.EMPTY,
-                    log.endOffset().offset(),
-                    Errors.NONE
-                )
-            );
-            // poll kraft to handle the fetch response
-            client.poll();
+        long remainingPeriodMs =
+            (long) NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD * fetchTimeoutMs - 1;
+        while (remainingPeriodMs > 0) {
+            long remainingFetchMs = client
+                .quorum()
+                .followerStateOrThrow()
+                .remainingFetchTimeMs(time.milliseconds());
+            // Never sleep all the way to the fetch timeout, so the fetch timer cannot expire.
+            long sleepMs = Math.min(remainingPeriodMs, remainingFetchMs - 1);
+            time.sleep(sleepMs);
+            remainingPeriodMs -= sleepMs;
+            if (remainingPeriodMs > 0) {
+                completeEmptyFetch(epoch, leaderId);
+            }
         }
         if (expireUpdateVoterSetTimer) {
-            time.sleep(fetchTimeoutMs - initialSleepMs);
+            time.sleep(1);
         }
+    }
+
+    /**
+     * Poll for a fetch request and reply with an empty, successful fetch response. This resets the
+     * follower's fetch timer but not its update voter set period timer.
+     */
+    private void completeEmptyFetch(int epoch, int leaderId) throws Exception {
+        pollUntilRequest();
+        final var fetchRequest = assertSentFetchRequest();
+        assertFetchRequestData(
+            fetchRequest,
+            epoch,
+            log.endOffset().offset(),
+            log.lastFetchedEpoch(),
+            client.highWatermark()
+        );
+
+        deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            fetchResponse(
+                epoch,
+                leaderId,
+                MemoryRecords.EMPTY,
+                log.endOffset().offset(),
+                Errors.NONE
+            )
+        );
+        // poll kraft to handle the fetch response
+        client.poll();
     }
 
     List<RaftRequest.Outbound> assertSentBeginQuorumEpochRequest(int epoch, Set<Integer> destinationIds) {
