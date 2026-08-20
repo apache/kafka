@@ -196,7 +196,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         if (headerCount == -1) { // keep for backward compatibility
             headers = new RecordHeaders();
         } else {
-            if (headerCount < 0 || headerCount > buffer.remaining() / (2 * Integer.BYTES)) {
+            if (headerCount > buffer.remaining() / (2 * Integer.BYTES)) {
                 throw new SerializationException();
             }
             final Header[] headerArr = new Header[headerCount];

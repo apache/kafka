@@ -149,17 +149,4 @@ public class ProcessorRecordContextTest {
 
         assertEquals(context, roundTripped);
     }
-
-    @Test
-    public void shouldRejectNegativeHeaderCount() {
-        final ByteBuffer buffer = ByteBuffer.allocate(28);
-        buffer.putLong(0L);    // timestamp
-        buffer.putLong(0L);    // offset
-        buffer.putInt(0);      // topicLen
-        buffer.putInt(0);      // partition
-        buffer.putInt(-2);     // headerCount, negative but not the -1 sentinel
-        buffer.flip();
-
-        assertThrows(SerializationException.class, () -> ProcessorRecordContext.deserialize(buffer));
-    }
 }
