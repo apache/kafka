@@ -2829,6 +2829,11 @@ public class FetcherTest {
         LogContext logContext = new LogContext();
         buildDependencies(new MetricConfig(), Long.MAX_VALUE, new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST), logContext);
 
+        // Replace the Mockito spy from buildDependencies() with a plain instance: sendFetches()/poll() below
+        // are called on every spin of a tight busy-wait, and the per-call cost of Mockito's real-method
+        // interception on that many invocations can make a run slow enough to hit GC overhead limits.
+        consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, Integer.MAX_VALUE);
+
         IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
 
         offsetFetcher = new OffsetFetcher(logContext,
@@ -2941,6 +2946,8 @@ public class FetcherTest {
                         }
                         client.respondToRequest(request, FetchResponse.of(Errors.NONE, 0, 123, responseMap, List.of()));
                         consumerClient.poll(time.timer(0));
+                    } else {
+                        Thread.onSpinWait();
                     }
                 }
             }
@@ -2949,7 +2956,8 @@ public class FetcherTest {
         Map<TopicPartition, Long> nextFetchOffsets = topicPartitions.stream()
                 .collect(Collectors.toMap(Function.identity(), t -> 0L));
         while (fetchesRemaining.get() > 0 && !future.isDone()) {
-            if (sendFetches() == 1) {
+            boolean madeProgress = sendFetches() == 1;
+            if (madeProgress) {
                 synchronized (consumerClient) {
                     consumerClient.poll(time.timer(0));
                 }
@@ -2957,6 +2965,7 @@ public class FetcherTest {
             if (fetcher.hasCompletedFetches()) {
                 Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
                 if (!fetchedRecords.isEmpty()) {
+                    madeProgress = true;
                     fetchesRemaining.decrementAndGet();
                     fetchedRecords.forEach((tp, records) -> {
                         assertEquals(2, records.size());
@@ -2967,6 +2976,8 @@ public class FetcherTest {
                     });
                 }
             }
+            if (!madeProgress)
+                Thread.onSpinWait();
         }
         assertEquals(0, future.get());
     }
