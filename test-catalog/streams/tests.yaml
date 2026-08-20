@@ -736,6 +736,8 @@ org.apache.kafka.streams.kstream.internals.ChangedSerdeTest:
 - shouldSerializeAndDeserializeChangeWithNonNullNewValueAndNullOldValue
 - shouldSerializeAndDeserializeChangeWithNullNewValueAndNonNullOldValue
 - shouldThrowErrorIfEncountersAnUnknownByteValueForOldNewFlag
+- shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag2
+- shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag5
 org.apache.kafka.streams.kstream.internals.CogroupedKStreamImplTest:
 - shouldAllowDifferentOutputTypeInCoGroup
 - shouldCoGroupStreamsWithDifferentInputTypes
@@ -1591,6 +1593,7 @@ org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchemaTest:
 - shouldPassHeadersToUnderlyingDeserializersOnFromBytes
 - shouldPassHeadersToUnderlyingSerializerOnPrefixBytes
 - shouldPassHeadersToUnderlyingSerializersOnToBytes
+- shouldThrowWhenForeignKeyLengthExceedsRemainingBytes
 org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignTableJoinProcessorSupplierTests:
 - shouldIgnoreRecordWithNullKey
 - shouldNotMatchForeignKeysHavingThisFKAsPrefix
@@ -2309,6 +2312,8 @@ org.apache.kafka.streams.processor.internals.ProcessorMetadataTest:
 - shouldDeserializeNull
 - shouldNotUseCommitFlagForHashcodeAndEquals
 - shouldSerializeAndDeserialize
+- shouldThrowWhenEntrySizeExceedsRemainingBytes
+- shouldThrowWhenKeySizeExceedsRemainingBytes
 - shouldUpdate
 - shouldUpdateCommitFlag
 org.apache.kafka.streams.processor.internals.ProcessorNodeTest:
@@ -2332,12 +2337,14 @@ org.apache.kafka.streams.processor.internals.ProcessorNodeTest:
 - testTopologyLevelClassCastExceptionDirect
 - testTopologyLevelConfigException
 org.apache.kafka.streams.processor.internals.ProcessorRecordContextTest:
+- shouldDeserializeValidHeaderCountWithoutRejecting
 - shouldEstimateEmptyHeaderAsZeroLength
 - shouldEstimateHeadersLength
 - shouldEstimateNullTopicAndEmptyHeadersAsZeroLength
 - shouldEstimateNullValueInHeaderAsZero
 - shouldEstimateTopicLength
 - shouldNotAllowNullHeaders
+- shouldRejectHeaderCountLargerThanRemainingBuffer
 org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldBeAbleToCloseWithoutRegisteringAnyStores
 - shouldClearStoreCache

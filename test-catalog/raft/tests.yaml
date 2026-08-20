@@ -246,6 +246,8 @@ org.apache.kafka.raft.KafkaRaftClientSnapshotTest:
 - testFetchSnapshotRequestWithNewerEpoch
 - testFetchSnapshotRequestWithOlderEpoch
 - testFetchSnapshotRequestWithPartialData
+- testFetchSnapshotRequestWithoutPartitions
+- testFetchSnapshotRequestWithoutTopics
 - testFetchSnapshotResponseFromNewerEpochLeader
 - testFetchSnapshotResponseFromNewerEpochNotLeader
 - testFetchSnapshotResponseFromOlderEpoch
@@ -608,6 +610,8 @@ org.apache.kafka.raft.RaftUtilTest:
 - testAddVoterResponse
 - testErrorResponse
 - testFetchRequestV17Compatibility
+- testHasValidTopicPartitionFetchSnapshotRequest
+- testHasValidTopicPartitionFetchSnapshotResponse
 - testRemoveVoterResponse
 - testSingletonBeginQuorumEpochRequestForAllVersion
 - testSingletonBeginQuorumEpochResponseForAllVersion
