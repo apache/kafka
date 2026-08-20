@@ -147,6 +147,11 @@ public final class ClientUtils {
         if (bootstrapResolveTimeoutMs == 0L) {
             return BootstrapConfiguration.DISABLED;
         }
+        log.info(
+            "Asynchronous bootstrap DNS resolution is enabled via {}={}. This evolving feature may undergo compatibility-breaking changes in a minor release.", 
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, 
+            bootstrapResolveTimeoutMs
+        );
         return BootstrapConfiguration.enabled(
             bootstrapServers,
             ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
