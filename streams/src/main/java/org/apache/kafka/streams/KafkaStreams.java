@@ -463,6 +463,8 @@ public class KafkaStreams implements AutoCloseable {
      * <p>
      * Note, this handler must be thread safe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
+     * Using {@link KafkaStreams#close()} within same thread as the Handler call-back will result in a deadlock,
+     * either set a flag and move {@code close()} outside or place it using a timeout {@link KafkaStreams#close(Duration)}
      *
      * @param userStreamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads
      * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
