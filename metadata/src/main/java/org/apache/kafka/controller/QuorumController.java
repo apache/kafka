@@ -505,7 +505,7 @@ public final class QuorumController implements Controller {
         }
 
         /**
-         * Checks if a node id is registered as a broker, controller in static/dynamic quorum.
+         * Checks if a node id is known to the controller, from registrations or the voter set.
          */
         private boolean isNodeIdKnown(int nodeId) {
             if (clusterControl.brokerRegistrations().containsKey(nodeId)) {
