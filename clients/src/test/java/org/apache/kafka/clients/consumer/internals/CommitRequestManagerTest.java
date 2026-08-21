@@ -732,6 +732,18 @@ public class CommitRequestManagerTest {
     }
 
     @Test
+    public void testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+
+        time.sleep(100);
+        long result = commitRequestManager.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 when the coordinator is unknown to avoid a busy-spin; got " + result);
+        assertEquals(100, result);
+    }
+
+    @Test
     public void testOffsetFetchRequestEnsureDuplicatedRequestSucceed() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));

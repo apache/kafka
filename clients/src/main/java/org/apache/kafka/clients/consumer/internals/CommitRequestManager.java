@@ -221,7 +221,19 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
-        return autoCommitState.map(ac -> ac.remainingMs(currentTimeMs)).orElse(Long.MAX_VALUE);
+        if (autoCommitState.isEmpty()) {
+            return Long.MAX_VALUE;
+        }
+        AutoCommitState autocommit = autoCommitState.get();
+        // An auto-commit is only sent when the coordinator is known; poll() returns EMPTY otherwise.
+        // If the coordinator is unavailable (e.g. bootstrap DNS resolution is still in progress),
+        // falling through to the timer-based remainingMs() would return 0 once the auto-commit interval
+        // elapses, since the auto-commit timer remains permanently expired. This would cause both the
+        // application and network threads to busy-spin.
+        if (coordinatorRequestManager.coordinator().isEmpty()) {
+            return autocommit.autoCommitIntervalMs();
+        }
+        return autocommit.remainingMs(currentTimeMs);
     }
 
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
@@ -1563,6 +1575,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         public void setInflightCommitStatus(final boolean inflightCommitStatus) {
             this.hasInflightCommit = inflightCommitStatus;
+        }
+
+        public long autoCommitIntervalMs() {
+            return autoCommitInterval;
         }
     }
 
