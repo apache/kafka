@@ -31,7 +31,6 @@ class StreamsTopologyDescriptionPluginTest(Test):
     PUSH_REQUESTED_LOG = "Broker requested topology description push"
     PUSH_SENDING_LOG = "Sending topology description for group"
     PUSH_SUCCESS_LOG = "Topology description pushed successfully"
-    PUSH_FAILED_LOG = "Topology description push failed with non-retriable exception"
     STREAMS_RUNNING_LOG = "State transition from REBALANCING to RUNNING"
     BROKER_SOLICITED_LOG = "Requested topology description push at topology epoch"
     BROKER_LOG_FILE = "%s/server.log" % KafkaService.OPERATIONAL_LOG_INFO_DIR
@@ -230,7 +229,6 @@ class StreamsTopologyDescriptionPluginTest(Test):
         self.setup_kafka(plugin_enabled=True)
         processor1 = StreamsTopologyDescriptionPluginService(self.test_context, self.kafka)
         processor2 = StreamsTopologyDescriptionPluginService(self.test_context, self.kafka)
-        
         with processor1.node.account.monitor_log(processor1.LOG_FILE) as monitor1, \
              processor2.node.account.monitor_log(processor2.LOG_FILE) as monitor2:
             processor1.start()
