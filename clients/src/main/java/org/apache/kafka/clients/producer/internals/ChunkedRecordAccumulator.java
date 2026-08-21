@@ -152,7 +152,6 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     effectivePartition = partition;
                 }
                 setPartition(callbacks, effectivePartition);
-
                 TopicPartition tp = new TopicPartition(topic, effectivePartition);
                 Deque<ProducerBatch> dq = topicInfo.batches.computeIfAbsent(tp, k -> new ArrayDeque<>());
                 RecordAppendResult appendResult;
@@ -224,7 +223,6 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         extensionChunks = null;
                         continue;
                     }
-
                     if (extensionChunks != null) {
                         ProducerBatch last = dq.peekLast();
                         // The batch may have changed while allocateChunks was off-lock: drained and
