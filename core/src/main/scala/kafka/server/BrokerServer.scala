@@ -79,7 +79,7 @@ import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
 
-private class InitialDynamicBrokerConfigPublisher(config: KafkaConfig) extends MetadataPublisher {
+private[server] class InitialDynamicBrokerConfigPublisher(config: KafkaConfig) extends MetadataPublisher {
   val firstPublishFuture = new CompletableFuture[Void]
 
   override def name(): String = s"InitialDynamicBrokerConfigPublisher id=${config.nodeId}"
@@ -98,7 +98,6 @@ private class InitialDynamicBrokerConfigPublisher(config: KafkaConfig) extends M
     } catch {
       case t: Throwable =>
         firstPublishFuture.completeExceptionally(t)
-        throw t
     }
   }
 }
