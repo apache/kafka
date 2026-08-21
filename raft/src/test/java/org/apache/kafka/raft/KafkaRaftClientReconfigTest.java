@@ -346,16 +346,21 @@ public class KafkaRaftClientReconfigTest {
         );
 
         prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
+        assertEquals(Set.of(local.id(), follower.id()), context.client.latestVoterSet().voterIds());
 
         // Attempt to add new voter to the quorum
         context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
-
         completeApiVersions(context, newVoter, newAddress);
 
         // Handle the API_VERSIONS response
         context.poll();
         // Append new VotersRecord to log
         context.poll();
+
+        assertEquals(
+            Set.of(local.id(), follower.id(), newVoter.id()),
+            context.client.latestVoterSet().voterIds()
+        );
 
         commitNewVoterSetForAddVoter(context, local, follower, newVoter, epoch);
 
