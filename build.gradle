@@ -30,7 +30,7 @@ buildscript {
 }
 
 plugins {
-  id 'io.github.ben-manes.versions' version '0.56.0'
+  id 'io.github.ben-manes.versions' version '0.61.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
@@ -38,10 +38,10 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.5.9' apply false
+  id "com.github.spotbugs" version '6.5.10' apply false
   id 'org.scoverage' version '9.1' apply false
   id 'com.gradleup.shadow' version '9.6.1' apply false
-  id 'com.diffplug.spotless' version "8.4.0"
+  id 'com.diffplug.spotless' version "8.10.0"
 
   // Pre-register the KIP-1265 checker so `apply plugin:` resolves it inside subprojects { }.
   // The plugin itself ships from the `:api-checker` included build (see settings.gradle's
@@ -2204,6 +2204,14 @@ project(':clients:clients-integration-tests') {
     archivesName = "kafka-clients-integration-tests"
   }
 
+  configurations {
+    // To prevent a UniqueResourceException due the same resource existing in both
+    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
+    testImplementation.exclude module: 'api-ldap-schema-data'
+    testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+  }
+
   dependencies {
     testImplementation libs.metrics
     testImplementation libs.slf4jApi
@@ -2212,6 +2220,7 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':metadata')
     testImplementation project(':raft')
     testImplementation project(':server')
+    testImplementation testFixtures(project(':server'))
     testImplementation project(':storage')
     testImplementation testFixtures(project(':storage'))
     testImplementation testFixtures(project(':clients'))
@@ -2222,6 +2231,18 @@ project(':clients:clients-integration-tests') {
     implementation project(':transaction-coordinator')
     testImplementation project(':test-common:test-common-util')
 
+    testImplementation libs.bcpkix
+    testImplementation(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+      exclude module: 'mina-core'
+    }
+    testImplementation libs.apachedsCoreApi
+    testImplementation libs.apachedsInterceptorKerberos
+    testImplementation libs.apachedsProtocolShared
+    testImplementation libs.apachedsProtocolKerberos
+    testImplementation libs.apachedsProtocolLdap
+    testImplementation libs.apachedsLdifPartition
+    testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
 
     testRuntimeOnly runtimeTestLibs
@@ -3131,7 +3152,6 @@ project(':streams:examples') {
     testImplementation project(':streams:test-utils')
     testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
-    testImplementation libs.hamcrest
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
