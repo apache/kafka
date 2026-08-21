@@ -19,6 +19,10 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
+import org.apache.kafka.common.message.AddRaftVoterRequestDataJsonConverter;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestDataJsonConverter;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
@@ -39,6 +43,7 @@ import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotRequestDataJsonConverter;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseDataJsonConverter;
+import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteRequestDataJsonConverter;
 import org.apache.kafka.common.message.VoteResponseData;
@@ -67,7 +72,10 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RaftUtilTest {
 
@@ -619,6 +627,84 @@ public class RaftUtilTest {
         );
         JsonNode json = DescribeQuorumResponseDataJsonConverter.write(describeQuorumResponseData, version);
         assertEquals(expectedJson, json.toString());
+    }
+
+    @Test
+    public void testHasValidTopicPartitionFetchSnapshotRequest() {
+        FetchSnapshotRequestData data = RaftUtil.singletonFetchSnapshotRequest(
+            clusterId,
+            ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
+            topicPartition,
+            1,
+            new OffsetAndEpoch(10, 1),
+            1000,
+            10
+        );
+        assertTrue(RaftUtil.hasValidTopicPartition(data));
+
+        data.topics().get(0).setPartitions(List.of());
+        assertFalse(RaftUtil.hasValidTopicPartition(data));
+
+        data.setTopics(List.of());
+        assertFalse(RaftUtil.hasValidTopicPartition(data));
+    }
+
+    @Test
+    public void testHasValidTopicPartitionFetchSnapshotResponse() {
+        FetchSnapshotResponseData data = RaftUtil.singletonFetchSnapshotResponse(
+            listenerName,
+            (short) 0,
+            topicPartition,
+            1,
+            Endpoints.fromInetSocketAddresses(Map.of(listenerName, address)),
+            responsePartitionSnapshot -> responsePartitionSnapshot
+        );
+        assertTrue(RaftUtil.hasValidTopicPartition(data));
+
+        data.topics().get(0).setPartitions(List.of());
+        assertFalse(RaftUtil.hasValidTopicPartition(data));
+
+        data.setTopics(List.of());
+        assertFalse(RaftUtil.hasValidTopicPartition(data));
+    }
+
+    @Test
+    public void testAddRaftVoterRequestAckWhenCommittedNotIgnorable() {
+        AddRaftVoterRequestData request = new AddRaftVoterRequestData()
+            .setClusterId("test-cluster")
+            .setTimeoutMs(1000)
+            .setVoterId(1)
+            .setVoterDirectoryId(Uuid.randomUuid()); // field only exists in v1+
+
+        // Attempt to serialize to version 0, which does not support ackWhenCommitted
+        assertThrows(
+            UnsupportedVersionException.class,
+            () -> AddRaftVoterRequestDataJsonConverter.write(request, (short) 0)
+        );
+    }
+
+    @Test
+    public void testAddVoterResponse() {
+        for (Errors error : Errors.values()) {
+            AddRaftVoterResponseData addRaftVoterResponseData = RaftUtil.addVoterResponse(error, null);
+            assertEquals(error.code(), addRaftVoterResponseData.errorCode());
+            if (Errors.NONE.equals(error))
+                assertNull(addRaftVoterResponseData.errorMessage());
+            else
+                assertEquals(error.message(), addRaftVoterResponseData.errorMessage());
+        }
+    }
+
+    @Test
+    public void testRemoveVoterResponse() {
+        for (Errors error : Errors.values()) {
+            RemoveRaftVoterResponseData removeRaftVoterResponseData = RaftUtil.removeVoterResponse(error, null);
+            assertEquals(error.code(), removeRaftVoterResponseData.errorCode());
+            if (Errors.NONE.equals(error))
+                assertNull(removeRaftVoterResponseData.errorMessage());
+            else
+                assertEquals(error.message(), removeRaftVoterResponseData.errorMessage());
+        }
     }
 
     private Records createRecords() {
