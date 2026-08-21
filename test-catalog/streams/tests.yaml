@@ -2448,6 +2448,7 @@ org.apache.kafka.streams.processor.internals.ProcessorTopologyTest:
 - testTopologyInitializationWithInitialKeyAndValue
 - testTopologyMetadata
 org.apache.kafka.streams.processor.internals.PunctuationQueueTest:
+- shouldNotSpinInfinitelyWhenStreamTimeReachesMaxValue
 - testPunctuationInterval
 - testPunctuationIntervalCancelFromPunctuator
 - testPunctuationIntervalCustomAlignment
