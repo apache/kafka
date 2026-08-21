@@ -1124,6 +1124,7 @@ public class KafkaRaftClientReconfigTest {
         int epoch = context.currentEpoch();
 
         assertTrue(context.client.quorum().isVoter(follower2));
+        assertEquals(voters.voterIds(), context.client.voterIds());
 
         checkLeaderMetricValues(3, 0, 0, context);
 
@@ -1144,6 +1145,7 @@ public class KafkaRaftClientReconfigTest {
 
         // follower2 should not be a voter in the latest voter set
         assertFalse(context.client.quorum().isVoter(follower2));
+        assertEquals(Set.of(local.id(), follower1.id()), context.client.voterIds());
         checkLeaderMetricValues(2, 1, 1, context);
 
         // Send a FETCH to increase the HWM and commit the new voter set

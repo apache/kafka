@@ -177,6 +177,14 @@ public class FeatureControlManagerTest {
         List<Map.Entry<Integer, Map<String, VersionRange>>> brokerRanges,
         List<Map.Entry<Integer, Map<String, VersionRange>>> controllerRanges
     ) {
+        return createFakeClusterFeatureSupportDescriber(brokerRanges, controllerRanges, Set.of());
+    }
+
+    static ClusterFeatureSupportDescriber createFakeClusterFeatureSupportDescriber(
+        List<Map.Entry<Integer, Map<String, VersionRange>>> brokerRanges,
+        List<Map.Entry<Integer, Map<String, VersionRange>>> controllerRanges,
+        Set<Integer> controllerIds
+    ) {
         return new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Map.Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
@@ -187,7 +195,74 @@ public class FeatureControlManagerTest {
             public Iterator<Map.Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
                 return controllerRanges.iterator();
             }
+
+            @Override
+            public Set<Integer> controllerIds() {
+                return controllerIds;
+            }
         };
+    }
+
+    @Test
+    public void testFeatureUpgradeIgnoresRemovedControllerRegistration() {
+        FeatureControlManager manager = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(
+                0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                List.of(0, 1, 2))).
+            setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
+                List.of(),
+                List.of(
+                    new SimpleImmutableEntry<>(1, Map.of(
+                        MetadataVersion.FEATURE_NAME,
+                        VersionRange.of(MetadataVersion.IBP_3_7_IV0.featureLevel(),
+                            MetadataVersion.IBP_4_3_IV0.featureLevel()))),
+                    new SimpleImmutableEntry<>(2, Map.of(
+                        MetadataVersion.FEATURE_NAME,
+                        VersionRange.of(MetadataVersion.IBP_3_7_IV0.featureLevel(),
+                            MetadataVersion.IBP_4_2_IV1.featureLevel())))
+                ),
+                Set.of(0, 1))).
+            build();
+        manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel()));
+
+        ControllerResult<ApiError> result = manager.updateFeatures(
+            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_3_IV0.featureLevel()),
+            Map.of(),
+            false,
+            0);
+
+        assertEquals(ApiError.NONE, result.response());
+    }
+
+    @Test
+    public void testFeatureUpgradeRequiresCurrentControllerRegistration() {
+        FeatureControlManager manager = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(
+                0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                List.of(0, 1))).
+            setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
+                List.of(),
+                List.of(new SimpleImmutableEntry<>(1, Map.of(
+                    MetadataVersion.FEATURE_NAME,
+                    VersionRange.of(MetadataVersion.IBP_3_7_IV0.featureLevel(),
+                        MetadataVersion.IBP_4_3_IV0.featureLevel())))),
+                Set.of(0, 1, 2))).
+            build();
+        manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel()));
+
+        ControllerResult<ApiError> result = manager.updateFeatures(
+            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_3_IV0.featureLevel()),
+            Map.of(),
+            false,
+            0);
+
+        assertEquals(new ApiError(Errors.INVALID_UPDATE_VERSION,
+            "Invalid update version 30 for feature metadata.version. controller 2 has not " +
+                "registered, and may not support this feature"), result.response());
     }
 
     @Test

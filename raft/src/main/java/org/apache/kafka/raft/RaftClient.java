@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 public interface RaftClient<T> extends AutoCloseable {
@@ -151,6 +152,13 @@ public interface RaftClient<T> extends AutoCloseable {
      * @return the node information if it exists, otherwise {@code Optional.empty()}
      */
     Optional<Node> voterNode(int id, ListenerName listenerName);
+
+    /**
+     * Return the IDs of the voters in the current quorum.
+     *
+     * @return the current voter IDs
+     */
+    Set<Integer> voterIds();
 
     /**
      * Prepare a list of records to be appended to the log.

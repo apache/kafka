@@ -528,6 +528,11 @@ public final class QuorumController implements Controller {
         public Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
             return clusterControl.controllerSupportedFeatures();
         }
+
+        @Override
+        public Set<Integer> controllerIds() {
+            return raftClient.voterIds();
+        }
     }
 
     class PeriodicTaskControlManagerQueueAccessor implements PeriodicTaskControlManager.QueueAccessor {

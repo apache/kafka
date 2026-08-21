@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
@@ -341,10 +342,17 @@ public class FeatureControlManager {
         HashSet<Integer> foundControllers = new HashSet<>();
         foundControllers.add(quorumFeatures.nodeId());
         if (metadataVersionOrThrow().isControllerRegistrationSupported()) {
+            Set<Integer> controllerIds = clusterSupportDescriber.controllerIds();
+            if (controllerIds.isEmpty()) {
+                controllerIds = Set.copyOf(quorumFeatures.quorumNodeIds());
+            }
             for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
                  clusterSupportDescriber.controllerSupported();
                  iter.hasNext(); ) {
                 Entry<Integer, Map<String, VersionRange>> entry = iter.next();
+                if (!controllerIds.contains(entry.getKey())) {
+                    continue;
+                }
                 if (entry.getKey() == quorumFeatures.nodeId()) {
                     // No need to re-check the features supported by this controller, since we
                     // already checked that above.
@@ -357,7 +365,7 @@ public class FeatureControlManager {
                 foundControllers.add(entry.getKey());
                 numControllersChecked++;
             }
-            for (int id : quorumFeatures.quorumNodeIds()) {
+            for (int id : controllerIds) {
                 if (!foundControllers.contains(id)) {
                     return Optional.of("controller " + id + " has not registered, and may not " +
                         "support this feature");

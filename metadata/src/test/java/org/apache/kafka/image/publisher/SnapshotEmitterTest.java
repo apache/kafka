@@ -37,6 +37,7 @@ import java.util.NavigableSet;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
@@ -78,6 +79,11 @@ public class SnapshotEmitterTest {
         @Override
         public Optional<Node> voterNode(int id, ListenerName listenerName) {
             return Optional.empty();
+        }
+
+        @Override
+        public Set<Integer> voterIds() {
+            return Set.of();
         }
 
         @Override
