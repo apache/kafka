@@ -57,12 +57,14 @@ public record AssignmentConfigsImpl(
      */
     public static AssignmentConfigsImpl fromMap(Map<String, String> configs) {
         // Configs are only recorded when set, so every absent key means the configuration is at its default.
-        String numStandbyReplicas = configs.getOrDefault(NUM_STANDBY_REPLICAS_CONFIG,
-            Integer.toString(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
+        String numStandbyReplicasConfig = configs.get(NUM_STANDBY_REPLICAS_CONFIG);
+        int numStandbyReplicas = numStandbyReplicasConfig != null
+            ? Integer.parseInt(numStandbyReplicasConfig)
+            : GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT;
         String rackAwareAssignmentTags = configs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
             GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT);
         return new AssignmentConfigsImpl(
-            Integer.parseInt(numStandbyReplicas),
+            numStandbyReplicas,
             parseRackAwareAssignmentTags(rackAwareAssignmentTags)
         );
     }
@@ -78,12 +80,12 @@ public record AssignmentConfigsImpl(
     /**
      * Converts the typed configs into the raw configs recorded for the group; the inverse of {@link #fromMap(Map)}.
      */
-    public Map<String, String> toMap() {
+    public static Map<String, String> toMap(AssignmentConfigs assignmentConfigs) {
         // The rack-aware assignment tags are only recorded when any are configured, matching what fromMap expects.
         Map<String, String> configs = new TreeMap<>();
-        configs.put(NUM_STANDBY_REPLICAS_CONFIG, Integer.toString(numStandbyReplicas));
-        if (!rackAwareAssignmentTags.isEmpty()) {
-            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
+        configs.put(NUM_STANDBY_REPLICAS_CONFIG, Integer.toString(assignmentConfigs.numStandbyReplicas()));
+        if (!assignmentConfigs.rackAwareAssignmentTags().isEmpty()) {
+            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", assignmentConfigs.rackAwareAssignmentTags()));
         }
         return configs;
     }

@@ -71,7 +71,7 @@ public class AssignmentConfigsImplTest {
                 "num.standby.replicas", "1",
                 "rack.aware.assignment.tags", "tag1,tag2"
             ),
-            new AssignmentConfigsImpl(1, List.of("tag1", "tag2")).toMap()
+            AssignmentConfigsImpl.toMap(new AssignmentConfigsImpl(1, List.of("tag1", "tag2")))
         );
     }
 
@@ -80,17 +80,17 @@ public class AssignmentConfigsImplTest {
         // The tags are only put in the map when any are configured, matching what fromMap expects.
         assertEquals(
             Map.of("num.standby.replicas", "2"),
-            new AssignmentConfigsImpl(2, List.of()).toMap()
+            AssignmentConfigsImpl.toMap(new AssignmentConfigsImpl(2, List.of()))
         );
     }
 
     @Test
     void testToMapFromMapRoundTrip() {
         AssignmentConfigsImpl withTags = new AssignmentConfigsImpl(1, List.of("tag1", "tag2"));
-        assertEquals(withTags, AssignmentConfigsImpl.fromMap(withTags.toMap()));
+        assertEquals(withTags, AssignmentConfigsImpl.fromMap(AssignmentConfigsImpl.toMap(withTags)));
 
         AssignmentConfigsImpl withoutTags = new AssignmentConfigsImpl(2, List.of());
-        assertEquals(withoutTags, AssignmentConfigsImpl.fromMap(withoutTags.toMap()));
+        assertEquals(withoutTags, AssignmentConfigsImpl.fromMap(AssignmentConfigsImpl.toMap(withoutTags)));
     }
 
     @Test
