@@ -705,6 +705,19 @@ public class KRaftClusterTest {
             cluster.waitForActiveController();
 
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
+                // The controller is still part of the voter set, so it can't be unregistered yet
+                assertFutureThrows(
+                    InvalidRequestException.class,
+                    admin.unregisterController(controllerIdToUnregister).all(),
+                    "Cannot unregister controller " + controllerIdToUnregister +
+                        " because it is part of the voter set."
+                );
+
+                admin.removeRaftVoter(
+                    controllerIdToUnregister,
+                    initialVoters.get(controllerIdToUnregister)
+                ).all().get();
+
                 assertDoesNotThrow(() -> admin.unregisterController(controllerIdToUnregister).all().get());
             }
 
@@ -730,6 +743,11 @@ public class KRaftClusterTest {
                     .map(Map.Entry::getKey)
                     .findFirst()
                     .orElseThrow();
+            // The voter set is static in this cluster, so every controller is a voter
+            int inactiveId = cluster.controllers().keySet().stream()
+                    .filter(id -> id != activeId)
+                    .findFirst()
+                    .orElseThrow();
 
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 assertFutureThrows(
@@ -740,7 +758,12 @@ public class KRaftClusterTest {
                 assertFutureThrows(
                     InvalidRequestException.class,
                     admin.unregisterController(activeId).all(),
-                    "Controller cannot unregister itself while it is active."
+                        "Cannot unregister controller " + activeId + " because it is part of the voter set."
+                );
+                assertFutureThrows(
+                    InvalidRequestException.class,
+                    admin.unregisterController(inactiveId).all(),
+                    "Cannot unregister controller " + inactiveId + " because it is part of the voter set."
                 );
             }
         }
