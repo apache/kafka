@@ -44,6 +44,19 @@ class LRUCacheEntry {
                   final String topic,
                   final byte[] rawKey,
                   final byte[] rawValue) {
+        this(value, headers, isDirty, offset, timestamp, partition, topic, rawKey, rawValue, null);
+    }
+
+    LRUCacheEntry(final byte[] value,
+                  final Headers headers,
+                  final boolean isDirty,
+                  final long offset,
+                  final long timestamp,
+                  final int partition,
+                  final String topic,
+                  final byte[] rawKey,
+                  final byte[] rawValue,
+                  final Headers sourceRawHeaders) {
         final ProcessorRecordContext context = new ProcessorRecordContext(
             timestamp,
             offset,
@@ -51,7 +64,8 @@ class LRUCacheEntry {
             topic,
             headers,
             rawKey,
-            rawValue
+            rawValue,
+            sourceRawHeaders
         );
 
         this.record = new ContextualRecord(

@@ -407,11 +407,7 @@ public class RecordDeserializerTest {
             assertNull(recordDeserializer.deserialize(context, mutatingRawRecord, new RecordHeaders(mutatingRawRecord.headers())));
         }
 
-        // After the deserializer ran, the live Headers reference is empty.
         assertNull(mutableHeaders.lastHeader("source-only"));
-        // But the ErrorHandlerContext seen by the DeserializationExceptionHandler
-        // must reflect the source record's *original* headers, per the javadoc on
-        // ErrorHandlerContext#headers().
         final Headers seenByHandler = capturedHeaders.get();
         assertNotNull(seenByHandler);
         assertNotNull(
@@ -432,9 +428,6 @@ public class RecordDeserializerTest {
 
         @Override
         public Object deserializeKey(final String topic, final Headers headers, final byte[] data) {
-            // Simulate a Deserializer that strips serde-internal headers before
-            // signaling failure (e.g., a LargeMessageDeserializer-style flow that
-            // realizes the payload is malformed after consuming a marker header).
             headers.remove("source-only");
             throw new RuntimeException("KABOOM!");
         }

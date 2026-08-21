@@ -214,13 +214,6 @@ public class RecordQueue {
 
         while (headRecord == null && !fifoQueue.isEmpty()) {
             final ConsumerRecord<byte[], byte[]> raw = fifoQueue.pollFirst();
-            // Snapshot raw.headers() before invoking the user-supplied
-            // Deserializer in deserialize(...). The same snapshot is then
-            // attached to the StampedRecord so it can be carried through to
-            // the ProcessingExceptionHandler error path -- a Deserializer is
-            // free to mutate the live Headers reference, but
-            // ErrorHandlerContext#headers() must continue to expose the
-            // original source-record headers per its javadoc.
             final Headers sourceRawHeaders = new RecordHeaders(raw.headers());
             final ConsumerRecord<Object, Object> deserialized =
                 recordDeserializer.deserialize(processorContext, raw, sourceRawHeaders);

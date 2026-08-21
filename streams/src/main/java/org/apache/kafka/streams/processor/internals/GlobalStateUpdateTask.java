@@ -111,11 +111,6 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     @Override
     public void update(final ConsumerRecord<byte[], byte[]> record) {
         final RecordDeserializer sourceNodeAndDeserializer = deserializers.get(record.topic());
-        // Snapshot headers before invoking the user-supplied Deserializer so
-        // ErrorHandlerContext#headers() observed by the
-        // DeserializationExceptionHandler / ProcessingExceptionHandler exposes
-        // the original source-record headers, even if a Deserializer mutates
-        // the live Headers reference.
         final Headers sourceRawHeaders = new RecordHeaders(record.headers());
         final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.deserialize(processorContext, record, sourceRawHeaders);
 

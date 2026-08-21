@@ -25,10 +25,6 @@ public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
 
     private final byte[] rawKey;
     private final byte[] rawValue;
-    // Snapshot of the source record's headers taken before any Deserializer
-    // ran, propagated downstream so that ErrorHandlerContext#headers() can
-    // expose the original source-record headers even after a Deserializer
-    // mutated the live Headers instance.
     private final Headers rawHeaders;
 
     public StampedRecord(final ConsumerRecord<?, ?> record, final long timestamp) {

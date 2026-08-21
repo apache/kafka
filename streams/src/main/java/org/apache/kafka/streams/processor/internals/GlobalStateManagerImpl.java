@@ -371,11 +371,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     if (record.key() != null) {
                         // Deserialization phase
                         final Record<?, ?> deserializedRecord;
-                        // Snapshot headers before invoking the user-supplied
-                        // Deserializers so the ErrorHandlerContext seen by the
-                        // DeserializationExceptionHandler reflects the original
-                        // source-record headers, even if a Deserializer mutates
-                        // the live Headers reference.
                         final Headers sourceRecordHeaders = new RecordHeaders(record.headers());
                         try {
                             deserializedRecord = new Record<>(

@@ -41,13 +41,6 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     private final Headers headers;
     private byte[] sourceRawKey;
     private byte[] sourceRawValue;
-    // Snapshot of the source record's headers taken before any user-supplied
-    // Deserializer ran. Like {@link #sourceRawKey}/{@link #sourceRawValue},
-    // this is transient (not serialized) and is cleared by
-    // {@link #freeRawRecord()}. Used by the error-handler construction sites
-    // in StreamTask and ProcessorNode so that ErrorHandlerContext#headers()
-    // can return the original source-record headers even when a Deserializer
-    // mutated the live Headers instance.
     private Headers sourceRawHeaders;
 
     public ProcessorRecordContext(final long timestamp,
@@ -121,16 +114,8 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         return sourceRawValue;
     }
 
-    /**
-     * Returns the snapshot of the source record's headers taken before any
-     * user-supplied {@code Deserializer} ran, or {@code null} if no snapshot
-     * was captured (e.g., for {@code ProcessorRecordContext} instances that
-     * were not constructed from a live consumer record). This is consumed by
-     * Streams error-handler construction sites and is not part of the public
-     * {@link RecordContext} interface.
-     */
     public Headers sourceRawHeaders() {
-        return sourceRawHeaders;
+        return sourceRawHeaders == null ? headers : sourceRawHeaders;
     }
 
     public long residentMemorySizeEstimate() {

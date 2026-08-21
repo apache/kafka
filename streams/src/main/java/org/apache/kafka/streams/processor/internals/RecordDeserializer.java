@@ -58,14 +58,6 @@ public class RecordDeserializer {
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext<?, ?> processorContext,
                                                final ConsumerRecord<byte[], byte[]> rawRecord,
                                                final Headers sourceRecordHeaders) {
-
-        // sourceRecordHeaders is a snapshot of rawRecord.headers() captured by
-        // the caller BEFORE this method runs, because user-supplied
-        // Deserializers are allowed to mutate the live Headers reference (e.g.
-        // a LargeMessageDeserializer that strips serde-internal headers) and
-        // we still need ErrorHandlerContext#headers() to expose the original
-        // source-record headers per its javadoc, so that DLQ records can be
-        // reconstructed faithfully.
         try {
             return new ConsumerRecord<>(
                 rawRecord.topic(),

@@ -19,9 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
@@ -58,7 +56,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.quality.Strictness;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -75,8 +72,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -254,14 +249,8 @@ public class ProcessorNodeTest {
 
     @Test
     public void shouldExposeSourceRawHeadersToProcessingExceptionHandlerWhenDeserializerMutatedHeaders() {
-        // Simulate a Deserializer that has mutated the live Headers reference
-        // (e.g. removed a serde-internal marker header) before downstream
-        // processing, while a snapshot of the original source-record headers
-        // was captured upstream by RecordQueue.
         final RecordHeaders mutatedLiveHeaders = new RecordHeaders();
-        final RecordHeaders sourceRawHeaders = new RecordHeaders(new Header[]{
-            new RecordHeader("source-only", "kept".getBytes(StandardCharsets.UTF_8))
-        });
+        final Headers sourceRawHeaders = new RecordHeaders().add("source-only", "kept".getBytes());
         final ProcessorRecordContext recordContextWithSnapshot = new ProcessorRecordContext(
             TIMESTAMP,
             OFFSET,
@@ -297,20 +286,7 @@ public class ProcessorNodeTest {
         node.init(internalProcessorContext, handler);
         node.process(new Record<>(KEY, VALUE, TIMESTAMP));
 
-        // Live headers were mutated to empty, but ErrorHandlerContext#headers()
-        // must expose the original source-record headers from the snapshot.
-        assertNull(mutatedLiveHeaders.lastHeader("source-only"));
-        final Headers seenByHandler = capturedHeaders.get();
-        assertNotNull(seenByHandler);
-        assertNotNull(
-            seenByHandler.lastHeader("source-only"),
-            "ErrorHandlerContext.headers() in ProcessingExceptionHandler should expose the original " +
-                "source-record headers (from sourceRawHeaders), not the post-deserialization (mutated) headers"
-        );
-        assertEquals(
-            "kept",
-            new String(seenByHandler.lastHeader("source-only").value(), StandardCharsets.UTF_8)
-        );
+        assertEquals(sourceRawHeaders, capturedHeaders.get());
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {
