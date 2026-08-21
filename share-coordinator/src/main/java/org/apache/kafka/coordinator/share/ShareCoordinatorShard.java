@@ -545,23 +545,25 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * the request data which covers only key i.e. group1:topic1:partition1. The implementation
      * below was done keeping this in mind.
      *
-     * @param request - InitializeShareGroupStateRequestData for a single key
+     * @param groupId - String representing the group id for a single key
+     * @param topicId - Uuid representing the topic id for a single key
+     * @param partitionData - InitializeShareGroupStateRequestData.PartitionData for a single key
      * @return CoordinatorResult(records, response)
      */
 
     public CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> initializeState(
-        InitializeShareGroupStateRequestData request
+        String groupId,
+        Uuid topicId,
+        InitializeShareGroupStateRequestData.PartitionData partitionData
     ) {
         // Records to write (with both key and value of snapshot type), response to caller
         // only one key will be there in the request by design.
-        Optional<CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord>> error = maybeGetInitializeStateError(request);
+        Optional<CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord>> error = maybeGetInitializeStateError(groupId, topicId, partitionData);
         if (error.isPresent()) {
             return error.get();
         }
 
-        InitializeShareGroupStateRequestData.InitializeStateData topicData = request.topics().get(0);
-        InitializeShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
-        SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicData.topicId(), partitionData.partition());
+        SharePartitionKey key = SharePartitionKey.getInstance(groupId, topicId, partitionData.partition());
 
         Integer currentStateEpoch = stateEpochMap.get(key);
         ShareGroupOffset currentState = shareStateMap.get(key);
@@ -575,7 +577,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         if (currentStateEpoch != null && currentStateEpoch == partitionData.stateEpoch() &&
                 currentState != null && currentState.startOffset() == partitionData.startOffset()) {
-            log.debug("Duplicate initialize request {}. Treating as no-op.", request);
+            log.debug("Duplicate initialize request {} {} {}. Treating as no-op.", groupId, topicId, partitionData);
             return new CoordinatorResult<>(List.of(), responseData);
         }
 
@@ -933,12 +935,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     private Optional<CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord>> maybeGetInitializeStateError(
-        InitializeShareGroupStateRequestData request
+        String groupId,
+        Uuid topicId,
+        InitializeShareGroupStateRequestData.PartitionData partitionData
     ) {
-        InitializeShareGroupStateRequestData.InitializeStateData topicData = request.topics().get(0);
-        InitializeShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
-
-        Uuid topicId = topicData.topicId();
         int partitionId = partitionData.partition();
         int stateEpoch = partitionData.stateEpoch();
 
@@ -954,7 +954,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.INVALID_REQUEST, NEGATIVE_STATE_EPOCH, topicId, partitionId));
         }
 
-        SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicId, partitionId);
+        SharePartitionKey key = SharePartitionKey.getInstance(groupId, topicId, partitionId);
         if (stateEpochMap.containsKey(key) && stateEpochMap.get(key) > partitionData.stateEpoch()) {
             log.info("Initialize request state epoch is smaller than last recorded current: {}, requested: {}.", stateEpochMap.get(key), partitionData.stateEpoch());
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.FENCED_STATE_EPOCH, Errors.FENCED_STATE_EPOCH.exception(), topicId, partitionId));
