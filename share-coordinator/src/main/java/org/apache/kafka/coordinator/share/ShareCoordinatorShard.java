@@ -546,7 +546,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *
      * @param groupId - String representing the group id.
      * @param topicId - Uuid representing the topic id.
-     * @param partitionData - InitializeShareGroupStateRequestData.PartitionData for a single partition.
+     * @param partitionData - InitializeShareGroupStateRequestData.PartitionData representing partition request data.
      * @return CoordinatorResult(records, response)
      */
 
@@ -555,8 +555,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Uuid topicId,
         InitializeShareGroupStateRequestData.PartitionData partitionData
     ) {
-        // Records to write (with both key and value of snapshot type), response to caller
-        // only one key will be there in the request by design.
+        // Records to write (with both key and value of snapshot type), response to caller.
         Optional<CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord>> error = maybeGetInitializeStateError(groupId, topicId, partitionData);
         if (error.isPresent()) {
             return error.get();
