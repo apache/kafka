@@ -268,13 +268,17 @@ org.apache.kafka.controller.QuorumControllerTest:
 - testUncleanShutdownBrokerElrEnabled
 - testUncleanShutdownElrDisabled
 - testUnregisterBroker
+- testUnregisterControllerInVoterSet
 org.apache.kafka.controller.QuorumFeaturesTest:
 - ensureDefaultSupportedFeaturesRangeMaxNotZero
 - testDefaultFeatureMap
 - testDefaultFeatureMapWithUnstable
-- testIsControllerId
+- testIsVoterId
 - testLocalSupportedFeature
 - testReasonNotSupported
+- testVoterIdsAreSuppliedOnEveryCall
+org.apache.kafka.controller.RaftClientVotersSupplierTest:
+- testVoterSupplier
 org.apache.kafka.controller.ReplicationControlManagerTest:
 - testAlterPartitionDisallowReplicationFactorChange
 - testAlterPartitionHandleUnknownTopicIdOrName
