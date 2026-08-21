@@ -375,7 +375,12 @@ public class ProducerStateManager {
 
     public ProducerAppendInfo prepareUpdate(long producerId, AppendOrigin origin) {
         ProducerStateEntry currentEntry = lastEntry(producerId).orElse(ProducerStateEntry.empty(producerId));
-        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin, verificationStateEntry(producerId));
+        // mapEndOffset() == 0 means no records have ever been appended to the log. It is advanced on every append
+        // (including from producers without idempotence enabled) and by producer state rebuilds, so it tracks the
+        // log end offset, and is advanced to the log start offset when producer state is loaded without a snapshot
+        // or when the log start offset is incremented, so any deletion of records leaves it non-zero.
+        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin,
+            verificationStateEntry(producerId), mapEndOffset() == 0);
     }
 
     /**
