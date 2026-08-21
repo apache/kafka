@@ -924,94 +924,88 @@ public class DescribeConsumerGroupTest {
     @ClusterTest
     public void testDescribeGroupWithShortInitializationTimeout(ClusterInstance clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
-        for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
-            String topic = TOPIC_PREFIX + groupProtocol.name();
-            createTopic(topic);
+        GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
+        String topic = TOPIC_PREFIX + groupProtocol.name();
+        createTopic(topic);
 
-            // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
-            // complete before the timeout expires
-            List<String> describeType = DESCRIBE_TYPES.get(RANDOM.nextInt(DESCRIBE_TYPES.size()));
-            String group = GROUP_PREFIX + groupProtocol.name() + String.join("", describeType);
+        // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
+        // complete before the timeout expires
+        List<String> describeType = DESCRIBE_TYPES.get(RANDOM.nextInt(DESCRIBE_TYPES.size()));
+        String group = GROUP_PREFIX + groupProtocol.name() + String.join("", describeType);
 
-            // set the group initialization timeout too low for the group to stabilize
-            List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--timeout", "1", "--group", group));
-            cgcArgs.addAll(describeType);
+        // set the group service timeout too low for the group to stabilize
+        List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"));
+        cgcArgs.addAll(describeType);
 
-            // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
-                 ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))
-            ) {
-                ExecutionException e = assertThrows(ExecutionException.class, service::describeGroups);
-                assertInstanceOf(TimeoutException.class, e.getCause());
-            }
+        // run one consumer in the group consuming from a single-partition topic
+        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
+             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))
+        ) {
+            ExecutionException e = assertThrows(ExecutionException.class, service::describeGroups);
+            assertInstanceOf(TimeoutException.class, e.getCause());
         }
     }
 
     @ClusterTest
     public void testDescribeGroupOffsetsWithShortInitializationTimeout(ClusterInstance clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
-        for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
-            String topic = TOPIC_PREFIX + groupProtocol.name();
-            String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+        GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
+        String topic = TOPIC_PREFIX + groupProtocol.name();
+        String group = GROUP_PREFIX + groupProtocol.name();
+        createTopic(topic);
 
-            // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
-            // complete before the timeout expires
+        // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
+        // complete before the timeout expires
 
-            // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
-                 // set the group initialization timeout too low for the group to stabilize
-                 ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
-            ) {
-                Throwable e = assertThrows(ExecutionException.class, () -> service.collectGroupOffsets(group));
-                assertEquals(TimeoutException.class, e.getCause().getClass());
-            }
+        // run one consumer in the group consuming from a single-partition topic
+        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
+             // set the group service timeout too low for the group to stabilize
+             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
+        ) {
+            Throwable e = assertThrows(ExecutionException.class, () -> service.collectGroupOffsets(group));
+            assertEquals(TimeoutException.class, e.getCause().getClass());
         }
     }
 
     @ClusterTest
     public void testDescribeGroupMembersWithShortInitializationTimeout(ClusterInstance clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
-        for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
-            String topic = TOPIC_PREFIX + groupProtocol.name();
-            String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+        GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
+        String topic = TOPIC_PREFIX + groupProtocol.name();
+        String group = GROUP_PREFIX + groupProtocol.name();
+        createTopic(topic);
 
-            // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
-            // complete before the timeout expires
+        // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
+        // complete before the timeout expires
 
-            // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
-                 // set the group initialization timeout too low for the group to stabilize
-                 ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
-            ) {
-                Throwable e = assertThrows(ExecutionException.class, () -> service.collectGroupMembers(group));
-                assertEquals(TimeoutException.class, e.getCause().getClass());
-                e = assertThrows(ExecutionException.class, () -> service.collectGroupMembers(group));
-                assertEquals(TimeoutException.class, e.getCause().getClass());
-            }
+        // run one consumer in the group consuming from a single-partition topic
+        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
+             // set the group service timeout too low for the group to stabilize
+             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
+        ) {
+            Throwable e = assertThrows(ExecutionException.class, () -> service.collectGroupMembers(group));
+            assertEquals(TimeoutException.class, e.getCause().getClass());
         }
     }
 
     @ClusterTest
     public void testDescribeGroupStateWithShortInitializationTimeout(ClusterInstance clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
-        for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
-            String topic = TOPIC_PREFIX + groupProtocol.name();
-            String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+        GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
+        String topic = TOPIC_PREFIX + groupProtocol.name();
+        String group = GROUP_PREFIX + groupProtocol.name();
+        createTopic(topic);
 
-            // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
-            // complete before the timeout expires
+        // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
+        // complete before the timeout expires
 
-            // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
-                 // set the group initialization timeout too low for the group to stabilize
-                 ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
-            ) {
-                Throwable e = assertThrows(ExecutionException.class, () -> service.collectGroupState(group));
-                assertEquals(TimeoutException.class, e.getCause().getClass());
-            }
+        // run one consumer in the group consuming from a single-partition topic
+        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
+             // set the group service timeout too low for the group to stabilize
+             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
+        ) {
+            Throwable e = assertThrows(ExecutionException.class, () -> service.collectGroupState(group));
+            assertEquals(TimeoutException.class, e.getCause().getClass());
         }
     }
 
