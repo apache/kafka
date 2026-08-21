@@ -539,15 +539,14 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * This method writes a share snapshot records corresponding to the requested topic partitions.
+     * This method writes a share snapshot records corresponding to the requested share partition.
      * <p>
      * This method as called by the ShareCoordinatorService will be provided with
-     * the request data which covers only key i.e. group1:topic1:partition1. The implementation
-     * below was done keeping this in mind.
+     * the request data for a single share partition (group, topicId and partition data).
      *
-     * @param groupId - String representing the group id for a single key
-     * @param topicId - Uuid representing the topic id for a single key
-     * @param partitionData - InitializeShareGroupStateRequestData.PartitionData for a single key
+     * @param groupId - String representing the group id.
+     * @param topicId - Uuid representing the topic id.
+     * @param partitionData - InitializeShareGroupStateRequestData.PartitionData for a single partition.
      * @return CoordinatorResult(records, response)
      */
 
