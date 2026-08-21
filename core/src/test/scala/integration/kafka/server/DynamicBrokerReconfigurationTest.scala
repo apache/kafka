@@ -1182,6 +1182,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG))
     assertEquals("4", configEntry(describeConfig(adminClients.head, Seq(restartedBroker)),
       ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG).value)
+    val defaultResource = new ConfigResource(ConfigResource.Type.BROKER, "")
+    val defaultConfig = adminClients.head.describeConfigs(util.Set.of(defaultResource)).all.get.get(defaultResource)
+    assertEquals("4", configEntry(defaultConfig, ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG).value)
   }
 
   @Test
