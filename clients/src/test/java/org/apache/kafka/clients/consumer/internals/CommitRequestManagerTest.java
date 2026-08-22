@@ -16,15 +16,23 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
@@ -33,6 +41,7 @@ import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
@@ -50,6 +59,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -734,6 +744,7 @@ public class CommitRequestManagerTest {
     @Test
     public void testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin() {
         CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
 
         time.sleep(100);
         long result = commitRequestManager.maximumTimeToWait(time.milliseconds());
@@ -741,6 +752,70 @@ public class CommitRequestManagerTest {
         assertTrue(result > 0,
             "maximumTimeToWait must be > 0 when the coordinator is unknown to avoid a busy-spin; got " + result);
         assertEquals(100, result);
+    }
+
+    @Test
+    public void testMaximumTimeToWaitDoesNotSpinDuringRealBootstrapDnsResolution() throws Exception {
+        long bootstrapResolveTimeoutMs = 1000;
+
+        BootstrapConfiguration bootstrapConfiguration = BootstrapConfiguration.enabled(
+            List.of("unresolvable.invalid:9092"),
+            ClientDnsLookup.USE_ALL_DNS_IPS,
+            bootstrapResolveTimeoutMs,
+            retryBackoffMs
+        );
+
+        ConsumerConfig config = new ConsumerConfig(Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.GROUP_ID_CONFIG, DEFAULT_GROUP_ID,
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "unresolvable.invalid:9092",
+            // Much shorter than bootstrapResolveTimeoutMs, so the auto-commit timer expires several
+            // times while the coordinator is still (and will remain, since DNS never resolves) unknown.
+            ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "100",
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true"
+        ));
+
+        ConsumerMetadata metadata = new ConsumerMetadata(config, subscriptionState, logContext, new ClusterResourceListeners());
+
+        MockSelector selector = new MockSelector(time);
+        NetworkClient networkClient = new NetworkClient(selector, metadata, "test-client",
+            Integer.MAX_VALUE, 50, 1000, 64 * 1024, 64 * 1024, 1000, 5000, 30000,
+            time, false, new ApiVersions(), logContext,
+            MetadataRecoveryStrategy.NONE, bootstrapConfiguration, false);
+
+
+        CoordinatorRequestManager realCoordinatorRequestManager = new CoordinatorRequestManager(
+            logContext, retryBackoffMs, retryBackoffMaxMs, DEFAULT_GROUP_ID);
+
+        CommitRequestManager realCommitRequestManager = new CommitRequestManager(
+            time, logContext, subscriptionState, config, realCoordinatorRequestManager,
+            mock(OffsetCommitCallbackInvoker.class), DEFAULT_GROUP_ID, Optional.empty(), retryBackoffMs,
+            retryBackoffMaxMs, OptionalDouble.of(0), new Metrics(), metadata);
+
+        try (NetworkClientDelegate networkClientDelegate = new NetworkClientDelegate(time, config, logContext, networkClient, metadata,
+                mock(BackgroundEventHandler.class), false, mock(AsyncConsumerMetrics.class));
+        ) {
+            long deadline = time.milliseconds() + bootstrapResolveTimeoutMs + 3000;
+            boolean sawBootstrapException = false;
+
+            while (time.milliseconds() < deadline) {
+                // Drives the real NetworkClient's ensureBootstrapped()/async DNS resolution forward;
+                // the coordinator never becomes known since there is no real broker to respond.
+                networkClientDelegate.poll(50, time.milliseconds());
+
+                Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
+                if (metadataError.isPresent()) {
+                    assertInstanceOf(BootstrapResolutionException.class, metadataError.get());
+                    sawBootstrapException = true;
+                    break;
+                }
+
+                long waitMs = realCommitRequestManager.maximumTimeToWait(time.milliseconds());
+                assertTrue(waitMs > 0, "maximumTimeToWait must be > 0 while real bootstrap DNS resolution is pending; got " + waitMs);
+            }
+            assertTrue(sawBootstrapException, "Expected a real BootstrapResolutionException within " + (bootstrapResolveTimeoutMs + 3000) + "ms");
+        }
     }
 
     @Test
