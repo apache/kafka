@@ -1420,15 +1420,13 @@ project(':core') {
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy = 'exclude'
-    filePermissions {
-      user {
-        read = true
-        execute = true
+    eachFile {
+      if (name.endsWith(".sh") || name.endsWith(".bat")) {
+        permissions {
+          user.execute = true
+          other.execute = true
+        }
       }
-      other.execute = true
-    }
-    dirPermissions {
-      unix('rwxr-xr-x')
     }
   }
 
