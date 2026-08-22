@@ -85,7 +85,6 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1781,7 +1780,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                 seekToTimestamps.get(partition),
                                 partition
                             );
-                            mainConsumer.seekToEnd(Collections.singleton(partitionAndOffset.getKey()));
+                            mainConsumer.seekToEnd(Set.of(partitionAndOffset.getKey()));
                         }
                     }
                 } catch (final TimeoutException timeoutException) {
@@ -2018,8 +2017,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             restoreConsumerClientId(getName()),
             taskManager.producerClientIds(),
             adminClientId,
-            Collections.emptySet(),
-            Collections.emptySet());
+            Set.of(),
+            Set.of());
 
         return this;
     }

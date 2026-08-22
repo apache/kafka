@@ -52,7 +52,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -750,7 +749,7 @@ public class StoreChangelogReader implements ChangelogReader {
             recordRestorationProgress(task, changelogMetadata, 0, storeMetadata.offset(), changelogMetadata.restoreEndOffset);
 
             changelogMetadata.transitTo(ChangelogState.COMPLETED);
-            pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
+            pauseChangelogsFromRestoreConsumer(Set.of(partition));
             if (storeMetadata.store() instanceof MeteredStateStore) {
                 ((MeteredStateStore) storeMetadata.store()).recordRestoreTime(changelogMetadata.calculateRestoreTime(time.nanoseconds()));
             }
@@ -811,7 +810,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private Map<TopicPartition, Long> committedOffsetForChangelogs(final Map<TaskId, Task> tasks, final Set<TopicPartition> partitions) {
         if (partitions.isEmpty()) {
-            return Collections.emptyMap();
+            return Map.of();
         }
 
         try {
@@ -822,7 +821,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 .topicPartitions(new ArrayList<>(partitions));
             final Map<TopicPartition, Long> committedOffsets =
                 adminClient.listConsumerGroupOffsets(
-                        Collections.singletonMap(groupId, spec),
+                        Map.of(groupId, spec),
                         options
                     )
                     .partitionsToOffsetAndMetadata(groupId).get().entrySet()
@@ -835,7 +834,7 @@ public class StoreChangelogReader implements ChangelogReader {
             log.debug("Could not retrieve the committed offsets for partitions {} due to {}, will retry in the next run loop",
                 partitions, retriableException.toString());
             maybeInitTaskTimeoutOrThrow(getTasksFromPartitions(tasks, partitions), retriableException);
-            return Collections.emptyMap();
+            return Map.of();
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("Failed to retrieve committed offsets for %s", partitions), e);
         }
@@ -848,7 +847,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private Map<TopicPartition, Long> endOffsetForChangelogs(final Map<TaskId, Task> tasks, final Set<TopicPartition> partitions) {
         if (partitions.isEmpty()) {
-            return Collections.emptyMap();
+            return Map.of();
         }
 
         try {
@@ -867,7 +866,7 @@ public class StoreChangelogReader implements ChangelogReader {
             log.debug("Could not fetch all end offsets for {} due to {}, will retry in the next run loop",
                 partitions, retriableException.toString());
             maybeInitTaskTimeoutOrThrow(getTasksFromPartitions(tasks, partitions), retriableException);
-            return Collections.emptyMap();
+            return Map.of();
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
         }
@@ -1152,7 +1151,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 for (final TopicPartition partition : windowedPartitionsRetention.keySet()) {
                     final Long endOffset = endOffsets.get(partition);
                     if (endOffset == null || endOffset <= 0) {
-                        restoreConsumer.seekToBeginning(Collections.singleton(partition));
+                        restoreConsumer.seekToBeginning(Set.of(partition));
                         seekToBeginningPartitions.add(partition);
                     }
                 }
