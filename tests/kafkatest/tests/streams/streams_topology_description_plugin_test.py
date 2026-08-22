@@ -56,12 +56,10 @@ class StreamsTopologyDescriptionPluginTest(Test):
             num_nodes=1,
             zk=None,
             topics=self.topics,
-            use_streams_groups=True,
             server_prop_overrides=server_prop_overrides,
         )
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
-        self.kafka.run_features_command("upgrade", "streams.version", 1)
 
     @cluster(num_nodes=2)
     @matrix(metadata_quorum=[quorum.combined_kraft])
@@ -169,11 +167,11 @@ class StreamsTopologyDescriptionPluginTest(Test):
             metadata_quorum=[quorum.combined_kraft])
     def test_no_push_solicited_by_old_broker(self, broker_version, metadata_quorum):
         """
-        Test a 4.4 client against a 4.2/4.3 broker. The broker solicits a topology description push
-        by setting topologyDescriptionRequired on the heartbeat response, but that field only exists
-        in response version 1 (KIP-1331), so a 4.2/4.3 broker can never ask. Such a broker also does
-        not know the plugin config and only warns about it, which this configures deliberately: even
-        with the config present, the older broker must not cause the newer client to push.
+        Run a client from the current branch (DEV) against a 4.2/4.3 broker. A broker solicits a
+        topology description push by setting topologyDescriptionRequired on the heartbeat response,
+        but that field only exists in response version 1 (KIP-1331), so a 4.2/4.3 broker can never
+        ask. This pins the client-side contract that a push happens only when solicited: a buggy
+        client that pushed without a broker signal would send an RPC the older broker cannot handle.
         """
         self.setup_kafka(plugin_enabled=True, broker_version=broker_version)
 
