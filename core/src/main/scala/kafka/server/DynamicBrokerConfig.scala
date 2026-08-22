@@ -602,14 +602,18 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
     }
 
     def validateCordonedLogDirs(): Unit = {
-      val logDirs = newConfig.logDirs()
+      val absoluteLogDirSet = newConfig.absoluteLogDirs().asScala.toSet
       val cordonedLogDirs = newConfig.cordonedLogDirs()
-      cordonedLogDirs.asScala.foreach(dir =>
-        if (!logDirs.contains(dir)) {
-          throw new ConfigException(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, cordonedLogDirs, s"Invalid entry in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG}: $dir. " +
-            s"All cordoned log dirs must be entries of ${ServerLogConfigs.LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}.")
-        }
-      )
+      val absoluteCordonedLogDirs = newConfig.absoluteCordonedLogDirs()
+      cordonedLogDirs.asScala.zip(absoluteCordonedLogDirs.asScala).foreach {
+        case (cordonedLogDir, absoluteCordonedLogDir) =>
+          if (!absoluteLogDirSet.contains(absoluteCordonedLogDir)) {
+            val invalidLogDir = if (cordonedLogDir == absoluteCordonedLogDir) cordonedLogDir else s"$cordonedLogDir (absolute path: $absoluteCordonedLogDir)"
+
+            throw new ConfigException(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, cordonedLogDirs, s"Invalid entry in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG}: " +
+              s"$invalidLogDir. All cordoned log dirs must match ${ServerLogConfigs.LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG} entries by absolute path.")
+          }
+      }
     }
 
     validateLogLocalRetentionMs()
@@ -638,9 +642,10 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
     updateLogsConfig(newBrokerDefaults.asScala)
 
-    logManager.updateCordonedLogDirs(util.Set.copyOf(newConfig.cordonedLogDirs))
-    directoryEventHandler.handleCordoned(newConfig.cordonedLogDirs.stream
-      .flatMap[Uuid](dir => logManager.directoryId(dir).stream)
+    val absoluteCordonedLogDirs = newConfig.absoluteCordonedLogDirs
+    logManager.updateCordonedLogDirs(util.Set.copyOf(absoluteCordonedLogDirs))
+    directoryEventHandler.handleCordoned(absoluteCordonedLogDirs.stream
+      .flatMap[Uuid](absoluteCordonedLogDir => logManager.directoryId(absoluteCordonedLogDir).stream)
       .collect(Collectors.toSet[Uuid]))
   }
 }

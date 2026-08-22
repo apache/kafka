@@ -425,8 +425,12 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (cordonedLogDirs.contains(ServerLogConfigs.CORDONED_LOG_DIRS_ALL)) {
       require(cordonedLogDirs.size == 1, s"When ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} is set to ${ServerLogConfigs.CORDONED_LOG_DIRS_ALL}, it must not contain other values")
     } else {
-      val unknownLogDirs = cordonedLogDirs.asScala.filter(!logDirs().contains(_))
-      require(unknownLogDirs.isEmpty, s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be present in ${ServerLogConfigs.LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}. Missing entries : ${unknownLogDirs.mkString(", ")}")
+      val absoluteLogDirSet = absoluteLogDirs().asScala.toSet
+      val unknownLogDirs = cordonedLogDirs.asScala.zip(absoluteCordonedLogDirs().asScala).collect {
+        case (cordonedLogDir, absoluteCordonedLogDir) if !absoluteLogDirSet.contains(absoluteCordonedLogDir) =>
+          if (cordonedLogDir == absoluteCordonedLogDir) cordonedLogDir else s"$cordonedLogDir (absolute path: $absoluteCordonedLogDir)"
+      }
+      require(unknownLogDirs.isEmpty, s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must match ${ServerLogConfigs.LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG} entries by absolute path. Missing entries: ${unknownLogDirs.mkString(", ")}")
     }
   }
 

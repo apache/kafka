@@ -32,6 +32,7 @@ import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
@@ -42,11 +43,14 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
+import java.io.File;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -198,6 +202,49 @@ public class CordonedLogDirsIntegrationTest {
             // We can create topics and partitions again
             admin.createTopics(newTopics).all().get();
             admin.createPartitions(newPartitions).all().get();
+        }
+    }
+
+    @ClusterTest(types = Type.KRAFT)
+    public void testCordonRelativeLogDir() throws Exception {
+        int brokerId = 0;
+        List<String> initialLogDirs = clusterInstance.brokers().get(brokerId).config().logDirs();
+        String metadataLogDir = clusterInstance.brokers().get(brokerId).config().metadataLogDir();
+        Path workingDirectory = Path.of("").toAbsolutePath();
+        String relativeLogDir = initialLogDirs.stream()
+            .filter(logDir -> !logDir.equals(metadataLogDir))
+            .map(logDir -> workingDirectory.relativize(Path.of(logDir).toAbsolutePath()).toString())
+            .findFirst()
+            .orElseThrow();
+        assertFalse(Path.of(relativeLogDir).isAbsolute());
+
+        clusterInstance.restartBroker(brokerId, Map.of(LOG_DIRS_CONFIG, relativeLogDir));
+        clusterInstance.waitForReadyBrokers();
+        assertEquals(List.of(relativeLogDir), clusterInstance.brokers().get(brokerId).config().logDirs());
+
+        String absoluteLogDir = new File(relativeLogDir).getAbsolutePath();
+        Set<Uuid> expectedDirectoryIds = Set.copyOf(clusterInstance.brokers().get(brokerId).logManager().directoryIds().values());
+
+        try (Admin admin = clusterInstance.admin()) {
+            setCordonedLogDirs(admin, List.of(relativeLogDir), BROKER_0);
+
+            // Wait until the broker marks the resolved absolute log directory as cordoned.
+            TestUtils.waitForCondition(() -> {
+                Map<String, LogDirDescription> descriptions = admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId);
+                return descriptions.containsKey(absoluteLogDir) && descriptions.get(absoluteLogDir).isCordoned();
+            }, 10_000, "Relative log directories were not marked as cordoned by the broker");
+
+            // Wait until controller metadata reflects the broker's cordoned directory IDs.
+            TestUtils.waitForCondition(() -> {
+                KRaftMetadataCache metadataCache = (KRaftMetadataCache) clusterInstance.brokers().get(brokerId).metadataCache();
+                var registration = metadataCache.getImage().cluster().broker(brokerId);
+                return registration != null
+                    && registration.cordonedDirectories() != null
+                    && expectedDirectoryIds.equals(Set.copyOf(registration.cordonedDirectories()));
+            }, 10_000, "Relative cordoned log directories were not propagated to the controller");
+
+            Throwable exception = assertThrows(ExecutionException.class, () -> admin.createTopics(newTopic(TOPIC1, (short) 1)).all().get());
+            assertInstanceOf(InvalidReplicationFactorException.class, exception.getCause());
         }
     }
 

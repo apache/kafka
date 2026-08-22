@@ -48,6 +48,7 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -106,12 +107,26 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return Optional.ofNullable(getList(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getList(ServerLogConfigs.LOG_DIR_CONFIG));
     }
 
+    public List<String> absoluteLogDirs() {
+        return toAbsolutePaths(logDirs());
+    }
+
     public List<String> cordonedLogDirs() {
         List<String> configuredCordonedLogDirs = getList(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG);
         if (configuredCordonedLogDirs.contains(ServerLogConfigs.CORDONED_LOG_DIRS_ALL)) {
             return logDirs();
         }
         return configuredCordonedLogDirs;
+    }
+
+    public List<String> absoluteCordonedLogDirs() {
+        return toAbsolutePaths(cordonedLogDirs());
+    }
+
+    private static List<String> toAbsolutePaths(List<String> paths) {
+        return paths.stream()
+            .map(path -> new File(path).getAbsolutePath())
+            .toList();
     }
 
     public int numIoThreads() {
