@@ -2553,6 +2553,24 @@ public class SenderTest {
     }
 
     @Test
+    public void testRecordQueueTimeIncludesBatchesExpiredInAccumulator() throws Exception {
+        Future<RecordMetadata> request = appendToAccumulator(tp0);
+
+        Node node = metadata.fetch().nodes().get(0);
+        client.delayReady(node, DELIVERY_TIMEOUT_MS + 100L);
+        time.sleep(DELIVERY_TIMEOUT_MS + 1L);
+
+        sender.runOnce();
+
+        assertFutureFailure(request, TimeoutException.class);
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+
+        KafkaMetric maxMetric = metrics.metrics().get(this.senderMetricsRegistry.recordQueueTimeMax);
+        assertEquals(DELIVERY_TIMEOUT_MS + 1.0, (Double) maxMetric.metricValue(), EPS);
+    }
+
+    @Test
     public void testRecordErrorPropagatedToApplication() throws InterruptedException {
         int recordCount = 5;
 
