@@ -22,15 +22,21 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.lang.reflect.Field;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -96,5 +102,51 @@ public class StandardAclTest {
             "User:*", "*", AclOperation.ALTER, AclPermissionType.ALLOW);
         assertEquals("User", acl.kafkaPrincipal().getPrincipalType());
         assertEquals("*", acl.kafkaPrincipal().getName());
+    }
+
+    /**
+     * The static kafkaPrincipal() cache is shared by every StandardAcl in the JVM and is never
+     * explicitly cleared, so it must stay bounded even when a long-running cluster churns through
+     * many distinct principal strings over time. Verify that parsing stays correct once the cache
+     * is full and that its size never exceeds the documented bound.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testKafkaPrincipalCacheIsBounded() throws Exception {
+        Field cacheField = StandardAcl.class.getDeclaredField("PRINCIPAL_CACHE");
+        cacheField.setAccessible(true);
+        Map<String, KafkaPrincipal> cache = (Map<String, KafkaPrincipal>) cacheField.get(null);
+
+        Field maxField = StandardAcl.class.getDeclaredField("MAX_CACHED_PRINCIPALS");
+        maxField.setAccessible(true);
+        int maxCachedPrincipals = maxField.getInt(null);
+
+        Map<String, KafkaPrincipal> previousEntries = new HashMap<>(cache);
+        cache.clear();
+        try {
+            int principalsBeforeConcurrentAdmission = maxCachedPrincipals - 32;
+            for (int i = 0; i < principalsBeforeConcurrentAdmission; i++) {
+                assertPrincipalParsed(i);
+            }
+
+            IntStream.range(principalsBeforeConcurrentAdmission, maxCachedPrincipals + 500)
+                .parallel()
+                .forEach(StandardAclTest::assertPrincipalParsed);
+
+            assertTrue(cache.size() <= maxCachedPrincipals,
+                "Principal cache grew past its bound: size=" + cache.size() + " max=" + maxCachedPrincipals);
+        } finally {
+            cache.clear();
+            cache.putAll(previousEntries);
+        }
+    }
+
+    private static void assertPrincipalParsed(int id) {
+        StandardAcl acl = new StandardAcl(
+            ResourceType.TOPIC, "foo", PatternType.LITERAL,
+            "User:cache-bound-test-" + id, "*", AclOperation.READ, AclPermissionType.ALLOW);
+        KafkaPrincipal principal = acl.kafkaPrincipal();
+        assertEquals("User", principal.getPrincipalType());
+        assertEquals("cache-bound-test-" + id, principal.getName());
     }
 }

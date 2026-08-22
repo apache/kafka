@@ -33,8 +33,8 @@ import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
-import org.apache.kafka.server.immutable.ImmutableNavigableSet;
 import org.apache.kafka.server.authorizer.internals.CidrUtils;
+import org.apache.kafka.server.immutable.ImmutableNavigableSet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
