@@ -59,13 +59,11 @@ class StreamsTopologyDescriptionPluginTest(Test):
             num_nodes=1,
             zk=None,
             topics=self.topics,
-            use_streams_groups=True,
             server_prop_overrides=server_prop_overrides,
         )
         if broker_version is not None:
             self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
-        self.kafka.run_features_command("upgrade", "streams.version", 1)
 
     @cluster(num_nodes=2)
     @matrix(metadata_quorum=[quorum.combined_kraft])
