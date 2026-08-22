@@ -98,6 +98,13 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
             "Partition Count * offset.lag.max = Approximate duplicated record count (Actual value can be lower or even higher depending on timing and consumer lag)";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
+    public static final String OFFSET_VALIDATION_ENABLED = "offset.validation" + ENABLED_SUFFIX;
+    private static final String OFFSET_VALIDATION_ENABLED_DOC = "Whether to fail the MirrorSourceTask when its next source offset is no longer available. "
+            + "When enabled, the replication consumer uses auto.offset.reset=none so invalid offsets are surfaced instead of silently reset. "
+            + "The task throws " + DataLossException.class.getSimpleName() + " when earlier records were purged, or "
+            + TopicResetException.class.getSimpleName() + " when the source topic appears to have been reset or recreated.";
+    public static final boolean OFFSET_VALIDATION_ENABLED_DEFAULT = false;
+
     public static final String HEARTBEATS_REPLICATION_ENABLED = "heartbeats.replication" + ENABLED_SUFFIX;
     private static final String HEARTBEATS_REPLICATION_ENABLED_DOC = "Whether to replicate the heartbeats topics even when the topic filter does not include them." +
             " If set to true, heartbeats topics identified by the replication policy will always be replicated, regardless of the topic filter configuration." +
@@ -213,6 +220,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
+    boolean offsetValidationEnabled() {
+        return getBoolean(OFFSET_VALIDATION_ENABLED);
+    }
+
     boolean emitOffsetSyncsEnabled() {
         return getBoolean(EMIT_OFFSET_SYNCS_ENABLED);
     }
@@ -320,6 +331,12 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         OFFSET_LAG_MAX_DEFAULT,
                         ConfigDef.Importance.LOW,
                         OFFSET_LAG_MAX_DOC)
+                .define(
+                        OFFSET_VALIDATION_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        OFFSET_VALIDATION_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        OFFSET_VALIDATION_ENABLED_DOC)
                 .define(
                         OFFSET_SYNCS_TOPIC_LOCATION,
                         ConfigDef.Type.STRING,
