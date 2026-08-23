@@ -149,6 +149,11 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
  */
 public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
+
+    /**
+     * The default value for the maximum number of partitions in total that can be created by a single
+     * CreateTopics batch.
+     */
     static final int MAX_PARTITIONS_PER_BATCH = 10_000;
 
     static class Builder {
@@ -158,6 +163,7 @@ public class ReplicationControlManager {
         private int defaultNumPartitions = 1;
 
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
+        private int maxPartitionsPerBatch = MAX_PARTITIONS_PER_BATCH;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
@@ -185,6 +191,11 @@ public class ReplicationControlManager {
 
         Builder setMaxElectionsPerImbalance(int maxElectionsPerImbalance) {
             this.maxElectionsPerImbalance = maxElectionsPerImbalance;
+            return this;
+        }
+
+        Builder setMaxPartitionsPerBatch(int maxPartitionsPerBatch) {
+            this.maxPartitionsPerBatch = maxPartitionsPerBatch;
             return this;
         }
 
@@ -224,6 +235,7 @@ public class ReplicationControlManager {
                 defaultReplicationFactor,
                 defaultNumPartitions,
                 maxElectionsPerImbalance,
+                maxPartitionsPerBatch,
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
@@ -299,6 +311,11 @@ public class ReplicationControlManager {
      * Maximum number of leader elections to perform during one partition leader balancing operation.
      */
     private final int maxElectionsPerImbalance;
+
+    /**
+     * Maximum number of partitions in total that can be created by a single CreateTopics batch.
+     */
+    private final int maxPartitionsPerBatch;
 
     /**
      * A reference to the controller's configuration control manager.
@@ -384,6 +401,7 @@ public class ReplicationControlManager {
         short defaultReplicationFactor,
         int defaultNumPartitions,
         int maxElectionsPerImbalance,
+        int maxPartitionsPerBatch,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
@@ -394,6 +412,7 @@ public class ReplicationControlManager {
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
+        this.maxPartitionsPerBatch = maxPartitionsPerBatch;
         this.configurationControl = configurationControl;
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;
@@ -633,7 +652,7 @@ public class ReplicationControlManager {
         Map<String, ApiError> topicErrors = new HashMap<>();
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
 
-        validateTotalNumberOfPartitions(request, defaultNumPartitions);
+        validateTotalNumberOfPartitions(request, defaultNumPartitions, maxPartitionsPerBatch);
 
         // Check the topic names.
         validateNewTopicNames(topicErrors, request.topics(), topicsWithCollisionChars);
@@ -1211,15 +1230,21 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Validates that a batch of topics will create at most {@value MAX_PARTITIONS_PER_BATCH}. Exceeding this number of topics per batch
-     * has led to out-of-memory exceptions. We use this validation to fail earlier to avoid allocating the memory.
-     * Validates an upper bound number of partitions. The actual number may be smaller if some topics are misconfigured.
+     * Validates that a batch of topics will create at most maxPartitionsPerBatch partitions. Exceeding this number of
+     * partitions per batch has led to out-of-memory exceptions. We use this validation to fail earlier to avoid
+     * allocating the memory. Validates an upper bound number of partitions. The actual number may be smaller if some
+     * topics are misconfigured.
      *
      * @param request a batch of topics to create.
      * @param defaultNumPartitions default number of partitions to assign if unspecified.
-     * @throws PolicyViolationException if total number of partitions exceeds {@value MAX_PARTITIONS_PER_BATCH}.
+     * @param maxPartitionsPerBatch maximum number of partitions allowed in a single batch.
+     * @throws PolicyViolationException if total number of partitions exceeds maxPartitionsPerBatch.
      */
-    static void validateTotalNumberOfPartitions(CreateTopicsRequestData request, int defaultNumPartitions) {
+    static void validateTotalNumberOfPartitions(
+        CreateTopicsRequestData request,
+        int defaultNumPartitions,
+        int maxPartitionsPerBatch
+    ) {
         long totalPartitions = 0;
         for (CreatableTopic topic: request.topics()) {
             if (topic.assignments().isEmpty()) {
@@ -1231,7 +1256,7 @@ public class ReplicationControlManager {
             } else {
                 totalPartitions += topic.assignments().size();
             }
-            if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
+            if (totalPartitions > maxPartitionsPerBatch) {
                 throw new PolicyViolationException("Excessively large number of partitions per request.");
             }
         }

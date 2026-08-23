@@ -203,6 +203,7 @@ public final class QuorumController implements Controller {
         private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
+        private int maxPartitionsPerBatch = ReplicationControlManager.MAX_PARTITIONS_PER_BATCH;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
@@ -281,6 +282,11 @@ public final class QuorumController implements Controller {
 
         public Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
+            return this;
+        }
+
+        public Builder setMaxPartitionsPerBatch(int maxPartitionsPerBatch) {
+            this.maxPartitionsPerBatch = maxPartitionsPerBatch;
             return this;
         }
 
@@ -436,6 +442,7 @@ public final class QuorumController implements Controller {
                     quorumFeatures,
                     defaultReplicationFactor,
                     defaultNumPartitions,
+                    maxPartitionsPerBatch,
                     replicaPlacer,
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
@@ -1519,6 +1526,7 @@ public final class QuorumController implements Controller {
         QuorumFeatures quorumFeatures,
         short defaultReplicationFactor,
         int defaultNumPartitions,
+        int maxPartitionsPerBatch,
         ReplicaPlacer replicaPlacer,
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
@@ -1604,6 +1612,7 @@ public final class QuorumController implements Controller {
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
+            setMaxPartitionsPerBatch(maxPartitionsPerBatch).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
             setCreateTopicPolicy(createTopicPolicy).
