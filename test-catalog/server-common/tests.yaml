@@ -130,9 +130,9 @@ org.apache.kafka.server.common.KRaftVersionTest:
 - testKraftVersionRecordVersion
 - testQuorumStateVersion
 org.apache.kafka.server.common.MetadataVersionTest:
-- assertLatestProductionIsNotAfterLatestTesting
+- assertLatestIsNotProduction
+- assertLatestProductionIsLessThanLatest
 - assertLatestProductionIsProduction
-- assertLatestTestingIsUnstable
 - testDirectoryAssignmentSupported
 - testFeatureLevels
 - testFromShortVersionString
