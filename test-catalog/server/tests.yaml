@@ -13,6 +13,7 @@ org.apache.kafka.network.RequestConvertToJsonTest:
 - testClientInfoNode
 - testRequestDesc
 - testRequestDescMetrics
+- testRequestDescMetricsOmitsNonPositiveMetrics
 - testRequestHeaderNode
 org.apache.kafka.network.RequestTest:
 - testAlterRequests
