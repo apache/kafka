@@ -34,6 +34,10 @@ import java.util.function.Supplier;
 
 public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<SubscriptionWrapper<KLeft>, KLeft, Void> {
 
+    // Sentinel for a null primaryPartition, which the fixed-width V1 field cannot otherwise express.
+    // Partitions are never negative, so -1 can never collide with a real value.
+    private static final int NULL_PRIMARY_PARTITION = -1;
+
     public SubscriptionWrapperSerde(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
                                     final Serde<KLeft> primaryKeySerde) {
         super(
@@ -158,7 +162,7 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
 
         private byte[] serializeV1(final SubscriptionWrapper<KLeft> data, final Headers headers) {
             final ByteBuffer buf = serializeCommon(data, headers, data.version(), Integer.BYTES);
-            buf.putInt(data.primaryPartition());
+            buf.putInt(data.primaryPartition() == null ? NULL_PRIMARY_PARTITION : data.primaryPartition());
             return buf.array();
         }
     }
@@ -224,7 +228,8 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
             );
             final Integer primaryPartition;
             if (version > 0) {
-                primaryPartition = buf.getInt();
+                final int rawPrimaryPartition = buf.getInt();
+                primaryPartition = rawPrimaryPartition == NULL_PRIMARY_PARTITION ? null : rawPrimaryPartition;
             } else {
                 primaryPartition = null;
             }

@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -36,8 +37,15 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TableJoined;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -47,8 +55,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -69,6 +80,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
     private static final String LEFT_TABLE = "left_table";
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
+    private static final String LEFT_STORE = "left-store";
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
@@ -484,5 +496,99 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
         assertTrue(leftPartitionerCalled.get());
         assertTrue(rightPartitionerCalled.get());
+    }
+
+    /**
+     * Regression test for KAKFA-20792.
+     * <p>
+     * When a punctuator deletes a record from the materialized store backing the left-hand side of a foreign-key join,
+     * the {@code  StreamTask#punctuate} sets a dummy {@code ProcessorRecordContext} (null topic, -1 partition, -1 offset).
+     * The caching layer captures that dummy context and replays it when the change is flushed downstream. The subscription
+     * send processor injects that -1 into {@code SubscriptionWrapper#primaryPartition}, which later failed with
+     * {@code IllegalArgumentException: Invalid partition: -1} when the subscription response was routed back to the primary-key partition.
+     */
+    @Test
+    public void shouldNotFailWhenPunctuatorDeletesFromLeftTableStore() {
+        final String leftTopic = "left-topic";
+        final String rightTopic = "right-topic";
+        final String primaryKey = "pk";
+        final String foreignKey = "fk";
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, String> left = builder
+                .stream(leftTopic, Consumed.with(Serdes.String(), Serdes.String()))
+                .toTable(Materialized.as(LEFT_STORE));
+
+        final KTable<String, String> right = builder
+                .stream(rightTopic, Consumed.with(Serdes.String(), Serdes.String()))
+                .toTable(Materialized.as("right-store"));
+
+        left.leftJoin(
+                right,
+                value -> foreignKey,
+                (leftValue, rightValue) -> leftValue + "+" + rightValue,
+                Materialized.as("join-store"))
+                .toStream()
+                .to(OUTPUT, Produced.with(Serdes.String(), Serdes.String()));
+
+        // attach a wall-clock punctuator to the left table's own mateialized store
+        left.toStream().processValues(StoreCleaner::new, LEFT_STORE);
+
+        final Properties config = new Properties();
+        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "fk-join-punctuation-test");
+        config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        // caching must be enabled: the cache flush listener is what replays the record context that was captured
+        // while the punctuator mutated the store
+        config.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, String.valueOf(10 * 1024 * 1024));
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(config).build()) {
+            final TestInputTopic<String, String> leftInput = driver.createInputTopic(leftTopic, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> rightInput = driver.createInputTopic(rightTopic, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> output = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+
+            rightInput.pipeInput(foreignKey, "rightValue");
+            leftInput.pipeInput(primaryKey, "leftValue");
+
+            assertThat(output.readKeyValue(), is(KeyValue.pair(primaryKey, "leftValue+rightValue")));
+
+            // fires the punctuator, which deletes the left record and the subsequent cache flush forwards the change
+            // downstream while the dummy punctuation record context is in effect
+            driver.advanceWallClockTime(Duration.ofSeconds(2));
+
+            // the left join must emit a tombstone rather than failing or dropping the delete silently
+            assertThat(output.readKeyValue(), is(KeyValue.pair(primaryKey, null)));
+            assertTrue(output.isEmpty());
+        }
+    }
+
+    /**
+     * Deletes every record from {@link #LEFT_STORE} on each wall-clock-time punctuation.
+     */
+    private static final class StoreCleaner implements FixedKeyProcessor<String, String, String> {
+
+        private TimestampedKeyValueStore<String, String> store;
+
+        @Override
+        public void init(final FixedKeyProcessorContext<String, String> context) {
+            store = context.getStateStore(LEFT_STORE);
+            context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+                final List<String> keys = new ArrayList<>();
+                try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = store.all()) {
+                    while (iterator.hasNext()) {
+                        keys.add(iterator.next().key);
+                    }
+                }
+                keys.forEach(store::delete);
+            });
+        }
+
+        @Override
+        public void process(final FixedKeyRecord<String, String> record) {
+            // no-op: this processor exists only to own the punctuator and connect the store
+        }
     }
 }
