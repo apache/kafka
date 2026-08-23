@@ -141,7 +141,7 @@ public class IQv2StoreIntegrationTest {
         (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS,
-            // Each test application has one Streams group member, so waiting for more members only delays startup.
+        // Each test application has one Streams group member, so waiting for more members only delays startup.
         Utils.mkProperties(Map.of(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")));
     private static final Position POSITION_0 =
         Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 5L)))));
