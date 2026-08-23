@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -77,23 +78,33 @@ public class MetricsDuringTopicCreationDeletionTest {
         final int initialPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
         final int initialUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
 
+        AtomicInteger offlinePartitionsCount =
+            new AtomicInteger(initialOfflinePartitionsCount);
+        AtomicInteger preferredReplicaImbalanceCount =
+            new AtomicInteger(initialPreferredReplicaImbalanceCount);
+        AtomicInteger underReplicatedPartitionsCount =
+            new AtomicInteger(initialUnderReplicatedPartitionsCount);
+
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
             while (running) {
-                int offlinePartitionsCount = getGauge("OfflinePartitionsCount").value();
-                int preferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
-                int underReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
+                offlinePartitionsCount.set(getGauge("OfflinePartitionsCount").value());
+                preferredReplicaImbalanceCount.set(
+                    getGauge("PreferredReplicaImbalanceCount").value());
+                underReplicatedPartitionsCount.set(
+                    getGauge("UnderReplicatedPartitions").value());
 
-                if (offlinePartitionsCount != initialOfflinePartitionsCount ||
-                    preferredReplicaImbalanceCount != initialPreferredReplicaImbalanceCount ||
-                    underReplicatedPartitionsCount != initialUnderReplicatedPartitionsCount) {
+                if (offlinePartitionsCount.get() != initialOfflinePartitionsCount ||
+                    preferredReplicaImbalanceCount.get() != initialPreferredReplicaImbalanceCount ||
+                    underReplicatedPartitionsCount.get() != initialUnderReplicatedPartitionsCount) {
                     running = false;
                 }
 
                 try {
                     // Avoid busy loop
                     TimeUnit.MILLISECONDS.sleep(100);
-                } catch (InterruptedException ignored) {
-
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    running = false;
                 }
             }
         });
@@ -107,16 +118,15 @@ public class MetricsDuringTopicCreationDeletionTest {
             createAndDeleteTopics();
         }
 
-        final int finalOfflinePartitionsCount = getGauge("OfflinePartitionsCount").value();
-        final int finalPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
-        final int finalUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
-
-        assertEquals(initialOfflinePartitionsCount, finalOfflinePartitionsCount,
-            "Expect offlinePartitionsCount to be " + initialOfflinePartitionsCount + ", but got: " + finalOfflinePartitionsCount);
-        assertEquals(initialPreferredReplicaImbalanceCount, finalPreferredReplicaImbalanceCount,
-            "Expect PreferredReplicaImbalanceCount to be " + initialPreferredReplicaImbalanceCount + ", but got: " + finalPreferredReplicaImbalanceCount);
-        assertEquals(initialUnderReplicatedPartitionsCount, finalUnderReplicatedPartitionsCount,
-            "Expect UnderReplicatedPartitionCount to be " + initialUnderReplicatedPartitionsCount + ", but got: " + finalUnderReplicatedPartitionsCount);
+        assertEquals(initialOfflinePartitionsCount, offlinePartitionsCount.get(),
+            "Expect offlinePartitionsCount to be " + initialOfflinePartitionsCount
+                + ", but got: " + offlinePartitionsCount.get());
+        assertEquals(initialPreferredReplicaImbalanceCount, preferredReplicaImbalanceCount.get(),
+            "Expect PreferredReplicaImbalanceCount to be " + initialPreferredReplicaImbalanceCount
+                + ", but got: " + preferredReplicaImbalanceCount.get());
+        assertEquals(initialUnderReplicatedPartitionsCount, underReplicatedPartitionsCount.get(),
+            "Expect UnderReplicatedPartitionCount to be " + initialUnderReplicatedPartitionsCount
+                + ", but got: " + underReplicatedPartitionsCount.get());
     }
 
     private void createAndDeleteTopics() {
