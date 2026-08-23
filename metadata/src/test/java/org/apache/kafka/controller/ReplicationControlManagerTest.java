@@ -94,6 +94,7 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -271,6 +272,7 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
+                setMaxPartitionsPerBatch(KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT).
                 setConfigurationControl(configurationControl).
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
@@ -625,7 +627,7 @@ public class ReplicationControlManagerTest {
                 .setAssignments(assignments));
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
-                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999, ReplicationControlManager.MAX_PARTITIONS_PER_BATCH)
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999, KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT)
         );
         assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
     }
@@ -640,7 +642,7 @@ public class ReplicationControlManagerTest {
 
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
-                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1, ReplicationControlManager.MAX_PARTITIONS_PER_BATCH)
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1, KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT)
         );
         assertEquals("Excessively large number of partitions per request.", error.getMessage());
     }

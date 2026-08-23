@@ -112,6 +112,7 @@ import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.authorizer.AclCreateResult;
@@ -203,7 +204,7 @@ public final class QuorumController implements Controller {
         private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
-        private int maxPartitionsPerBatch = ReplicationControlManager.MAX_PARTITIONS_PER_BATCH;
+        private int maxPartitionsPerBatch = KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();

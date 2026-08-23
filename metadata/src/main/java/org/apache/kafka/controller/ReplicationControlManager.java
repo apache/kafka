@@ -150,12 +150,6 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
 
-    /**
-     * The default value for the maximum number of partitions in total that can be created by a single
-     * CreateTopics batch.
-     */
-    static final int MAX_PARTITIONS_PER_BATCH = 10_000;
-
     static class Builder {
         private SnapshotRegistry snapshotRegistry = null;
         private LogContext logContext = null;
@@ -163,7 +157,7 @@ public class ReplicationControlManager {
         private int defaultNumPartitions = 1;
 
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
-        private int maxPartitionsPerBatch = MAX_PARTITIONS_PER_BATCH;
+        private int maxPartitionsPerBatch = -1;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
@@ -224,6 +218,8 @@ public class ReplicationControlManager {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
                 throw new IllegalStateException("Cluster control must be set before building");
+            } else if (maxPartitionsPerBatch == -1) {
+                throw new IllegalStateException("Max partitions per batch must be set before building");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
