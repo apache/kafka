@@ -112,7 +112,6 @@ import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
-import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.authorizer.AclCreateResult;
@@ -204,7 +203,7 @@ public final class QuorumController implements Controller {
         private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
-        private int maxPartitionsPerBatch = KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT;
+        private int maxPartitionsPerBatch = 0;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
@@ -408,6 +407,8 @@ public final class QuorumController implements Controller {
                 throw new IllegalStateException("You must specify a non-fatal fault handler.");
             } else if (fatalFaultHandler == null) {
                 throw new IllegalStateException("You must specify a fatal fault handler.");
+            } else if (maxPartitionsPerBatch == 0) {
+                throw new IllegalStateException("You must specify the max partitions per batch.");
             }
 
             if (threadNamePrefix == null) {

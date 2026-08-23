@@ -157,7 +157,7 @@ public class ReplicationControlManager {
         private int defaultNumPartitions = 1;
 
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
-        private int maxPartitionsPerBatch = -1;
+        private int maxPartitionsPerBatch;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
@@ -218,7 +218,7 @@ public class ReplicationControlManager {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
                 throw new IllegalStateException("Cluster control must be set before building");
-            } else if (maxPartitionsPerBatch == -1) {
+            } else if (maxPartitionsPerBatch == 0) {
                 throw new IllegalStateException("Max partitions per batch must be set before building");
             }
             if (logContext == null) logContext = new LogContext();
