@@ -131,6 +131,14 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
 
     public static final String TASK_INDEX = "task.index";
 
+    public static final String FAIL_FAST_ON_OFFSET_RESET = "fail.fast.on.offset.reset";
+    public static final boolean FAIL_FAST_ON_OFFSET_RESET_DEFAULT = false;
+    private static final String FAIL_FAST_ON_OFFSET_RESET_DOC = "If true, the source consumer is configured with "
+            + AUTO_OFFSET_RESET_CONFIG + "=none and MirrorSourceTask fails the task immediately with "
+            + "DataLossException or TopicResetException whenever a previously replicated offset is no longer "
+            + "available on the source topic, instead of silently resetting to the earliest offset. Defaults to "
+            + "false to preserve MirrorMaker 2's historical behavior.";
+
     private final ReplicationPolicy replicationPolicy;
 
     @SuppressWarnings("this-escape")
@@ -163,6 +171,10 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         return replicationPolicy;
     }
 
+    boolean failFastOnOffsetReset() {
+        return getBoolean(FAIL_FAST_ON_OFFSET_RESET);
+    }
+
     Map<String, Object> sourceProducerConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
@@ -186,7 +198,13 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         result.putAll(Utils.entriesWithPrefix(props, CONSUMER_CLIENT_PREFIX));
         result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));
         result.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
-        result.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // This is a static helper (also used before the connector's config is fully parsed), so we read the
+        // fail-fast flag straight off the raw props map rather than through a typed getter. When enabled, the
+        // consumer is switched to auto.offset.reset=none so MirrorSourceTask sees OffsetOutOfRangeException
+        // instead of the consumer silently resolving it to the earliest offset.
+        boolean failFastOnOffsetReset = Boolean.parseBoolean(
+                String.valueOf(props.getOrDefault(FAIL_FAST_ON_OFFSET_RESET, FAIL_FAST_ON_OFFSET_RESET_DEFAULT)));
+        result.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, failFastOnOffsetReset ? "none" : "earliest");
         return result;
     }
 
@@ -312,6 +330,12 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     FORWARDING_ADMIN_CLASS_DEFAULT,
                     ConfigDef.Importance.LOW,
                     FORWARDING_ADMIN_CLASS_DOC)
+            .define(
+                    FAIL_FAST_ON_OFFSET_RESET,
+                    ConfigDef.Type.BOOLEAN,
+                    FAIL_FAST_ON_OFFSET_RESET_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    FAIL_FAST_ON_OFFSET_RESET_DOC)
             .define(
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     ConfigDef.Type.LIST,
