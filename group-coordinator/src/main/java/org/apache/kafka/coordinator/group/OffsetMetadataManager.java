@@ -259,6 +259,16 @@ public class OffsetMetadataManager {
         }
 
         /**
+         * Snapshot-aware overload of {@link #contains(String)}: returns {@code true} if the
+         * given group had any pending transactional offsets at {@code committedOffset}. Used
+         * by read operations that must only observe committed state (e.g. the topology
+         * cleanup cycle's eligibility scan).
+         */
+        private boolean contains(String groupId, long committedOffset) {
+            return openTransactionsByGroup.containsKey(groupId, committedOffset);
+        }
+
+        /**
          * Returns {@code true} if the given group has any pending transactional offsets for the given topic and partition.
          *
          * @param groupId   The group id.
@@ -1035,6 +1045,24 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * Whether {@code groupId} currently has no committed offsets and no pending transactional
+     * offsets at the snapshot {@code committedOffset}. Used by the topology-description plugin
+     * cleanup cycle on the eligibility read side — the regular offset-expiration cycle is
+     * already running periodically and tombstoning expired offsets, so by the time this is
+     * called the group's {@code offsetsByGroup} entry is gone iff every committed offset has
+     * been expired and no transactional commits are in flight.
+     *
+     * <p>{@code committedOffset} is the snapshot point the runtime hands to the read operation
+     * that calls this method. Both lookups go through that snapshot — the runtime contract is
+     * that read operations only observe committed state, so a concurrent uncommitted offset
+     * commit or pending-transaction record must not flip the eligibility outcome on us.
+     */
+    public boolean groupHasNoOffsets(String groupId, long committedOffset) {
+        return offsets.offsetsByGroup.get(groupId, committedOffset) == null
+            && !openTransactions.contains(groupId, committedOffset);
+    }
+
+    /**
      * Remove expired offsets for the given group.
      *
      * @param groupId The group id.
@@ -1066,8 +1094,8 @@ public class OffsetMetadataManager {
             if (!group.isSubscribedToTopic(topic)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
                     // We don't expire the offset yet if there is a pending transactional offset for the partition.
-                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs()) &&
-                        !hasPendingTransactionalOffsets(groupId, topic, partition)) {
+                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
+                        && !hasPendingTransactionalOffsets(groupId, topic, partition)) {
                         appendOffsetCommitTombstone(groupId, topic, partition, records);
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {

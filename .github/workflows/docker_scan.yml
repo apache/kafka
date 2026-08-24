@@ -26,10 +26,10 @@ jobs:
     strategy:
       matrix:
         # This is an array of supported tags. Make sure this array only contains the supported tags
-        supported_image_tag: ['latest', '3.9.2', '4.0.2', '4.1.2', '4.2.1', '4.3.0']
+        supported_image_tag: ['latest', '3.9.2', '4.0.2', '4.1.2', '4.2.1', '4.3.1']
     steps:
       - name: Run CVE scan
-        uses: lhotari/sandboxed-trivy-action@555963036b2012b44c1071508a236e569db28ebb # v1.0.1
+        uses: lhotari/sandboxed-trivy-action@f01374b6cc3bf7264ab238293e94f6db7ada6dd0 # v1.0.2
         if: always()
         with:
           scan-type: 'image'

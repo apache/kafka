@@ -150,6 +150,22 @@ public class GroupCoordinatorMetricsTest {
                 Map.of("protocol", Group.GroupType.STREAMS.toString())),
             metrics.metricName("streams-group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("streams-group-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-cleanup-cycle-rate", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-cleanup-cycle-count", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-cleanup-eligible-rate", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-cleanup-eligible-count", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-delete-success-rate", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-delete-success-count", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-delete-error-rate", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-delete-error-count", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-set-success-rate", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-set-success-count", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-set-error-rate", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-set-error-count", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-get-success-rate", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-get-success-count", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-get-error-rate", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("streams-group-topology-description-get-error-count", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName(
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
@@ -397,6 +413,31 @@ public class GroupCoordinatorMetricsTest {
             GroupCoordinatorMetrics.METRICS_GROUP,
             "The total number of streams group rebalances"
         ), 50);
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionSetAndGetSensors() {
+        MetricsRegistry registry = new MetricsRegistry();
+        Time time = new MockTime();
+        Metrics metrics = new Metrics(time);
+        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
+
+        coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
+        coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
+        coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
+        coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+        coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+        coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+        coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+
+        assertMetricValue(metrics, metrics.metricName(
+            "streams-group-topology-description-set-success-count", GroupCoordinatorMetrics.METRICS_GROUP), 1);
+        assertMetricValue(metrics, metrics.metricName(
+            "streams-group-topology-description-set-error-count", GroupCoordinatorMetrics.METRICS_GROUP), 2);
+        assertMetricValue(metrics, metrics.metricName(
+            "streams-group-topology-description-get-success-count", GroupCoordinatorMetrics.METRICS_GROUP), 3);
+        assertMetricValue(metrics, metrics.metricName(
+            "streams-group-topology-description-get-error-count", GroupCoordinatorMetrics.METRICS_GROUP), 1);
     }
 
     private void assertMetricValue(Metrics metrics, MetricName metricName, double val) {

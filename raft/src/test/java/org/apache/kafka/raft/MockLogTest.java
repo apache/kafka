@@ -36,10 +36,6 @@ import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 
-import net.jqwik.api.AfterFailureMode;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -453,20 +449,20 @@ public class MockLogTest {
         assertEquals(previousEndOffset, log.endOffset().offset());
     }
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void testRandomRecords(
-        @ForAll(supplier = ArbitraryMemoryRecords.class) MemoryRecords records
-    ) {
-        try (MockLog log = new MockLog(topicPartition, topicId, new LogContext())) {
-            long previousEndOffset = log.endOffset().offset();
+    @Test
+    void testRandomRecords() {
+        ArbitraryMemoryRecords.forRandomRecords(100, records -> {
+            try (MockLog log = new MockLog(topicPartition, topicId, new LogContext())) {
+                long previousEndOffset = log.endOffset().offset();
 
-            assertThrows(
-                CorruptRecordException.class,
-                () -> log.appendAsFollower(records, Integer.MAX_VALUE)
-            );
+                assertThrows(
+                    CorruptRecordException.class,
+                    () -> log.appendAsFollower(records, Integer.MAX_VALUE)
+                );
 
-            assertEquals(previousEndOffset, log.endOffset().offset());
-        }
+                assertEquals(previousEndOffset, log.endOffset().offset());
+            }
+        });
     }
 
     @Test

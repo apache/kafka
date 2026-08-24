@@ -58,7 +58,13 @@ class KStreamKTableJoin<StreamKey, StreamValue, TableValue, VOut> implements Pro
 
     @Override
     public Processor<StreamKey, StreamValue, StreamKey, VOut> get() {
-        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), keyValueMapper, joiner, leftJoin, gracePeriod, storeName);
+        return new KStreamKTableJoinProcessor<>(
+            valueGetterSupplier.get(),
+            keyValueMapper,
+            (streamKey, mappedKey, value1, value2) -> joiner.apply(streamKey, value1, value2),
+            leftJoin,
+            gracePeriod,
+            storeName);
     }
 
 }

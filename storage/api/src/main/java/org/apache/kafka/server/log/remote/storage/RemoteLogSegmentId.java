@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
@@ -26,6 +28,7 @@ import java.util.Objects;
  * regenerated for every attempt of copying a specific log segment in {@link RemoteStorageManager#copyLogSegmentData(RemoteLogSegmentMetadata, LogSegmentData)}.
  * Once it is stored in remote storage, it is used to access that segment later from remote log metadata storage.
  */
+@InterfaceAudience.Public
 public class RemoteLogSegmentId {
 
     private final TopicIdPartition topicIdPartition;

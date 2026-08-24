@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * The StaleMemberEpochException is used in the context of the new
@@ -22,6 +25,7 @@ package org.apache.kafka.common.errors;
  * OffsetCommit/Fetch APIs when the member epoch received does not
  * match the current member epoch.
  */
+@InterfaceAudience.Public
 public class StaleMemberEpochException extends ApiException {
     public StaleMemberEpochException(String message) {
         super(message);

@@ -1,6 +1,6 @@
 ---
 title: Streams DSL
-description: 
+description: Kafka Streams DSL API for defining stream processing logic.
 weight: 3
 tags: ['kafka', 'docs']
 aliases: 
@@ -58,18 +58,18 @@ The Kafka Streams DSL (Domain Specific Language) is built on top of the Streams 
 
 # Overview
 
-In comparison to the [Processor API](processor-api.html#streams-developer-guide-processor-api), only the DSL supports:
+In comparison to the [Processor API](../processor-api#streams-developer-guide-processor-api), only the DSL supports:
 
-  * Built-in abstractions for [streams and tables](../core-concepts.html#streams_concepts_duality) in the form of KStream, KTable, and GlobalKTable. Having first-class support for streams and tables is crucial because, in practice, most use cases require not just either streams or databases/tables, but a combination of both. For example, if your use case is to create a customer 360-degree view that is updated in real-time, what your application will be doing is transforming many input _streams_ of customer-related events into an output _table_ that contains a continuously updated 360-degree view of your customers.
+  * Built-in abstractions for [streams and tables](../../core-concepts#streams_concepts_duality) in the form of KStream, KTable, and GlobalKTable. Having first-class support for streams and tables is crucial because, in practice, most use cases require not just either streams or databases/tables, but a combination of both. For example, if your use case is to create a customer 360-degree view that is updated in real-time, what your application will be doing is transforming many input _streams_ of customer-related events into an output _table_ that contains a continuously updated 360-degree view of your customers.
   * Declarative, functional programming style with stateless transformations (e.g. `map` and `filter`) as well as stateful transformations such as aggregations (e.g. `count` and `reduce`), joins (e.g. `leftJoin`), and windowing (e.g. session windows).
 
 
 
-With the DSL, you can define [processor topologies](../core-concepts.html#streams_topology) (i.e., the logical processing plan) in your application. The steps to accomplish this are:
+With the DSL, you can define [processor topologies](../../core-concepts#streams_topology) (i.e., the logical processing plan) in your application. The steps to accomplish this are:
 
   1. Specify one or more input streams that are read from Kafka topics.
   2. Compose transformations on these streams.
-  3. Write the resulting output streams back to Kafka topics, or expose the processing results of your application directly to other applications through [interactive queries](interactive-queries.html#streams-developer-guide-interactive-queries) (e.g., via a REST API).
+  3. Write the resulting output streams back to Kafka topics, or expose the processing results of your application directly to other applications through [interactive queries](../interactive-queries#streams-developer-guide-interactive-queries) (e.g., via a REST API).
 
 
 
@@ -105,7 +105,7 @@ If your stream processing application were to sum the values per user, it would 
 
 However, it would not be safe to enable log compaction in the case of a KStream because, as soon as log compaction would begin purging older data records of the same key, it would break the semantics of the data. To pick up the illustration example again, you'd suddenly get a `3` for `alice` instead of a `4` because log compaction would have removed the `("alice", 1)` data record. Hence log compaction is perfectly safe for a KTable (changelog stream) but it is a mistake for a KStream (record stream). 
 
-We have already seen an example of a changelog stream in the section [streams and tables](../core-concepts.html#streams_concepts_duality). Another example are change data capture (CDC) records in the changelog of a relational database, representing which row in a database table was inserted, updated, or deleted. 
+We have already seen an example of a changelog stream in the section [streams and tables](../../core-concepts#streams_concepts_duality). Another example are change data capture (CDC) records in the changelog of a relational database, representing which row in a database table was inserted, updated, or deleted. 
 
 KTable also provides an ability to look up _current_ values of data records by keys. This table-lookup functionality is available through **join operations** (see also **Joining** in the Developer Guide) as well as through **Interactive Queries**. 
 
@@ -185,9 +185,9 @@ In the case of a KStream, the local KStream instance of every application instan
           Serdes.Long()   /* value serde */
         );
 
-If you do not specify Serdes explicitly, the default Serdes from the [configuration](config-streams.html#streams-developer-guide-configuration) are used.
+If you do not specify Serdes explicitly, the default Serdes from the [configuration](../config-streams#streams-developer-guide-configuration) are used.
 
-You **must specify Serdes explicitly** if the key or value types of the records in the Kafka input topics do not match the configured default Serdes. For information about configuring default Serdes, available Serdes, and implementing your own custom Serdes see [Data Types and Serialization](datatypes.html#streams-developer-guide-serdes).
+You **must specify Serdes explicitly** if the key or value types of the records in the Kafka input topics do not match the configured default Serdes. For information about configuring default Serdes, available Serdes, and implementing your own custom Serdes see [Data Types and Serialization](../datatypes#streams-developer-guide-serdes).
 
 Several variants of `stream` exist. For example, you can specify a regex pattern for input topics to read from (note that all matching topics will be part of the same input topic group, and the work will not be parallelized for different topics if subscribed to in this way).
 
@@ -212,11 +212,11 @@ Reads the specified Kafka input topic into a KTable. The topic is interpreted as
 
 In the case of a KTable, the local KTable instance of every application instance will be populated with data from only **a subset** of the partitions of the input topic. Collectively, across all application instances, all input topic partitions are read and processed.
 
-You must provide a name for the table (more precisely, for the internal [state store](../architecture.html#streams_architecture_state) that backs the table). This is required for supporting [interactive queries](interactive-queries.html#streams-developer-guide-interactive-queries) against the table. When a name is not provided the table will not be queryable and an internal name will be provided for the state store.
+You must provide a name for the table (more precisely, for the internal [state store](../../architecture#streams_architecture_state) that backs the table). This is required for supporting [interactive queries](../interactive-queries#streams-developer-guide-interactive-queries) against the table. When a name is not provided the table will not be queryable and an internal name will be provided for the state store.
 
-If you do not specify Serdes explicitly, the default Serdes from the [configuration](config-streams.html#streams-developer-guide-configuration) are used.
+If you do not specify Serdes explicitly, the default Serdes from the [configuration](../config-streams#streams-developer-guide-configuration) are used.
 
-You **must specify Serdes explicitly** if the key or value types of the records in the Kafka input topics do not match the configured default Serdes. For information about configuring default Serdes, available Serdes, and implementing your own custom Serdes see [Data Types and Serialization](datatypes.html#streams-developer-guide-serdes).
+You **must specify Serdes explicitly** if the key or value types of the records in the Kafka input topics do not match the configured default Serdes. For information about configuring default Serdes, available Serdes, and implementing your own custom Serdes see [Data Types and Serialization](../datatypes#streams-developer-guide-serdes).
 
 Several variants of `table` exist, for example to specify the `auto.offset.reset` policy to be used when reading from the input topic.
 
@@ -241,7 +241,7 @@ Reads the specified Kafka input topic into a GlobalKTable. The topic is interpre
 
 In the case of a GlobalKTable, the local GlobalKTable instance of every application instance will be populated with data from **all** the partitions of the input topic.
 
-You must provide a name for the table (more precisely, for the internal [state store](../architecture.html#streams_architecture_state) that backs the table). This is required for supporting [interactive queries](interactive-queries.html#streams-developer-guide-interactive-queries) against the table. When a name is not provided the table will not be queryable and an internal name will be provided for the state store.
+You must provide a name for the table (more precisely, for the internal [state store](../../architecture#streams_architecture_state) that backs the table). This is required for supporting [interactive queries](../interactive-queries#streams-developer-guide-interactive-queries) against the table. When a name is not provided the table will not be queryable and an internal name will be provided for the state store.
     
     
     import org.apache.kafka.common.serialization.Serdes;
@@ -258,7 +258,7 @@ You must provide a name for the table (more precisely, for the internal [state s
           .withValueSerde(Serdes.Long()) /* value serde */
         );
 
-You **must specify Serdes explicitly** if the key or value types of the records in the Kafka input topics do not match the configured default Serdes. For information about configuring default Serdes, available Serdes, and implementing your own custom Serdes see [Data Types and Serialization](datatypes.html#streams-developer-guide-serdes).
+You **must specify Serdes explicitly** if the key or value types of the records in the Kafka input topics do not match the configured default Serdes. For information about configuring default Serdes, available Serdes, and implementing your own custom Serdes see [Data Types and Serialization](../datatypes#streams-developer-guide-serdes).
 
 Several variants of `globalTable` exist to e.g. specify explicit Serdes.
 
@@ -271,7 +271,7 @@ The KStream and KTable interfaces support a variety of transformation operations
 
 Some KStream transformations may generate one or more KStream objects, for example: \- `filter` and `map` on a KStream will generate another KStream \- `split` on KStream can generate multiple KStreams
 
-Some others may generate a KTable object, for example an aggregation of a KStream also yields a KTable. This allows Kafka Streams to continuously update the computed value upon arrivals of [out-of-order records](../core-concepts.html#streams_concepts_aggregations) after it has already been produced to the downstream transformation operators.
+Some others may generate a KTable object, for example an aggregation of a KStream also yields a KTable. This allows Kafka Streams to continuously update the computed value upon arrivals of [out-of-order records](../../core-concepts#streams_concepts_aggregations) after it has already been produced to the downstream transformation operators.
 
 All KTable transformation operations can only generate another KTable. However, the Kafka Streams DSL does provide a special function that converts a KTable representation into a KStream. All of these transformation methods can be chained together to compose a complex processor topology.
 
@@ -284,7 +284,7 @@ These transformation operations are described in the following subsections:
 
 ## Stateless transformations
 
-Stateless transformations do not require state for processing and they do not require a state store associated with the stream processor. Kafka 0.11.0 and later allows you to materialize the result from a stateless `KTable` transformation. This allows the result to be queried through [interactive queries](interactive-queries.html#streams-developer-guide-interactive-queries). To materialize a `KTable`, each of the below stateless operations [can be augmented](interactive-queries.html#streams-developer-guide-interactive-queries-local-key-value-stores) with an optional `queryableStoreName` argument.  
+Stateless transformations do not require state for processing and they do not require a state store associated with the stream processor. Kafka 0.11.0 and later allows you to materialize the result from a stateless `KTable` transformation. This allows the result to be queried through [interactive queries](../interactive-queries#streams-developer-guide-interactive-queries). To materialize a `KTable`, each of the below stateless operations [can be augmented](../interactive-queries#streams-developer-guide-interactive-queries-local-key-value-stores) with an optional `queryableStoreName` argument.  
   
 <table>  
 <tr>  
@@ -915,7 +915,7 @@ Kafka Streams will manage the topic for `repartition()`. Generated topic is trea
 
 ## Stateful transformations
 
-Stateful transformations depend on state for processing inputs and producing outputs and require a [state store](../architecture.html#streams_architecture_state) associated with the stream processor. For example, in aggregating operations, a windowing state store is used to collect the latest aggregation results per window. In join operations, a windowing state store is used to collect all of the records received so far within the defined window boundary.
+Stateful transformations depend on state for processing inputs and producing outputs and require a [state store](../../architecture#streams_architecture_state) associated with the stream processor. For example, in aggregating operations, a windowing state store is used to collect the latest aggregation results per window. In join operations, a windowing state store is used to collect all of the records received so far within the defined window boundary.
 
 **Note:** Following store types are used regardless of the possibly specified type (via the parameter `materialized`): 
 
@@ -925,17 +925,17 @@ Stateful transformations depend on state for processing inputs and producing out
 
 
 
-**Headers-aware state stores ([KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G)):** Set [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format) to make supported DSL operators use headers-aware state stores. These stores can keep record headers together with the value and timestamp.
+**Headers-aware state stores ([KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G)):** Set [`dsl.store.format=HEADERS`](../config-streams#dsl-store-format) to make supported DSL operators use headers-aware state stores. These stores can keep record headers together with the value and timestamp.
 
 This config only changes the state store format. It does not define how DSL operators create headers for output records. Current behavior is:
 
   * aggregations, KTable-KTable joins, materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers to their materialized stores
   * KStream-KStream join window stores keep source-record headers, but join result records do not get computed or merged headers; they may carry the headers from the record that triggered the result
-  * `suppress()` and left/outer [KStream-KStream joins](#kstream-kstream-join) use non-headers-aware buffer stores, so records passing through those buffers lose their headers
+  * left/outer [KStream-KStream joins](#kstream-kstream-join) use a non-headers-aware buffer store for not-yet-matched records, so records passing through that buffer lose their headers
 
 A follow-up KIP will define how DSL result headers are computed.
 
-Note, that state stores are fault-tolerant. In case of failure, Kafka Streams guarantees to fully restore all state stores prior to resuming the processing. See [Fault Tolerance](../architecture.html#streams_architecture_recovery) for further information.
+Note, that state stores are fault-tolerant. In case of failure, Kafka Streams guarantees to fully restore all state stores prior to resuming the processing. See [Fault Tolerance](../../architecture#streams_architecture_recovery) for further information.
 
 Available stateful transformations in the DSL include:
 
@@ -1348,7 +1348,7 @@ See the example at the bottom of this section for a visualization of the aggrega
 
 **Note**
 
-**Impact of record caches** : For illustration purposes, the column "KTable `aggregated`" below shows the table's state changes over time in a very granular way. In practice, you would observe state changes in such a granular way only when [record caches](memory-mgmt.html#streams-developer-guide-memory-management-record-cache) are disabled (default: enabled). When record caches are enabled, what might happen for example is that the output results of the rows with timestamps 4 and 5 would be [compacted](memory-mgmt.html#streams-developer-guide-memory-management-record-cache), and there would only be a single state update for the key `kafka` in the KTable (here: from `(kafka 1)` directly to `(kafka, 3)`. Typically, you should only disable record caches for testing or debugging purposes - under normal circumstances it is better to leave record caches enabled.  
+**Impact of record caches** : For illustration purposes, the column "KTable `aggregated`" below shows the table's state changes over time in a very granular way. In practice, you would observe state changes in such a granular way only when [record caches](../memory-mgmt#streams-developer-guide-memory-management-record-cache) are disabled (default: enabled). When record caches are enabled, what might happen for example is that the output results of the rows with timestamps 4 and 5 would be [compacted](../memory-mgmt#streams-developer-guide-memory-management-record-cache), and there would only be a single state update for the key `kafka` in the KTable (here: from `(kafka 1)` directly to `(kafka, 3)`. Typically, you should only disable record caches for testing or debugging purposes - under normal circumstances it is better to leave record caches enabled.  
   
 <table>  
 <tr>  
@@ -1608,7 +1608,7 @@ State
 
 **Note**
 
-**Impact of record caches** : For illustration purposes, the column "KTable `aggregated`" below shows the table's state changes over time in a very granular way. In practice, you would observe state changes in such a granular way only when [record caches](memory-mgmt.html#streams-developer-guide-memory-management-record-cache) are disabled (default: enabled). When record caches are enabled, what might happen for example is that the output results of the rows with timestamps 4 and 5 would be [compacted](memory-mgmt.html#streams-developer-guide-memory-management-record-cache), and there would only be a single state update for the key `kafka` in the KTable (here: from `(kafka 1)` directly to `(kafka, 3)`. Typically, you should only disable record caches for testing or debugging purposes - under normal circumstances it is better to leave record caches enabled.  
+**Impact of record caches** : For illustration purposes, the column "KTable `aggregated`" below shows the table's state changes over time in a very granular way. In practice, you would observe state changes in such a granular way only when [record caches](../memory-mgmt#streams-developer-guide-memory-management-record-cache) are disabled (default: enabled). When record caches are enabled, what might happen for example is that the output results of the rows with timestamps 4 and 5 would be [compacted](../memory-mgmt#streams-developer-guide-memory-management-record-cache), and there would only be a single state update for the key `kafka` in the KTable (here: from `(kafka 1)` directly to `(kafka, 3)`. Typically, you should only disable record caches for testing or debugging purposes - under normal circumstances it is better to leave record caches enabled.  
   
 <table>  
 <tr>  
@@ -2127,7 +2127,7 @@ There are two exceptions where co-partitioning is not required. For KStream-Glob
 
 KStream-KStream joins are always windowed joins, because otherwise the size of the internal state store used to perform the join - e.g., a sliding window or "buffer" - would grow indefinitely.
 
-**Note on headers-aware state stores:** With [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format), inner stream-stream joins use headers-aware join window stores. Left and outer stream-stream joins also use a separate buffer store for not-yet-matched records, and that buffer is not headers-aware. Records that pass through this buffer lose their headers.
+**Note on headers-aware state stores:** With [`dsl.store.format=HEADERS`](../config-streams#dsl-store-format), inner stream-stream joins use headers-aware join window stores. Left and outer stream-stream joins also use a separate buffer store for not-yet-matched records, and that buffer is not headers-aware. Records that pass through this buffer lose their headers.
 
 Join output records do not get computed or merged headers. The current forwarding path may carry the headers from the record that triggered the output. For stream-stream joins it's important to highlight that a new input record on one side will produce a join output _for each_ matching record on the other side, and there can be _multiple_ such matching records in a given join window (cf. the row with timestamp 15 in the join semantics table below, for example).
 
@@ -4462,7 +4462,7 @@ Windowing lets you control how to group records that have the same key for state
 
 A related operation is grouping, which groups all records that have the same key to ensure that data is properly partitioned ("keyed") for subsequent operations. Once grouped, windowing allows you to further sub-group the records of a key.
 
-For example, in join operations, a windowing state store is used to store all the records received so far within the defined window boundary. In aggregating operations, a windowing state store is used to store the latest aggregation results per window. Old records in the state store are purged after the specified [window retention period](../core-concepts.html#streams_concepts_windowing). Kafka Streams guarantees to keep a window for at least this specified time; the default value is one day and can be changed via `Materialized#withRetention()`.
+For example, in join operations, a windowing state store is used to store all the records received so far within the defined window boundary. In aggregating operations, a windowing state store is used to store the latest aggregation results per window. Old records in the state store are purged after the specified [window retention period](../../core-concepts#streams_concepts_windowing). Kafka Streams guarantees to keep a window for at least this specified time; the default value is one day and can be changed via `Materialized#withRetention()`.
 
 The DSL supports the following types of windows:  
   
@@ -4672,8 +4672,6 @@ The key parts of this program are:
      This configures the buffer used for storing events until their windows close. Production code is able to put a cap on the amount of memory to use for the buffer, but this simple example creates a buffer with no upper bound. 
 
 One thing to note is that suppression is just like any other Kafka Streams operator, so you can build a topology with two branches emerging from the `count`, one suppressed, and one not, or even multiple differently configured suppressions. This allows you to apply suppressions where they are needed and otherwise rely on the default continuous update behavior. 
-
-**Note on headers-aware state stores:** `suppress()` uses an in-memory buffer that is not headers-aware. Record headers attached to upstream records are not preserved across the suppression boundary, even when [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format) is set globally per [KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G).
 
 For more detailed information, see the JavaDoc on the `Suppressed` config object and [KIP-328](https://cwiki.apache.org/confluence/x/sQU0BQ "KIP-328"). 
 
@@ -5621,7 +5619,7 @@ By automating the detection of popular pages, the system eliminates the need for
         }
     }
 
-Naming Operators in a Streams DSL application Kafka Streams allows you to [name processors](dsl-topology-naming.html) created via the Streams DSL 
+Naming Operators in a Streams DSL application Kafka Streams allows you to [name processors](../dsl-topology-naming) created via the Streams DSL 
 
 # Controlling KTable emit rate
 
@@ -5629,7 +5627,7 @@ A KTable is logically a continuously updated table. These updates make their way
 
 However, some applications need to take other actions, such as calling out to external systems, and therefore need to exercise some control over the rate of invocations, for example of `KStream#foreach`. 
 
-Rather than achieving this as a side-effect of the [KTable record cache](memory-mgmt.html#streams-developer-guide-memory-management-record-cache), you can directly impose a rate limit via the `KTable#suppress` operator. 
+Rather than achieving this as a side-effect of the [KTable record cache](../memory-mgmt#streams-developer-guide-memory-management-record-cache), you can directly impose a rate limit via the `KTable#suppress` operator. 
 
 For example: 
     
@@ -5713,9 +5711,9 @@ Description
 
 When to provide serdes explicitly:
 
-  * If you do not specify Serdes explicitly, the default Serdes from the [configuration](config-streams.html#streams-developer-guide-configuration) are used.
+  * If you do not specify Serdes explicitly, the default Serdes from the [configuration](../config-streams#streams-developer-guide-configuration) are used.
   * You **must specify Serdes explicitly** via the `Produced` class if the key and/or value types of the `KStream` do not match the configured default Serdes.
-  * See [Data Types and Serialization](datatypes.html#streams-developer-guide-serdes) for information about configuring default Serdes, available Serdes, and implementing your own custom Serdes.
+  * See [Data Types and Serialization](../datatypes#streams-developer-guide-serdes) for information about configuring default Serdes, available Serdes, and implementing your own custom Serdes.
 
 
 
@@ -5746,11 +5744,11 @@ Another variant of `to` exists that enables you to dynamically choose which topi
 
 **Note**
 
-**When you want to write to systems other than Kafka:** Besides writing the data back to Kafka, you can also apply a custom processor as a stream sink at the end of the processing to, for example, write to external databases. First, doing so is not a recommended pattern - we strongly suggest to use the [Kafka Connect API](../../connect/index.html#kafka-connect) instead. However, if you do use such a sink processor, please be aware that it is now your responsibility to guarantee message delivery semantics when talking to such external systems (e.g., to retry on delivery failure or to prevent message duplication).
+**When you want to write to systems other than Kafka:** Besides writing the data back to Kafka, you can also apply a custom processor as a stream sink at the end of the processing to, for example, write to external databases. First, doing so is not a recommended pattern - we strongly suggest to use the [Kafka Connect API](../../../kafka-connect/#kafka-connect) instead. However, if you do use such a sink processor, please be aware that it is now your responsibility to guarantee message delivery semantics when talking to such external systems (e.g., to retry on delivery failure or to prevent message duplication).
 
 # Testing a Streams application
 
-Kafka Streams comes with a `test-utils` module to help you test your application [here](testing.html). 
+Kafka Streams comes with a `test-utils` module to help you test your application [here](../testing). 
 
 # Kafka Streams DSL for Scala
 

@@ -1,6 +1,6 @@
 ---
 title: Design
-description: 
+description: Kafka architecture, design principles, and wire protocol.
 weight: 4
 tags: ['kafka', 'docs', 'design']
 aliases: 

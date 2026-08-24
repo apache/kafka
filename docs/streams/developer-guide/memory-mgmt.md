@@ -1,6 +1,6 @@
 ---
 title: Memory Management
-description: 
+description: Kafka Streams memory management for caches, state stores, and record buffers.
 weight: 9
 tags: ['kafka', 'docs']
 aliases: 
@@ -38,20 +38,20 @@ The record caches are implemented slightly different in the DSL and Processor AP
 You can specify the total memory (RAM) size of the record cache for an instance of the processing topology. It is leveraged by the following `KTable` instances:
 
   * Source `KTable`: `KTable` instances that are created via `StreamsBuilder#table()` or `StreamsBuilder#globalTable()`.
-  * Aggregation `KTable`: instances of `KTable` that are created as a result of [aggregations](dsl-api.html#streams-developer-guide-dsl-aggregating).
+  * Aggregation `KTable`: instances of `KTable` that are created as a result of [aggregations](../dsl-api#streams-developer-guide-dsl-aggregating).
 
 
 
 For such `KTable` instances, the record cache is used for:
 
-  * Internal caching and compacting of output records before they are written by the underlying stateful [processor node](../core-concepts#streams_processor_node) to its internal state stores.
-  * Internal caching and compacting of output records before they are forwarded from the underlying stateful [processor node](../core-concepts#streams_processor_node) to any of its downstream processor nodes.
+  * Internal caching and compacting of output records before they are written by the underlying stateful [processor node](../../core-concepts#streams_processor_node) to its internal state stores.
+  * Internal caching and compacting of output records before they are forwarded from the underlying stateful [processor node](../../core-concepts#streams_processor_node) to any of its downstream processor nodes.
 
 
 
 Use the following example to understand the behaviors with and without record caching. In this example, the input is a `KStream<String, Integer>` with the records `<K,V>: <A, 1>, <D, 5>, <A, 20>, <A, 300>`. The focus in this example is on the records with key == `A`.
 
-  * An [aggregation](dsl-api.html#streams-developer-guide-dsl-aggregating) computes the sum of record values, grouped by key, for the input and returns a `KTable<String, Integer>`.
+  * An [aggregation](../dsl-api#streams-developer-guide-dsl-aggregating) computes the sum of record values, grouped by key, for the input and returns a `KTable<String, Integer>`.
 
 >     * **Without caching** : a sequence of output records is emitted for key `A` that represent changes in the resulting aggregation table. The parentheses (`()`) denote changes, the left number is the new aggregate value and the right number is the old aggregate value: `<A, (1, null)>, <A, (21, 1)>, <A, (321, 21)>`.
 >     * **With caching** : a single output record is emitted for key `A` that would likely be compacted in the cache, leading to a single output record of `<A, (321, null)>`. This record is written to the aggregation's internal state store and forwarded to any downstream operations.
@@ -112,7 +112,7 @@ You can specify the total memory (RAM) size of the record cache for an instance 
 
 The record cache in the Processor API does not cache or compact any output records that are being forwarded downstream. This means that all downstream processor nodes can see all records, whereas the state stores see a reduced number of records. This does not impact correctness of the system, but is a performance optimization for the state stores. For example, with the Processor API you can store a record in a state store while forwarding a different value downstream.
 
-Following from the example first shown in section [State Stores](processor-api.html#streams-developer-guide-state-store), to disable caching, you can add the `withCachingDisabled` call (note that caches are enabled by default, however there is an explicit `withCachingEnabled` call).
+Following from the example first shown in section [State Stores](../processor-api#streams-developer-guide-state-store), to disable caching, you can add the `withCachingDisabled` call (note that caches are enabled by default, however there is an explicit `withCachingEnabled` call).
     
     
     StoreBuilder countStoreBuilder =
@@ -122,9 +122,9 @@ Following from the example first shown in section [State Stores](processor-api.h
         Serdes.Long())
       .withCachingEnabled();
 
-Record caches are not supported for [versioned state stores](processor-api.html#streams-developer-guide-state-store-versioned).
+Record caches are not supported for [versioned state stores](../processor-api#streams-developer-guide-state-store-versioned).
 
-To avoid reading stale data, you can `flush()` the store before creating the iterator. Note, that flushing too often can lead to performance degration if RocksDB is used, so we advice to avoid flushing manually in general.
+To avoid reading stale data, you can `flush()` the store before creating the iterator. Note, that flushing too often can lead to performance degradation if RocksDB is used, so we advise to avoid flushing manually in general.
 
 # RocksDB
 
@@ -151,6 +151,16 @@ To reduce the likelihood of this for an affected low-traffic store, you can make
     }
 
 This is a trade-off: a smaller write buffer bounds how stale the persisted offset can get, but increases the number of SST files and the compaction load.  So tune only the specific low-traffic stores that need it, and size the buffer to the store's write rate. Note that flushing is **volume-based, not time-based**.  A store that receives only a trickle of writes may still not flush until it is closed, so the most reliable protection is a **clean shutdown**. Register a shutdown hook that calls `KafkaStreams#close`, and ensure it is allowed to complete — on Kubernetes, set the close timeout comfortably below the pod termination grace period (default 30s) so the process is not `SIGKILL`ed mid-close.  Note that the record cache (`statestore.cache.max.bytes`) in front of the store coalesces repeated updates to the same key in place before they are written to RocksDB. So for an update-heavy, small-keyspace workload even fewer bytes reach the memtable per commit, making it fill more slowly.
+
+### Restore performance and write buffer size {#rocksdb-restore-tuning}
+
+Flushing also affects **state restoration**, which writes to the store in bulk. A flush happens when the memtable fills, and each flush produces another level-0 (L0) SST file. Restoring a store with large state through a small write buffer therefore produces many L0 files and a lot of compaction work. The restore can then stall on the L0 file count (`level0_slowdown_writes_trigger` / `level0_stop_writes_trigger`) or on the flush queue (`max_write_buffer_number`). A stalled restore takes longer, and its duration is less predictable.
+
+If restore time is a concern for such a store, we recommend increasing `write_buffer_size` above the 16 MB default through a custom `RocksDBConfigSetter`. A starting range of 32 MB to 64 MB is reasonable, for example `options.setWriteBufferSize(64 * 1024 * 1024L)`. Fewer, larger flushes mean fewer L0 files and less compaction work, which typically restores faster. Raising `level0_file_num_compaction_trigger` can help further. Both settings cost off-heap memory. A store holds up to `max_write_buffer_number` buffers, multiplied by the stores and stream threads on the instance. If you bound total memory with a shared `WriteBufferManager` (see below), budget for the increase.
+
+Note that this recommendation points the opposite way from the guidance above, because it applies to a different case. Shrink the buffer for a low-traffic store whose memtable rarely fills. Enlarge it for a store that is slow to restore.
+
+### Off-heap memory usage {#rocksdb-off-heap-memory}
 
 Also, we recommend changing RocksDB's default memory allocator, because the default allocator may lead to increased memory consumption. To change the memory allocator to `jemalloc`, you need to set the environment variable `LD_PRELOAD`before you start your Kafka Streams application:
     
