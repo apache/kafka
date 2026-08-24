@@ -773,6 +773,13 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
 
+    /** {@code restore.buffered.records.per.partition} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG = "restore.buffered.records.per.partition";
+    private static final String RESTORE_BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition during state-store restoration. "
+        + "Bounds the memory used by the restore consumer's per-partition buffer in <code>StoreChangelogReader</code>. "
+        + "Distinct from <code>buffered.records.per.partition</code>, which bounds the main processing queue and does not affect the restore path.";
+
     /** {@code retry.backoff.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
@@ -1086,6 +1093,12 @@ public class StreamsConfig extends AbstractConfig {
                     -1,
                     Importance.MEDIUM,
                     REPLICATION_FACTOR_DOC)
+            .define(RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    Type.INT,
+                    10_000,
+                    atLeast(1),
+                    Importance.LOW,
+                    RESTORE_BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,

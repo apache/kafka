@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
@@ -2250,6 +2251,119 @@ public class StoreChangelogReaderTest {
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
         assertEquals(0L, consumer.position(tp), "Non-windowed store should seek to beginning, not by timestamp");
+    }
+
+    @Test
+    public void shouldRejectInvalidRestoreBufferedRecordsPerPartition() {
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG, 0);
+        assertThrows(ConfigException.class,
+            () -> new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties)));
+    }
+
+    @Test
+    public void shouldPausePartitionWhenRestoreBufferCapIsReached() {
+        // standby with a committed-offset limit lets records pile up past the limit
+        setupStandbyStateManager();
+        setupStoreMetadata();
+        setupStore();
+        // standby fixture has a null taskId, so the predicate looks up tasks.get(null)
+        @SuppressWarnings("unchecked")
+        final Map<TaskId, Task> mockTasks = mock(Map.class);
+        when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        when(mockTasks.containsKey(null)).thenReturn(true);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(3L);
+        when(storeMetadata.endOffset()).thenReturn(20L);
+
+        final int restoreBufferedRecordsPerPartition = 3;
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG, restoreBufferedRecordsPerPartition);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        final StreamsConfig cappedConfig =
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, cappedConfig, logContext, adminClient, consumer, callback, standbyListener);
+        changelogReader.transitToUpdateStandby();
+
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 7L));
+        changelogReader.register(tp, standbyStateManager);
+
+        changelogReader.restore(mockTasks);
+        assertEquals(Collections.emptySet(), consumer.paused());
+
+        // committed offset is 7, so offsets >=7 stay buffered
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 5L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 6L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 7L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 8L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 9L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 10L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 11L, "key".getBytes(), "value".getBytes()));
+
+        // first tick fills the buffer, second tick sees it full and pauses
+        changelogReader.restore(mockTasks);
+        changelogReader.restore(mockTasks);
+
+        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().size() >= restoreBufferedRecordsPerPartition);
+        assertEquals(Collections.singleton(tp), consumer.paused());
+    }
+
+    @Test
+    public void shouldResumePartitionOnceBufferDrainsBelowCap() {
+        setupStandbyStateManager();
+        setupStoreMetadata();
+        setupStore();
+        // standby fixture has a null taskId, so the predicate looks up tasks.get(null)
+        @SuppressWarnings("unchecked")
+        final Map<TaskId, Task> mockTasks = mock(Map.class);
+        when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        when(mockTasks.containsKey(null)).thenReturn(true);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(3L);
+        when(storeMetadata.endOffset()).thenReturn(20L);
+
+        final long now = time.milliseconds();
+        final int restoreBufferedRecordsPerPartition = 3;
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG, restoreBufferedRecordsPerPartition);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        final StreamsConfig cappedConfig =
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, cappedConfig, logContext, adminClient, consumer, callback, standbyListener);
+        changelogReader.transitToUpdateStandby();
+
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 7L));
+        changelogReader.register(tp, standbyStateManager);
+
+        changelogReader.restore(mockTasks);
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 5L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 6L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 7L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 8L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 9L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 10L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 11L, "key".getBytes(), "value".getBytes()));
+
+        // fill the buffer past the cap and confirm the pause
+        changelogReader.restore(mockTasks);
+        changelogReader.restore(mockTasks);
+        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().size() >= restoreBufferedRecordsPerPartition);
+        assertEquals(Collections.singleton(tp), consumer.paused());
+
+        // bump the committed offset so the buffered records can drain
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 20L));
+        time.setCurrentTimeMs(now + 101L);
+        // refresh limit, drain, then resume
+        changelogReader.restore(mockTasks);
+        changelogReader.restore(mockTasks);
+        changelogReader.restore(mockTasks);
+
+        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().size() < restoreBufferedRecordsPerPartition);
+        assertEquals(Collections.emptySet(), consumer.paused());
     }
 
     private void assignPartition(final long messages,

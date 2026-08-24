@@ -259,6 +259,9 @@ public class StoreChangelogReader implements ChangelogReader {
     private long lastUpdateOffsetTime;
     private final StandbyUpdateListener standbyUpdateListener;
 
+    // pauses fetching when a partition's buffer hits this size, to bound restore memory
+    private final int restoreMaxBufferedRecordsPerPartition;
+
     public StoreChangelogReader(final Time time,
                                 final StreamsConfig config,
                                 final LogContext logContext,
@@ -279,6 +282,8 @@ public class StoreChangelogReader implements ChangelogReader {
         this.updateOffsetIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) == Long.MAX_VALUE ?
             DEFAULT_OFFSET_UPDATE_MS : config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.lastUpdateOffsetTime = 0L;
+        this.restoreMaxBufferedRecordsPerPartition =
+            config.getInt(StreamsConfig.RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG);
 
         this.changelogs = new HashMap<>();
     }
@@ -587,21 +592,23 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private boolean shouldResume(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
-        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final ChangelogMetadata metadata = changelogs.get(partition);
+        final ProcessorStateManager manager = metadata.stateManager;
         final TaskId taskId = manager.taskId();
         final Task task = tasks.get(taskId);
         if (manager.taskType() == taskType) {
-            return task != null;
+            return task != null && metadata.bufferedRecords.size() < restoreMaxBufferedRecordsPerPartition;
         }
         return false;
     }
 
     private boolean shouldPause(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
-        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final ChangelogMetadata metadata = changelogs.get(partition);
+        final ProcessorStateManager manager = metadata.stateManager;
         final TaskId taskId = manager.taskId();
         final Task task = tasks.get(taskId);
         if (manager.taskType() == taskType) {
-            return task == null;
+            return task == null || metadata.bufferedRecords.size() >= restoreMaxBufferedRecordsPerPartition;
         }
         return false;
     }
