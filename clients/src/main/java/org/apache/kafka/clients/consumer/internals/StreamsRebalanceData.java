@@ -445,7 +445,6 @@ public class StreamsRebalanceData {
         return partitionsByHost.get();
     }
 
-
     public void setTopicPartitionCounts(final Map<String, Integer> topicPartitionCounts) {
         this.topicPartitionCounts.set(Map.copyOf(topicPartitionCounts));
     }
