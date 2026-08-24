@@ -209,8 +209,8 @@ class DockerSanityTest(unittest.TestCase):
             total_errors.append(str(e))
         
         self.assertEqual(total_errors, [])
-
-class TestDockerSanityCombinedMode(DockerSanityTest):
+    
+class DockerSanityTestCombinedMode(DockerSanityTest):
     def setUp(self) -> None:
         self.start_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
     def tearDown(self) -> None:
@@ -218,7 +218,7 @@ class TestDockerSanityCombinedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
-class TestDockerSanityIsolatedMode(DockerSanityTest):
+class DockerSanityTestIsolatedMode(DockerSanityTest):
     def setUp(self) -> None:
         self.start_compose(f"{self.FIXTURES_DIR}/{constants.ISOLATED_MODE_COMPOSE}")
     def tearDown(self) -> None:
