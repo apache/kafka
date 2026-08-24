@@ -218,7 +218,7 @@ public class ReplicationControlManager {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
                 throw new IllegalStateException("Cluster control must be set before building");
-            } else if (maxPartitionsPerBatch == 0) {
+            } else if (maxPartitionsPerBatch <= 0) {
                 throw new IllegalStateException("Max partitions per batch must be set before building");
             }
             if (logContext == null) logContext = new LogContext();

@@ -407,7 +407,7 @@ public final class QuorumController implements Controller {
                 throw new IllegalStateException("You must specify a non-fatal fault handler.");
             } else if (fatalFaultHandler == null) {
                 throw new IllegalStateException("You must specify a fatal fault handler.");
-            } else if (maxPartitionsPerBatch == 0) {
+            } else if (maxPartitionsPerBatch <= 0) {
                 throw new IllegalStateException("You must specify the max partitions per batch.");
             }
 

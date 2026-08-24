@@ -648,6 +648,22 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testBuilderRequiresPositiveMaxPartitionsPerBatch() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        for (int invalidMaxPartitionsPerBatch : new int[] {0, -1, -100}) {
+            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new ReplicationControlManager.Builder().
+                    setSnapshotRegistry(ctx.snapshotRegistry).
+                    setLogContext(ctx.logContext).
+                    setConfigurationControl(ctx.configurationControl).
+                    setClusterControl(ctx.clusterControl).
+                    setMaxPartitionsPerBatch(invalidMaxPartitionsPerBatch).
+                    build());
+            assertEquals("Max partitions per batch must be set before building", exception.getMessage());
+        }
+    }
+
+    @Test
     public void testCreateTopics() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
