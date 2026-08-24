@@ -22,7 +22,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -127,13 +126,13 @@ public class DynamicBrokerConfig {
         }
     }
 
-    public static void validateConfigs(Properties props, boolean perBrokerConfig) {
-        checkInvalidProps(nonDynamicConfigs(props), "Cannot update these configs dynamically");
-        checkInvalidProps(securityConfigsWithoutListenerPrefix(props),
+    public static void validateConfigs(Properties propsOriginal, Properties propsResolved, boolean perBrokerConfig) {
+        checkInvalidProps(nonDynamicConfigs(propsResolved), "Cannot update these configs dynamically");
+        checkInvalidProps(securityConfigsWithoutListenerPrefix(propsResolved),
                 "These security configs can be dynamically updated only per-listener using the listener prefix");
-        validateConfigTypes(props);
+        validateConfigTypes(propsOriginal, propsResolved);
         if (!perBrokerConfig) {
-            checkInvalidProps(perBrokerConfigs(props),
+            checkInvalidProps(perBrokerConfigs(propsResolved),
                     "Cannot update these configs at default cluster level, broker id must be specified");
         }
     }
@@ -143,17 +142,26 @@ public class DynamicBrokerConfig {
     }
 
     public static void validateConfigTypes(Properties props) {
+        validateConfigTypes(props, props);
+    }
+
+    static void validateConfigTypes(Properties propsOriginal, Properties propsResolved) {
+        Properties basePropsOriginal = stripListenerPrefix(propsOriginal);
+        Properties basePropsResolved = stripListenerPrefix(propsResolved);
+        DynamicConfig.Broker.validate(basePropsOriginal, basePropsResolved);
+    }
+
+    private static Properties stripListenerPrefix(Properties props) {
         Properties baseProps = new Properties();
         props.forEach((name, value) -> {
             Matcher matcher = LISTENER_CONFIG_REGEX.matcher((String) name);
             if (matcher.matches()) {
-                String baseName = matcher.group(1);
-                baseProps.put(baseName, value);
+                baseProps.put(matcher.group(1), value);
             } else {
                 baseProps.put(name, value);
             }
         });
-        DynamicConfig.Broker.validate(baseProps);
+        return baseProps;
     }
 
     public static Set<String> perBrokerConfigs(Properties props) {
@@ -183,7 +191,7 @@ public class DynamicBrokerConfig {
 
     public static Properties resolveVariableConfigs(Properties propsOriginal) {
         Properties props = new Properties();
-        AbstractConfig config = new AbstractConfig(new ConfigDef(), propsOriginal, Utils.castToStringObjectMap(propsOriginal), false);
+        AbstractConfig config = new AbstractConfig(new ConfigDef(), propsOriginal, false);
         config.originals().forEach((key, value) -> {
             if (!key.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG)) {
                 props.put(key, value);
