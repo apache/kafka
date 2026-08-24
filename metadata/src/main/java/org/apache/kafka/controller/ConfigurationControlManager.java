@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.SupportedConfigChecker;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -63,7 +64,6 @@ import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CO
 import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 import static org.apache.kafka.server.config.ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG;
 
 
@@ -83,6 +83,7 @@ public class ConfigurationControlManager {
     private final ConfigResource currentController;
     private final FeatureControlManager featureControl;
     private final SupportedConfigChecker supportedConfigChecker;
+    private final int maxRecordsPerBatch;
 
     static class Builder {
         private LogContext logContext = null;
@@ -95,6 +96,7 @@ public class ConfigurationControlManager {
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
         private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
+        private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -146,6 +148,11 @@ public class ConfigurationControlManager {
             return this;
         }
 
+        Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         ConfigurationControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -165,7 +172,8 @@ public class ConfigurationControlManager {
                 staticConfig,
                 nodeId,
                 featureControl,
-                supportedConfigChecker);
+                supportedConfigChecker,
+                maxRecordsPerBatch);
         }
     }
 
@@ -178,7 +186,8 @@ public class ConfigurationControlManager {
             Map<String, Object> staticConfig,
             int nodeId,
             FeatureControlManager featureControl,
-            SupportedConfigChecker supportedConfigChecker
+            SupportedConfigChecker supportedConfigChecker,
+            int maxRecordsPerBatch
     ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
@@ -192,6 +201,7 @@ public class ConfigurationControlManager {
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.featureControl = featureControl;
         this.supportedConfigChecker = supportedConfigChecker;
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
     }
 
     SnapshotRegistry snapshotRegistry() {
@@ -217,7 +227,7 @@ public class ConfigurationControlManager {
         boolean forwarded
     ) {
         List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(maxRecordsPerBatch);
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<OpType, String>>> resourceEntry :
                 configChanges.entrySet()) {
@@ -261,7 +271,7 @@ public class ConfigurationControlManager {
         boolean forwarded
     ) {
         List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(maxRecordsPerBatch);
         ApiError apiError = incrementalAlterConfigResource(configResource,
             keyToOps,
             newlyCreatedResource,
@@ -500,7 +510,7 @@ public class ConfigurationControlManager {
         boolean forwarded
     ) {
         List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(maxRecordsPerBatch);
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, String>> resourceEntry :
             newConfigs.entrySet()) {
@@ -760,7 +770,7 @@ public class ConfigurationControlManager {
             !validateOnly &&
             updates.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) > 0
         ) {
-            List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+            List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(maxRecordsPerBatch);
             String logMessage = maybeGenerateElrSafetyRecords(records);
             if (!logMessage.isEmpty()) {
                 log.info("{}", logMessage);

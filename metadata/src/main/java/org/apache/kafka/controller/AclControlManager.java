@@ -52,7 +52,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
+import org.apache.kafka.raft.KRaftConfigs;
 
 
 /**
@@ -64,6 +64,7 @@ public class AclControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
+        private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -75,31 +76,39 @@ public class AclControlManager {
             return this;
         }
 
+        Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         AclControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            return new AclControlManager(logContext, snapshotRegistry);
+            return new AclControlManager(logContext, snapshotRegistry, maxRecordsPerBatch);
         }
     }
 
     private final Logger log;
     private final TimelineHashMap<Uuid, StandardAcl> idToAcl;
     private final TimelineHashSet<StandardAcl> existingAcls;
+    private final int maxRecordsPerBatch;
 
     private AclControlManager(
         LogContext logContext,
-        SnapshotRegistry snapshotRegistry
+        SnapshotRegistry snapshotRegistry,
+        int maxRecordsPerBatch
     ) {
         this.log = logContext.logger(AclControlManager.class);
         this.idToAcl = new TimelineHashMap<>(snapshotRegistry, 0);
         this.existingAcls = new TimelineHashSet<>(snapshotRegistry, 0);
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
     }
 
     ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls, MetadataVersion metadataVersion) {
         Set<StandardAcl> aclsToCreate = new HashSet<>(acls.size());
         List<AclCreateResult> results = new ArrayList<>(acls.size());
         List<ApiMessageAndVersion> records =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(maxRecordsPerBatch);
         for (AclBinding acl : acls) {
             try {
                 validateNewAcl(acl, metadataVersion.isCidrAclSupported());
@@ -246,9 +255,9 @@ public class AclControlManager {
             AclBinding binding = acl.toBinding();
             if (filter.matches(binding)) {
                 // check size limitation first before adding additional records
-                if (records.size() >= MAX_RECORDS_PER_USER_OP) {
+                if (records.size() >= maxRecordsPerBatch) {
                     throw new BoundedListTooLongException("Cannot remove more than " +
-                        MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.");
+                        maxRecordsPerBatch + " acls in a single delete operation.");
                 }
                 deleted.add(new AclBindingDeleteResult(binding));
                 records.add(new ApiMessageAndVersion(

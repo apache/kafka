@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
@@ -50,7 +51,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 public class FeatureControlManager {
@@ -59,6 +59,7 @@ public class FeatureControlManager {
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
         private KRaftVersionAccessor kraftVersionAccessor = null;
+        private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
 
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
@@ -97,6 +98,11 @@ public class FeatureControlManager {
             return this;
         }
 
+        Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         public FeatureControlManager build() {
             // set reasonable defaults for fields when this object is built in testing
             if (logContext == null) logContext = new LogContext();
@@ -131,7 +137,8 @@ public class FeatureControlManager {
                 quorumFeatures,
                 snapshotRegistry,
                 clusterSupportDescriber,
-                kraftVersionAccessor
+                kraftVersionAccessor,
+                maxRecordsPerBatch
             );
         }
     }
@@ -163,12 +170,15 @@ public class FeatureControlManager {
      */
     private final KRaftVersionAccessor kraftVersionAccessor;
 
+    private final int maxRecordsPerBatch;
+
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
         ClusterFeatureSupportDescriber clusterSupportDescriber,
-        KRaftVersionAccessor kraftVersionAccessor
+        KRaftVersionAccessor kraftVersionAccessor,
+        int maxRecordsPerBatch
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
@@ -176,6 +186,7 @@ public class FeatureControlManager {
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.clusterSupportDescriber = clusterSupportDescriber;
         this.kraftVersionAccessor = kraftVersionAccessor;
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
     }
 
     ControllerResult<ApiError> updateFeatures(
@@ -185,7 +196,7 @@ public class FeatureControlManager {
         int currentClaimedEpoch
     ) {
         List<ApiMessageAndVersion> records =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(maxRecordsPerBatch);
 
         Map<String, Short> proposedUpdatedVersions = new HashMap<>(finalizedVersions);
         proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersionOrThrow().featureLevel());

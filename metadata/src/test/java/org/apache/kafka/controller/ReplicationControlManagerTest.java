@@ -272,7 +272,7 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
-                setMaxPartitionsPerBatch(KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 setConfigurationControl(configurationControl).
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
@@ -627,7 +627,7 @@ public class ReplicationControlManagerTest {
                 .setAssignments(assignments));
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
-                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999, KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT)
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
         );
         assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
     }
@@ -642,24 +642,24 @@ public class ReplicationControlManagerTest {
 
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
-                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1, KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT)
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
         );
         assertEquals("Excessively large number of partitions per request.", error.getMessage());
     }
 
     @Test
-    public void testBuilderRequiresPositiveMaxPartitionsPerBatch() {
+    public void testBuilderRequiresPositiveMaxRecordsPerBatch() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
-        for (int invalidMaxPartitionsPerBatch : new int[] {0, -1, -100}) {
+        for (int invalidMaxRecordsPerBatch : new int[] {0, -1, -100}) {
             IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
                 new ReplicationControlManager.Builder().
                     setSnapshotRegistry(ctx.snapshotRegistry).
                     setLogContext(ctx.logContext).
                     setConfigurationControl(ctx.configurationControl).
                     setClusterControl(ctx.clusterControl).
-                    setMaxPartitionsPerBatch(invalidMaxPartitionsPerBatch).
+                    setMaxRecordsPerBatch(invalidMaxRecordsPerBatch).
                     build());
-            assertEquals("Max partitions per batch must be set before building", exception.getMessage());
+            assertEquals("Max records per batch must be set before building", exception.getMessage());
         }
     }
 

@@ -46,13 +46,14 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
+import org.apache.kafka.raft.KRaftConfigs;
 
 
 public class ClientQuotaControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
+        private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -64,10 +65,15 @@ public class ClientQuotaControlManager {
             return this;
         }
 
+        Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         ClientQuotaControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            return new ClientQuotaControlManager(logContext, snapshotRegistry);
+            return new ClientQuotaControlManager(logContext, snapshotRegistry, maxRecordsPerBatch);
         }
     }
 
@@ -75,14 +81,18 @@ public class ClientQuotaControlManager {
 
     private final SnapshotRegistry snapshotRegistry;
 
+    private final int maxRecordsPerBatch;
+
     final TimelineHashMap<ClientQuotaEntity, TimelineHashMap<String, Double>> clientQuotaData;
 
     ClientQuotaControlManager(
         LogContext logContext,
-        SnapshotRegistry snapshotRegistry
+        SnapshotRegistry snapshotRegistry,
+        int maxRecordsPerBatch
     ) {
         this.log = logContext.logger(ClientQuotaControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
         this.clientQuotaData = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
@@ -97,7 +107,7 @@ public class ClientQuotaControlManager {
     ControllerResult<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
             Collection<ClientQuotaAlteration> quotaAlterations) {
         List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(maxRecordsPerBatch);
         Map<ClientQuotaEntity, ApiError> outputResults = new HashMap<>();
 
         quotaAlterations.forEach(quotaAlteration -> {

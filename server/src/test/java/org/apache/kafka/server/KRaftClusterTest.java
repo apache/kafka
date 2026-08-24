@@ -1420,13 +1420,13 @@ public class KRaftClusterTest {
     }
 
     @Test
-    public void testCreateTopicsRespectsConfiguredMaxPartitionsPerBatch() throws Exception {
+    public void testCreateTopicsRespectsConfiguredMaxRecordsPerBatch() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
                 .setNumBrokerNodes(1)
                 .setNumControllerNodes(1)
                 .build())
-            .setConfigProp(KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_CONFIG, "10")
+            .setConfigProp(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG, "10")
             .build()) {
             cluster.format();
             cluster.startup();

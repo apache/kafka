@@ -73,8 +73,8 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.PatternType.MATCH;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
+import static org.apache.kafka.raft.KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -396,8 +396,8 @@ public class AclControlManagerTest {
         List<AclBinding> firstCreate = new ArrayList<>();
         List<AclBinding> secondCreate = new ArrayList<>();
 
-        // create MAX_RECORDS_PER_USER_OP + 2 ACLs
-        for (int i = 0; i < MAX_RECORDS_PER_USER_OP + 2; i++) {
+        // create CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT + 2 ACLs
+        for (int i = 0; i < CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT + 2; i++) {
             StandardAclWithId acl = new StandardAclWithId(Uuid.randomUuid(),
                 new StandardAcl(
                     ResourceType.TOPIC,
@@ -416,13 +416,13 @@ public class AclControlManagerTest {
             }
         }
         ControllerResult<List<AclCreateResult>> firstCreateResult = manager.createAcls(firstCreate, MetadataVersion.IBP_4_0_IV0);
-        assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, firstCreateResult.response().size());
+        assertEquals((CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT / 2) + 1, firstCreateResult.response().size());
         for (AclCreateResult result : firstCreateResult.response()) {
             assertTrue(result.exception().isEmpty());
         }
 
         ControllerResult<List<AclCreateResult>> secondCreateResult = manager.createAcls(secondCreate, MetadataVersion.IBP_4_0_IV0);
-        assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, secondCreateResult.response().size());
+        assertEquals((CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT / 2) + 1, secondCreateResult.response().size());
         for (AclCreateResult result : secondCreateResult.response()) {
             assertTrue(result.exception().isEmpty());
         }
@@ -432,7 +432,7 @@ public class AclControlManagerTest {
         assertFalse(manager.idToAcl().isEmpty());
 
         ArrayList<AclBindingFilter> filters = new ArrayList<>();
-        for (int i = 0; i < MAX_RECORDS_PER_USER_OP + 2; i++) {
+        for (int i = 0; i < CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT + 2; i++) {
             filters.add(new AclBindingFilter(
                 new ResourcePatternFilter(ResourceType.TOPIC, "mytopic_" + i, PatternType.LITERAL),
                 AccessControlEntryFilter.ANY));
@@ -440,7 +440,7 @@ public class AclControlManagerTest {
 
         Exception exception = assertThrows(InvalidRequestException.class, () -> manager.deleteAcls(filters));
         assertEquals(BoundedListTooLongException.class, exception.getCause().getClass());
-        assertEquals("Cannot remove more than " + MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.", exception.getCause().getMessage());
+        assertEquals("Cannot remove more than " + CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT + " acls in a single delete operation.", exception.getCause().getMessage());
     }
 
     @Test

@@ -124,7 +124,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 MockFaultHandler nonFatalFaultHandler = new MockFaultHandler("nonFatalFaultHandler");
                 builder.setNonFatalFaultHandler(nonFatalFaultHandler);
                 builder.setConfigSchema(FakeKafkaConfigSchema.INSTANCE);
-                builder.setMaxPartitionsPerBatch(KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT);
+                builder.setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT);
                 nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 QuorumController controller = builder.build();

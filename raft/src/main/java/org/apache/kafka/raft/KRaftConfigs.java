@@ -69,11 +69,12 @@ public class KRaftConfigs {
     public static final long CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS_DEFAULT = 2000;
     public static final String CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS_DOC = "We will log an error message about controller events that take longer than this threshold.";
 
-    public static final String CONTROLLER_MAX_PARTITIONS_PER_BATCH_CONFIG = "controller.max.partitions.per.batch";
-    public static final int CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT = 10_000;
-    public static final String CONTROLLER_MAX_PARTITIONS_PER_BATCH_DOC = "The maximum number of partitions that the " +
-            "active controller will allow to be created by a single CreateTopics request. This limit protects the " +
-            "controller from out-of-memory errors caused by excessively large requests.";
+    public static final String CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG = "controller.max.records.per.batch";
+    public static final int CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT = 10_000;
+    public static final String CONTROLLER_MAX_RECORDS_PER_BATCH_DOC = "The maximum number of metadata records that " +
+            "the active controller will allow a single user-initiated operation (for example CreateTopics, " +
+            "DeleteTopics, or AlterConfigs) to generate. This limit protects the controller from out-of-memory " +
+            "errors caused by excessively large requests.";
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(PROCESS_ROLES_CONFIG, LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.ValidList.in(false, "broker", "controller"), HIGH, PROCESS_ROLES_DOC)
@@ -86,5 +87,5 @@ public class KRaftConfigs {
             .defineInternal(CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS, LONG, CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS_DEFAULT, atLeast(100), MEDIUM, CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS_DOC)
             .defineInternal(CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS, LONG, CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS_DEFAULT, atLeast(0), MEDIUM, CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS_DOC)
             .defineInternal(SERVER_MAX_STARTUP_TIME_MS_CONFIG, LONG, SERVER_MAX_STARTUP_TIME_MS_DEFAULT, atLeast(0), MEDIUM, SERVER_MAX_STARTUP_TIME_MS_DOC)
-            .defineInternal(CONTROLLER_MAX_PARTITIONS_PER_BATCH_CONFIG, INT, CONTROLLER_MAX_PARTITIONS_PER_BATCH_DEFAULT, atLeast(1), MEDIUM, CONTROLLER_MAX_PARTITIONS_PER_BATCH_DOC);
+            .defineInternal(CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG, INT, CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT, atLeast(1), MEDIUM, CONTROLLER_MAX_RECORDS_PER_BATCH_DOC);
 }
