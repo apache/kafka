@@ -18,12 +18,14 @@
 package kafka.server
 
 import java.net.InetSocketAddress
+import java.nio.file.Files
 import java.util
 import java.util.{Arrays, Collections, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
+import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, Records}
@@ -51,6 +53,51 @@ import scala.jdk.CollectionConverters._
 import scala.util.Using
 
 class KafkaConfigTest {
+
+  @Test
+  def testConfigProviderAllowlistSkippedForServerProperties(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    val previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+    try {
+      Files.writeString(providerFile, "token=1234")
+      System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none")
+
+      val props = TestUtils.createBrokerConfig(0)
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":token}")
+
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(1234, config.numIoThreads)
+    } finally {
+      if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+      else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
+      Files.deleteIfExists(providerFile)
+    }
+  }
+
+  @Test
+  def testConfigProviderAllowlistEnforcedForReconfiguration(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    val previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+    try {
+      Files.writeString(providerFile, "token=1234")
+      System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none")
+
+      val props = TestUtils.createBrokerConfig(0)
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":token}")
+
+      val e = assertThrows(classOf[ConfigException], () => KafkaConfig(props, doLog = false, enforceProviderAllowlist = true))
+      assertTrue(e.getMessage.contains("is not allowed"))
+      assertFalse(e.getMessage.contains("1234"))
+    } finally {
+      if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+      else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
+      Files.deleteIfExists(providerFile)
+    }
+  }
 
   def createDefaultConfig(): Properties = {
     val props = new Properties()

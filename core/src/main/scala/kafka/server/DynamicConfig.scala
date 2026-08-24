@@ -20,8 +20,8 @@ package kafka.server
 import kafka.server.DynamicBrokerConfig.AllDynamicConfigs
 
 import java.util.Properties
-import org.apache.kafka.common.config.ConfigDef
-import org.apache.kafka.server.config.QuotaConfig 
+import org.apache.kafka.common.config.{ConfigDef, ConfigException}
+import org.apache.kafka.server.config.QuotaConfig
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -50,20 +50,28 @@ object DynamicConfig {
 
     def names: util.Set[String] = brokerConfigs.names
 
-    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(brokerConfigs, props, customPropsAllowed = true)
-  }
-
-
-  private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
-    // Validate Names
-    val names = configDef.names
-    val propKeys = props.keySet.asScala.map(_.asInstanceOf[String])
-    if (!customPropsAllowed) {
-      val unknownKeys = propKeys.filterNot(names.contains(_))
-      require(unknownKeys.isEmpty, s"Unknown Dynamic Configuration: $unknownKeys.")
+    def validate(propsOriginal: Properties, propsResolved: Properties): util.Map[String, AnyRef] = {
+      for (entry <- configKeys.entrySet.asScala) {
+        val name = entry.getKey
+        val key = entry.getValue
+        val resolvedValue = propsResolved.get(name)
+        if (resolvedValue != null) {
+          try {
+            val parsed = ConfigDef.parseType(name, resolvedValue, key.`type`)
+            if (key.validator != null) {
+              key.validator.ensureValid(name, parsed)
+            }
+          } catch {
+            case ce: ConfigException =>
+              val originalValue = propsOriginal.get(name)
+              if (originalValue != null && !(originalValue == resolvedValue)) {
+                throw new ConfigException(name, originalValue)
+              }
+              throw ce
+          }
+        }
+      }
+      brokerConfigs.parse(propsResolved)
     }
-    val propResolved = DynamicBrokerConfig.resolveVariableConfigs(props)
-    // ValidateValues
-    configDef.parse(propResolved)
   }
 }
