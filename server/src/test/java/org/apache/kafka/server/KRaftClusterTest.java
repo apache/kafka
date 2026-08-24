@@ -40,11 +40,14 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
@@ -127,6 +130,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.server.IntegrationTestUtils.connectAndReceive;
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -672,6 +676,96 @@ public class KRaftClusterTest {
 
             TestUtils.waitForCondition(() -> brokerIsAbsent(clusterImage(cluster, 1), 0),
                 "Timed out waiting for broker 0 to be fenced.");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testUnregisterController(boolean usingBootstrapControllers) throws Exception {
+        final var nodes = new TestKitNodes.Builder().
+            setNumBrokerNodes(3).
+            setNumControllerNodes(3).
+            build();
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                controllerNode.id(),
+                controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
+            setInitialVoterSet(initialVoters).
+            build()
+        ) {
+            cluster.format();
+            cluster.startup();
+            int controllerIdToUnregister = cluster.controllers().keySet().iterator().next();
+            cluster.controllers().get(controllerIdToUnregister).shutdown();
+            cluster.waitForActiveController();
+
+            try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
+                // The controller is still part of the voter set, so it can't be unregistered yet
+                assertFutureThrows(
+                    InvalidRequestException.class,
+                    admin.unregisterController(controllerIdToUnregister).all(),
+                    "Cannot unregister controller " + controllerIdToUnregister +
+                        " because it is part of the voter set."
+                );
+
+                admin.removeRaftVoter(
+                    controllerIdToUnregister,
+                    initialVoters.get(controllerIdToUnregister)
+                ).all().get();
+
+                assertDoesNotThrow(() -> admin.unregisterController(controllerIdToUnregister).all().get());
+            }
+
+            TestUtils.waitForCondition(() -> !clusterImage(cluster, 1).controllers().containsKey(controllerIdToUnregister),
+                    "Timed out waiting for controller to be unregistered.");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testUnregisterControllerError(boolean usingBootstrapControllers) throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(3)
+                .setNumControllerNodes(3)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            int unknownId = 9999;
+            cluster.waitForActiveController();
+            int activeId = cluster.controllers().entrySet().stream()
+                    .filter(e -> e.getValue().controller().isActive())
+                    .map(Map.Entry::getKey)
+                    .findFirst()
+                    .orElseThrow();
+            // The voter set is static in this cluster, so every controller is a voter
+            int inactiveId = cluster.controllers().keySet().stream()
+                    .filter(id -> id != activeId)
+                    .findFirst()
+                    .orElseThrow();
+
+            try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
+                assertFutureThrows(
+                    ControllerIdNotRegisteredException.class,
+                    admin.unregisterController(unknownId).all(),
+                    String.format("Controller ID %s is not currently registered.", unknownId)
+                );
+                assertFutureThrows(
+                    InvalidRequestException.class,
+                    admin.unregisterController(activeId).all(),
+                        "Cannot unregister controller " + activeId + " because it is part of the voter set."
+                );
+                assertFutureThrows(
+                    InvalidRequestException.class,
+                    admin.unregisterController(inactiveId).all(),
+                    "Cannot unregister controller " + inactiveId + " because it is part of the voter set."
+                );
+            }
         }
     }
 

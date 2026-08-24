@@ -780,7 +780,7 @@ public class KafkaRaftLog implements RaftLog {
                 }
                 if (latestSnapshotId.isEmpty() || latestSnapshotId.get().offset() < log.logStartOffset()) {
                     throw new IllegalStateException("Inconsistent snapshot state: there must be a snapshot " +
-                            "at an offset larger then the current log start offset " + log.logStartOffset() +
+                            "at an offset larger than the current log start offset " + log.logStartOffset() +
                             ", but the latest snapshot is " + latestSnapshotId);
                 }
             }

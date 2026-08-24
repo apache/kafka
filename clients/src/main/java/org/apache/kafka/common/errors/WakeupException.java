@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Exception used to indicate preemption of a blocking operation by an external thread.
@@ -24,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
  * can be used to break out of an active {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(java.time.Duration)},
  * which would raise an instance of this exception.
  */
+@InterfaceAudience.Public
 public class WakeupException extends KafkaException {
     private static final long serialVersionUID = 1L;
 

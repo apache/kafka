@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.api.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
@@ -23,6 +24,7 @@ import org.apache.kafka.common.errors.ApiException;
  * Signals that the topology description for the current epoch will never be accepted
  * (e.g. too large, semantically rejected).
  */
+@InterfaceAudience.Public
 @InterfaceStability.Evolving
 public class StreamsTopologyDescriptionPermanentFailureException extends ApiException {
 

@@ -18,7 +18,9 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -26,6 +28,8 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
@@ -35,12 +39,12 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.CopyOnWriteMap;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
@@ -58,6 +62,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * This class acts as a queue that accumulates records into {@link MemoryRecords}
@@ -68,23 +73,23 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class RecordAccumulator {
 
-    private final LogContext logContext;
-    private final Logger log;
-    private volatile boolean closed;
+    protected final LogContext logContext;
+    protected final Logger log;
+    protected volatile boolean closed;
     private final AtomicInteger flushesInProgress;
-    private final AtomicInteger appendsInProgress;
-    private final int batchSize;
-    private final Compression compression;
+    protected final AtomicInteger appendsInProgress;
+    protected final int batchSize;
+    protected final Compression compression;
     private final int lingerMs;
     private final ExponentialBackoff retryBackoff;
     private final int deliveryTimeoutMs;
     private final long partitionAvailabilityTimeoutMs;  // latency threshold for marking partition temporary unavailable
-    private final boolean partitionerRackAware;
-    private final String rack;
+    protected final boolean partitionerRackAware;
+    protected final String rack;
     private final boolean enableAdaptivePartitioning;
     private final BufferPool free;
-    private final Time time;
-    private final ConcurrentMap<String /*topic*/, TopicInfo> topicInfoMap = new CopyOnWriteMap<>();
+    protected final Time time;
+    protected final ConcurrentMap<String /*topic*/, TopicInfo> topicInfoMap = new CopyOnWriteMap<>();
     private final ConcurrentMap<Integer /*nodeId*/, NodeLatencyStats> nodeStats = new CopyOnWriteMap<>();
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
@@ -217,7 +222,7 @@ public class RecordAccumulator {
             (config, now) -> free.availableMemory());
     }
 
-    private void setPartition(AppendCallbacks callbacks, int partition) {
+    protected void setPartition(AppendCallbacks callbacks, int partition) {
         if (callbacks != null)
             callbacks.setPartition(partition);
     }
@@ -230,11 +235,11 @@ public class RecordAccumulator {
      * @param partitionInfo The built-in partitioner's partition info
      * @param deque The partition queue
      * @param nowMs The current time, in milliseconds
-     * @param cluster THe cluster metadata
+     * @param cluster The cluster metadata
      * @return 'true' if partition changed and we need to get new partition info and retry,
      *         'false' otherwise
      */
-    private boolean partitionChanged(String topic,
+    protected boolean partitionChanged(String topic,
                                      TopicInfo topicInfo,
                                      BuiltInPartitioner.StickyPartitionInfo partitionInfo,
                                      Deque<ProducerBatch> deque, long nowMs,
@@ -287,7 +292,7 @@ public class RecordAccumulator {
                                      long maxTimeToBlock,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
+        TopicInfo topicInfo = topicInfoFor(topic);
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
@@ -322,12 +327,8 @@ public class RecordAccumulator {
                         continue;
 
                     RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-                    if (appendResult != null) {
-                        // If queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
-                        boolean enableSwitch = allBatchesFull(dq);
-                        topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
-                        return appendResult;
-                    }
+                    if (appendResult.appended())
+                        return updatePartitionInfoOnAppend(appendResult, topicInfo, partitionInfo, dq, cluster);
                 }
 
                 if (buffer == null) {
@@ -347,20 +348,101 @@ public class RecordAccumulator {
                     if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
                         continue;
 
-                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer, nowMs);
+                    final ByteBuffer batchBuffer = buffer;
+                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
+                            () -> MemoryRecords.builder(batchBuffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L),
+                            nowMs);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
-                    // If queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
-                    boolean enableSwitch = allBatchesFull(dq);
-                    topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
-                    return appendResult;
+                    return updatePartitionInfoOnAppend(appendResult, topicInfo, partitionInfo, dq, cluster);
                 }
             }
         } finally {
             free.deallocate(buffer);
             appendsInProgress.decrementAndGet();
         }
+    }
+
+    /**
+     * The {@link TopicInfo} for the given topic, creating it (with its built-in partitioner) on first use.
+     */
+    protected TopicInfo topicInfoFor(String topic) {
+        return topicInfoMap.computeIfAbsent(topic,
+                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
+    }
+
+    /**
+     * Update the built-in partitioner for a successful append and return the result. Shared by the
+     * full and incremental strategies at each point a record is appended.
+     */
+    protected RecordAppendResult updatePartitionInfoOnAppend(RecordAppendResult appendResult, TopicInfo topicInfo,
+                                                             BuiltInPartitioner.StickyPartitionInfo partitionInfo,
+                                                             Deque<ProducerBatch> dq, Cluster cluster) {
+        // If the queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
+        boolean enableSwitch = allBatchesFull(dq);
+        topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
+        return appendResult;
+    }
+
+    /**
+     * Adds {@code maxTimeToBlock} to {@code nowMs}, capped at {@link Long#MAX_VALUE} so that a large
+     * {@code max.block.ms} cannot overflow into a deadline in the past.
+     */
+    protected static long appendDeadlineMs(long nowMs, long maxTimeToBlock) {
+        return maxTimeToBlock > Long.MAX_VALUE - nowMs ? Long.MAX_VALUE : nowMs + maxTimeToBlock;
+    }
+
+    /**
+     * What is left of {@code deadlineMs} to wait for memory. An acquire given this rather than the raw
+     * {@code max.block.ms} has the time already spent retrying counted against its wait. Reads the clock, not a
+     * cached {@code nowMs}, which retries that acquired nothing never refresh.
+     * <p>
+     * Only {@link ChunkedRecordAccumulator#append} uses it so far; {@link #append} still passes the raw value.
+     */
+    protected long remainingTimeToBlockMs(long deadlineMs) {
+        return Math.max(0L, deadlineMs - time.milliseconds());
+    }
+
+    /**
+     * Decide whether an append pass may run, and throw if it may not because no time is left.
+     * <ul>
+     * <li>The first pass is always allowed. The deadline is not even read, so an append that completes in one
+     *     pass never depends on the clock</li>
+     * <li>Every following pass is allowed only while there is time left before {@code deadlineMs}. The first one
+     *     that finds the deadline gone throws.</li>
+     * </ul>
+     * The deadline therefore bounds the loop as well as the waiting inside it.
+     * Every acquire is bounded by the {@link #remainingTimeToBlockMs}.
+     * Every retry that waits for nothing is bounded too (e.g., the partition changed, the batch the pass
+     * read was replaced or filled under it).
+     *
+     * @param firstPass whether this is the append's first pass, which is always allowed no matter the deadline.
+     * @param deniedMemory whether the pool refused the pass that just ended; it only decides how giving up is
+     *                     reported. Only the incremental extension acquire can be refused and still let its
+     *                     pass finish, and it suppresses the pool's own buffer-exhausted metric so the drop is
+     *                     counted here — exactly once either way. The full path should pass {@code false}:
+     *                     {@link BufferPool#allocate} records that metric itself and its refusal ends the append.
+     * @throws BufferExhaustedException if the pass that gave up was denied memory
+     * @throws TimeoutException if the deadline has been reached (and it's not the first pass).
+     */
+    protected void throwIfNoMoreRetriesAllowed(boolean firstPass, long deadlineMs,
+                                              boolean deniedMemory, String topic) {
+        // The common case is a single pass, so it costs no clock read.
+        if (firstPass)
+            return;
+        if (time.milliseconds() < deadlineMs)
+            return;
+        if (deniedMemory) {
+            free.recordBufferExhausted();
+            throw new BufferExhaustedException("Failed to allocate memory for a record of topic " + topic
+                    + " within " + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". Total memory: "
+                    + free.totalMemory() + " bytes. Available memory: "
+                    + free.availableMemory() + " bytes.");
+        }
+        throw new TimeoutException("Failed to append a record to topic " + topic + " within "
+                + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". The append kept retrying because concurrent "
+                + "appends changed the state it read.");
     }
 
     /**
@@ -374,61 +456,82 @@ public class RecordAccumulator {
      * @param value The value for the record
      * @param headers the Headers for the record
      * @param callbacks The callbacks to execute
-     * @param buffer The buffer for the new batch
+     * @param recordsBuilderSupplier Supplies the {@link MemoryRecordsBuilder} for the new
+     *        batch. Invoked lazily, only when a new batch is actually created. The chunked
+     *        subclass passes a supplier that produces a builder backed by a
+     *        {@link ChunkedByteBufferOutputStream}.
      * @param nowMs The current time, in milliseconds
+     * @return the append result, which is never {@code needsNewBatch}. It is either {@code appended}
+     *         — the record was appended, whether to a batch another thread created concurrently or to
+     *         the batch this method creates — or, in the incremental strategy, {@code needsBufferExtension}:
+     *         a concurrent appender created an extendable open batch, but the new record doesn't fit in,
+     *         so the caller releases its pre-allocated buffer and retries via the extension path.
      */
-    private RecordAppendResult appendNewBatch(String topic,
-                                              int partition,
-                                              Deque<ProducerBatch> dq,
-                                              long timestamp,
-                                              byte[] key,
-                                              byte[] value,
-                                              Header[] headers,
-                                              AppendCallbacks callbacks,
-                                              ByteBuffer buffer,
-                                              long nowMs) {
+    protected RecordAppendResult appendNewBatch(String topic,
+                                                int partition,
+                                                Deque<ProducerBatch> dq,
+                                                long timestamp,
+                                                byte[] key,
+                                                byte[] value,
+                                                Header[] headers,
+                                                AppendCallbacks callbacks,
+                                                Supplier<MemoryRecordsBuilder> recordsBuilderSupplier,
+                                                long nowMs) {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
         RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-        if (appendResult != null) {
-            // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
+        if (!appendResult.needsNewBatch()) {
+            // Propagate without creating a new batch: either another thread already made us a batch
+            // (success), or — incremental strategy — a concurrent appender created an extendable open batch
+            // that the new record doesn't fit into (needsBufferExtension), so the caller releases its
+            // pre-allocated buffer and retries via the extension path.
             return appendResult;
         }
 
-        MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer);
-        ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
+        MemoryRecordsBuilder recordsBuilder = recordsBuilderSupplier.get();
+        ProducerBatch batch = createProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
 
         dq.addLast(batch);
         incomplete.add(batch);
 
-        return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
+        return RecordAppendResult.appended(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
     }
 
-    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer) {
-        return MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L);
+    /**
+     * Create the {@link ProducerBatch} for a new batch. The incremental strategy overrides this to
+     * create a {@link ChunkedProducerBatch}.
+     */
+    protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
+        return new ProducerBatch(tp, recordsBuilder, nowMs);
     }
 
     /**
      * Check if all batches in the queue are full.
      */
-    private boolean allBatchesFull(Deque<ProducerBatch> deque) {
+    protected boolean allBatchesFull(Deque<ProducerBatch> deque) {
         // Only the last batch may be incomplete, so we just check that.
         ProducerBatch last = deque.peekLast();
         return last == null || last.isFull();
     }
 
-     /**
-     *  Try to append to a ProducerBatch.
+    /**
+     * Try to append to a ProducerBatch.
+     * <p>
+     * If it is full (or absent), we return {@link RecordAppendResult#NEEDS_NEW_BATCH} and a new batch is created.
+     * We also close the batch for record appends to free up resources like compression buffers. The batch will be
+     * fully closed (ie. the record batch headers will be written and memory records built) in one of the following
+     * cases (whichever comes first): right before send, if it is expired, or when the producer is closed.
      *
-     *  If it is full, we return null and a new batch is created. We also close the batch for record appends to free up
-     *  resources like compression buffers. The batch will be fully closed (ie. the record batch headers will be written
-     *  and memory records built) in one of the following cases (whichever comes first): right before send,
-     *  if it is expired, or when the producer is closed.
+     * @return one of two outcomes: an {@code appended} result ({@link RecordAppendResult#appended()}) when the
+     * record was appended to the open batch, or {@link RecordAppendResult#NEEDS_NEW_BATCH} when there is
+     * no open batch that can take it (full or absent). The incremental strategy overrides this and may
+     * additionally return a {@link RecordAppendResult#needsExtension(int) needsBufferExtension} result
+     * when the open batch is within its batch-size limit but its chunks lack capacity for the record.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
-                                         Callback callback, Deque<ProducerBatch> deque, long nowMs) {
+    protected RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+                                           Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         if (closed)
             throw new KafkaException("Producer closed while send in progress");
         ProducerBatch last = deque.peekLast();
@@ -439,10 +542,10 @@ public class RecordAccumulator {
                 last.closeForRecordAppends();
             } else {
                 int appendedBytes = last.estimatedSizeInBytes() - initialBytes;
-                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, appendedBytes);
+                return RecordAppendResult.appended(future, deque.size() > 1 || last.isFull(), false, appendedBytes);
             }
         }
-        return null;
+        return RecordAppendResult.NEEDS_NEW_BATCH;
     }
 
     private boolean isMuted(TopicPartition tp) {
@@ -510,7 +613,7 @@ public class RecordAccumulator {
     }
 
     /**
-     * Split the big batch that has been rejected and reenqueue the split batches in to the accumulator.
+     * Split the big batch that has been rejected and reenqueue the split batches into the accumulator.
      * @return the number of split batches.
      */
     public int splitAndReenqueue(ProducerBatch bigBatch) {
@@ -1025,8 +1128,7 @@ public class RecordAccumulator {
      * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(),
-                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
+        TopicInfo topicInfo = topicInfoFor(tp.topic());
         return topicInfo.batches.computeIfAbsent(tp.partition(), k -> new ArrayDeque<>());
     }
 
@@ -1054,11 +1156,12 @@ public class RecordAccumulator {
             } else {
                 batch.markBufferDeallocated();
                 if (batch.isInflight()) {
-                    // Create a fresh ByteBuffer to give to BufferPool to reuse since we can't safely call deallocate with the ProduceBatch's buffer
-                    free.deallocate(ByteBuffer.allocate(batch.initialCapacity()));
+                    // We can't safely deallocate the buffer of an inflight batch; the batch credits
+                    // the memory back to the pool in a way that suits its buffer type.
+                    batch.deallocateInflightBuffer(free);
                     throw new IllegalStateException("Attempting to deallocate a batch that is inflight. Batch is " + batch);
                 }
-                free.deallocate(batch.buffer(), batch.initialCapacity());
+                batch.deallocateBuffer(free);
             }
         }
     }
@@ -1240,7 +1343,7 @@ public class RecordAccumulator {
             this.rack = rack;
 
             if (rackAware && Utils.isBlank(rack)) {
-                throw new IllegalArgumentException("client.rack must be provided if partitioner.rack.aware is enabled");
+                throw new ConfigException("client.rack must be provided if partitioner.rack.aware is enabled");
             }
         }
 
@@ -1250,22 +1353,83 @@ public class RecordAccumulator {
     }
 
     /*
-     * Metadata about a record just appended to the record accumulator
+     * Result of an attempt to append a record to the accumulator. Carries exactly one of three
+     * mutually-exclusive outcomes: the record was appended ({@link RecordAppendResult#appended()}, {@code future} is set),
+     * the open batch needs more chunk capacity first ({@link RecordAppendResult#needsBufferExtension()}),
+     * or a new batch must be created for the record ({@link RecordAppendResult#needsNewBatch()}).
      */
     public static final class RecordAppendResult {
+        /**
+         * The three mutually-exclusive outcomes of an append attempt. Internal representation only;
+         * callers use {@link #appended()}, {@link #needsBufferExtension()}, and {@link #needsNewBatch()}.
+         */
+        private enum Outcome { APPENDED, NEEDS_BUFFER_EXTENSION, NEEDS_NEW_BATCH }
+
+        private final Outcome outcome;
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
+        /**
+         * Bytes of chunk capacity the open batch needs before the record fits (incremental
+         * strategy). Meaningful only for {@link Outcome#NEEDS_BUFFER_EXTENSION}: the append was NOT
+         * attempted ({@code future} is null); the caller allocates this many bytes, attaches them
+         * via {@link ChunkedProducerBatch#addBuffers}, and retries.
+         */
+        public final int extensionBytesNeeded;
         public final int appendedBytes;
 
-        public RecordAppendResult(FutureRecordMetadata future,
-                                  boolean batchIsFull,
-                                  boolean newBatchCreated,
-                                  int appendedBytes) {
+        /** The shared signal-only result for {@link Outcome#NEEDS_NEW_BATCH}; carries no per-append state. */
+        public static final RecordAppendResult NEEDS_NEW_BATCH =
+                new RecordAppendResult(Outcome.NEEDS_NEW_BATCH, null, false, false, 0, 0);
+
+        private RecordAppendResult(Outcome outcome,
+                                   FutureRecordMetadata future,
+                                   boolean batchIsFull,
+                                   boolean newBatchCreated,
+                                   int extensionBytesNeeded,
+                                   int appendedBytes) {
+            this.outcome = outcome;
             this.future = future;
             this.batchIsFull = batchIsFull;
             this.newBatchCreated = newBatchCreated;
+            this.extensionBytesNeeded = extensionBytesNeeded;
             this.appendedBytes = appendedBytes;
+        }
+
+        /** Result of a successful append to an open batch */
+        public static RecordAppendResult appended(FutureRecordMetadata future,
+                                                  boolean batchIsFull,
+                                                  boolean newBatchCreated,
+                                                  int appendedBytes) {
+            Objects.requireNonNull(future, "future must be non-null for an appended result");
+            return new RecordAppendResult(Outcome.APPENDED, future, batchIsFull, newBatchCreated, 0, appendedBytes);
+        }
+
+        /**
+         * Signal-only result (incremental strategy): the open batch is within its batch-size limit
+         * but its chunks lack capacity, so the caller must allocate {@code extensionBytesNeeded}
+         * bytes of chunk capacity and retry. The append was not attempted.
+         */
+        public static RecordAppendResult needsExtension(int extensionBytesNeeded) {
+            return new RecordAppendResult(Outcome.NEEDS_BUFFER_EXTENSION, null, false, false, extensionBytesNeeded, 0);
+        }
+
+        /**
+         * @return {@code true} if the record was appended to the open batch ({@link #future} is then
+         * non-null), {@code false} for the {@link #needsBufferExtension()} and {@link #needsNewBatch()} results.
+         */
+        public boolean appended() {
+            return outcome == Outcome.APPENDED;
+        }
+
+        /** @return {@code true} if the open batch needs more chunk capacity before the record fits. */
+        public boolean needsBufferExtension() {
+            return outcome == Outcome.NEEDS_BUFFER_EXTENSION;
+        }
+
+        /** @return {@code true} if there is no open batch that can take the record, so a new one must be created. */
+        public boolean needsNewBatch() {
+            return outcome == Outcome.NEEDS_NEW_BATCH;
         }
     }
 
@@ -1298,7 +1462,7 @@ public class RecordAccumulator {
     /**
      * Per topic info.
      */
-    private static class TopicInfo {
+    protected static class TopicInfo {
         public final ConcurrentMap<Integer /*partition*/, Deque<ProducerBatch>> batches = new CopyOnWriteMap<>();
         public final BuiltInPartitioner builtInPartitioner;
 

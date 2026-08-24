@@ -92,6 +92,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -134,7 +135,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -474,6 +474,8 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             future.get()
@@ -506,6 +508,8 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData(),
                 Map.of(),
+                -1,
+                -1,
                 -1
             )
         ));
@@ -515,7 +519,7 @@ public class GroupCoordinatorServiceTest {
             request
         );
 
-        assertEquals(new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), -1), future.get(5, TimeUnit.SECONDS));
+        assertEquals(new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), -1, -1, -1), future.get(5, TimeUnit.SECONDS));
     }
 
     private static Stream<Arguments> testStreamsGroupHeartbeatWithExceptionSource() {
@@ -575,6 +579,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(expectedErrorCode)
                     .setErrorMessage(expectedErrorMessage),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             future.get(5, TimeUnit.SECONDS)
@@ -595,53 +601,10 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("TaskOffsets are not supported yet."),
-                Map.of(),
-                -1
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("TaskEndOffsets are not supported yet."),
-                Map.of(),
-                -1
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setTaskEndOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("WarmupTasks are not supported yet."),
-                Map.of(),
-                -1
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setWarmupTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()))
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Regular expressions for source topics are not supported yet."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -653,6 +616,49 @@ public class GroupCoordinatorServiceTest {
                         ))
                     )
             ).get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatAcceptsTaskOffsetsAndWarmupTasks() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime)
+            .setConfig(createConfig())
+            .build(true);
+
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
+            .setGroupId("foo")
+            .setMemberId(Uuid.randomUuid().toString())
+            .setMemberEpoch(1)
+            .setActiveTasks(List.of())
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()))
+            .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
+            .setTaskEndOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("streams-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData(),
+                Map.of(),
+                -1,
+                -1,
+                -1
+            )
+        ));
+
+        CompletableFuture<StreamsGroupHeartbeatResult> future = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
+            request
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), -1, -1, -1),
+            future.get(5, TimeUnit.SECONDS)
         );
     }
 
@@ -676,6 +682,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("MemberId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -691,6 +699,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("MemberId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -707,6 +717,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("GroupId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -723,6 +735,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("GroupId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -740,6 +754,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("RebalanceTimeoutMs must be provided in first request."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -758,6 +774,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("ActiveTasks must be empty when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -777,6 +795,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("StandbyTasks must be empty when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -797,6 +817,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("WarmupTasks must be empty when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -818,6 +840,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Topology must be non-null when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -840,6 +864,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("RackId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -859,6 +885,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("InstanceId can't be null."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -882,6 +910,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("MemberEpoch is -3, but must be greater than or equal to -2."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -901,6 +931,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Topology can only be provided when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -924,6 +956,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code())
                     .setErrorMessage("Changelog topic changelog_topic_with_fixed_partition must have an undefined partition count, but it is set to 3."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -976,12 +1010,14 @@ public class GroupCoordinatorServiceTest {
             .setRuntime(runtime)
             .build();
 
-        Properties expectedProperties = new Properties();
-        expectedProperties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
-        expectedProperties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
-        expectedProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000");
-
-        assertEquals(expectedProperties, service.groupMetadataTopicConfigs());
+        assertEquals(
+            Map.of(
+                TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT,
+                TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name,
+                TopicConfig.SEGMENT_BYTES_CONFIG, "1000"
+            ),
+            service.groupMetadataTopicConfigs()
+        );
     }
 
     @Test
@@ -1056,9 +1092,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(
-            new JoinGroupResponseData()
-        ));
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
 
         CompletableFuture<JoinGroupResponseData> responseFuture = service.joinGroup(
             requestContext(ApiKeys.JOIN_GROUP),
@@ -2136,7 +2170,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(describedGroupFuture);
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("group-id-1", "group-id-2"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("group-id-1", "group-id-2"), false);
 
         assertFalse(future.isDone());
         describedGroupFuture.complete(new StreamsGroupDescribeResult(List.of(describedGroup2), Map.of()));
@@ -2176,7 +2210,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup)));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("", null));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("", null), false);
 
         assertEquals(expectedDescribedGroups, future.get());
     }
@@ -2200,7 +2234,7 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"), false);
 
         assertEquals(
             List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
@@ -2227,7 +2261,7 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"), false);
 
         assertEquals(
             List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
@@ -5921,6 +5955,7 @@ public class GroupCoordinatorServiceTest {
         private Persister persister = new NoOpStatePersister();
         private MetadataImage metadataImage = null;
         private PartitionMetadataClient partitionMetadataClient = null;
+        private Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin = Optional.empty();
 
         GroupCoordinatorService build() {
             return build(false);
@@ -5933,6 +5968,7 @@ public class GroupCoordinatorServiceTest {
                     .build();
             }
 
+            MockTimer mockTimer = new MockTimer();
             var service = new GroupCoordinatorService(
                 logContext,
                 config,
@@ -5940,8 +5976,10 @@ public class GroupCoordinatorServiceTest {
                 metrics,
                 configManager,
                 persister,
-                new MockTimer(),
-                partitionMetadataClient
+                mockTimer,
+                partitionMetadataClient,
+                streamsGroupTopologyDescriptionPlugin,
+                mockTimer.time()
             );
 
             if (serviceStartup) {

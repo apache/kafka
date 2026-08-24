@@ -82,6 +82,7 @@ import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -488,7 +489,7 @@ public final class QuorumController implements Controller {
                         throw new InvalidRequestException("Invalid broker name " +
                             configResource.name());
                     }
-                    if (!isNodeIdRegistered(nodeId)) {
+                    if (!isNodeIdKnown(nodeId)) {
                         throw new BrokerIdNotRegisteredException("No node with id " + nodeId + " found.");
                     }
                     break;
@@ -504,13 +505,13 @@ public final class QuorumController implements Controller {
         }
 
         /**
-         * Checks if a node id is registered as a broker, controller in static/dynamic quorum.
+         * Checks if a node id is known to the controller, from registrations or the voter set.
          */
-        private boolean isNodeIdRegistered(int nodeId) {
+        private boolean isNodeIdKnown(int nodeId) {
             if (clusterControl.brokerRegistrations().containsKey(nodeId)) {
                 return true;
             }
-            if (featureControl.isControllerId(nodeId)) {
+            if (featureControl.isVoterId(nodeId)) {
                 return true;
             }
             return clusterControl.controllerRegistrations().containsKey(nodeId);
@@ -1324,6 +1325,9 @@ public final class QuorumController implements Controller {
                 break;
             case REGISTER_CONTROLLER_RECORD:
                 clusterControl.replay((RegisterControllerRecord) message);
+                break;
+            case UNREGISTER_CONTROLLER_RECORD:
+                clusterControl.replay((UnregisterControllerRecord) message);
                 break;
             case CLEAR_ELR_RECORD:
                 replicationControl.replay((ClearElrRecord) message);
@@ -2154,12 +2158,28 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<Void> unregisterController(
+        ControllerRequestContext context,
+        int controllerId
+    ) {
+        return appendWriteEvent("unregisterController", context.deadlineNs(),
+            () -> {
+                if (featureControl.isVoterId(controllerId)) {
+                    throw new InvalidRequestException("Cannot unregister controller " + controllerId +
+                        " because it is part of the voter set.");
+                }
+                return clusterControl.unregisterController(controllerId);
+            },
+            EnumSet.noneOf(ControllerOperationFlag.class));
+    }
+
+    @Override
     public CompletableFuture<List<AclCreateResult>> createAcls(
         ControllerRequestContext context,
         List<AclBinding> aclBindings
     ) {
         return appendWriteEvent("createAcls", context.deadlineNs(),
-            () -> aclControlManager.createAcls(aclBindings));
+            () -> aclControlManager.createAcls(aclBindings, featureControl.metadataVersionOrThrow()));
     }
 
     @Override

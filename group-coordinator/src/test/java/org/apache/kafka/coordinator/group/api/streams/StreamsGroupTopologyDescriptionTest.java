@@ -81,14 +81,11 @@ public class StreamsGroupTopologyDescriptionTest {
     }
 
     @Test
-    public void testCollectionsAreDefensivelyCopied() {
-        Set<String> mutableTopics = new HashSet<>(Set.of("in"));
+    public void testCollectionAccessorsAreUnmodifiable() {
         StreamsGroupTopologyDescription.Source src = new StreamsGroupTopologyDescription.Source(
-            "src", mutableTopics, Set.of("proc"));
-        mutableTopics.add("rogue");
-
-        assertEquals(Set.of("in"), src.topics());
+            "src", new HashSet<>(Set.of("in")), Set.of("proc"));
         assertThrows(UnsupportedOperationException.class, () -> src.topics().add("nope"));
+        assertThrows(UnsupportedOperationException.class, () -> src.successors().add("nope"));
     }
 
     @Test
