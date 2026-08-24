@@ -41,10 +41,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.BooleanNode;
-import com.fasterxml.jackson.databind.node.DoubleNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -58,6 +54,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 
 public class RequestConvertToJsonTest {
@@ -140,11 +137,10 @@ public class RequestConvertToJsonTest {
     @Test
     public void testClientInfoNode() {
         ClientInformation clientInfo = new ClientInformation("name", "1");
-        ObjectNode expectedNode = JsonNodeFactory.instance.objectNode();
-        expectedNode.set("softwareName", new TextNode(clientInfo.softwareName()));
-        expectedNode.set("softwareVersion", new TextNode(clientInfo.softwareVersion()));
         JsonNode actualNode = RequestConvertToJson.clientInfoNode(clientInfo);
-        assertEquals(expectedNode, actualNode);
+
+        assertEquals("name", actualNode.get("softwareName").asText());
+        assertEquals("1", actualNode.get("softwareVersion").asText());
     }
 
     @Test
@@ -166,14 +162,11 @@ public class RequestConvertToJsonTest {
         AlterPartitionRequest alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.latestVersion());
         Request req = request(alterIsrRequest);
 
-        ObjectNode expectedNode = new ObjectNode(JsonNodeFactory.instance);
-        expectedNode.set("isForwarded", req.isForwarded() ? BooleanNode.TRUE : BooleanNode.FALSE);
-        expectedNode.set("requestHeader", RequestConvertToJson.requestHeaderNode(req.header()));
-        expectedNode.set("request", req.requestLog().orElse(NullNode.getInstance()));
-
         JsonNode actualNode = RequestConvertToJson.requestDesc(req.header(), req.requestLog(), req.isForwarded());
 
-        assertEquals(expectedNode, actualNode);
+        assertFalse(actualNode.get("isForwarded").asBoolean());
+        assertEquals(RequestConvertToJson.requestHeaderNode(req.header()), actualNode.get("requestHeader"));
+        assertEquals(req.requestLog().orElse(NullNode.getInstance()), actualNode.get("request"));
     }
 
     @Test
@@ -184,38 +177,45 @@ public class RequestConvertToJsonTest {
         JsonNode headerLog = RequestConvertToJson.requestHeaderNode(req.header());
         SendResponse res = new SendResponse(req, send, Optional.of(headerLog));
 
-        int totalTimeMs = 1;
-        int requestQueueTimeMs = 2;
-        int apiLocalTimeMs = 3;
-        int apiRemoteTimeMs = 4;
-        int apiThrottleTimeMs = 5;
-        int responseQueueTimeMs = 6;
-        int responseSendTimeMs = 7;
-        int temporaryMemoryBytes = 8;
-        int messageConversionsTimeMs = 9;
-
-        ObjectNode expectedNode = (ObjectNode) RequestConvertToJson.requestDesc(req.header(), req.requestLog(), req.isForwarded());
-        expectedNode.set("response", res.responseLog().orElse(NullNode.getInstance()));
-        expectedNode.set("connection", new TextNode(req.context().connectionId));
-        expectedNode.set("totalTimeMs", new DoubleNode(totalTimeMs));
-        expectedNode.set("requestQueueTimeMs", new DoubleNode(requestQueueTimeMs));
-        expectedNode.set("localTimeMs", new DoubleNode(apiLocalTimeMs));
-        expectedNode.set("remoteTimeMs", new DoubleNode(apiRemoteTimeMs));
-        expectedNode.set("throttleTimeMs", new LongNode(apiThrottleTimeMs));
-        expectedNode.set("responseQueueTimeMs", new DoubleNode(responseQueueTimeMs));
-        expectedNode.set("sendTimeMs", new DoubleNode(responseSendTimeMs));
-        expectedNode.set("securityProtocol", new TextNode(req.context().securityProtocol.name));
-        expectedNode.set("principal", new TextNode(req.session().principal.toString()));
-        expectedNode.set("listener", new TextNode(req.context().listenerName.value()));
-        expectedNode.set("clientInformation", RequestConvertToJson.clientInfoNode(req.context().clientInformation));
-        expectedNode.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes));
-        expectedNode.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs));
-
         ObjectNode actualNode = (ObjectNode) RequestConvertToJson.requestDescMetrics(req.header(), req.requestLog(), res.responseLog(), req.context(), req.session(), req.isForwarded(),
-                totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
-                responseSendTimeMs, temporaryMemoryBytes, messageConversionsTimeMs);
+                1, 2, 3, 4, 5, 6, 7, 8, 9);
 
-        assertEquals(expectedNode, actualNode);
+        assertFalse(actualNode.get("isForwarded").asBoolean());
+        assertEquals(req.requestLog().orElse(NullNode.getInstance()), actualNode.get("request"));
+        assertEquals(res.responseLog().orElse(NullNode.getInstance()), actualNode.get("response"));
+        assertEquals("connection-id", actualNode.get("connection").asText());
+        assertEquals(1.0, actualNode.get("totalTimeMs").asDouble());
+        assertEquals(2.0, actualNode.get("requestQueueTimeMs").asDouble());
+        assertEquals(3.0, actualNode.get("localTimeMs").asDouble());
+        assertEquals(4.0, actualNode.get("remoteTimeMs").asDouble());
+        assertEquals(5, actualNode.get("throttleTimeMs").asLong());
+        assertEquals(6.0, actualNode.get("responseQueueTimeMs").asDouble());
+        assertEquals(7.0, actualNode.get("sendTimeMs").asDouble());
+        assertEquals("PLAINTEXT", actualNode.get("securityProtocol").asText());
+        assertEquals("User:user", actualNode.get("principal").asText());
+        assertEquals("PLAINTEXT", actualNode.get("listener").asText());
+        assertEquals("name", actualNode.get("clientInformation").get("softwareName").asText());
+        assertEquals("version", actualNode.get("clientInformation").get("softwareVersion").asText());
+        assertEquals(8, actualNode.get("temporaryMemoryBytes").asLong());
+        assertEquals(9.0, actualNode.get("messageConversionsTime").asDouble());
+    }
+
+    @Test
+    public void testRequestDescMetricsOmitsNonPositiveMetrics() {
+        AlterPartitionRequest alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.latestVersion());
+        Request req = request(alterIsrRequest);
+
+        ObjectNode zeroMetricsNode = (ObjectNode) RequestConvertToJson.requestDescMetrics(req.header(), req.requestLog(), Optional.empty(),
+                req.context(), req.session(), req.isForwarded(), 1, 2, 3, 4, 5, 6, 7, 0, 0);
+
+        assertFalse(zeroMetricsNode.has("temporaryMemoryBytes"));
+        assertFalse(zeroMetricsNode.has("messageConversionsTime"));
+
+        ObjectNode negativeMetricsNode = (ObjectNode) RequestConvertToJson.requestDescMetrics(req.header(), req.requestLog(), Optional.empty(),
+                req.context(), req.session(), req.isForwarded(), 1, 2, 3, 4, 5, 6, 7, -1, -1);
+
+        assertFalse(negativeMetricsNode.has("temporaryMemoryBytes"));
+        assertFalse(negativeMetricsNode.has("messageConversionsTime"));
     }
 
     private static Request request(AbstractRequest req) {
