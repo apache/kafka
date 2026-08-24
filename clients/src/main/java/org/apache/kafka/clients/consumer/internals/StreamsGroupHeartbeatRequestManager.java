@@ -680,6 +680,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));
         }
 
+        if (data.topicPartitionCounts() != null) {
+            streamsRebalanceData.setTopicPartitionCounts(convertTopicPartitionCounts(data));
+        }
+
         maybeLogStatuses(data.status());
 
         membershipManager.onHeartbeatSuccess(response);
@@ -893,6 +897,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             );
         });
         return partitionsByHost;
+    }
+
+    static Map<String, Integer> convertTopicPartitionCounts(final StreamsGroupHeartbeatResponseData data) {
+        Map<String, Integer> topicPartitionCounts = new HashMap<>();
+        data.topicPartitionCounts().forEach(topicPartitionCount ->
+            topicPartitionCounts.put(topicPartitionCount.topic(), topicPartitionCount.partitionCount()));
+        return topicPartitionCounts;
     }
 
     static List<TopicPartition> getTopicPartitionList(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {

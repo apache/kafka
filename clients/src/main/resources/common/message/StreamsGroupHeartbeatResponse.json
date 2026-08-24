@@ -19,7 +19,9 @@
   "name": "StreamsGroupHeartbeatResponse",
   // Version 1 adds TopologyDescriptionRequired (KIP-1331), and allows the broker to return the
   // MISSING_CLIENT_TAGS status (code 6), which version 0 clients do not understand (KAFKA-20744).
-  "validVersions": "0-1",
+  // Version 2 adds TopicPartitionCounts so clients hash Interactive Query keys with the true
+  // source-topic partition count instead of inferring it from PartitionsByUserEndpoint.
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -85,7 +87,9 @@
         { "name": "StandbyPartitions", "type": "[]TopicPartition", "versions": "0+",
           "about": "The source topic partitions, including repartition source topics, of the standby and warm-up tasks assigned to this member" }
       ]
-    }
+    },
+    { "name": "TopicPartitionCounts", "type": "[]TopicPartitionCount", "versions": "2+", "nullableVersions": "2+", "default": "null",
+      "about": "Partition counts of source and repartition source topics. Used by clients for Interactive Query key-to-partition hashing so the count is not inferred from PartitionsByUserEndpoint. Null if unchanged since last heartbeat." }
   ],
   "commonStructs": [
     { "name": "Status", "versions": "0+", "fields": [
@@ -126,6 +130,12 @@
         "about": "host of the endpoint" },
       { "name": "Port", "type": "uint16", "versions": "0+",
         "about": "port of the endpoint" }
+    ]},
+    { "name": "TopicPartitionCount", "versions": "2+", "fields": [
+      { "name": "Topic", "type": "string", "versions": "2+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "PartitionCount", "type": "int32", "versions": "2+",
+        "about": "The number of partitions in the topic." }
     ]}
   ]
 }

@@ -365,6 +365,8 @@ public class StreamsRebalanceData {
 
     private final AtomicReference<Map<HostInfo, EndpointPartitions>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
 
+    private final AtomicReference<Map<String, Integer>> topicPartitionCounts = new AtomicReference<>(Collections.emptyMap());
+
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
     private final AtomicReference<List<StreamsGroupHeartbeatResponseData.Status>> statuses = new AtomicReference<>(List.of());
@@ -441,6 +443,15 @@ public class StreamsRebalanceData {
 
     public Map<HostInfo, EndpointPartitions> partitionsByHost() {
         return partitionsByHost.get();
+    }
+
+
+    public void setTopicPartitionCounts(final Map<String, Integer> topicPartitionCounts) {
+        this.topicPartitionCounts.set(Map.copyOf(topicPartitionCounts));
+    }
+
+    public Map<String, Integer> topicPartitionCounts() {
+        return topicPartitionCounts.get();
     }
 
     /** For the current stream thread to request a shutdown of all Streams clients belonging to the same application. */
