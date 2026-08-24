@@ -198,6 +198,15 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
+        return resize(newSize, false);
+    }
+
+    /**
+     * @param newSize new size of the index file
+     * @param sync if true, fsync the file after resizing to ensure both content and size are durable
+     * @return true if the index was resized, false otherwise
+     */
+    public boolean resize(int newSize, boolean sync) throws IOException {
         return inLock(() ->
                 inRemapWriteLock(() -> {
                     int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
@@ -216,6 +225,9 @@ public abstract class AbstractIndex implements Closeable {
                             mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
                             this.maxEntries = mmap.limit() / entrySize();
                             mmap.position(position);
+                            if (sync) {
+                                raf.getChannel().force(true);
+                            }
                             log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
                                     mmap.position(), mmap.limit());
                             return true;
@@ -261,13 +273,13 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     /**
-     * Trim this segment to fit just the valid entries, deleting all trailing unwritten bytes from
-     * the file.
+     * Trim this index to fit just the valid entries, deleting all trailing unwritten bytes from the file.
+     * @param sync if true, fsync the file after resizing to ensure both content and size are durable
      */
-    public void trimToValidSize() throws IOException {
+    public void trimToValidSize(boolean sync) throws IOException {
         inLock(() -> {
             if (mmap != null) {
-                resize(entrySize() * entries);
+                resize(entrySize() * entries, sync);
             }
         });
     }
@@ -280,7 +292,7 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     public void close() throws IOException {
-        trimToValidSize();
+        trimToValidSize(true);
         closeHandler();
     }
 
