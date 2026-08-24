@@ -21,7 +21,7 @@ FROM docker.io/library/eclipse-temurin:21-jre-alpine AS build-jsa
 USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
-ARG kafka_url
+ARG kafka_url=""
 
 COPY jsa_launch /etc/kafka/docker/jsa_launch
 COPY server.properties /etc/kafka/docker/server.properties
@@ -33,7 +33,7 @@ RUN set -eux ; \
     apk upgrade ; \
     apk add --no-cache bash procps-ng; \
     mkdir opt/kafka; \
-    if [ -n "${kafka_url:-}" ]; then \
+    if [ -n "$kafka_url" ]; then \
         apk add --no-cache wget gcompat gpg gpg-agent; \
         wget -nv -O kafka.tgz "$kafka_url"; \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
