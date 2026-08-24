@@ -30,6 +30,7 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,12 +51,12 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     private final String name;
     protected final Map<Bytes, byte[]> map;
 
-    private boolean restoring = false; // TODO: this is a sub-optimal solution to avoid logging during restoration.
-                                       // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
+    private boolean restoring = false;
     private volatile boolean open = true;
     protected StateStoreContext context;
 
     private EldestEntryRemovalListener listener;
+    private RecordBatchingStateRestoreCallback restoreCallback;
 
     MemoryLRUCache(final String name, final int maxCacheSize) {
         this.name = name;
@@ -91,11 +92,19 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false
         );
-        // register the store
-        stateStoreContext.register(
-            root,
-            (RecordBatchingStateRestoreCallback) records -> {
+        this.restoreCallback = new RecordBatchingStateRestoreCallback() {
+            @Override
+            public void onRestoreStart() {
                 restoring = true;
+            }
+
+            @Override
+            public void onRestoreEnd() {
+                restoring = false;
+            }
+
+            @Override
+            public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
                 synchronized (position) {
                     for (final ConsumerRecord<byte[], byte[]> record : records) {
                         put(Bytes.wrap(record.key()), record.value());
@@ -106,9 +115,10 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
                         );
                     }
                 }
-                restoring = false;
             }
-        );
+        };
+        // register the store
+        stateStoreContext.register(root, restoreCallback);
         this.context = stateStoreContext;
     }
 
@@ -231,5 +241,15 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     public int size() {
         return this.map.size();
+    }
+
+    // visible for testing
+    boolean isRestoring() {
+        return restoring;
+    }
+
+    // visible for testing
+    RecordBatchingStateRestoreCallback restoreCallback() {
+        return restoreCallback;
     }
 }

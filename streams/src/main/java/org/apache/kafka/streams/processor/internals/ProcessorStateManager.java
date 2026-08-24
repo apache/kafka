@@ -514,12 +514,15 @@ public class ProcessorStateManager implements StateManager {
                 .collect(Collectors.toList());
 
             try {
+                restoreCallback.onRestoreStart();
                 restoreCallback.restoreBatch(convertedRecords);
             } catch (final RuntimeException e) {
                 throw new ProcessorStateException(
                     format("%sException caught while trying to restore state from %s", logPrefix, storeMetadata.changelogPartition),
                     e
                 );
+            } finally {
+                restoreCallback.onRestoreEnd();
             }
 
             storeMetadata.setOffset(batchEndOffset);

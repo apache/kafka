@@ -60,9 +60,12 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Properties;
@@ -305,6 +308,70 @@ public class ProcessorStateManagerTest {
             assertTrue(store.keys.contains(key));
             // we just check timestamped value length
             assertEquals(17, store.values.get(0).length);
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldInvokeRestoreLifecycleHooksAroundRestoreBatch() {
+        final List<String> events = new ArrayList<>();
+        final RecordBatchingStateRestoreCallback callback = new RecordBatchingStateRestoreCallback() {
+            @Override
+            public void onRestoreStart() {
+                events.add("start");
+            }
+
+            @Override
+            public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+                events.add("batch:" + records.size());
+            }
+
+            @Override
+            public void onRestoreEnd() {
+                events.add("end");
+            }
+        };
+
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        try {
+            stateMgr.registerStore(persistentStore, callback, null);
+            final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
+            assertThat(storeMetadata, notNullValue());
+
+            stateMgr.restore(storeMetadata, singletonList(consumerRecord), OptionalLong.of(2L));
+
+            assertEquals(Arrays.asList("start", "batch:1", "end"), events);
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldInvokeOnRestoreEndEvenWhenRestoreBatchThrows() {
+        final AtomicBoolean onEndCalled = new AtomicBoolean(false);
+        final RecordBatchingStateRestoreCallback callback = new RecordBatchingStateRestoreCallback() {
+            @Override
+            public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+                throw new RuntimeException("boom");
+            }
+
+            @Override
+            public void onRestoreEnd() {
+                onEndCalled.set(true);
+            }
+        };
+
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        try {
+            stateMgr.registerStore(persistentStore, callback, null);
+            final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
+
+            assertThrows(
+                ProcessorStateException.class,
+                () -> stateMgr.restore(storeMetadata, singletonList(consumerRecord), OptionalLong.of(2L))
+            );
+            assertTrue(onEndCalled.get(), "onRestoreEnd must be invoked even when restoreBatch throws");
         } finally {
             stateMgr.close();
         }

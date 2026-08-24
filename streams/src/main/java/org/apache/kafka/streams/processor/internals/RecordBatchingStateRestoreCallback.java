@@ -25,6 +25,12 @@ import java.util.Collection;
 public interface RecordBatchingStateRestoreCallback extends BatchingStateRestoreCallback {
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records);
 
+    /** Called before each {@link #restoreBatch}; pair with {@link #onRestoreEnd}. */
+    default void onRestoreStart() {}
+
+    /** Called after each {@link #restoreBatch}, including on throw. */
+    default void onRestoreEnd() {}
+
     @Override
     default void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
         throw new UnsupportedOperationException();
