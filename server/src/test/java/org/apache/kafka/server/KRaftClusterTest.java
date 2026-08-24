@@ -1420,6 +1420,31 @@ public class KRaftClusterTest {
     }
 
     @Test
+    public void testCreateTopicsRespectsConfiguredMaxPartitionsPerBatch() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .setConfigProp(KRaftConfigs.CONTROLLER_MAX_PARTITIONS_PER_BATCH_CONFIG, "10")
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            try (Admin admin = cluster.admin()) {
+                var newTopics = List.of(
+                    new NewTopic("foo1", 5, (short) 1),
+                    new NewTopic("foo2", 6, (short) 1));
+                var executionException = assertThrows(ExecutionException.class,
+                    () -> admin.createTopics(newTopics).all().get());
+                assertNotNull(executionException.getCause());
+                assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
+                assertEquals("Excessively large number of partitions per request.",
+                    executionException.getCause().getMessage());
+            }
+        }
+    }
+
+    @Test
     public void testTimedOutHeartbeats() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
