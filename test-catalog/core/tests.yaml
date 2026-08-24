@@ -1783,6 +1783,8 @@ kafka.server.KafkaConfigTest:
 - testBrokerIdDeprecationWarning
 - testBrokerIdIsInferredByNodeIdWithKraft
 - testCaseInsensitiveListenerProtocol
+- testConfigProviderAllowlistEnforcedForReconfiguration
+- testConfigProviderAllowlistSkippedForServerProperties
 - testConsumerGroupHeartbeatIntervalValidation
 - testConsumerGroupMigrationPolicy
 - testConsumerGroupSessionTimeoutValidation

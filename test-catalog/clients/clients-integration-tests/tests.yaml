@@ -50,6 +50,11 @@ org.apache.kafka.clients.admin.AdminMetadataTest:
 - testListNodesWithFencedBroker
 - testListTopicsWithOptionListInternal
 - testListTopicsWithOptionTimeoutMs
+org.apache.kafka.clients.admin.AlterConfigsIntegrationTest:
+- testAlterConfigsRespectsConfigProviderAllowlist
+- testAlterConfigsWithConfigProviders
+- testAlterConfigsWithConfigProvidersAndValidatorRejection
+- testAlterConfigsWithConfigProvidersWithoutAcls
 org.apache.kafka.clients.admin.AutoTopicCreationTest:
 - testAutoCreateTopicWithDefaultConfig
 - testAutoCreateTopicWithExplicitBrokerConfig
