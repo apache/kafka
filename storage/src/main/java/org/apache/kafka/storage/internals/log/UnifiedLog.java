@@ -1224,8 +1224,8 @@ public class UnifiedLog implements AutoCloseable {
                                 }
                             });
 
-                            // check messages size does not exceed config.segmentSize
-                            if (validRecords.sizeInBytes() > config().segmentSize()) {
+                            // Like KAFKA-9617 for max.message.bytes, KAFKA-17375 lets followers replicate data accepted before segment.bytes was lowered.
+                            if (origin != AppendOrigin.REPLICATION && validRecords.sizeInBytes() > config().segmentSize()) {
                                 throw new RecordBatchTooLargeException("Message batch size is " + validRecords.sizeInBytes() + " bytes in append " +
                                         "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize() + ".");
                             }

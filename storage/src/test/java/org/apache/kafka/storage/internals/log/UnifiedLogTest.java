@@ -2982,6 +2982,62 @@ public class UnifiedLogTest {
         assertThrows(RecordBatchTooLargeException.class, () -> log.appendAsLeader(messageSet, 0));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = AppendOrigin.class, names = "REPLICATION", mode = EnumSource.Mode.EXCLUDE)
+    public void testSegmentSizeCheckForNonReplicationOrigins(AppendOrigin origin) throws IOException {
+        MemoryRecords records = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(records.sizeInBytes() - 1)
+                .maxMessageBytes(records.sizeInBytes())
+                .build());
+
+        assertThrows(RecordBatchTooLargeException.class, () -> log.appendAsLeader(records, 0, origin));
+    }
+
+    @Test
+    public void testSegmentSizeCheckInAppendAsFollower() throws IOException {
+        MemoryRecords records = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(records.sizeInBytes() - 1)
+                .maxMessageBytes(records.sizeInBytes())
+                .build());
+
+        log.appendAsFollower(records, Integer.MAX_VALUE);
+
+        assertEquals(2L, log.logEndOffset());
+        assertEquals(1, log.numberOfSegments());
+        assertEquals(records.sizeInBytes(), log.activeSegment().size());
+    }
+
+    @Test
+    public void testSegmentSizeCheckInAppendAsFollowerWithNonEmptySegment() throws IOException {
+        MemoryRecords first = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("small".getBytes()));
+        MemoryRecords oversized = MemoryRecords.withRecords(1, Compression.NONE, 0,
+                new SimpleRecord("This record set is larger than the configured segment size.".getBytes()),
+                new SimpleRecord("More padding for the oversized record set.".getBytes()));
+        MemoryRecords last = MemoryRecords.withRecords(3, Compression.NONE, 0,
+                new SimpleRecord("small".getBytes()));
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(oversized.sizeInBytes() - 1)
+                .build());
+
+        log.appendAsFollower(first, Integer.MAX_VALUE);
+        log.appendAsFollower(oversized, Integer.MAX_VALUE);
+
+        assertEquals(3L, log.logEndOffset());
+        assertEquals(2, log.numberOfSegments());
+        assertEquals(oversized.sizeInBytes(), log.activeSegment().size());
+
+        log.appendAsFollower(last, Integer.MAX_VALUE);
+
+        assertEquals(4L, log.logEndOffset());
+        assertEquals(3, log.numberOfSegments());
+        assertEquals(last.sizeInBytes(), log.activeSegment().size());
+    }
+
     @Test
     public void testCompactedTopicConstraints() throws IOException {
         SimpleRecord keyedMessage = new SimpleRecord("and here it is".getBytes(), "this message has a key".getBytes());

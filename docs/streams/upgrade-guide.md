@@ -79,6 +79,14 @@ For applications using the Streams Rebalance Protocol (`group.protocol=streams`)
 
 The buffer used by `suppress()` is now headers-aware, closing one of the gaps listed under the [KIP-1285 current limitations](#current-limitations) in 4.3.0. With [`dsl.store.format=HEADERS`](/{version}/streams/developer-guide/config-streams.html#dsl-store-format), each buffered value is stored together with the headers of the record it came from, so record headers are preserved across the suppression boundary: the record emitted when a buffered row is evicted carries the headers of the value being emitted. With the default `dsl.store.format=DEFAULT`, behavior is unchanged — the buffer stores plain values plus a single record context per buffered row, so a row that is updated by a later record before it is evicted preserves only the headers of that later record. The buffer's changelog records keep the existing V3 value format in both cases; under `HEADERS` the headers of the buffered old and prior values are carried in additional Kafka record headers (`vh.old`, `vh.prior`), which older versions ignore and restore the values without, so the changelog stays readable across a downgrade.
 
+Kafka Streams now supports static membership with the Streams Rebalance Protocol. Applications using `group.protocol=streams` may configure `group.instance.id`. However, for topologies without persistent state stores, Kafka Streams generates a new process ID on each restart, causing the broker to recompute the group assignment and effectively negating the benefits of static membership across restarts.
+
+As part of [KIP-1284](https://cwiki.apache.org/confluence/spaces/KAFKA/pages/406621398/KIP-1284+Introduce+CloseOptions.DEFAULT+for+Kafka+Streams), the [`CloseOptions`](/{version}/javadoc/org/apache/kafka/streams/CloseOptions.html) limitation noted in 3.3.0 no longer applies. `LEAVE_GROUP` always leaves the group, while `REMAIN_IN_GROUP` suppresses an explicit leave. With `DEFAULT`, members using `group.protocol=classic` remain in the group, dynamic members using `group.protocol=streams` leave, and static members using `group.protocol=streams` remain until the session timeout.
+
+### Header-aware Interactive Queries v2 (KIP-1356) {#kip-1356-iqv2-header-queries}
+
+[KIP-1356](https://cwiki.apache.org/confluence/spaces/KAFKA/pages/430408653/KIP-1356+Introduce+IQv2+for+headers-aware+state+stores) adds four `@Evolving` IQv2 query types that return record headers from the [header-aware state stores](#kip-1271-headers-aware-stores) introduced by KIP-1271: `TimestampedKeyWithHeadersQuery`, `TimestampedRangeWithHeadersQuery`, `TimestampedWindowKeyWithHeadersQuery`, and `TimestampedWindowRangeWithHeadersQuery`. Their results carry headers as a [`ReadOnlyRecord`](/{version}/javadoc/org/apache/kafka/streams/processor/api/ReadOnlyRecord.html) — or, for the range and window forms, a closeable [`ReadOnlyRecordIterator`](/{version}/javadoc/org/apache/kafka/streams/state/ReadOnlyRecordIterator.html). See the [interactive queries guide](/{version}/streams/developer-guide/interactive-queries/#header-aware-stores-interactive-queries) for usage and behavior details.
+
 ## Streams API changes in 4.3.0
 
 **Note:** Kafka Streams 4.3.0 contains a critical native memory leak in the RocksDB state store layer ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616)). The `ColumnFamilyOptions` for the offsets column family is not closed, and column family handles can leak on close-path exceptions, which under cascading task closes (e.g., rebalances or error-triggered recoveries) leads to unbounded off-heap memory growth and eventual OOM. Users running Kafka Streams should consider upgrading directly to 4.3.1, which includes the fix for it.
@@ -93,7 +101,6 @@ Kafka Streams now persists state store changelog offsets inside each state store
 
 As part of KIP-1035, the per-store changelog offset is written into RocksDB on each commit and is made durable on disk only when RocksDB flushes its memtable to an SST file — either organically once the memtable fills `write_buffer_size` (16 MB by default), or on a clean store close. Earlier releases force-flushed RocksDB on every commit. A consequence is that for a **low-traffic store** whose memtable rarely fills, the on-disk offset can lag the store's actual position until the next clean shutdown. For the durability model and guidance on tuning flush frequency for low-traffic stores, see [Memory Management: RocksDB](/{{version}}/documentation/streams/developer-guide/memory-mgmt.html#rocksdb-offset-durability).  If the process then exits uncleanly (for example SIGKILL/OOM-kill, or a KafkaStreams#close that does not complete within the shutdown grace period) and changelog retention or compaction has since advanced the changelog's log-start offset past that stale offset, the restore consumer seeks out of range on restart — logged as OffsetOutOfRangeException/TaskCorruptedException — and the task is automatically re-initialized from the changelog (no data loss, but a full re-restore).
 
-Kafka Streams now supports static membership with the Streams Rebalance Protocol. Applications using `group.protocol=streams` may configure `group.instance.id`; Kafka Streams derives unique group instance IDs for its stream threads internally.
 
 ### Header-aware state stores for the Processor API (KIP-1271) {#kip-1271-headers-aware-stores}
 
@@ -195,7 +202,7 @@ This Early Access release covers a subset of the functionality detailed in [KIP-
 
 **What's Not Included in Early Access**
 
-  * **Static Membership:** Setting `group.instance.id` was rejected in the 4.1 Early Access release. Static membership is supported with the Streams Rebalance Protocol starting in 4.3.0.
+  * **Static Membership:** Setting `group.instance.id` was rejected in the 4.1 Early Access release. Static membership is supported with the Streams Rebalance Protocol starting in 4.4.0.
   * **Topology Updates:** If a topology is changed significantly (e.g., by adding new source topics or changing the number of sub-topologies), a new streams group must be created.
   * **High Availability Assignor:** Only the sticky assignor is supported.
   * **Regular Expressions:** Pattern-based topic subscription is not supported.
