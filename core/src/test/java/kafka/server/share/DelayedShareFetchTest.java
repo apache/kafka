@@ -1681,7 +1681,7 @@ public class DelayedShareFetchTest {
         DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
-            .withReplicaManager(replicaManager)
+            .withReplicaManagerLogReader(replicaManager)
             .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .withFetchId(fetchId)
             .build();
