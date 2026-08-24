@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
@@ -260,7 +261,7 @@ public abstract class SslSelectorTest extends SelectorTest {
                 new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
-            ss.bind(new InetSocketAddress(0));
+            ss.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
 
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
 

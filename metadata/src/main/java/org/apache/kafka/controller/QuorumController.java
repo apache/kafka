@@ -489,7 +489,7 @@ public final class QuorumController implements Controller {
                         throw new InvalidRequestException("Invalid broker name " +
                             configResource.name());
                     }
-                    if (!isNodeIdRegistered(nodeId)) {
+                    if (!isNodeIdKnown(nodeId)) {
                         throw new BrokerIdNotRegisteredException("No node with id " + nodeId + " found.");
                     }
                     break;
@@ -505,13 +505,13 @@ public final class QuorumController implements Controller {
         }
 
         /**
-         * Checks if a node id is registered as a broker, controller in static/dynamic quorum.
+         * Checks if a node id is known to the controller, from registrations or the voter set.
          */
-        private boolean isNodeIdRegistered(int nodeId) {
+        private boolean isNodeIdKnown(int nodeId) {
             if (clusterControl.brokerRegistrations().containsKey(nodeId)) {
                 return true;
             }
-            if (featureControl.isControllerId(nodeId)) {
+            if (featureControl.isVoterId(nodeId)) {
                 return true;
             }
             return clusterControl.controllerRegistrations().containsKey(nodeId);
@@ -2164,8 +2164,9 @@ public final class QuorumController implements Controller {
     ) {
         return appendWriteEvent("unregisterController", context.deadlineNs(),
             () -> {
-                if (nodeId == controllerId) {
-                    throw new InvalidRequestException("Controller cannot unregister itself while it is active.");
+                if (featureControl.isVoterId(controllerId)) {
+                    throw new InvalidRequestException("Cannot unregister controller " + controllerId +
+                        " because it is part of the voter set.");
                 }
                 return clusterControl.unregisterController(controllerId);
             },
