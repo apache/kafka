@@ -203,7 +203,7 @@ public final class QuorumController implements Controller {
         private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
         private Map<String, Object> staticConfig = Map.of();
         private BootstrapMetadata bootstrapMetadata = null;
-        private int maxRecordsPerBatch = 0;
+        private int maxRecordsPerBatch;
         private long controllerPerformanceSamplePeriodMs = 60000L;
         private long controllerPerformanceAlwaysLogThresholdMs = 2000L;
         private DelegationTokenCache tokenCache;
