@@ -221,11 +221,6 @@ public class OffsetFetchResponse extends AbstractResponse {
         return data;
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 4;
-    }
-
     public static OffsetFetchResponseData.OffsetFetchResponseGroup groupError(
         OffsetFetchRequestData.OffsetFetchRequestGroup group,
         Errors error,
