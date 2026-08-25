@@ -17,7 +17,6 @@
 package kafka.utils
 
 import com.yammer.metrics.core.Meter
-import kafka.security.JaasTestUtils
 import kafka.server._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -45,6 +44,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{ConfigRepository, LeaderAndIsr, MockConfigRepository}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -235,7 +235,6 @@ object TestUtils extends Logging {
     props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
     props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
     props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    props.put(ServerConfigs.BROKER_ID_CONFIG, nodeId.toString)
     props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners)
     props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
@@ -317,14 +316,11 @@ object TestUtils extends Logging {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-    topicConfig: Properties = new Properties,
+    topicConfig: util.Map[String, String] = util.Map.of(),
   ): Uuid = {
-    val configsMap = new util.HashMap[String, String]()
-    topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
-
     val result = if (replicaAssignment.isEmpty) {
       admin.createTopics(util.List.of(new NewTopic(
-        topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
+        topic, numPartitions, replicationFactor.toShort).configs(topicConfig)))
     } else {
       val assignment = new util.HashMap[Integer, util.List[Integer]]()
       replicaAssignment.foreachEntry { case (k, v) =>
@@ -333,7 +329,7 @@ object TestUtils extends Logging {
         assignment.put(k.asInstanceOf[Integer], replicas)
       }
       admin.createTopics(util.List.of(new NewTopic(
-        topic, assignment).configs(configsMap)))
+        topic, assignment).configs(topicConfig)))
     }
 
     result.topicId(topic).get()
@@ -347,7 +343,7 @@ object TestUtils extends Logging {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-    topicConfig: Properties = new Properties,
+    topicConfig: util.Map[String, String] = util.Map.of(),
   ): scala.collection.immutable.Map[Int, Int] = {
     val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
       numPartitions
@@ -494,7 +490,8 @@ object TestUtils extends Logging {
                            saslProperties: Option[Properties] = None,
                            keySerializer: Serializer[K] = new ByteArraySerializer,
                            valueSerializer: Serializer[V] = new ByteArraySerializer,
-                           enableIdempotence: Boolean = false): KafkaProducer[K, V] = {
+                           enableIdempotence: Boolean = false,
+                           additionalProperties: Option[Properties] = None): KafkaProducer[K, V] = {
     val producerProps = new Properties
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
@@ -507,6 +504,7 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotence.toString)
+    additionalProperties.foreach(producerProps ++= _)
     producerProps ++= JaasTestUtils.producerSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(saslProperties))
     new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
@@ -1117,10 +1115,6 @@ object TestUtils extends Logging {
         "aborted".getBytes(StandardCharsets.UTF_8)
     }
     new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, key, value, util.Set.of(header))
-  }
-
-  def producerRecordWithExpectedTransactionStatus(topic: String, partition: Integer, key: String, value: String, willBeCommitted: Boolean): ProducerRecord[Array[Byte], Array[Byte]] = {
-    producerRecordWithExpectedTransactionStatus(topic, partition, asBytes(key), asBytes(value), willBeCommitted)
   }
 
   // Collect the current positions for all partition in the consumers current assignment.

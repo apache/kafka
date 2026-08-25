@@ -1180,7 +1180,7 @@ public class UnifiedLog implements AutoCloseable {
                                             // to be consistent with pre-compression bytesRejectedRate recording
                                             brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
                                             brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
-                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to" +
+                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to " +
                                                     "partition " + topicPartition() + " which exceeds the maximum configured size of " + config().maxMessageSize() + ".");
                                         }
                                     });
@@ -1224,8 +1224,8 @@ public class UnifiedLog implements AutoCloseable {
                                 }
                             });
 
-                            // check messages size does not exceed config.segmentSize
-                            if (validRecords.sizeInBytes() > config().segmentSize()) {
+                            // Like KAFKA-9617 for max.message.bytes, KAFKA-17375 lets followers replicate data accepted before segment.bytes was lowered.
+                            if (origin != AppendOrigin.REPLICATION && validRecords.sizeInBytes() > config().segmentSize()) {
                                 throw new RecordBatchTooLargeException("Message batch size is " + validRecords.sizeInBytes() + " bytes in append " +
                                         "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize() + ".");
                             }
@@ -2151,7 +2151,7 @@ public class UnifiedLog implements AutoCloseable {
             long maxOffsetInMessages = appendInfo.lastOffset();
 
             if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize(), appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
-                logger.debug("Rolling new log segment (log_size = {}/{}}, " +
+                logger.debug("Rolling new log segment (log_size = {}/{}, " +
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",

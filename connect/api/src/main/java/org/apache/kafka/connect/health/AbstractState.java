@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.health;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Objects;
@@ -24,6 +25,7 @@ import java.util.Objects;
 /**
  * Provides the current status for a connector or a task, along with an identifier for its Connect worker
  */
+@InterfaceAudience.Public
 public abstract class AbstractState {
 
     private final String state;

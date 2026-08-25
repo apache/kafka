@@ -17,11 +17,12 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.MockTime;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -30,12 +31,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaMetricTest {
 
-    private static final MetricName METRIC_NAME = new MetricName("name", "group", "description", Collections.emptyMap());
+    private static final MetricName METRIC_NAME_1 = new MetricName("name", "group", "description", Map.of());
+    private static final MetricName METRIC_NAME_2 = new MetricName(
+            "request-latency-avg",
+            "consumer-fetch-manager-metrics",
+            "The average request latency in ms",
+            Map.of("client-id", "consumer-1")
+    );
 
     @Test
     public void testIsMeasurable() {
         Measurable metricValueProvider = (config, now) -> 0;
-        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME, metricValueProvider, new MetricConfig(), new MockTime());
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider, new MetricConfig(), new MockTime());
         assertTrue(metric.isMeasurable());
         assertEquals(metricValueProvider, metric.measurable());
     }
@@ -43,7 +50,7 @@ public class KafkaMetricTest {
     @Test
     public void testIsMeasurableWithGaugeProvider() {
         Gauge<Double> metricValueProvider = (config, now) -> 0.0;
-        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME, metricValueProvider, new MetricConfig(), new MockTime());
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider, new MetricConfig(), new MockTime());
         assertFalse(metric.isMeasurable());
         assertThrows(IllegalStateException.class, metric::measurable);
     }
@@ -54,14 +61,14 @@ public class KafkaMetricTest {
         MetricConfig config = new MetricConfig();
         Gauge<Integer> gauge = (c, now) -> 7;
 
-        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME, gauge, config, time);
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, gauge, config, time);
         assertEquals(0.0d, metric.measurableValue(time.milliseconds()), 0.0d);
     }
 
     @Test
     public void testKafkaMetricAcceptsNonMeasurableNonGaugeProvider() {
         MetricValueProvider<String> provider = (config, now) -> "metric value provider";
-        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME, provider, new MetricConfig(), new MockTime());
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, provider, new MetricConfig(), new MockTime());
 
         Object value = metric.metricValue();
         assertEquals("metric value provider", value);
@@ -70,7 +77,60 @@ public class KafkaMetricTest {
     @Test
     public void testConstructorWithNullProvider() {
         assertThrows(NullPointerException.class, () ->
-                new KafkaMetric(new Object(), METRIC_NAME, null, new MetricConfig(), new MockTime())
+                new KafkaMetric(new Object(), METRIC_NAME_1, null, new MetricConfig(), new MockTime())
         );
+    }
+
+    /**
+     * Verifies that toString produces a human-readable representation suitable for logging.
+     * Note that we skip the metric provider in this case, but this is still a
+     * significant improvement over the default Object.toString() output (e.g. "KafkaMetric@62a7d6c6").
+     */
+    @Test
+    public void testToStringWithLambdaProvider() {
+        Measurable metricValueProvider = (config, now) -> 0;
+        testToStringOnLambdaOrAnonymousClass(metricValueProvider);
+    }
+
+    /**
+     * Verifies that toString produces a human-readable representation suitable for logging.
+     * Note that we skip the metric provider in this case, but this is still a
+     * significant improvement over the default Object.toString() output (e.g. "KafkaMetric@62a7d6c6").
+     */
+    @Test
+    public void testToStringWithAnonymousClassProvider() {
+        //noinspection Convert2Lambda
+        Measurable metricValueProvider = new Measurable() {
+            @Override
+            public double measure(MetricConfig config, long now) {
+                return 0;
+            }
+        };
+        testToStringOnLambdaOrAnonymousClass(metricValueProvider);
+    }
+
+    @Test
+    public void testToStringWithStatProvider() {
+        Avg avg = new Avg();
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_2, avg, new MetricConfig(), new MockTime());
+
+        assertEquals("KafkaMetric [metricName=MetricName [name=request-latency-avg, "
+                + "group=consumer-fetch-manager-metrics, "
+                + "description=The average request latency in ms, "
+                + "tags={client-id=consumer-1}], "
+                + "metricValueProvider=org.apache.kafka.common.metrics.stats.Avg]",
+                metric.toString());
+    }
+
+    private void testToStringOnLambdaOrAnonymousClass(Measurable metricValueProvider) {
+        KafkaMetric metric = new KafkaMetric(
+                new Object(), METRIC_NAME_2, metricValueProvider, new MetricConfig(), new MockTime());
+
+        String result = metric.toString();
+        assertEquals("KafkaMetric [metricName=MetricName [name=request-latency-avg, "
+                        + "group=consumer-fetch-manager-metrics, "
+                        + "description=The average request latency in ms, "
+                        + "tags={client-id=consumer-1}]]",
+                result);
     }
 }

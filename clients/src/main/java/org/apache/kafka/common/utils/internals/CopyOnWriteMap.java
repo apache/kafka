@@ -35,7 +35,7 @@ public class CopyOnWriteMap<K, V> implements ConcurrentMap<K, V> {
     private volatile Map<K, V> map;
 
     public CopyOnWriteMap() {
-        this.map = Collections.emptyMap();
+        this.map = Map.of();
     }
 
     public CopyOnWriteMap(Map<K, V> map) {
@@ -84,7 +84,7 @@ public class CopyOnWriteMap<K, V> implements ConcurrentMap<K, V> {
 
     @Override
     public synchronized void clear() {
-        this.map = Collections.emptyMap();
+        this.map = Map.of();
     }
 
     @Override

@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.Map;
@@ -29,6 +31,7 @@ import java.util.Map;
  * has been defined) with the first offset known to diverge from what the
  * consumer previously read.
  */
+@InterfaceAudience.Public
 public class LogTruncationException extends OffsetOutOfRangeException {
 
     private final Map<TopicPartition, OffsetAndMetadata> divergentOffsets;

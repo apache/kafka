@@ -31,6 +31,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -1234,7 +1235,7 @@ public class KStreamImplTest {
         final KStream<String, String> stream = builder.stream(input, stringConsumed);
         stream.repartition(Repartitioned.with(Serdes.String(), Serdes.String())).process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("a", "b");
@@ -1250,7 +1251,7 @@ public class KStreamImplTest {
         stream.to("to-topic", Produced.with(Serdes.String(), Serdes.String()));
         builder.stream("to-topic", stringConsumed).process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("e", "f");
@@ -1268,7 +1269,7 @@ public class KStreamImplTest {
         builder.stream(input + "-a-v", stringConsumed).process(processorSupplier);
         builder.stream(input + "-b-v", stringConsumed).process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("a", "v1");
@@ -1370,7 +1371,7 @@ public class KStreamImplTest {
 
         merged.process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> inputTopic2 =
@@ -1402,7 +1403,7 @@ public class KStreamImplTest {
 
         merged.process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> inputTopic2 =
@@ -1439,7 +1440,7 @@ public class KStreamImplTest {
 
         pattern2Source.process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic3 =
                 driver.createInputTopic("topic-3", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> inputTopic4 =
@@ -1477,7 +1478,7 @@ public class KStreamImplTest {
 
         merged.process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic3 =
                 driver.createInputTopic("topic-3", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> inputTopic4 =
@@ -1787,7 +1788,7 @@ public class KStreamImplTest {
                 "      <-- KTABLE-TOSTREAM-0000000003\n\n")
         );
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic =
@@ -1866,7 +1867,7 @@ public class KStreamImplTest {
                 + "      <-- KSTREAM-SOURCE-0000000000\n\n")
         );
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
                     input,
@@ -1954,7 +1955,7 @@ public class KStreamImplTest {
                 + "      <-- KSTREAM-SOURCE-0000000000\n\n")
         );
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
                     input,
@@ -2010,7 +2011,7 @@ public class KStreamImplTest {
                         "      <-- fkp\n\n")
         );
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
                     input,
@@ -2304,7 +2305,7 @@ public class KStreamImplTest {
                 "      <-- KSTREAM-SOURCE-0000000000\n\n")
         );
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer());
             final KeyValueStore<String, String> store = driver.getKeyValueStore(storeName);
@@ -2363,7 +2364,7 @@ public class KStreamImplTest {
                 "      <-- KTABLE-TOSTREAM-0000000007\n\n")
         );
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Integer, String> outputTopic =
@@ -2459,7 +2460,7 @@ public class KStreamImplTest {
         );
 
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(input1, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> right = driver.createInputTopic(input2, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(output, new StringDeserializer(), new StringDeserializer());
@@ -2546,7 +2547,7 @@ public class KStreamImplTest {
                 "    Sink: KSTREAM-SINK-0000000010 (topic: output)\n" +
                 "      <-- KTABLE-TOSTREAM-0000000009\n\n"));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(leftTopic, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> right = driver.createInputTopic(rightTopic, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> output = driver.createOutputTopic(outputTopic, new StringDeserializer(), new StringDeserializer());
@@ -2622,7 +2623,7 @@ public class KStreamImplTest {
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n\n"));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(streamTopic, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> right = driver.createInputTopic(tableTopic, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> output = driver.createOutputTopic(outputTopic, new StringDeserializer(), new StringDeserializer());
@@ -2711,7 +2712,7 @@ public class KStreamImplTest {
                 "      <-- KTABLE-TOSTREAM-0000000008\n\n"));
 
         try (
-            final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Long> outputTopic =
@@ -2776,7 +2777,7 @@ public class KStreamImplTest {
                 "      <-- KTABLE-TOSTREAM-0000000004\n\n"));
 
         try (
-            final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+            final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Integer> outputTopic =

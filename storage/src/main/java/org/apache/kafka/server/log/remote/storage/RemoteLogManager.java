@@ -37,17 +37,16 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RemoteLogInputStream;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.utils.ChildFirstClassLoader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ChildFirstClassLoader;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
@@ -153,6 +152,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PATTERN = "remote-log-reader-%d";
+    // The keys the RSM/RLMM plugins are configured with, independent of the broker configs of the same
+    // names. broker.id is deprecated and will no longer be passed from 5.0 (KIP-1232).
+    private static final String BROKER_ID = "broker.id";
+    private static final String NODE_ID = "node.id";
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
@@ -401,7 +404,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     private Plugin<RemoteStorageManager> configAndWrapRsmPlugin(RemoteStorageManager rsm) {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
-        rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
+        rsmProps.put(BROKER_ID, brokerId);
+        rsmProps.put(NODE_ID, brokerId);
         rsm.configure(rsmProps);
         return Plugin.wrapInstance(rsm, metrics, RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP);
     }
@@ -428,7 +432,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         // update the remoteLogMetadataProps here to override endpoint config if any
         rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
 
-        rlmmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
+        rlmmProps.put(BROKER_ID, brokerId);
+        rlmmProps.put(NODE_ID, brokerId);
         rlmmProps.put(LOG_DIR_CONFIG, logDir);
         rlmmProps.put("cluster.id", clusterId);
 
@@ -562,7 +567,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
         // We want to remote topicId map and stopPartition on RLMM for deleteLocalLog or stopRLMM partitions because
         // in both case, they all mean the topic will not be held in this broker anymore.
-        // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
         Set<TopicIdPartition> pendingActionsPartitions = stopPartitions.stream()
                 .filter(sp -> (sp.stopRemoteLogMetadataManager || sp.deleteLocalLog) && topicIdByPartitionMap.containsKey(sp.topicPartition))
                 .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition), sp.topicPartition))
@@ -1405,6 +1409,20 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             return new RemoteLogMetadataStats(epochsSet, metadataCount, sizeInBytes, copyFinishedSegmentsSizeInBytes);
         }
 
+        // On a freshly-elected leader, highestOffsetInRemoteStorage is unseeded (-1) until RLMCopyTask /
+        // RLMFollowerTask seed it; RLMExpirationTask does not. If size-based retention runs while it is -1,
+        // UnifiedLog.onlyLocalLogSegmentsSize() (filter baseOffset >= highestOffsetInRemoteStorage()) returns
+        // the whole local log -- including segments already copied to remote -- which buildRetentionSizeData
+        // then double-counts against the remote size, over-deleting in-retention data from both tiers.
+        private void maybeSeedHighestOffsetInRemoteStorage(UnifiedLog log) throws RemoteStorageException {
+            if (log.highestOffsetInRemoteStorage() == -1) {
+                OffsetAndEpoch highestRemoteOffsetAndEpoch = findHighestRemoteOffset(topicIdPartition, log);
+                if (highestRemoteOffsetAndEpoch.offset() >= 0) {
+                    log.updateHighestOffsetInRemoteStorage(highestRemoteOffsetAndEpoch.offset());
+                }
+            }
+        }
+
         /**
          * Cleanup expired and dangling remote log segments.
          */
@@ -1440,6 +1458,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             LeaderEpochFileCache leaderEpochCache = log.leaderEpochCache();
             // Build the leader epoch map by filtering the epochs that do not have any records.
             NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
+
+            // Seed highestOffsetInRemoteStorage before size-retention to avoid the fresh-leader double-count
+            // (no-op once RLMCopyTask/RLMFollowerTask have seeded it).
+            maybeSeedHighestOffsetInRemoteStorage(log);
 
             long logStartOffset = log.logStartOffset();
             long logEndOffset = log.logEndOffset();

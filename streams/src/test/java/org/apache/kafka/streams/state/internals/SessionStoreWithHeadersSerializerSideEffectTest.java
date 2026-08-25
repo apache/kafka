@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -155,7 +156,7 @@ public class SessionStoreWithHeadersSerializerSideEffectTest {
         props.put("default.key.serde", Serdes.StringSerde.class);
         props.put("default.value.serde", Serdes.StringSerde.class);
 
-        try (TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic(
                 INPUT_TOPIC,
                 Serdes.String().serializer(),

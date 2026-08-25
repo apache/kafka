@@ -22,7 +22,7 @@ from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 from kafkatest.version import LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
   LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, \
-  LATEST_3_9, LATEST_4_0, LATEST_4_1, DEV_VERSION, KafkaVersion
+  LATEST_3_9, LATEST_4_0, LATEST_4_1, LATEST_4_2, LATEST_4_3, DEV_VERSION, KafkaVersion
 
 
 smoke_test_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6),
@@ -30,7 +30,18 @@ smoke_test_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6),
                        str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3),
                        str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6),
                        str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9),
-                       str(LATEST_4_0), str(LATEST_4_1)]
+                       str(LATEST_4_0), str(LATEST_4_1), str(LATEST_4_2),
+                       str(LATEST_4_3)]
+
+# The headers-aware suppress buffer (KAFKA-20413) is only on trunk, so 4.3 is the newest
+# release that still writes plain V3 suppress-changelog records even with this config set.
+DSL_STORE_FORMAT_CONFIG = "dsl.store.format"
+DSL_STORE_FORMAT_HEADERS = "HEADERS"
+SUPPRESS_HEADERS_OLD_VERSION = str(LATEST_4_3)
+
+# InMemoryTimeOrderedKeyValueChangeBuffer throws this when it cannot make sense of a
+# suppress-changelog record while restoring.
+INVALID_CHANGELOG_RECORD_MSG = "Restoring apparently invalid changelog record"
 
 class StreamsUpgradeTest(Test):
     """
@@ -62,8 +73,48 @@ class StreamsUpgradeTest(Test):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
         """
+        self._run_app_transition(from_version, str(DEV_VERSION), bounce_type)
 
-        to_version = str(DEV_VERSION)
+    @cluster(num_nodes=9)
+    @matrix(direction=["upgrade", "downgrade"], metadata_quorum=[quorum.combined_kraft])
+    def test_suppress_headers_app_transition(self, direction, metadata_quorum):
+        """
+        Same smoke-test application as test_app_upgrade, but with dsl.store.format=HEADERS so that
+        suppress() uses the headers-aware buffer (KAFKA-20413).
+
+        The transition crosses the 4.3/trunk boundary in both directions because the two sides write
+        the suppress changelog differently even though both tag the record as V3:
+          - 4.3 has the dsl.store.format config but not the headers-aware buffer, so it writes the
+            whole BufferValue into the record value.
+          - trunk writes only the plain value bytes into the record value and ships the
+            value/timestamp/headers prefixes in extra Kafka record headers.
+
+        The suppress buffer is in-memory only, so every restart replays its entire changelog. That
+        makes this an actual cross-format restore test: on upgrade, trunk must restore records that
+        carry no value-part headers; on downgrade, 4.3 must cope with records whose prefixes it never
+        learned to read.
+        """
+        old_version = SUPPRESS_HEADERS_OLD_VERSION
+        dev_version = str(DEV_VERSION)
+
+        if direction == "upgrade":
+            from_version, to_version = old_version, dev_version
+        else:
+            from_version, to_version = dev_version, old_version
+
+        self._run_app_transition(
+            from_version,
+            to_version,
+            "full",
+            extra_configs={DSL_STORE_FORMAT_CONFIG: DSL_STORE_FORMAT_HEADERS},
+            verify_suppress_restore=True)
+
+    def _run_app_transition(self, from_version, to_version, bounce_type,
+                            extra_configs=None, verify_suppress_restore=False):
+        """
+        Starts 3 KafkaStreams instances with <from_version> and moves them all to <to_version>,
+        keeping the smoke-test workload running throughout.
+        """
 
         if from_version == to_version:
             return
@@ -88,9 +139,9 @@ class StreamsUpgradeTest(Test):
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.driver.disable_auto_terminate()
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
-        self.processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
-        self.processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1, extra_configs = extra_configs)
+        self.processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1, extra_configs = extra_configs)
+        self.processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1, extra_configs = extra_configs)
 
         self.purge_state_dir(self.processor1)
         self.purge_state_dir(self.processor2)
@@ -115,6 +166,12 @@ class StreamsUpgradeTest(Test):
         else:
             raise Exception("Unrecognized bounce_type: " + str(bounce_type))
 
+        if verify_suppress_restore:
+            # The liveness checks above only prove the app came back up. A suppress-changelog record
+            # that is misread rather than rejected is silent, so also assert that no instance logged
+            # a restore rejection while replaying the buffer.
+            for p in self.processors:
+                self.verify_no_suppress_restore_failure(p)
 
         # shutdown
         self.driver.stop()
@@ -222,6 +279,15 @@ class StreamsUpgradeTest(Test):
         except ValueError:
             self.logger.warn("Command failed with ValueError: " + result)
             return 0
+
+    def verify_no_suppress_restore_failure(self, processor):
+        node = processor.node
+        for file in [processor.STDERR_FILE, processor.LOG_FILE]:
+            found = list(node.account.ssh_capture(
+                "grep -F '%s' %s" % (INVALID_CHANGELOG_RECORD_MSG, file), allow_fail=True))
+            if len(found) > 0:
+                raise Exception("Suppress buffer failed to restore its changelog on %s: %s"
+                                % (str(node.account), found[0]))
 
     def set_version(self, processor, version):
         if version == str(DEV_VERSION):

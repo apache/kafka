@@ -23,6 +23,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -40,6 +41,7 @@ import java.util.concurrent.TimeoutException;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientRebootstrapTest {
     private static final String TOPIC = "topic";
@@ -64,7 +66,8 @@ public class ClientRebootstrapTest {
             admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
 
             // Only the broker 1 is available for the admin client during the bootstrap.
-            assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
+            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
+            assertTrue(topics.contains(TOPIC));
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
@@ -72,7 +75,8 @@ public class ClientRebootstrapTest {
             // The broker 1, originally cached during the bootstrap, is offline.
             // However, the broker 0 from the bootstrap list is online.
             // Should be able to list topics again.
-            assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
+            topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
+            assertTrue(topics.contains(TOPIC));
         }
     }
 
@@ -90,19 +94,22 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         var admin = clusterInstance.admin(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
-        admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
+        try {
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
+            // Only the broker 1 is available for the admin client during the bootstrap.
+            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS));
+            assertTrue(topics.contains(TOPIC));
 
-        // Only the broker 1 is available for the admin client during the bootstrap.
-        assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(TOPIC));
+            clusterInstance.shutdownBroker(broker1);
+            clusterInstance.startBroker(broker0);
 
-        clusterInstance.shutdownBroker(broker1);
-        clusterInstance.startBroker(broker0);
-
-        // The broker 1, originally cached during the bootstrap, is offline.
-        // As a result, the admin client will throw a TimeoutException when trying to get list of the topics.
-        assertThrows(TimeoutException.class, () -> admin.listTopics().names().get(5, TimeUnit.SECONDS));
-        // Since the brokers cached during the bootstrap are offline, the admin client needs to wait the default timeout for other threads.
-        admin.close(Duration.ZERO);
+            // The broker 1, originally cached during the bootstrap, is offline.
+            // As a result, the admin client will throw a TimeoutException when trying to get list of the topics.
+            assertThrows(TimeoutException.class, () -> admin.listTopics().names().get(5, TimeUnit.SECONDS));
+        } finally {
+            // Since the brokers cached during the bootstrap are offline, the admin client needs to wait the default timeout for other threads.
+            admin.close(Duration.ZERO);
+        }
     }
 
     @ClusterTest(
@@ -292,5 +299,43 @@ public class ClientRebootstrapTest {
     )
     public void testConsumerRebootstrapDisabled(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         consumerRebootstrapDisabled(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    @ClusterTest(
+        brokers = REPLICAS,
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
+        }
+    )
+    public void testRebootstrapOnMetadataClusterCheckFail(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        try (var admin = clusterInstance.admin()) {
+            admin.createTopics(List.of(new NewTopic(TOPIC, 2, (short) 1)));
+        }
+
+        try (var producer = clusterInstance.producer()) {
+            var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, 0, null, "value 0".getBytes())).get();
+            assertEquals(0, recordMetadata0.offset());
+            var recordMetadata1 = producer.send(new ProducerRecord<>(TOPIC, 1, null, "value 1".getBytes())).get();
+            assertEquals(0, recordMetadata1.offset());
+
+            ListenerName clientListener = clusterInstance.clientListener();
+            int broker0Port = clusterInstance.brokers().get(0).boundPort(clientListener);
+            int broker1Port = clusterInstance.brokers().get(1).boundPort(clientListener);
+
+            // Stop and restart the broker, but with their client listener ports swapped. When the client reconnects,
+            // it will have out-of-date cluster metadata which the broker will detect from the ApiVersions request.
+            // The client will then rebootstrap, successfully reconnect with the updated cluster metadata, and continue
+            // processing. This simulates a network routing anomaly, such as a misconfigured proxy.
+            clusterInstance.restartBrokersWithSwappedClientListenerPorts(0, 1);
+
+            var recordMetadata2 = producer.send(new ProducerRecord<>(TOPIC, 0, null, "value 2".getBytes())).get();
+            assertEquals(1, recordMetadata2.offset());
+            var recordMetadata3 = producer.send(new ProducerRecord<>(TOPIC, 1, null, "value 3".getBytes())).get();
+            assertEquals(1, recordMetadata3.offset());
+
+            assertEquals(broker1Port, clusterInstance.brokers().get(0).boundPort(clientListener));
+            assertEquals(broker0Port, clusterInstance.brokers().get(1).boundPort(clientListener));
+        }
     }
 }

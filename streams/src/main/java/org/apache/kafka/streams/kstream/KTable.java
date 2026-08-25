@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -87,6 +88,7 @@ import java.util.function.Function;
  *
  * @see GlobalKTable
  */
+@InterfaceAudience.Public
 public interface KTable<K, V> {
 
     /**

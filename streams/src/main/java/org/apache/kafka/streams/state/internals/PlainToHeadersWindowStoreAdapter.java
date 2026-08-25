@@ -55,7 +55,7 @@ import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
  *   <li>Read: {@code [value]} → {@code [headers][timestamp][value]} (add empty headers and timestamp=-1)</li>
  * </ul>
  */
-public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]> {
+public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]>, WithRetentionPeriod {
     private final WindowStore<Bytes, byte[]> store;
 
     public PlainToHeadersWindowStoreAdapter(final WindowStore<Bytes, byte[]> store) {
@@ -66,6 +66,17 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
             throw new IllegalArgumentException("Provided store must be a plain (non-timestamped) window store, but it is timestamped.");
         }
         this.store = store;
+    }
+
+    /**
+     * Report the retention of the store being adapted. This adapter holds its delegate in a private
+     * field rather than as a {@link WrappedStateStore}, so {@code extractRetentionPeriod}'s unwrap
+     * walk terminates here; without this it resolves -1 and the KAFKA-13499 windowed-restore
+     * optimisation is silently skipped for every store behind the adapter.
+     */
+    @Override
+    public long retentionPeriod() {
+        return WithRetentionPeriod.resolveRetentionPeriod(store);
     }
 
     @Override
@@ -230,6 +241,11 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
     @Override
     public Long committedOffset(final TopicPartition partition) {
         return store.committedOffset(partition);
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
     }
 
     @Override

@@ -487,7 +487,7 @@ public class ConfigurationControlManagerTest {
         FeatureControlManager featureManager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of())).
+                () -> Set.of())).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -538,7 +538,7 @@ public class ConfigurationControlManagerTest {
         FeatureControlManager featureManager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of())).
+                () -> Set.of())).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -573,7 +573,7 @@ public class ConfigurationControlManagerTest {
         FeatureControlManager featureManager = new FeatureControlManager.Builder().
                 setQuorumFeatures(new QuorumFeatures(0,
                         QuorumFeatures.defaultSupportedFeatureMap(true),
-                        List.of())).
+                        () -> Set.of())).
                 build();
         featureManager.replay(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
