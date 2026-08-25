@@ -27,6 +27,7 @@ import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -281,6 +282,91 @@ public class PeriodicTaskControlManagerTest {
         assertEquals(1, foo.numCalls.get());
         env.advanceTime(300000);
         assertEquals(2, foo.numCalls.get());
+        env.manager.deactivate();
+    }
+
+    @Test
+    public void testThrottledRescheduleDelayUsedInsteadOfImmediatePeriodOnContinuation() {
+        AtomicInteger numCalls = new AtomicInteger();
+        AtomicBoolean continuation = new AtomicBoolean(false);
+        PeriodicTask throttledTask = new PeriodicTask("throttled",
+            () -> {
+                numCalls.incrementAndGet();
+                return ControllerResult.of(List.of(), continuation.getAndSet(false));
+            },
+            MILLISECONDS.toNanos(100),
+            EnumSet.noneOf(PeriodicTaskFlag.class),
+            PeriodicTask.DEFAULT_IMMEDIATE_PERIOD_NS,
+            OptionalLong.of(MILLISECONDS.toNanos(200)));
+
+        PeriodicTaskControlManagerTestEnv env = new PeriodicTaskControlManagerTestEnv();
+        env.manager.activate();
+        env.manager.registerTask(throttledTask);
+
+        continuation.set(true);
+        env.advanceTime(100);
+        assertEquals(1, numCalls.get(), "Task should have fired once at t=100ms");
+
+        env.advanceTime(150);
+        assertEquals(1, numCalls.get(), "Task must NOT fire before the 200ms throttled delay");
+
+        env.advanceTime(50);
+        assertEquals(2, numCalls.get(), "Task should fire at t=300ms when throttled delay elapses");
+
+        env.manager.deactivate();
+    }
+
+    /**
+     * Multiple tasks that have no throttledRescheduleDelayNs each independently reschedule
+     * at immediatePeriodNs (10 ms) when continuation is true. Verifies that the throttle
+     * path introduced for electPreferred does not contaminate other tasks.
+     */
+    @Test
+    public void testMultipleTasksWithoutThrottleEachUseImmediatePeriodOnContinuation() {
+        FakePeriodicTask taskA = new FakePeriodicTask("taskA", MILLISECONDS.toNanos(100));
+        FakePeriodicTask taskB = new FakePeriodicTask("taskB", MILLISECONDS.toNanos(100));
+        taskA.continuation.set(true);
+        taskB.continuation.set(true);
+
+        PeriodicTaskControlManagerTestEnv env = new PeriodicTaskControlManagerTestEnv();
+        env.manager.activate();
+        env.manager.registerTask(taskA.task);
+        env.manager.registerTask(taskB.task);
+
+        // Both fire at t=100ms (period=100ms each).
+        env.advanceTime(100);
+        assertEquals(1, taskA.numCalls.get(), "taskA fires at t=100ms");
+        assertEquals(1, taskB.numCalls.get(), "taskB fires at t=100ms");
+
+        // Both had continuation=true → rescheduled at immediatePeriodNs=10ms.
+        env.advanceTime(5);
+        assertEquals(1, taskA.numCalls.get(), "taskA must not fire before immediatePeriodNs elapses");
+        assertEquals(1, taskB.numCalls.get(), "taskB must not fire before immediatePeriodNs elapses");
+        env.advanceTime(5);
+        assertEquals(2, taskA.numCalls.get(), "taskA fires at t+10ms (immediatePeriodNs)");
+        assertEquals(2, taskB.numCalls.get(), "taskB fires at t+10ms (immediatePeriodNs)");
+
+        env.manager.deactivate();
+    }
+
+    @Test
+    public void testImmediatePeriodFallbackWhenThrottledRescheduleAbsent() {
+        FakePeriodicTask foo = new FakePeriodicTask("foo", MILLISECONDS.toNanos(100));
+        foo.continuation.set(true);
+
+        PeriodicTaskControlManagerTestEnv env = new PeriodicTaskControlManagerTestEnv();
+        env.manager.activate();
+        env.manager.registerTask(foo.task);
+
+        env.advanceTime(100);
+        assertEquals(1, foo.numCalls.get(), "Task should have fired once at t=100ms");
+
+        env.advanceTime(5);
+        assertEquals(1, foo.numCalls.get(), "Task must NOT fire before immediatePeriodNs elapses");
+
+        env.advanceTime(5);
+        assertEquals(2, foo.numCalls.get(), "Task should fire at t+10ms when immediatePeriodNs elapses");
+
         env.manager.deactivate();
     }
 }

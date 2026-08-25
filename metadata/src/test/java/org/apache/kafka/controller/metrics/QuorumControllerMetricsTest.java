@@ -26,6 +26,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -42,6 +43,7 @@ public class QuorumControllerMetricsTest {
                     time,
                     9000)) {
                 metrics.addTimeSinceLastHeartbeatMetric(1);
+                metrics.updateBrokerOutOfSyncCounts(Map.of(2, 5));
                 Set<String> expected = Set.of(
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
@@ -55,7 +57,12 @@ public class QuorumControllerMetricsTest {
                     "kafka.controller:type=KafkaController,name=LastCommittedRecordOffset",
                     "kafka.controller:type=KafkaController,name=NewActiveControllersCount",
                     "kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount",
-                    "kafka.controller:type=KafkaController,name=TimeSinceLastHeartbeatReceivedMs,broker=1"
+                    "kafka.controller:type=KafkaController,name=TimeSinceLastHeartbeatReceivedMs,broker=1",
+                    "kafka.controller:type=KafkaController,name=OutOfSyncPreferredPartitionCount,broker=2",
+                    "kafka.controller:type=KafkaController,name=PreferredLeaderElectionsPerRun",
+                    "kafka.controller:type=KafkaController,name=GatedPreferredLeaderBrokerCount",
+                    "kafka.controller:type=KafkaController,name=PreferredLeaderElectionThrottledRunCount",
+                    "kafka.controller:type=KafkaController,name=PreferredLeaderElectionEscapeHatchCount"
                 );
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller", expected);
             }
@@ -215,6 +222,77 @@ public class QuorumControllerMetricsTest {
             // avgIdleRatio = (1ms idle) / (20ms interval) = 0.05
             assertEquals(0.05, avgIdleRatio.value(), delta);
 
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testPreferredLeaderElectionMetrics() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, 9000)) {
+            Gauge<Long> electionsPerRun = (Gauge<Long>) registry.allMetrics()
+                .get(metricName("KafkaController", "PreferredLeaderElectionsPerRun"));
+            Gauge<Long> gatedBrokerCount = (Gauge<Long>) registry.allMetrics()
+                .get(metricName("KafkaController", "GatedPreferredLeaderBrokerCount"));
+            Gauge<Long> throttledRunCount = (Gauge<Long>) registry.allMetrics()
+                .get(metricName("KafkaController", "PreferredLeaderElectionThrottledRunCount"));
+            Gauge<Long> escapeHatchCount = (Gauge<Long>) registry.allMetrics()
+                .get(metricName("KafkaController", "PreferredLeaderElectionEscapeHatchCount"));
+
+            assertEquals(0L, electionsPerRun.value());
+            assertEquals(0L, gatedBrokerCount.value());
+            assertEquals(0L, throttledRunCount.value());
+            assertEquals(0L, escapeHatchCount.value());
+
+            metrics.setPreferredLeaderElectionsPerRun(7);
+            assertEquals(7L, electionsPerRun.value());
+
+            metrics.setGatedPreferredLeaderBrokerCount(3);
+            assertEquals(3L, gatedBrokerCount.value());
+
+            metrics.incrementPreferredLeaderElectionThrottledRunCount();
+            metrics.incrementPreferredLeaderElectionThrottledRunCount();
+            assertEquals(2L, throttledRunCount.value());
+
+            metrics.setPreferredLeaderElectionEscapeHatchCount(1);
+            assertEquals(1L, escapeHatchCount.value());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testOutOfSyncPreferredPartitionCountMetric() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, 9000)) {
+            // Initially no per-broker metrics registered.
+            int baseCount = registry.allMetrics().size();
+
+            // Register broker 1 with 3 out-of-sync partitions, broker 2 with 1.
+            metrics.updateBrokerOutOfSyncCounts(Map.of(1, 3, 2, 1));
+            assertEquals(baseCount + 2, registry.allMetrics().size());
+
+            Gauge<Integer> broker1 = (Gauge<Integer>) registry.allMetrics()
+                .get(metricName("KafkaController", "OutOfSyncPreferredPartitionCount", "broker=1"));
+            Gauge<Integer> broker2 = (Gauge<Integer>) registry.allMetrics()
+                .get(metricName("KafkaController", "OutOfSyncPreferredPartitionCount", "broker=2"));
+
+            assertEquals(3, broker1.value());
+            assertEquals(1, broker2.value());
+
+            // Update broker 1's count; broker 2 disappears (now fully in sync).
+            metrics.updateBrokerOutOfSyncCounts(Map.of(1, 7));
+            assertEquals(baseCount + 1, registry.allMetrics().size());
+            assertEquals(7, broker1.value());
+
+            // All brokers in sync — no per-broker metrics remain.
+            metrics.updateBrokerOutOfSyncCounts(Map.of());
+            assertEquals(baseCount, registry.allMetrics().size());
         } finally {
             registry.shutdown();
         }

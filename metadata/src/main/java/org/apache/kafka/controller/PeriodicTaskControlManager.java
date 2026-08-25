@@ -185,7 +185,9 @@ class PeriodicTaskControlManager {
             // collection of operations before picking from the non-deferred collection of
             // operations. This can result in some unfairness if deferred operation are
             // scheduled for immediate execution. This delays them by a small amount of time.
-            return task.immediatePeriodNs();
+            // If a throttled reschedule delay is configured, use it instead so that successive
+            // capped runs are paced rather than fired back-to-back.
+            return task.throttledRescheduleDelayNs().orElse(task.immediatePeriodNs());
         } else if (error) {
             // If the periodic task hit an error, reschedule it in 5 minutes. This is to avoid
             // scenarios where we spin in a tight loop hitting errors, but still give the task

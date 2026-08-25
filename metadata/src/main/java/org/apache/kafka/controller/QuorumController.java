@@ -205,6 +205,11 @@ public final class QuorumController implements Controller {
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
+        private int leaderImbalanceElectionMaxPerRun = ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE;
+        private OptionalLong leaderImbalanceElectionThrottleIntervalNs = OptionalLong.empty();
+        private String leaderImbalanceElectionAlgorithm = "immediate";
+        private int leaderImbalanceElectionWaitForSyncThresholdPercent = 0;
+        private long leaderImbalanceElectionWaitForSyncMaxWaitMs = 1800000L;
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
         private long sessionTimeoutNs = ClusterControlManager.DEFAULT_SESSION_TIMEOUT_NS;
         private OptionalLong fenceStaleBrokerIntervalNs = OptionalLong.empty();
@@ -291,6 +296,31 @@ public final class QuorumController implements Controller {
 
         public Builder setLeaderImbalanceCheckIntervalNs(OptionalLong value) {
             this.leaderImbalanceCheckIntervalNs = value;
+            return this;
+        }
+
+        public Builder setLeaderImbalanceElectionMaxPerRun(int value) {
+            this.leaderImbalanceElectionMaxPerRun = value;
+            return this;
+        }
+
+        public Builder setLeaderImbalanceElectionThrottleIntervalNs(OptionalLong value) {
+            this.leaderImbalanceElectionThrottleIntervalNs = value;
+            return this;
+        }
+
+        public Builder setLeaderImbalanceElectionAlgorithm(String value) {
+            this.leaderImbalanceElectionAlgorithm = value;
+            return this;
+        }
+
+        public Builder setLeaderImbalanceElectionWaitForSyncThresholdPercent(int value) {
+            this.leaderImbalanceElectionWaitForSyncThresholdPercent = value;
+            return this;
+        }
+
+        public Builder setLeaderImbalanceElectionWaitForSyncMaxWaitMs(long value) {
+            this.leaderImbalanceElectionWaitForSyncMaxWaitMs = value;
             return this;
         }
 
@@ -438,6 +468,11 @@ public final class QuorumController implements Controller {
                     defaultNumPartitions,
                     replicaPlacer,
                     leaderImbalanceCheckIntervalNs,
+                    leaderImbalanceElectionMaxPerRun,
+                    leaderImbalanceElectionThrottleIntervalNs,
+                    leaderImbalanceElectionAlgorithm,
+                    leaderImbalanceElectionWaitForSyncThresholdPercent,
+                    leaderImbalanceElectionWaitForSyncMaxWaitMs,
                     maxIdleIntervalNs,
                     sessionTimeoutNs,
                     fenceStaleBrokerIntervalNs,
@@ -1521,6 +1556,11 @@ public final class QuorumController implements Controller {
         int defaultNumPartitions,
         ReplicaPlacer replicaPlacer,
         OptionalLong leaderImbalanceCheckIntervalNs,
+        int leaderImbalanceElectionMaxPerRun,
+        OptionalLong leaderImbalanceElectionThrottleIntervalNs,
+        String leaderImbalanceElectionAlgorithm,
+        int leaderImbalanceElectionWaitForSyncThresholdPercent,
+        long leaderImbalanceElectionWaitForSyncMaxWaitMs,
         OptionalLong maxIdleIntervalNs,
         long sessionTimeoutNs,
         OptionalLong fenceStaleBrokerIntervalNs,
@@ -1603,7 +1643,11 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
-            setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
+            setMaxElectionsPerImbalance(leaderImbalanceElectionMaxPerRun).
+            setElectionAlgorithm(leaderImbalanceElectionAlgorithm).
+            setWaitForSyncThresholdPercent(leaderImbalanceElectionWaitForSyncThresholdPercent).
+            setWaitForSyncMaxWaitMs(leaderImbalanceElectionWaitForSyncMaxWaitMs).
+            setTime(time).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
             setCreateTopicPolicy(createTopicPolicy).
@@ -1644,7 +1688,7 @@ public final class QuorumController implements Controller {
             registerMaybeFenceStaleBroker(maybeFenceStaleBrokerPeriodNs(sessionTimeoutNs));
         }
         if (leaderImbalanceCheckIntervalNs.isPresent()) {
-            registerElectPreferred(leaderImbalanceCheckIntervalNs.getAsLong());
+            registerElectPreferred(leaderImbalanceCheckIntervalNs.getAsLong(), leaderImbalanceElectionThrottleIntervalNs);
         }
         registerElectUnclean(TimeUnit.MILLISECONDS.toNanos(uncleanLeaderElectionCheckIntervalMs));
         registerExpireDelegationTokens(MILLISECONDS.toNanos(delegationTokenExpiryCheckIntervalMs));
@@ -1710,13 +1754,26 @@ public final class QuorumController implements Controller {
      * This task periodically checks to see if partitions with leaders other
      * than the preferred leader can be switched to have the preferred leader.
      *
-     * @param checkIntervalNs       The check interval in nanoseconds.
+     * @param checkIntervalNs               The check interval in nanoseconds.
+     * @param throttleIntervalNs            When present and > 0, used as the reschedule delay
+     *                                      when a run is capped at max.per.run, instead of the
+     *                                      default immediate-reschedule behavior.
      */
-    private void registerElectPreferred(long checkIntervalNs) {
+    private void registerElectPreferred(long checkIntervalNs, OptionalLong throttleIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("electPreferred",
-            replicationControl::maybeBalancePartitionLeaders,
+            () -> {
+                ControllerResult<Boolean> result = replicationControl.maybeBalancePartitionLeaders();
+                controllerMetrics.setPreferredLeaderElectionsPerRun(result.records().size());
+                controllerMetrics.setGatedPreferredLeaderBrokerCount(replicationControl.gatedBrokerCount());
+                controllerMetrics.setPreferredLeaderElectionEscapeHatchCount(replicationControl.escapeHatchReleaseCount());
+                controllerMetrics.updateBrokerOutOfSyncCounts(replicationControl.brokerOutOfSyncCounts());
+                if (result.response()) controllerMetrics.incrementPreferredLeaderElectionThrottledRunCount();
+                return result;
+            },
             checkIntervalNs,
-            EnumSet.of(PeriodicTaskFlag.VERBOSE)));
+            EnumSet.of(PeriodicTaskFlag.VERBOSE),
+            PeriodicTask.DEFAULT_IMMEDIATE_PERIOD_NS,
+            throttleIntervalNs));
     }
 
     /**

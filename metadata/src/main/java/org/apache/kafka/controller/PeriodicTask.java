@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import java.util.EnumSet;
+import java.util.OptionalLong;
 import java.util.function.Supplier;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -50,7 +51,14 @@ class PeriodicTask {
      */
     private final EnumSet<PeriodicTaskFlag> flags;
 
-    private static final long DEFAULT_IMMEDIATE_PERIOD_NS = MILLISECONDS.toNanos(10);
+    /**
+     * When present, used as the reschedule delay instead of immediatePeriodNs when the task
+     * signals "more work remains" (response=true). Allows pacing successive capped runs.
+     * Empty preserves the current immediate-reschedule behavior.
+     */
+    private final OptionalLong throttledRescheduleDelayNs;
+
+    static final long DEFAULT_IMMEDIATE_PERIOD_NS = MILLISECONDS.toNanos(10);
 
     PeriodicTask(
         String name,
@@ -63,6 +71,7 @@ class PeriodicTask {
         this.immediatePeriodNs = DEFAULT_IMMEDIATE_PERIOD_NS;
         this.periodNs = periodNs;
         this.flags = flags;
+        this.throttledRescheduleDelayNs = OptionalLong.empty();
     }
 
     PeriodicTask(
@@ -77,6 +86,23 @@ class PeriodicTask {
         this.immediatePeriodNs = immediatePeriodNs;
         this.periodNs = periodNs;
         this.flags = flags;
+        this.throttledRescheduleDelayNs = OptionalLong.empty();
+    }
+
+    PeriodicTask(
+        String name,
+        Supplier<ControllerResult<Boolean>> op,
+        long periodNs,
+        EnumSet<PeriodicTaskFlag> flags,
+        long immediatePeriodNs,
+        OptionalLong throttledRescheduleDelayNs
+    ) {
+        this.name = name;
+        this.op = op;
+        this.immediatePeriodNs = immediatePeriodNs;
+        this.periodNs = periodNs;
+        this.flags = flags;
+        this.throttledRescheduleDelayNs = throttledRescheduleDelayNs;
     }
 
     String name() {
@@ -97,5 +123,9 @@ class PeriodicTask {
 
     EnumSet<PeriodicTaskFlag> flags() {
         return flags;
+    }
+
+    OptionalLong throttledRescheduleDelayNs() {
+        return throttledRescheduleDelayNs;
     }
 }
