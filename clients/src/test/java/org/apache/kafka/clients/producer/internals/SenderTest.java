@@ -1569,7 +1569,7 @@ public class SenderTest {
 
         // The partition creation completes afterwards, so the request with sequence 0 does not reach the partition
         // and the broker rejects the in-flight second and third requests. They are retried without an epoch bump
-        // since the retry of th first request could still fill the gap in the expected sequence.
+        // since the retry of the first request could still fill the gap in the expected sequence.
         sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
         sender.runOnce(); // receive response 1
         sendIdempotentProducerResponse(2, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);

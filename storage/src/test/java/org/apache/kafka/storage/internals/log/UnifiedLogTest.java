@@ -1307,7 +1307,6 @@ public class UnifiedLogTest {
         assertEquals(Set.of(pid), log.activeProducersWithLastSequence().keySet());
 
         mockTime.sleep(producerIdExpirationCheckIntervalMs);
-        mockTime.sleep(producerIdExpirationCheckIntervalMs);
         assertEquals(Set.of(), log.activeProducersWithLastSequence().keySet());
 
         // The producer continues from sequence 1 with no state, which is accepted because the log is not empty

@@ -1212,7 +1212,7 @@ public class ProducerStateManagerTest {
         // contained any records, since no state can have been lost. A non-zero first sequence means the
         // request arrived out of order, and accepting it would permanently prevent the earlier request
         // from being appended
-        ProducerAppendInfo laterRequest = new ProducerAppendInfo(
+        ProducerAppendInfo currentProducerAppendInfo = new ProducerAppendInfo(
             partition,
             producerId,
             ProducerStateEntry.empty(producerId),
@@ -1222,7 +1222,7 @@ public class ProducerStateManagerTest {
         );
 
         OutOfOrderSequenceException exception = assertThrows(OutOfOrderSequenceException.class,
-            () -> laterRequest.appendDataBatch(
+            () -> currentProducerAppendInfo.appendDataBatch(
                 epoch,
                 17,
                 21,
@@ -1232,28 +1232,19 @@ public class ProducerStateManagerTest {
         assertTrue(exception.getMessage().contains("Expected sequence 0 for a producer with no state on a partition with no records"));
 
         // The retried earlier request starting at sequence 0 is accepted
-        ProducerAppendInfo earlierRequest = new ProducerAppendInfo(
-            partition,
-            producerId,
-            ProducerStateEntry.empty(producerId),
-            AppendOrigin.CLIENT,
-            null,
-            true
-        );
-
-        assertDoesNotThrow(() -> earlierRequest.appendDataBatch(
+        assertDoesNotThrow(() -> currentProducerAppendInfo.appendDataBatch(
             epoch,
             0,
             16,
             time.milliseconds(),
             new LogOffsetMetadata(0L), 16L, false)
         );
-        stateManager.update(earlierRequest);
+        stateManager.update(currentProducerAppendInfo);
         stateManager.updateMapEndOffset(17L);
 
         // The retry of the later request is then accepted
-        ProducerAppendInfo retriedLaterRequest = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
-        assertDoesNotThrow(() -> retriedLaterRequest.appendDataBatch(
+        ProducerAppendInfo updatedProducerAppendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
+        assertDoesNotThrow(() -> updatedProducerAppendInfo.appendDataBatch(
             epoch,
             17,
             21,
