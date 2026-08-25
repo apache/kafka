@@ -24,6 +24,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -39,8 +40,14 @@ public interface Runtime {
      */
     void pipeRecord(String topicName, long timestamp, byte[] key, byte[] value, Headers headers);
 
-    /** Fire wall-clock punctuators, commit, and drain any newly processable work. */
-    void advanceWallClockTime();
+    /**
+     * Advances the internally mocked wall-clock time by the given duration, then fires any
+     * eligible wall-clock punctuators, commits, and drains any newly processable work.
+     *
+     * @param advance the amount of time to advance the wall-clock time by
+     * @throws NullPointerException if {@code advance} is null
+     */
+    void handleWallClockTimeAdvance(final Duration advance);
 
     /**
      * Drain every currently processable record: re-enqueue produced records that loop back into a

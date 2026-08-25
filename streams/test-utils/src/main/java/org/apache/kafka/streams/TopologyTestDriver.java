@@ -44,6 +44,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
+import org.apache.kafka.streams.internals.SinglePartitionRuntime;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -103,7 +104,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Queue;
@@ -364,7 +364,7 @@ public class TopologyTestDriver implements Closeable {
         );
 
         setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        runtime = SinglePartitionRuntime.create(
+        runtime = new SinglePartitionRuntime(
                 streamsConfig,
                 streamsMetrics,
                 cache,
@@ -565,9 +565,7 @@ public class TopologyTestDriver implements Closeable {
      * @param advance the amount of time to advance wall-clock time
      */
     public void advanceWallClockTime(final Duration advance) {
-        Objects.requireNonNull(advance, "advance cannot be null");
-        mockWallClockTime.sleep(advance.toMillis());
-        runtime.advanceWallClockTime();
+        runtime.handleWallClockTimeAdvance(advance);
     }
 
     private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
