@@ -369,7 +369,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private def removeInvalidConfigs(props: Properties, perBrokerConfig: Boolean): Unit = {
     try {
       JDynamicBrokerConfig.validateConfigTypes(props)
-      props.asScala
     } catch {
       case e: Exception =>
         val invalidProps = props.asScala.filter { case (k, v) =>
