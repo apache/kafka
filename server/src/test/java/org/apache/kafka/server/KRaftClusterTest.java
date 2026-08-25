@@ -1413,7 +1413,7 @@ public class KRaftClusterTest {
                     () -> admin.createTopics(newTopics).all().get());
                 assertNotNull(executionException.getCause());
                 assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
-                assertEquals("Excessively large number of partitions per request.",
+                assertEquals("Too many partitions in request.",
                     executionException.getCause().getMessage());
             }
         }
@@ -1438,7 +1438,7 @@ public class KRaftClusterTest {
                     () -> admin.createTopics(newTopics).all().get());
                 assertNotNull(executionException.getCause());
                 assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
-                assertEquals("Excessively large number of partitions per request.",
+                assertEquals("Too many partitions in request.",
                     executionException.getCause().getMessage());
             }
         }

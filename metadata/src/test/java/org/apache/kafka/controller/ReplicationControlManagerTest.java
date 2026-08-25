@@ -612,7 +612,7 @@ public class ReplicationControlManagerTest {
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
                 () -> replicationControl.createTopics(requestContext, request, Set.of("foo", "bar", "baz"), false));
-        assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
+        assertEquals(error.getMessage(), "Too many partitions in request.");
     }
 
     @Test
@@ -631,7 +631,7 @@ public class ReplicationControlManagerTest {
                 PolicyViolationException.class,
                 () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
         );
-        assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
+        assertEquals(error.getMessage(), "Too many partitions in request.");
     }
 
     @Test
@@ -646,7 +646,7 @@ public class ReplicationControlManagerTest {
                 PolicyViolationException.class,
                 () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
         );
-        assertEquals("Excessively large number of partitions per request.", error.getMessage());
+        assertEquals("Too many partitions in request.", error.getMessage());
     }
 
     @Test
