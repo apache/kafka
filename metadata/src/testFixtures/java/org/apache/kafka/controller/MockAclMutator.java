@@ -48,7 +48,7 @@ public class MockAclMutator implements AclMutator {
         StandardAuthorizer authorizer
     ) {
         this.authorizer = authorizer;
-        this.aclControl = new AclControlManager.Builder().build();
+        this.aclControl = new AclControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
     }
 
     private void syncIdToAcl(

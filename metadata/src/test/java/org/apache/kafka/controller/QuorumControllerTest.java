@@ -1640,6 +1640,7 @@ public class QuorumControllerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
                 .setSnapshotRegistry(snapshotRegistry)
+                .setMaxRecordsPerBatch(10_000)
                 .build();
         featureControlManager.replay(new FeatureLevelRecord()
             .setName(MetadataVersion.FEATURE_NAME)

@@ -98,6 +98,7 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(features(TestFeatureVersion.FEATURE_NAME, 0, 2)).
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(10_000).
             build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
         snapshotRegistry.idempotentCreateSnapshot(-1);
@@ -141,6 +142,7 @@ public class FeatureControlManagerTest {
                 setLogContext(logContext).
                 setQuorumFeatures(features("foo", 1, 2)).
                 setSnapshotRegistry(snapshotRegistry).
+                setMaxRecordsPerBatch(10_000).
                 build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
         manager.replay(record);
@@ -160,6 +162,7 @@ public class FeatureControlManagerTest {
                 setLogContext(logContext).
                 setQuorumFeatures(features("foo", 1, 2)).
                 setSnapshotRegistry(snapshotRegistry).
+                setMaxRecordsPerBatch(10_000).
                 build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
         // Replay a kraft.version feature level record and shot that the level doesn't get updated
@@ -201,6 +204,7 @@ public class FeatureControlManagerTest {
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
                 List.of(new SimpleImmutableEntry<>(5, Map.of(TransactionVersion.FEATURE_NAME, VersionRange.of(0, 2)))),
                 List.of())).
+            setMaxRecordsPerBatch(10_000).
             build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
 
@@ -249,6 +253,7 @@ public class FeatureControlManagerTest {
             setLogContext(logContext).
             setQuorumFeatures(features(TestFeatureVersion.FEATURE_NAME, 0, 5, TransactionVersion.FEATURE_NAME, 0, 2)).
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(10_000).
             build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
         ControllerResult<ApiError> result = manager.
@@ -265,6 +270,7 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
                 MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel())).
+            setMaxRecordsPerBatch(10_000).
             build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.IBP_3_4_IV0.featureLevel()));
         return manager;
@@ -311,6 +317,7 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
                 MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel())).
+            setMaxRecordsPerBatch(10_000).
             build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.IBP_3_5_IV1.featureLevel()));
         assertEquals(ControllerResult.of(List.of(), new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -377,6 +384,7 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager.Builder().
                 setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
                         MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel())).
+                setMaxRecordsPerBatch(10_000).
                 build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.IBP_3_5_IV0.featureLevel()));
         assertEquals(ControllerResult.of(List.of(), ApiError.NONE),
@@ -392,6 +400,7 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
                 MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.latestTesting().featureLevel())).
+            setMaxRecordsPerBatch(10_000).
             build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
         assertEquals(
@@ -426,6 +435,7 @@ public class FeatureControlManagerTest {
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
                 List.of(new SimpleImmutableEntry<>(1, Map.of(Feature.TEST_VERSION.featureName(), VersionRange.of(0, 3)))),
                 List.of())).
+                setMaxRecordsPerBatch(10_000).
                 build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
         ControllerResult<ApiError> result  = manager.updateFeatures(
@@ -462,6 +472,7 @@ public class FeatureControlManagerTest {
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
                 List.of(new SimpleImmutableEntry<>(1, Map.of(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), VersionRange.of(0, 1)))),
                 List.of())).
+            setMaxRecordsPerBatch(10_000).
             build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.IBP_4_0_IV1.featureLevel()));
         ControllerResult<ApiError> result = manager.updateFeatures(
@@ -483,7 +494,7 @@ public class FeatureControlManagerTest {
 
     @Test
     public void testMetadataVersion() {
-        FeatureControlManager manager = new FeatureControlManager.Builder().build();
+        FeatureControlManager manager = new FeatureControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
         assertTrue(manager.metadataVersion().isEmpty());
         assertThrows(IllegalStateException.class, manager::metadataVersionOrThrow);
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));

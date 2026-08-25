@@ -141,6 +141,7 @@ public class ConfigurationControlManagerTest {
     public void testReplay() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             build();
         assertEquals(Map.of(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
@@ -168,6 +169,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             build();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
@@ -201,6 +203,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             build();
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
 
@@ -235,6 +238,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             build();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
@@ -282,6 +286,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             setExistenceChecker(TestExistenceChecker.INSTANCE).
             build();
         ConfigResource existingTopic = new ConfigResource(TOPIC, "ExistingTopic");
@@ -345,6 +350,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             setAlterConfigPolicy(Optional.of(policy)).
             build();
         // Existing configs should not be passed to the policy
@@ -405,6 +411,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
             build();
         List<ApiMessageAndVersion> expectedRecords1 = List.of(
@@ -440,7 +447,8 @@ public class ConfigurationControlManagerTest {
     public void testMaybeGenerateElrSafetyRecords(boolean setStaticConfig) {
         ConfigurationControlManager.Builder builder = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
-            setKafkaConfigSchema(SCHEMA);
+            setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000);
         if (setStaticConfig) {
             builder.setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"));
         }
@@ -488,6 +496,7 @@ public class ConfigurationControlManagerTest {
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 () -> Set.of())).
+            setMaxRecordsPerBatch(10_000).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -496,6 +505,7 @@ public class ConfigurationControlManagerTest {
             setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
             setFeatureControl(featureManager).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             build();
         ControllerResult<ApiError> result = manager.updateFeatures(
             Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
@@ -539,6 +549,7 @@ public class ConfigurationControlManagerTest {
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 () -> Set.of())).
+            setMaxRecordsPerBatch(10_000).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -547,6 +558,7 @@ public class ConfigurationControlManagerTest {
             setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
             setFeatureControl(featureManager).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             build();
         assertFalse(featureManager.isElrFeatureEnabled());
         ControllerResult<ApiError> result = manager.updateFeatures(
@@ -574,6 +586,7 @@ public class ConfigurationControlManagerTest {
                 setQuorumFeatures(new QuorumFeatures(0,
                         QuorumFeatures.defaultSupportedFeatureMap(true),
                         () -> Set.of())).
+                setMaxRecordsPerBatch(10_000).
                 build();
         featureManager.replay(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
@@ -581,6 +594,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
                 setFeatureControl(featureManager).
                 setKafkaConfigSchema(SCHEMA).
+                setMaxRecordsPerBatch(10_000).
                 build();
 
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
@@ -595,7 +609,9 @@ public class ConfigurationControlManagerTest {
     }
 
     private FeatureControlManager createFeatureControlManager(short level) {
-        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().
+                setMaxRecordsPerBatch(10_000).
+                build();
         featureControlManager.replay(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(level));
@@ -614,6 +630,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             setSupportedConfigChecker(supportedConfigChecker).
             build();
 
@@ -644,6 +661,7 @@ public class ConfigurationControlManagerTest {
 
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(10_000).
             setSupportedConfigChecker(supportedConfigChecker).
             build();
 
@@ -671,6 +689,7 @@ public class ConfigurationControlManagerTest {
     public void testIsCordonedLogDirsDisabled(boolean expected, short level) {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
                 setKafkaConfigSchema(SCHEMA).
+                setMaxRecordsPerBatch(10_000).
                 setFeatureControl(createFeatureControlManager(level)).
                 build();
 
@@ -696,6 +715,7 @@ public class ConfigurationControlManagerTest {
     public void testIsCordonedLogDirsInvalid() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
                 setKafkaConfigSchema(SCHEMA).
+                setMaxRecordsPerBatch(10_000).
                 setFeatureControl(createFeatureControlManager()).
                 build();
 

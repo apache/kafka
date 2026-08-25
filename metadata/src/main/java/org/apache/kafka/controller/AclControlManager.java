@@ -30,7 +30,6 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
-import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult;
@@ -63,7 +62,7 @@ public class AclControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
-        private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
+        private int maxRecordsPerBatch;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -81,6 +80,9 @@ public class AclControlManager {
         }
 
         AclControlManager build() {
+            if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
+            }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             return new AclControlManager(logContext, snapshotRegistry, maxRecordsPerBatch);

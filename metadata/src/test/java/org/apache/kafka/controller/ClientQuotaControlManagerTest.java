@@ -51,7 +51,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testInvalidEntityTypes() {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
 
         // Unknown type "foo"
         assertInvalidEntity(manager, entity("foo", "bar"));
@@ -77,7 +77,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testInvalidQuotaKeys() {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
         ClientQuotaEntity entity = entity(ClientQuotaEntity.USER, "user-1");
 
         // Invalid + valid keys
@@ -100,7 +100,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testAlterAndRemove() {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
 
         ClientQuotaEntity userEntity = userEntity("user-1");
         List<ClientQuotaAlteration> alters = new ArrayList<>();
@@ -174,7 +174,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testEntityTypes() throws Exception {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
 
         Map<ClientQuotaEntity, Map<String, Double>> quotasToTest = new HashMap<>();
         quotasToTest.put(userClientEntity("user-1", "client-id-1"),

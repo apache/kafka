@@ -218,7 +218,7 @@ public class ReplicationControlManager {
             } else if (clusterControl == null) {
                 throw new IllegalStateException("Cluster control must be set before building");
             } else if (maxRecordsPerBatch <= 0) {
-                throw new IllegalStateException("Max records per batch must be set before building");
+                throw new IllegalStateException("Max records per batch must be greater than zero");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();

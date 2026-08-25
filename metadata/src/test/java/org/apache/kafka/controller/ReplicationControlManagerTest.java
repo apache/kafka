@@ -240,6 +240,7 @@ public class ReplicationControlManagerTest {
                 setQuorumFeatures(new QuorumFeatures(0,
                     QuorumFeatures.defaultSupportedFeatureMap(true),
                     () -> Set.of(0))).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
             this.featureControl.replay(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
@@ -264,6 +265,7 @@ public class ReplicationControlManagerTest {
                 setFeatureControl(featureControl).
                 setStaticConfig(staticConfig).
                 setKafkaConfigSchema(FakeKafkaConfigSchema.INSTANCE).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
             this.offsetControlManager = new OffsetControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
@@ -659,7 +661,7 @@ public class ReplicationControlManagerTest {
                     setClusterControl(ctx.clusterControl).
                     setMaxRecordsPerBatch(invalidMaxRecordsPerBatch).
                     build());
-            assertEquals("Max records per batch must be set before building", exception.getMessage());
+            assertEquals("Max records per batch must be greater than zero", exception.getMessage());
         }
     }
 

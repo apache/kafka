@@ -26,7 +26,6 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.mutable.BoundedList;
@@ -52,7 +51,7 @@ public class ClientQuotaControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
-        private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
+        private int maxRecordsPerBatch;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -70,6 +69,9 @@ public class ClientQuotaControlManager {
         }
 
         ClientQuotaControlManager build() {
+            if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
+            }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             return new ClientQuotaControlManager(logContext, snapshotRegistry, maxRecordsPerBatch);

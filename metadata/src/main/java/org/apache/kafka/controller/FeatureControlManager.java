@@ -26,7 +26,6 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
@@ -59,7 +58,7 @@ public class FeatureControlManager {
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
         private KRaftVersionAccessor kraftVersionAccessor = null;
-        private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
+        private int maxRecordsPerBatch;
 
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
@@ -104,6 +103,9 @@ public class FeatureControlManager {
         }
 
         public FeatureControlManager build() {
+            if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
+            }
             // set reasonable defaults for fields when this object is built in testing
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);

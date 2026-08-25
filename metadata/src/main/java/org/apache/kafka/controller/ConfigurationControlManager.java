@@ -32,7 +32,6 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.SupportedConfigChecker;
-import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -96,7 +95,7 @@ public class ConfigurationControlManager {
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
         private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
-        private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
+        private int maxRecordsPerBatch;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -154,13 +153,18 @@ public class ConfigurationControlManager {
         }
 
         ConfigurationControlManager build() {
+            if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
+            }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (configSchema == null) {
                 throw new RuntimeException("You must set the configSchema.");
             }
             if (featureControl == null) {
-                featureControl = new FeatureControlManager.Builder().build();
+                featureControl = new FeatureControlManager.Builder().
+                    setMaxRecordsPerBatch(maxRecordsPerBatch).
+                    build();
             }
             return new ConfigurationControlManager(
                 logContext,

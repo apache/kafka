@@ -390,7 +390,7 @@ public final class QuorumController implements Controller {
             } else if (fatalFaultHandler == null) {
                 throw new IllegalStateException("You must specify a fatal fault handler.");
             } else if (maxRecordsPerBatch <= 0) {
-                throw new IllegalStateException("You must specify the max records per batch.");
+                throw new IllegalStateException("Max records per batch must be greater than zero");
             }
 
             if (threadNamePrefix == null) {

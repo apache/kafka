@@ -49,6 +49,7 @@ public class ProducerIdControlManagerTest {
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 () -> Set.of(0))).
+            setMaxRecordsPerBatch(10_000).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
