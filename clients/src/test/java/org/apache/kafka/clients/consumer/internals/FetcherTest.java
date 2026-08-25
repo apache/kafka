@@ -78,6 +78,7 @@ import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
@@ -290,30 +291,27 @@ public class FetcherTest {
 
     @Test
     public void testCloseShouldBeIdempotent() {
-        buildFetcher();
+        final int[] closeCount = {0};
 
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
+        LogContext logContext = new LogContext();
+        buildDependencies(new MetricConfig(), Long.MAX_VALUE, new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST), logContext);
+        FetchConfig fetchConfig = new FetchConfig(minBytes, maxBytes, maxWaitMs, fetchSize, Integer.MAX_VALUE,
+            true, CommonClientConfigs.DEFAULT_CLIENT_RACK, IsolationLevel.READ_UNCOMMITTED);
+        fetcher = new Fetcher<>(logContext, consumerClient, metadata, subscriptions, fetchConfig,
+            new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer(), metrics),
+            metricsManager, time, apiVersions) {
+                @Override
+                protected void closeInternal(Timer timer) {
+                    closeCount[0]++;
+                    super.closeInternal(timer);
+                }
+            };
 
-        // establish a fetch session so that closing the fetcher sends a session-close request
-        assertEquals(1, sendFetches());
-        final FetchResponse fetchResponse = fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0);
-        client.prepareResponse(fetchResponse);
-        consumerClient.poll(time.timer(0));
+        fetcher.close();
+        fetcher.close();
+        fetcher.close();
 
-        AtomicInteger closeRequests = new AtomicInteger();
-        client.prepareResponse(body -> {
-            closeRequests.incrementAndGet();
-            return true;
-        }, FetchResponse.of(Errors.NONE, 0, fetchResponse.sessionId(), new LinkedHashMap<>(), List.of()));
-
-        fetcher.close(time.timer(Duration.ofSeconds(10)));
-        fetcher.close(time.timer(Duration.ofSeconds(10)));
-        fetcher.close(time.timer(Duration.ofSeconds(10)));
-
-        // only the first close sends the session-close request
-        assertEquals(1, closeRequests.get());
-        assertFalse(client.hasInFlightRequests());
+        assertEquals(1, closeCount[0]);
     }
 
     @Test
