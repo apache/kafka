@@ -293,7 +293,7 @@ The REST API is used not only by users to monitor / manage Kafka Connect. In dis
 The following are the currently supported REST API endpoints:
 
   * `GET /connectors` \- return a list of active connectors
-  * `POST /connectors` \- create a new connector; the request body should be a JSON object containing a string `name` field and an object `config` field with the connector configuration parameters. The JSON object may also optionally contain a string `initial_state` field which can take the following values - `STOPPED`, `PAUSED` or `RUNNING` (the default value)
+  * `POST /connectors` \- create a new connector; the request body should be a JSON object containing a string `name` field and an object `config` field with the connector configuration parameters. The JSON object may also optionally contain a string `initial_state` field which can take the following values - `STOPPED`, `PAUSED` or `RUNNING` (the default value). The JSON object may also optionally contain a JSON array `initial_offsets` field, in the same format as the `PATCH /connectors/{name}/offsets` request body; these replace (not merge with) any existing offsets for the connector name, and an invalid payload fails the request without creating the connector (see [KIP-995](https://cwiki.apache.org/confluence/display/KAFKA/KIP-995%3A+Allow+users+to+specify+initial+offsets+while+creating+connectors))
   * `GET /connectors/{name}` \- get information about a specific connector
   * `GET /connectors/{name}/config` \- get the configuration parameters for a specific connector
   * `PUT /connectors/{name}/config` \- update the configuration parameters for a specific connector
