@@ -479,13 +479,11 @@ public final class GroupConfig extends AbstractConfig {
 
     /**
      * Check that the selected task assignor is one of the assignors registered on the broker.
-     * Validated separately from {@link #validate} because the registry of assignors only exists on
-     * brokers, which are the nodes that run the group coordinator.
      *
      * @param assignorName            The requested assignor name, as an unparsed config value.
      * @param registeredAssignorNames The names of the assignors registered on the broker.
      */
-    public static void validateAssignorName(String assignorName, List<String> registeredAssignorNames) {
+    static void validateAssignorName(String assignorName, List<String> registeredAssignorNames) {
         // ConfigDef trims STRING values while parsing, so trim here too in order to accept the same
         // values as the rest of the validation.
         String trimmed = assignorName.trim();
@@ -496,15 +494,34 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
-     * Check that the given properties contain only valid group config names and that
-     * all values can be parsed and are valid. Does not cover
-     * {@link #STREAMS_ASSIGNOR_NAME_CONFIG}, see {@link #validateAssignorName}.
+     * Check the subset of group config validation that depends on broker-only state, such as
+     * the registry of task assignors.
      *
      * @param newGroupConfig         The new unparsed group config overrides.
      * @param groupCoordinatorConfig The group coordinator config.
      * @param shareGroupConfig       The share group config.
      */
-    public static void validate(
+    public static void validateOnBroker(
+        Map<String, String> newGroupConfig,
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
+    ) {
+        String assignorName = newGroupConfig.get(STREAMS_ASSIGNOR_NAME_CONFIG);
+        if (assignorName != null) {
+            validateAssignorName(assignorName, groupCoordinatorConfig.streamsGroupAssignorNames());
+        }
+    }
+
+    /**
+     * Check that the given properties contain only valid group config names and that
+     * all values can be parsed and are valid. See {@link #validateOnBroker} for the
+     * remaining checks that require broker-only state.
+     *
+     * @param newGroupConfig         The new unparsed group config overrides.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
+     */
+    public static void validateOnController(
         Map<String, String> newGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig

@@ -360,14 +360,14 @@ public class GroupConfigTest {
         duplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
         assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
             assertThrows(InvalidConfigurationException.class,
-                () -> GroupConfig.validate(duplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
+                () -> GroupConfig.validateOnController(duplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
 
         // Duplicates are detected regardless of surrounding whitespace.
         Map<String, String> whitespaceDuplicateProps = createValidGroupConfig();
         whitespaceDuplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , zone ");
         assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
             assertThrows(InvalidConfigurationException.class,
-                () -> GroupConfig.validate(whitespaceDuplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
+                () -> GroupConfig.validateOnController(whitespaceDuplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
 
         // Distinct rack-aware assignment tags are accepted.
         Map<String, String> distinctProps = createValidGroupConfig();
@@ -408,11 +408,11 @@ public class GroupConfigTest {
     }
 
     private void doTestInvalidProps(Map<String, String> props, Class<? extends Exception> exceptionClassName) {
-        assertThrows(exceptionClassName, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
+        assertThrows(exceptionClassName, () -> GroupConfig.validateOnController(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     private void doTestValidProps(Map<String, String> props) {
-        assertDoesNotThrow(() -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
+        assertDoesNotThrow(() -> GroupConfig.validateOnController(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     private static Stream<Arguments> outOfRangeValuesAndExpectedMessages() {
@@ -481,7 +481,7 @@ public class GroupConfigTest {
         var props = Map.of(key, value);
         var exception = assertThrows(
             InvalidConfigurationException.class,
-            () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig())
+            () -> GroupConfig.validateOnController(props, createGroupCoordinatorConfig(), createShareGroupConfig())
         );
         assertEquals(expectedMessage, exception.getMessage());
     }
@@ -653,7 +653,7 @@ public class GroupConfigTest {
             GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000,
             GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000
         ));
-        assertDoesNotThrow(() -> GroupConfig.validate(Map.of(), groupCoordinatorConfig, createShareGroupConfig()));
+        assertDoesNotThrow(() -> GroupConfig.validateOnController(Map.of(), groupCoordinatorConfig, createShareGroupConfig()));
     }
 
     @Test
@@ -661,7 +661,7 @@ public class GroupConfigTest {
         Map<String, String> props = new HashMap<>();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         props.put("invalid.config.name", "10");
-        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validateOnController(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     @Test
@@ -681,7 +681,7 @@ public class GroupConfigTest {
         ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(overrides);
 
         assertDoesNotThrow(() ->
-            GroupConfig.validate(new HashMap<>(), groupCoordinatorConfig, shareGroupConfig));
+            GroupConfig.validateOnController(new HashMap<>(), groupCoordinatorConfig, shareGroupConfig));
     }
 
     @Test
@@ -971,7 +971,7 @@ public class GroupConfigTest {
         configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "__my-dlq");
 
         InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
-            GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+            GroupConfig.validateOnController(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
         assertTrue(exception.getMessage().contains("DLQ topic name must not start with '__'"));
     }
 

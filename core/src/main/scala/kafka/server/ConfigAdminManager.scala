@@ -65,15 +65,16 @@ import scala.jdk.CollectionConverters._
  *
  * Configuration processing is split into two parts.
  * - The first step, called "preprocessing," handles setting KIP-412 log levels, validating
- * BROKER configurations, and validating the streams task assignor selected by a GROUP
- * configuration. We also filter out some other things here like UNKNOWN resource types, etc.
+ * BROKER configurations, and performing the broker-only subset of GROUP configuration
+ * validation (see [[org.apache.kafka.coordinator.group.GroupConfig#validateOnBroker]]). We
+ * also filter out some other things here like UNKNOWN resource types, etc.
  * - The second step is "persistence," and handles storing the configurations durably to our
  * metadata store.
  *
  * The active controller performs its own configuration validation step in
  * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
  * TOPIC resources, since we already validated changes to BROKER resources, and the
- * selected streams task assignor of GROUP resources, on the forwarding broker. The
+ * broker-only subset of GROUP resource validation, on the forwarding broker. The
  * controller is also responsible for enforcing the configured
  * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
@@ -148,12 +149,7 @@ class ConfigAdminManager(nodeId: Int,
               }
               validateBrokerConfigChange(resource, configResource)
             case GROUP =>
-              resource.configs().forEach { config =>
-                if (config.name() == GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG &&
-                  config.configOperation() == OpType.SET.id()) {
-                  validateStreamsAssignorNameChange(config.value())
-                }
-              }
+              validateGroupConfigChangeOnBroker(resource)
             case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
             case _ =>
@@ -211,12 +207,17 @@ class ConfigAdminManager(nodeId: Int,
  }
 
   /**
-   * Validate a change to the task assignor selected by a streams group. This is done here rather
-   * than on the controller because the assignors are registered on the brokers, which are the
-   * nodes that run the group coordinator.
+   * Perform the broker-only subset of GROUP config validation on the forwarding broker,
+   * before the change is sent to the controller.
    */
-  private def validateStreamsAssignorNameChange(assignorName: String): Unit = {
-    GroupConfig.validateAssignorName(assignorName, conf.groupCoordinatorConfig.streamsGroupAssignorNames())
+  private def validateGroupConfigChangeOnBroker(resource: IAlterConfigsResource): Unit = {
+    val newGroupConfig = new util.HashMap[String, String]()
+    resource.configs().forEach { config =>
+      if (config.configOperation() == OpType.SET.id()) {
+        newGroupConfig.put(config.name(), config.value())
+      }
+    }
+    GroupConfig.validateOnBroker(newGroupConfig, conf.groupCoordinatorConfig, conf.shareGroupConfig)
   }
 
   /**
