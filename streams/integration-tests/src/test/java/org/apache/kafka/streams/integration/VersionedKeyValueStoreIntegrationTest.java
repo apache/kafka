@@ -24,6 +24,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -125,6 +127,12 @@ public class VersionedKeyValueStoreIntegrationTest {
             kafkaStreams.close(Duration.ofSeconds(30L));
             kafkaStreams.cleanUp();
         }
+    }
+
+    private void closeAndLeaveGroupBeforeRestart() {
+        // Leave the group so the immediate restart with the same application id
+        // does not wait for the previous member's session timeout.
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
     }
 
     @ParameterizedTest
@@ -253,7 +261,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             initialRecordsProduced);
 
         // wipe out state store to trigger restore process on restart
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams.cleanUp();
 
         // restart app and pass expected store contents to processor
@@ -392,7 +400,7 @@ public class VersionedKeyValueStoreIntegrationTest {
         }
 
         // wipe out state store to trigger restore process on restart
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams.cleanUp();
 
         // restart app with versioned store, and pass expected store contents to processor

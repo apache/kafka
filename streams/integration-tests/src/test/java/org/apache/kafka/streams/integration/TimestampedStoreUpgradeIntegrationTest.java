@@ -19,6 +19,8 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -110,6 +112,12 @@ public class TimestampedStoreUpgradeIntegrationTest {
         }
     }
 
+    private void closeAndLeaveGroupBeforeRestart() {
+        // Leave the group so the immediate restart with the same application id
+        // does not wait for the previous member's session timeout.
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
+    }
+
     @Test
     public void shouldMigrateInMemoryKeyValueStoreToTimestampedKeyValueStoreUsingPapi() throws Exception {
         shouldMigrateKeyValueStoreToTimestampedKeyValueStoreUsingPapi(false);
@@ -170,7 +178,7 @@ public class TimestampedStoreUpgradeIntegrationTest {
             KeyValue.pair(4, 3L)));
         final long lastUpdateKeyFour = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
 
@@ -276,7 +284,7 @@ public class TimestampedStoreUpgradeIntegrationTest {
             KeyValue.pair(3, 1L),
             KeyValue.pair(4, 3L)));
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
 
@@ -616,7 +624,7 @@ public class TimestampedStoreUpgradeIntegrationTest {
             KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), 3L)));
         final long lastUpdateKeyFour = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
 
@@ -763,7 +771,7 @@ public class TimestampedStoreUpgradeIntegrationTest {
             KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L),
             KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), 3L)));
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
 
@@ -1054,7 +1062,7 @@ public class TimestampedStoreUpgradeIntegrationTest {
             KeyValue.pair(1, ValueAndTimestamp.make(1L, timestamp1)),
             KeyValue.pair(2, ValueAndTimestamp.make(1L, timestamp2))));
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
     }
 
     private static class KeyValueProcessor implements Processor<Integer, Integer, Void, Void> {
