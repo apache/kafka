@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapter;
+import org.apache.kafka.streams.state.internals.WindowToTimestampedWindowByteStoreAdapter;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.slf4j.Logger;
@@ -63,6 +64,14 @@ final class StateManagerUtil {
         // Restore bypasses adapters and writes directly into the inner store, so the converter must
         // match the inner store's binary format, not the format the adapter advertises to the outer
         // store chain. Thus, check for adapters first.
+        //
+        // This loop enumerates the byte-translating adapters and maps each to its INNER store's
+        // format. Wrappers that merely advertise a format without translating bytes (e.g. the
+        // in-memory timestamped markers) are intentionally NOT listed here — they are resolved by
+        // the isTimestamped()/isHeadersAware() fallback below. Note that
+        // WindowToTimestampedWindowByteStoreAdapter deliberately does not implement
+        // TimestampedBytesStore: marking it without also converting in its query() would break the
+        // IQ read path.
         StateStore current = store;
         while (current != null) {
             if (current instanceof TimestampedToHeadersStoreAdapter || current instanceof TimestampedToHeadersWindowStoreAdapter) {
@@ -70,7 +79,8 @@ final class StateManagerUtil {
                 return rawValueToTimestampedValue();
             } else if (current instanceof PlainToHeadersStoreAdapter
                 || current instanceof PlainToHeadersWindowStoreAdapter
-                || current instanceof KeyValueToTimestampedKeyValueByteStoreAdapter) {
+                || current instanceof KeyValueToTimestampedKeyValueByteStoreAdapter
+                || current instanceof WindowToTimestampedWindowByteStoreAdapter) {
                 // Adapter wraps a plain store, so restore in plain format
                 return identity();
             }

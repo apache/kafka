@@ -61,6 +61,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
@@ -323,53 +324,25 @@ public class StateManagerUtilConverterTest {
         return new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), Time.SYSTEM).build();
     }
 
-    /**
-     * Feeds a changelog-format record (plain value, timestamp in the record timestamp field) through
-     * the converter and the store's registered restore callback, mirroring the restore code path,
-     * and reads the restored value back through the store.
-     */
     private static ValueAndTimestamp<String> restoreAndGet(final TimestampedWindowStore<String, String> store) {
-        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(
-            TestUtils.tempDirectory(),
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig())
-        );
-        store.init(context, store);
-        try {
-            // window changelog keys carry the window start (here WINDOW_START) in their binary encoding
-            final byte[] key = WindowKeySchema.toStoreKeyBinary(
-                Bytes.wrap("key".getBytes(StandardCharsets.UTF_8)), WINDOW_START, 0).get();
-            final byte[] plainValue = "value".getBytes(StandardCharsets.UTF_8);
-            final ConsumerRecord<byte[], byte[]> changelogRecord = new ConsumerRecord<>(
-                "changelog",
-                0,
-                0L,
-                TIMESTAMP,
-                TimestampType.CREATE_TIME,
-                key.length,
-                plainValue.length,
-                key,
-                plainValue,
-                new RecordHeaders(),
-                Optional.empty()
-            );
+        // window changelog keys carry the window start (here WINDOW_START) in their binary encoding
+        final byte[] key = WindowKeySchema.toStoreKeyBinary(
+            Bytes.wrap("key".getBytes(StandardCharsets.UTF_8)), WINDOW_START, 0).get();
+        return restoreAndRead(store, key, () -> store.fetch("key", WINDOW_START));
+    }
 
-            final RecordConverter converter = StateManagerUtil.converterForStore(store);
-            context.restoreWithHeaders(store.name(), List.of(converter.convert(changelogRecord)));
-
-            return store.fetch("key", WINDOW_START);
-        } finally {
-            store.close();
-        }
+    private static ValueAndTimestamp<String> restoreAndGet(final TimestampedKeyValueStore<String, String> store) {
+        return restoreAndRead(store, "key".getBytes(StandardCharsets.UTF_8), () -> store.get("key"));
     }
 
     /**
      * Feeds a changelog-format record (plain value, timestamp in the record timestamp field) through
      * the converter and the store's registered restore callback, mirroring the restore code path,
-     * and reads the restored value back through the store.
+     * then reads the restored value back via {@code read}.
      */
-    private static ValueAndTimestamp<String> restoreAndGet(final TimestampedKeyValueStore<String, String> store) {
+    private static ValueAndTimestamp<String> restoreAndRead(final StateStore store,
+                                                            final byte[] key,
+                                                            final Supplier<ValueAndTimestamp<String>> read) {
         final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -378,7 +351,6 @@ public class StateManagerUtilConverterTest {
         );
         store.init(context, store);
         try {
-            final byte[] key = "key".getBytes(StandardCharsets.UTF_8);
             final byte[] plainValue = "value".getBytes(StandardCharsets.UTF_8);
             final ConsumerRecord<byte[], byte[]> changelogRecord = new ConsumerRecord<>(
                 "changelog",
@@ -397,7 +369,7 @@ public class StateManagerUtilConverterTest {
             final RecordConverter converter = StateManagerUtil.converterForStore(store);
             context.restoreWithHeaders(store.name(), List.of(converter.convert(changelogRecord)));
 
-            return store.get("key");
+            return read.get();
         } finally {
             store.close();
         }

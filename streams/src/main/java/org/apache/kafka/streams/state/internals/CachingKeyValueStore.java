@@ -68,7 +68,6 @@ public class CachingKeyValueStore
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Position position;
-    private final CacheType cacheType;
 
     @FunctionalInterface
     public interface CacheQueryHandler {
@@ -92,10 +91,9 @@ public class CachingKeyValueStore
         );
 
 
-    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying, final CacheType cacheType) {
+    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying) {
         super(underlying);
         position = Position.emptyPosition();
-        this.cacheType = cacheType;
     }
 
     @Override
@@ -188,13 +186,10 @@ public class CachingKeyValueStore
             if (internalContext.cache() != null) {
                 final LRUCacheEntry lruCacheEntry = internalContext.cache().get(cacheName, key);
                 if (lruCacheEntry != null) {
-                    final byte[] rawValue;
-                    if (cacheType == CacheType.TIMESTAMPED_KEY_VALUE_STORE && !WrappedStateStore.isTimestamped(wrapped())) {
-                        rawValue = ValueAndTimestampDeserializer.rawValue(lruCacheEntry.value());
-                    } else {
-                        rawValue = lruCacheEntry.value();
-                    }
-                    result = (QueryResult<R>) QueryResult.forResult(rawValue);
+                    // the cache holds the same binary format as the wrapped store: every store below a
+                    // timestamped cache implements TimestampedBytesStore (natively, via the KV adapter,
+                    // or via the in-memory marker), so no format conversion is needed here
+                    result = (QueryResult<R>) QueryResult.forResult(lruCacheEntry.value());
                 }
             }
 
@@ -563,11 +558,5 @@ public class CachingKeyValueStore
         } finally {
             lock.writeLock().unlock();
         }
-    }
-
-    public enum CacheType {
-        KEY_VALUE_STORE,
-        TIMESTAMPED_KEY_VALUE_STORE,
-        TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS
     }
 }
