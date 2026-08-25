@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionStore;
@@ -53,6 +54,9 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -62,6 +66,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
@@ -79,132 +84,100 @@ public class StateManagerUtilConverterTest {
     private static final long TIMESTAMP = 42L;
     private static final long WINDOW_START = 0L;
 
+    // persistent plain kv/window -> ts kv/window (via KeyValueToTimestampedKeyValueByteStoreAdapter /
+    // WindowToTimestampedWindowByteStoreAdapter): restore bypasses the adapter and writes into the
+    // plain inner store directly, so the converter must be identity(). In-memory and persistent
+    // timestamped stores hold the timestamped format natively, so the converter must prepend it.
+    @ParameterizedTest
+    @MethodSource("keyValueConverterCases")
+    public void shouldReturnConverterForTimestampedKeyValueStore(final KeyValueBytesStoreSupplier supplier,
+                                                                  final RecordConverter expectedConverter) {
+        final TimestampedKeyValueStore<String, String> store = timestampedKeyValueStore(supplier);
+
+        assertEquals(expectedConverter, StateManagerUtil.converterForStore(store));
+    }
+
+    @ParameterizedTest
+    @MethodSource("windowConverterCases")
+    public void shouldReturnConverterForTimestampedWindowStore(final WindowBytesStoreSupplier supplier,
+                                                                final RecordConverter expectedConverter) {
+        final StateStore store = timestampedWindowStore(supplier);
+
+        assertEquals(expectedConverter, StateManagerUtil.converterForStore(store));
+    }
+
+    // versioned stores implement VersionedBytesStore, which extends TimestampedBytesStore, so both
+    // isTimestamped() and isVersioned() are true; the isVersioned() guard in converterForStore must
+    // win so that restore does not prepend a timestamp (versioned stores handle it separately in put())
     @Test
-    public void shouldReturnIdentityConverterForPlainToTimestampedPersistentKeyValueStore() {
-        // persistent plain kv -> ts kv (via KeyValueToTimestampedKeyValueByteStoreAdapter):
-        // restore bypasses the adapter and writes into the plain inner store directly
-        final TimestampedKeyValueStore<String, String> store =
-            timestampedKeyValueStore(Stores.persistentKeyValueStore("store"));
+    public void shouldReturnIdentityConverterForVersionedKeyValueStore() {
+        final VersionedKeyValueStore<String, String> store = Stores.versionedKeyValueStoreBuilder(
+            Stores.persistentVersionedKeyValueStore("store", Duration.ofMillis(1000)),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
 
         assertEquals(identity(), StateManagerUtil.converterForStore(store));
     }
 
-    @Test
-    public void shouldReturnTimestampedConverterForPlainToTimestampedInMemoryKeyValueStore() {
-        // in memory kv -> ts kv (via InMemoryTimestampedKeyValueStoreMarker):
-        // the inner store holds the timestamped format natively
-        final TimestampedKeyValueStore<String, String> store =
-            timestampedKeyValueStore(Stores.inMemoryKeyValueStore("store"));
-
-        assertEquals(rawValueToTimestampedValue(), StateManagerUtil.converterForStore(store));
-    }
-
-    @Test
-    public void shouldReturnTimestampedConverterForPersistentTimestampedKeyValueStore() {
-        final TimestampedKeyValueStore<String, String> store =
-            timestampedKeyValueStore(Stores.persistentTimestampedKeyValueStore("store"));
-
-        assertEquals(rawValueToTimestampedValue(), StateManagerUtil.converterForStore(store));
-    }
-
-    @Test
-    public void shouldReturnIdentityConverterForPlainToTimestampedPersistentWindowStore() {
-        // persistent plain window -> ts window (via WindowToTimestampedWindowByteStoreAdapter)
-        final StateStore store = timestampedWindowStore(
-            Stores.persistentWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
-
-        assertEquals(identity(), StateManagerUtil.converterForStore(store));
-    }
-
-    @Test
-    public void shouldReturnTimestampedConverterForPlainToTimestampedInMemoryWindowStore() {
-        // in memory window -> ts window (via InMemoryTimestampedWindowStoreMarker):
-        // the inner store holds the timestamped format natively
-        final StateStore store = timestampedWindowStore(
-            Stores.inMemoryWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
-
-        assertEquals(rawValueToTimestampedValue(), StateManagerUtil.converterForStore(store));
-    }
-
-    @Test
-    public void shouldReturnTimestampedConverterForPersistentTimestampedWindowStore() {
-        final StateStore store = timestampedWindowStore(
-            Stores.persistentTimestampedWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
-
-        assertEquals(rawValueToTimestampedValue(), StateManagerUtil.converterForStore(store));
-    }
-
-    @Test
-    public void shouldRestorePlainPersistentTimestampedKeyValueStoreInPlainFormat() {
-        // regression test for KAFKA-16141: restore bypasses the adapter, so restored records
-        // must not get a timestamp prepended even though the adapter advertises the timestamped format
-        final TimestampedKeyValueStore<String, String> store =
-            timestampedKeyValueStore(Stores.persistentKeyValueStore("store"));
-
-        final ValueAndTimestamp<String> restored = restoreAndGet(store);
-
-        // the plain inner store cannot retain the record timestamp; reads surface the dummy `-1`
-        assertEquals("value", restored.value());
-        assertEquals(-1L, restored.timestamp());
-    }
-
-    @Test
-    public void shouldRestoreInMemoryTimestampedKeyValueStoreInTimestampedFormat() {
-        final TimestampedKeyValueStore<String, String> store =
-            timestampedKeyValueStore(Stores.inMemoryKeyValueStore("store"));
+    // regression test for KAFKA-16141: restore bypasses the adapter, so restored records must not get
+    // a timestamp prepended even though the adapter advertises the timestamped format. The plain inner
+    // store cannot retain the record timestamp, so reads surface the dummy `-1`; in-memory and
+    // persistent timestamped stores retain the real timestamp.
+    @ParameterizedTest
+    @MethodSource("keyValueRestoreCases")
+    public void shouldRestoreTimestampedKeyValueStore(final KeyValueBytesStoreSupplier supplier,
+                                                       final long expectedTimestamp) {
+        final TimestampedKeyValueStore<String, String> store = timestampedKeyValueStore(supplier);
 
         final ValueAndTimestamp<String> restored = restoreAndGet(store);
 
         assertEquals("value", restored.value());
-        assertEquals(TIMESTAMP, restored.timestamp());
+        assertEquals(expectedTimestamp, restored.timestamp());
     }
 
-    @Test
-    public void shouldRestorePersistentTimestampedKeyValueStoreInTimestampedFormat() {
-        final TimestampedKeyValueStore<String, String> store =
-            timestampedKeyValueStore(Stores.persistentTimestampedKeyValueStore("store"));
+    @ParameterizedTest
+    @MethodSource("windowRestoreCases")
+    public void shouldRestoreTimestampedWindowStore(final WindowBytesStoreSupplier supplier,
+                                                     final long expectedTimestamp) {
+        final TimestampedWindowStore<String, String> store = timestampedWindowStore(supplier);
 
         final ValueAndTimestamp<String> restored = restoreAndGet(store);
 
         assertEquals("value", restored.value());
-        assertEquals(TIMESTAMP, restored.timestamp());
+        assertEquals(expectedTimestamp, restored.timestamp());
     }
 
-    @Test
-    public void shouldRestorePlainPersistentTimestampedWindowStoreInPlainFormat() {
-        // restore bypasses WindowToTimestampedWindowByteStoreAdapter and writes plain values into the
-        // inner store; reads then surface the adapter's dummy `-1` timestamp
-        final TimestampedWindowStore<String, String> store = timestampedWindowStore(
-            Stores.persistentWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
-
-        final ValueAndTimestamp<String> restored = restoreAndGet(store);
-
-        assertEquals("value", restored.value());
-        assertEquals(-1L, restored.timestamp());
+    private static Stream<Arguments> keyValueConverterCases() {
+        return Stream.of(
+            Arguments.of(Stores.persistentKeyValueStore("store"), identity()),
+            Arguments.of(Stores.inMemoryKeyValueStore("store"), rawValueToTimestampedValue()),
+            Arguments.of(Stores.persistentTimestampedKeyValueStore("store"), rawValueToTimestampedValue())
+        );
     }
 
-    @Test
-    public void shouldRestoreInMemoryTimestampedWindowStoreInTimestampedFormat() {
-        // the InMemoryTimestampedWindowStoreMarker's inner store holds the timestamped format
-        // natively, so the record timestamp is retained through restore
-        final TimestampedWindowStore<String, String> store = timestampedWindowStore(
-            Stores.inMemoryWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
-
-        final ValueAndTimestamp<String> restored = restoreAndGet(store);
-
-        assertEquals("value", restored.value());
-        assertEquals(TIMESTAMP, restored.timestamp());
+    private static Stream<Arguments> windowConverterCases() {
+        return Stream.of(
+            Arguments.of(Stores.persistentWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false), identity()),
+            Arguments.of(Stores.inMemoryWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false), rawValueToTimestampedValue()),
+            Arguments.of(Stores.persistentTimestampedWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false), rawValueToTimestampedValue())
+        );
     }
 
-    @Test
-    public void shouldRestorePersistentTimestampedWindowStoreInTimestampedFormat() {
-        final TimestampedWindowStore<String, String> store = timestampedWindowStore(
-            Stores.persistentTimestampedWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
+    private static Stream<Arguments> keyValueRestoreCases() {
+        return Stream.of(
+            Arguments.of(Stores.persistentKeyValueStore("store"), -1L),
+            Arguments.of(Stores.inMemoryKeyValueStore("store"), TIMESTAMP),
+            Arguments.of(Stores.persistentTimestampedKeyValueStore("store"), TIMESTAMP)
+        );
+    }
 
-        final ValueAndTimestamp<String> restored = restoreAndGet(store);
-
-        assertEquals("value", restored.value());
-        assertEquals(TIMESTAMP, restored.timestamp());
+    private static Stream<Arguments> windowRestoreCases() {
+        return Stream.of(
+            Arguments.of(Stores.persistentWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false), -1L),
+            Arguments.of(Stores.inMemoryWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false), TIMESTAMP),
+            Arguments.of(Stores.persistentTimestampedWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false), TIMESTAMP)
+        );
     }
 
     @Test
