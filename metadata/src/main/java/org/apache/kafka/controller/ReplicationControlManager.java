@@ -1253,7 +1253,7 @@ public class ReplicationControlManager {
                 totalPartitions += topic.assignments().size();
             }
             if (totalPartitions > maxRecordsPerBatch) {
-                throw new PolicyViolationException("Excessively large number of partitions per request.");
+                throw new PolicyViolationException("Too many partitions in request.");
             }
         }
     }

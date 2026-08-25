@@ -83,6 +83,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class AclControlManagerTest {
+    @Test
+    public void testBuilderRequiresPositiveMaxRecordsPerBatch() {
+        for (int invalidMaxRecordsPerBatch : new int[] {0, -1, -100}) {
+            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new AclControlManager.Builder().
+                    setMaxRecordsPerBatch(invalidMaxRecordsPerBatch).
+                    build());
+            assertEquals("Max records per batch must be greater than zero", exception.getMessage());
+        }
+    }
+
     /**
      * Verify that validateNewAcl catches invalid ACLs.
      */
