@@ -416,7 +416,7 @@ public class FormatterTest {
                 setFeatureLevel(GroupVersion.GV_1.featureLevel()), (short) 0));
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(ShareVersion.FEATURE_NAME).
-                setFeatureLevel(ShareVersion.SV_1.featureLevel()), (short) 0));
+                setFeatureLevel(ShareVersion.SV_2.featureLevel()), (short) 0));
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(StreamsVersion.FEATURE_NAME).
                 setFeatureLevel(StreamsVersion.SV_1.featureLevel()), (short) 0));
