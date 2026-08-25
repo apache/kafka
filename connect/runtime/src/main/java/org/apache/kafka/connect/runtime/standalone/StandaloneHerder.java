@@ -197,12 +197,19 @@ public final class StandaloneHerder extends AbstractHerder {
                                                 final Map<String, String> config,
                                                 boolean allowReplace,
                                                 final Callback<Created<ConnectorInfo>> callback) {
-        putConnectorConfig(connName, config, null, allowReplace, callback);
+        putConnectorConfig(connName, config, null, null, allowReplace, callback);
     }
 
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
                                    final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
+        putConnectorConfig(connName, config, targetState, null, allowReplace, callback);
+    }
+
+    @Override
+    public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
+                                   final Map<Map<String, ?>, Map<String, ?>> initialOffsets, final boolean allowReplace,
+                                   final Callback<Created<ConnectorInfo>> callback) {
         try {
             validateConnectorConfig(config, (error, configInfos) -> {
                 if (error != null) {
@@ -211,7 +218,7 @@ public final class StandaloneHerder extends AbstractHerder {
                 }
 
                 requestExecutorService.submit(
-                    () -> putConnectorConfig(connName, config, targetState, allowReplace, callback, configInfos)
+                    () -> putConnectorConfig(connName, config, targetState, initialOffsets, allowReplace, callback, configInfos)
                 );
             });
         } catch (Throwable t) {
@@ -222,6 +229,7 @@ public final class StandaloneHerder extends AbstractHerder {
     private synchronized void putConnectorConfig(String connName,
                                                  final Map<String, String> config,
                                                  TargetState targetState,
+                                                 Map<Map<String, ?>, Map<String, ?>> initialOffsets,
                                                  boolean allowReplace,
                                                  final Callback<Created<ConnectorInfo>> callback,
                                                  ConfigInfos configInfos) {
@@ -242,8 +250,55 @@ public final class StandaloneHerder extends AbstractHerder {
                 created = true;
             }
 
-            configBackingStore.putConnectorConfig(connName, config, targetState);
+            if (initialOffsets == null) {
+                writeConfigAndStartConnector(connName, config, targetState, created, null, callback);
+                return;
+            }
 
+            // Validate before anything destructive happens, so an invalid request can't wipe the connector's offsets
+            validateInitialOffsets(connName, initialOffsets);
+            setInitialConnectorOffsets(connName, config, initialOffsets, (error, message) -> {
+                if (error != null) {
+                    callback.onCompletion(error, null);
+                    return;
+                }
+                // The offsets callback fires on the worker's executor, so hop back onto the herder's single-threaded
+                // executor before writing the config; writeConfigAndStartConnector must hold this herder's monitor.
+                requestExecutorService.submit(
+                    () -> writeConfigAndStartConnector(connName, config, targetState, created, message.message(), callback)
+                );
+            });
+        } catch (Throwable t) {
+            callback.onCompletion(t, null);
+        }
+    }
+
+    /**
+     * Write the connector's config and start it. This is the last step of a connector creation, and for a creation that
+     * supplied initial offsets it runs only after those offsets have been written.
+     *
+     * @param offsetsStatus the outcome of writing the connector's initial offsets, to be reported back on the created
+     *                      {@link ConnectorInfo}; {@code null} if the request did not supply initial offsets, in which
+     *                      case the response is identical to one for a creation without initial offsets
+     */
+    private synchronized void writeConfigAndStartConnector(String connName,
+                                                           Map<String, String> config,
+                                                           TargetState targetState,
+                                                           boolean created,
+                                                           String offsetsStatus,
+                                                           Callback<Created<ConnectorInfo>> callback) {
+        try {
+            configBackingStore.putConnectorConfig(connName, config, targetState);
+        } catch (Throwable t) {
+            if (offsetsStatus != null) {
+                wipeInitialOffsetsAfterFailedCreate(connName, config, t, callback);
+            } else {
+                callback.onCompletion(t, null);
+            }
+            return;
+        }
+
+        try {
             startConnector(connName, (error, result) -> {
                 if (error != null) {
                     callback.onCompletion(error, null);
@@ -252,7 +307,11 @@ public final class StandaloneHerder extends AbstractHerder {
 
                 requestExecutorService.submit(() -> {
                     updateConnectorTasks(connName);
-                    callback.onCompletion(null, new Created<>(created, createConnectorInfo(connName)));
+                    ConnectorInfo info = createConnectorInfo(connName);
+                    if (offsetsStatus != null) {
+                        info = info.withOffsetsStatus(offsetsStatus);
+                    }
+                    callback.onCompletion(null, new Created<>(created, info));
                 });
             });
         } catch (Throwable t) {
@@ -277,7 +336,7 @@ public final class StandaloneHerder extends AbstractHerder {
                 }
 
                 requestExecutorService.submit(
-                        () -> putConnectorConfig(connName, patchedConfig, null, true, callback, configInfos)
+                        () -> putConnectorConfig(connName, patchedConfig, null, null, true, callback, configInfos)
                 );
             });
         } catch (Throwable e) {
