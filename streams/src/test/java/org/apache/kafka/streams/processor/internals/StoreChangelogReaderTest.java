@@ -973,6 +973,101 @@ public class StoreChangelogReaderTest {
         }
     }
 
+    @Test
+    public void shouldRetryMissingCommittedOffsetForSourceChangelogThenFallBackToZero() {
+        // KAFKA-20416: a source-topic changelog whose group has no committed offset must NOT immediately
+        // restore to 0 (which, after an EOS state wipe, silently empties the store). The missing offset is
+        // retried for up to task.timeout.ms so a transiently-missing offset can recover, and only then falls
+        // back to 0 for the legitimate brand-new-group case.
+        setupStateManagerMock(ACTIVE);
+        setupStoreMetadata();
+        setupStore();
+
+        final TaskId taskId = new TaskId(0, 0);
+        final Task mockTask = mock(Task.class);
+
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(stateManager.taskId()).thenReturn(taskId);
+
+        final String groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        // coordinator reports no committed offset (-1) for this partition, i.e. a null OffsetAndMetadata value
+        final Map<TopicPartition, OffsetAndMetadata> missingCommitted = new HashMap<>();
+        missingCommitted.put(tp, null);
+        final MockAdminClient adminClient = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
+                return AdminClientTestUtils.listConsumerGroupOffsetsResult(Collections.singletonMap(groupId, missingCommitted));
+            }
+        };
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 20L));
+
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+
+        changelogReader.register(tp, stateManager);
+
+        // first pass: the missing committed offset is retried rather than coerced to 0, so the changelog is
+        // left uninitialized instead of being declared restored at offset 0
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+
+        // once the retry budget (task.timeout.ms) is exhausted the group most likely genuinely has no committed
+        // offset (e.g. a brand-new group), so fall back to 0
+        time.sleep(config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG) + 1);
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
+    }
+
+    @Test
+    public void shouldRecoverToRealCommittedOffsetWhenTransientlyMissingBeforeTimeout() {
+        // KAFKA-20416: the case the fix exists for — a source-topic changelog's committed offset is missing on
+        // the first pass (transient coordinator unavailability) and the real offset appears on the next pass,
+        // before task.timeout.ms elapses. The ceiling must resolve to min(endOffset, committedOffset), not 0.
+        setupStateManagerMock(ACTIVE);
+        setupStoreMetadata();
+        setupStore();
+
+        final TaskId taskId = new TaskId(0, 0);
+        final Task mockTask = mock(Task.class);
+
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(stateManager.taskId()).thenReturn(taskId);
+
+        final String groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        final Map<TopicPartition, OffsetAndMetadata> missingCommitted = new HashMap<>();
+        missingCommitted.put(tp, null);
+        final AtomicBoolean firstCall = new AtomicBoolean(true);
+        final MockAdminClient adminClient = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
+                // first pass: no committed offset (transiently missing); later passes: the real committed offset
+                final Map<TopicPartition, OffsetAndMetadata> offsets = firstCall.compareAndSet(true, false)
+                    ? missingCommitted
+                    : Collections.singletonMap(tp, new OffsetAndMetadata(10L));
+                return AdminClientTestUtils.listConsumerGroupOffsetsResult(Collections.singletonMap(groupId, offsets));
+            }
+        };
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 20L));
+
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+
+        changelogReader.register(tp, stateManager);
+
+        // first pass: missing → retried, left uninitialized (not truncated to 0)
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+
+        // second pass, still well within task.timeout.ms: the real committed offset recovers the ceiling to
+        // min(endOffset=20, committedOffset=10) rather than falling back to 0
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
+    }
+
     @ParameterizedTest
     @EnumSource(Task.TaskType.class)
     public void shouldThrowIfCommittedOffsetsFail(final Task.TaskType type) {

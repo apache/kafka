@@ -233,16 +233,28 @@ public class StoreChangelogReader implements ChangelogReader {
     // The 8x is a conservative margin over the probe's cost as measured in load testing.
     private static final long PROBE_MIN_OFFSET_GAP = 8 * PROBE_WINDOWS[PROBE_WINDOWS.length - 1];
 
+    // Value used by committedOffsetForChangelogs to mark a source-topic changelog whose group has no
+    // committed offset. The coordinator reports "no committed offset" as INVALID_OFFSET (-1), and a real
+    // committed offset is never negative, so -1 unambiguously distinguishes "missing" from a genuine 0.
+    private static final long NO_COMMITTED_OFFSET = -1L;
+
     private ChangelogReaderState state;
 
     // deliberately outlives unregister: a changelog that is corrupted and re-registered in a loop
     // must not forget that probing it has just failed
     private final Map<TopicPartition, Long> probeFailedAtMs = new HashMap<>();
 
+    // When a source-topic changelog's committed offset comes back missing we retry it (rather than
+    // truncating restore to 0) for up to taskTimeoutMs; this records when the miss was first observed.
+    // Deliberately outlives unregister, mirroring probeFailedAtMs, so a corrupted-wiped-re-registered
+    // task keeps counting down its retry deadline instead of resetting it every iteration. See KAFKA-20416.
+    private final Map<TopicPartition, Long> committedOffsetMissingSinceMs = new HashMap<>();
+
     private final Time time;
     private final Logger log;
     private final Duration pollTime;
     private final long updateOffsetIntervalMs;
+    private final long taskTimeoutMs;
 
     // 1) we keep adding partitions to restore consumer whenever new tasks are registered with the state manager;
     // 2) we do not unassign partitions when we switch between standbys and actives, we just pause / resume them;
@@ -283,6 +295,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         this.updateOffsetIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) == Long.MAX_VALUE ?
             DEFAULT_OFFSET_UPDATE_MS : config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
         this.lastUpdateOffsetTime = 0L;
 
         this.changelogs = new HashMap<>();
@@ -825,7 +838,11 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         try {
-            // those which do not have a committed offset would default to 0
+            // partitions with no committed offset are mapped to NO_COMMITTED_OFFSET (-1) rather than 0, so
+            // callers can tell "the group has not committed here" apart from a genuine committed offset of 0.
+            // Coercing a missing offset straight to 0 here would let a transiently missing committed offset
+            // (e.g. the group coordinator is momentarily unavailable/resigning during a broker restart)
+            // truncate an active source-topic changelog's restore to 0 — see initializeChangelogs / KAFKA-20416.
             final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions()
                 .requireStable(true);
             final ListConsumerGroupOffsetsSpec spec = new ListConsumerGroupOffsetsSpec()
@@ -837,7 +854,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     )
                     .partitionsToOffsetAndMetadata(groupId).get().entrySet()
                     .stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? NO_COMMITTED_OFFSET : e.getValue().offset()));
 
             clearTaskTimeout(getTasksFromPartitions(tasks, partitions));
             return committedOffsets;
@@ -849,6 +866,47 @@ public class StoreChangelogReader implements ChangelogReader {
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("Failed to retrieve committed offsets for %s", partitions), e);
         }
+    }
+
+    // Resolves the committed-offset operand of the restore ceiling (min(endOffset, committedOffset)) for one
+    // changelog. A dedicated changelog is not bounded by any committed offset, so it uses Long.MAX_VALUE. A
+    // source-topic changelog whose group has no committed offset (NO_COMMITTED_OFFSET) is ambiguous: it can be
+    // transient (the coordinator is momentarily unavailable/resigning during a broker restart and reports
+    // -1/NONE for a group whose offset is durable) or authoritative (a brand-new group that has never committed,
+    // for which 0 is correct). We cannot distinguish the two from a single response, so we retry (returning null
+    // to leave the changelog uninitialized this pass) for up to task.timeout.ms before falling back to 0, rather
+    // than truncating restore to 0 immediately, which silently empties the store (KAFKA-20416). The fallback is
+    // only attempted once the end offset is known, so a ceiling is never resolved from a half-fetched pair.
+    private Long resolveRestoreCeilingCommittedOffset(final TopicPartition partition,
+                                                      final boolean changelogAsSource,
+                                                      final Long endOffset,
+                                                      final Map<TopicPartition, Long> committedOffsets) {
+        if (!changelogAsSource) {
+            return Long.MAX_VALUE;
+        }
+        final Long committedOffset = committedOffsets.get(partition);
+        if (committedOffset != null && committedOffset == NO_COMMITTED_OFFSET) {
+            return endOffset == null ? null : maybeFallBackToZeroCommittedOffset(partition);
+        }
+        return committedOffset;
+    }
+
+    // Retry budget for a source-topic changelog whose committed offset came back missing. Returns 0L once the
+    // offset has been missing for at least task.timeout.ms — at that point the group most likely genuinely has
+    // no committed offset (e.g. a brand-new group) and 0 is the correct restore ceiling — or null while the
+    // budget remains, to keep retrying. Retrying (rather than defaulting to 0 immediately) is what prevents a
+    // transiently missing committed offset from silently truncating an active source-topic store. See KAFKA-20416.
+    private Long maybeFallBackToZeroCommittedOffset(final TopicPartition partition) {
+        final long now = time.milliseconds();
+        final long missingSince = committedOffsetMissingSinceMs.computeIfAbsent(partition, p -> now);
+        if (now - missingSince >= taskTimeoutMs) {
+            log.warn("Committed offset for source-topic changelog {} was still unavailable {} ms after it was " +
+                "first missing; restoring with a committed offset of 0. If the group did have a committed offset " +
+                "this can leave the restored state incomplete (see KAFKA-20416).", partition, taskTimeoutMs);
+            committedOffsetMissingSinceMs.remove(partition);
+            return 0L;
+        }
+        return null;
     }
 
     private void filterNewPartitionsToRestore(final Map<TaskId, Task> tasks, final Set<ChangelogMetadata> newPartitionsToRestore) {
@@ -890,7 +948,10 @@ public class StoreChangelogReader implements ChangelogReader {
                 metadata.stateManager.changelogAsSource(partition) &&
                 committedOffsets.containsKey(partition)) {
 
-                final Long newLimit = committedOffsets.get(partition);
+                // A standby that reads a source topic as its changelog stops applying at the committed offset;
+                // if the group has no committed offset yet (NO_COMMITTED_OFFSET), the limit is 0 (apply nothing),
+                // which is the behavior before committedOffsetForChangelogs began surfacing the missing marker.
+                final Long newLimit = Math.max(committedOffsets.get(partition), 0L);
                 final Long previousLimit = metadata.restoreEndOffset;
 
                 if (previousLimit != null && previousLimit > newLimit) {
@@ -947,8 +1008,8 @@ public class StoreChangelogReader implements ChangelogReader {
         for (final TopicPartition partition : newPartitionsToFindEndOffset) {
             final ChangelogMetadata changelogMetadata = changelogs.get(partition);
             final Long endOffset = endOffsets.get(partition);
-            final Long committedOffset = newPartitionsToFindCommittedOffset.contains(partition) ?
-                committedOffsets.get(partition) : Long.valueOf(Long.MAX_VALUE);
+            final boolean changelogAsSource = newPartitionsToFindCommittedOffset.contains(partition);
+            final Long committedOffset = resolveRestoreCeilingCommittedOffset(partition, changelogAsSource, endOffset, committedOffsets);
 
             if (endOffset != null && committedOffset != null) {
                 if (changelogMetadata.restoreEndOffset != null) {
@@ -957,6 +1018,7 @@ public class StoreChangelogReader implements ChangelogReader {
                         ", new value: (" + endOffset + ", " + committedOffset + ")");
                 }
 
+                committedOffsetMissingSinceMs.remove(partition);
                 changelogMetadata.restoreEndOffset = Math.min(endOffset, committedOffset);
 
                 log.info("End offset for changelog {} initialized as {}.", partition, changelogMetadata.restoreEndOffset);
