@@ -903,21 +903,19 @@ public class DescribeConsumerGroupTest {
     @ClusterTest
     public void testDescribeSimpleConsumerGroup(ClusterInstance clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
-        // Ensure that the offsets of consumers which don't use group management are still displayed
-        for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
-            String topic = TOPIC_PREFIX + groupProtocol.name();
-            String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic, 2);
+        GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
+        String topic = TOPIC_PREFIX + groupProtocol.name();
+        String group = GROUP_PREFIX + groupProtocol.name();
+        createTopic(topic, 2);
 
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1)), Map.of());
-                 ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
-            ) {
-                TestUtils.waitForCondition(() -> {
-                    Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(group);
-                    return res.getKey().map(s -> s.equals(GroupState.EMPTY)).orElse(false)
-                            && res.getValue().isPresent() && res.getValue().get().stream().filter(s -> Objects.equals(s.group(), group)).count() == 2;
-                }, "Expected a stable group with two members in describe group state result.");
-            }
+        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1)), Map.of());
+             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
+        ) {
+            TestUtils.waitForCondition(() -> {
+                Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(group);
+                return res.getKey().map(s -> s.equals(GroupState.EMPTY)).orElse(false)
+                        && res.getValue().isPresent() && res.getValue().get().stream().filter(s -> Objects.equals(s.group(), group)).count() == 2;
+            }, "Expected a stable group with two members in describe group state result.");
         }
     }
 
