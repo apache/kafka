@@ -1292,8 +1292,9 @@ public class UnifiedLogTest {
     public void testNonZeroFirstSequenceAcceptedAfterProducerStateExpiration() throws IOException {
         // KAFKA-15591: Once records exist in the log, a producer with no state may start at a non-zero sequence.
         // Its state may have legitimately been lost, such as through producer expiration.
-        ProducerStateManagerConfig customPSMConfig = new ProducerStateManagerConfig(200, false);
         int producerIdExpirationCheckIntervalMs = 100;
+        int producerIdExpirationMs = 200;
+        ProducerStateManagerConfig customPSMConfig = new ProducerStateManagerConfig(producerIdExpirationMs, false);
 
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
         UnifiedLog log = createLog(logDir, logConfig, 0L, 0L, brokerTopicStats,
@@ -1306,7 +1307,7 @@ public class UnifiedLogTest {
             pid, epoch, 0, 0L), 0);
         assertEquals(Set.of(pid), log.activeProducersWithLastSequence().keySet());
 
-        mockTime.sleep(producerIdExpirationCheckIntervalMs);
+        mockTime.sleep(producerIdExpirationMs);
         assertEquals(Set.of(), log.activeProducersWithLastSequence().keySet());
 
         // The producer continues from sequence 1 with no state, which is accepted because the log is not empty
