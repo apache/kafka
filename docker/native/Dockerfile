@@ -15,7 +15,7 @@
 
 FROM ghcr.io/graalvm/graalvm-community:21 AS build-native-image
 
-ARG kafka_url
+ARG kafka_url=""
 
 WORKDIR /app
 
@@ -30,7 +30,8 @@ COPY native_command.sh native_command.sh
 
 COPY *kafka.tgz /app
 
-RUN if [ -n "$kafka_url" ]; then \
+RUN set -eux ; \
+    if [ -n "$kafka_url" ]; then \
         microdnf install wget; \
         wget -nv -O kafka.tgz "$kafka_url"; \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
