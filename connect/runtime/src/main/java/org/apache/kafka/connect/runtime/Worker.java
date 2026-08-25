@@ -1354,6 +1354,15 @@ public final class Worker {
     }
 
     /**
+     * Equivalent to {@link #modifyConnectorOffsets(String, Map, Map, boolean, Callback)} with
+     * {@code replaceAllOffsets = false}.
+     */
+    public void modifyConnectorOffsets(String connName, Map<String, String> connectorConfig,
+                                      Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
+        modifyConnectorOffsets(connName, connectorConfig, offsets, false, cb);
+    }
+
+    /**
      * Modify (alter / reset) a connector's offsets.
      *
      * @param connName the name of the connector whose offsets are to be modified
@@ -1361,22 +1370,32 @@ public final class Worker {
      * @param offsets a mapping from partitions (either source partitions for source connectors, or Kafka topic
      *                partitions for sink connectors) to offsets that need to be written; this should be {@code null}
      *                for offsets reset requests
+     * @param replaceAllOffsets if {@code true}, every offset the connector currently has is wiped before {@code offsets}
+     *                          is written, so the result is exactly {@code offsets} rather than a merge of old and new.
+     *                          Only meaningful when {@code offsets} is non-null; ignored for reset requests, which
+     *                          already wipe everything.
      * @param cb callback to invoke upon completion
      */
     public void modifyConnectorOffsets(String connName, Map<String, String> connectorConfig,
-                                      Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
+                                      Map<Map<String, ?>, Map<String, ?>> offsets, boolean replaceAllOffsets, Callback<Message> cb) {
 
         final Connector connector = instantiateConnector(connectorConfig);
         ClassLoader connectorLoader = connectorClassLoader(connectorConfig);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
             if (ConnectUtils.isSinkConnector(connector)) {
                 log.debug("Modifying offsets for sink connector: {}", connName);
-                modifySinkConnectorOffsets(connName, connector, connectorConfig, offsets, connectorLoader, cb);
+                modifySinkConnectorOffsets(connName, connector, connectorConfig, offsets, replaceAllOffsets, connectorLoader, cb);
             } else {
                 log.debug("Modifying offsets for source connector: {}", connName);
-                modifySourceConnectorOffsets(connName, connector, connectorConfig, offsets, connectorLoader, cb);
+                modifySourceConnectorOffsets(connName, connector, connectorConfig, offsets, replaceAllOffsets, connectorLoader, cb);
             }
         }
+    }
+
+    // Visible for testing; equivalent to the overload below with replaceAllOffsets = false
+    void modifySinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+                                    Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
+        modifySinkConnectorOffsets(connName, connector, connectorConfig, offsets, false, connectorLoader, cb);
     }
 
     /**
@@ -1389,11 +1408,13 @@ public final class Worker {
      * @param connectorConfig the sink connector's configuration
      * @param offsets a mapping from topic partitions to offsets that need to be written; this should be {@code null}
      *                for offsets reset requests
+     * @param replaceAllOffsets if {@code true} and {@code offsets} is non-null, every existing offset for the
+     *                          connector's consumer group is wiped before {@code offsets} is written
      * @param connectorLoader the connector plugin's classloader to be used as the thread context classloader
      * @param cb callback to invoke upon completion
      */
     void modifySinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
-                                    Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
+                                    Map<Map<String, ?>, Map<String, ?>> offsets, boolean replaceAllOffsets, ClassLoader connectorLoader, Callback<Message> cb) {
         executor.submit(plugins.withClassLoader(connectorLoader, () -> {
             try {
                 Timer timer = time.timer(Duration.ofMillis(RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS));
@@ -1418,7 +1439,13 @@ public final class Worker {
 
                 try {
                     Map<TopicPartition, Long> offsetsToWrite;
-                    if (isReset) {
+                    // Both a reset and a replace start by tombstoning every offset the consumer group currently has;
+                    // a replace then overlays the requested offsets on top of those tombstones.
+                    if (isReset || replaceAllOffsets) {
+                        String modification = isReset ? "resetting" : "replacing";
+                        // Parse the requested offsets before doing any admin client work, so that a malformed request
+                        // fails fast and doesn't cost a round trip to list the consumer group's existing offsets.
+                        Map<TopicPartition, Long> requestedOffsets = isReset ? Map.of() : SinkUtils.parseSinkConnectorOffsets(offsets);
                         offsetsToWrite = new HashMap<>();
                         ListConsumerGroupOffsetsOptions listConsumerGroupOffsetsOptions = new ListConsumerGroupOffsetsOptions()
                                 .timeoutMs((int) timer.remainingMs());
@@ -1429,14 +1456,17 @@ public final class Worker {
                                     .forEach((topicPartition, offsetAndMetadata) -> offsetsToWrite.put(topicPartition, null));
 
                             timer.update();
-                            log.debug("Found the following topic partitions (to reset offsets) for sink connector {} and consumer group ID {}: {}",
+                            log.debug("Found the following existing topic partitions for sink connector {} and consumer group ID {}: {}",
                                     connName, groupId, offsetsToWrite.keySet());
                         } catch (Exception e) {
-                            Utils.closeQuietly(admin, "Offset reset admin for sink connector " + connName);
-                            log.error("Failed to list offsets prior to resetting offsets for sink connector {}", connName, e);
-                            cb.onCompletion(new ConnectException("Failed to list offsets prior to resetting offsets for sink connector " + connName, e), null);
+                            Utils.closeQuietly(admin, "Offset modification admin for sink connector " + connName);
+                            log.error("Failed to list offsets prior to {} offsets for sink connector {}", modification, connName, e);
+                            cb.onCompletion(new ConnectException("Failed to list offsets prior to " + modification
+                                    + " offsets for sink connector " + connName, e), null);
                             return;
                         }
+                        // Requested offsets win over the tombstones for any partition that appears in both
+                        offsetsToWrite.putAll(requestedOffsets);
                     } else {
                         offsetsToWrite = SinkUtils.parseSinkConnectorOffsets(offsets);
                     }
@@ -1455,7 +1485,8 @@ public final class Worker {
                     if (isReset) {
                         resetSinkConnectorOffsets(connName, groupId, admin, cb, alterOffsetsResult, timer);
                     } else {
-                        alterSinkConnectorOffsets(connName, groupId, admin, offsetsToWrite, cb, alterOffsetsResult, timer);
+                        alterSinkConnectorOffsets(connName, groupId, admin, offsetsToWrite, cb, alterOffsetsResult, timer,
+                                offsetModificationType(offsets, replaceAllOffsets));
                     }
                 } catch (Throwable t) {
                     Utils.closeQuietly(admin, "Offset modification admin for sink connector " + connName);
@@ -1479,9 +1510,10 @@ public final class Worker {
      * @param cb callback to invoke upon completion
      * @param alterOffsetsResult the result of the call to {@link SinkConnector#alterOffsets} for the connector
      * @param timer {@link Timer} to bound the total runtime of admin client requests
+     * @param modificationType the verb ("altered" or "set") to use in the completion message
      */
     private void alterSinkConnectorOffsets(String connName, String groupId, Admin admin, Map<TopicPartition, Long> offsetsToWrite,
-                                           Callback<Message> cb, boolean alterOffsetsResult, Timer timer) {
+                                           Callback<Message> cb, boolean alterOffsetsResult, Timer timer, String modificationType) {
         List<KafkaFuture<Void>> adminFutures = new ArrayList<>();
 
         Map<TopicPartition, OffsetAndMetadata> offsetsToAlter = offsetsToWrite.entrySet()
@@ -1538,7 +1570,7 @@ public final class Worker {
                     cb.onCompletion(new ConnectException("Failed to alter consumer group offsets for connector " + connName, error), null);
                 }
             } else {
-                completeModifyOffsetsCallback(alterOffsetsResult, false, cb);
+                completeModifyOffsetsCallback(alterOffsetsResult, modificationType, cb);
             }
         }).whenComplete((ignored, ignoredError) -> {
             // errors originating from the original future are handled in the prior whenComplete invocation which isn't expected to throw
@@ -1581,7 +1613,7 @@ public final class Worker {
                             cb.onCompletion(new ConnectException("Failed to reset consumer group offsets for sink connector " + connName, error), null);
                         }
                     } else {
-                        completeModifyOffsetsCallback(alterOffsetsResult, true, cb);
+                        completeModifyOffsetsCallback(alterOffsetsResult, "reset", cb);
                     }
                 }).whenComplete((ignored, ignoredError) -> {
                     // errors originating from the original future are handled in the prior whenComplete invocation which isn't expected to throw
@@ -1598,11 +1630,14 @@ public final class Worker {
      * @param connectorConfig the source connector's configuration
      * @param offsets a mapping from partitions to offsets that need to be written; this should be {@code null} for
      *                offsets reset requests
+     * @param replaceAllOffsets if {@code true} and {@code offsets} is non-null, every existing offset for the
+     *                          connector is wiped before {@code offsets} is written
      * @param connectorLoader the connector plugin's classloader to be used as the thread context classloader
      * @param cb callback to invoke upon completion
      */
     private void modifySourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
-                                              Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
+                                              Map<Map<String, ?>, Map<String, ?>> offsets, boolean replaceAllOffsets,
+                                              ClassLoader connectorLoader, Callback<Message> cb) {
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorConfig, config.topicCreationEnable());
         Map<String, Object> producerProps = config.exactlyOnceSourceEnabled()
                 ? exactlyOnceSourceTaskProducerConfigs(new ConnectorTaskId(connName, 0), config, sourceConfig,
@@ -1617,12 +1652,20 @@ public final class Worker {
         offsetStore.configure(config);
 
         OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetStore, connName, internalKeyConverter, internalValueConverter);
-        modifySourceConnectorOffsets(connName, connector, connectorConfig, offsets, offsetStore, producer, offsetWriter, connectorLoader, cb);
+        modifySourceConnectorOffsets(connName, connector, connectorConfig, offsets, replaceAllOffsets, offsetStore, producer, offsetWriter, connectorLoader, cb);
     }
 
     // Visible for testing
     void modifySourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
                                       Map<Map<String, ?>, Map<String, ?>> offsets, ConnectorOffsetBackingStore offsetStore,
+                                      KafkaProducer<byte[], byte[]> producer, OffsetStorageWriter offsetWriter,
+                                      ClassLoader connectorLoader, Callback<Message> cb) {
+        modifySourceConnectorOffsets(connName, connector, connectorConfig, offsets, false, offsetStore, producer, offsetWriter, connectorLoader, cb);
+    }
+
+    // Visible for testing
+    void modifySourceConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
+                                      Map<Map<String, ?>, Map<String, ?>> offsets, boolean replaceAllOffsets, ConnectorOffsetBackingStore offsetStore,
                                       KafkaProducer<byte[], byte[]> producer, OffsetStorageWriter offsetWriter,
                                       ClassLoader connectorLoader, Callback<Message> cb) {
         executor.submit(plugins.withClassLoader(connectorLoader, () -> {
@@ -1634,16 +1677,19 @@ public final class Worker {
                         "offsets for source connector " + connName);
                 Map<Map<String, ?>, Map<String, ?>> offsetsToWrite;
 
-                // If the offsets argument is null, it indicates an offsets reset operation - i.e. a null offset should
-                // be written for every source partition of the connector
-                boolean isReset;
-                if (offsets == null) {
-                    isReset = true;
+                String modificationType = offsetModificationType(offsets, replaceAllOffsets);
+
+                // A null offsets argument indicates a reset - i.e. a null offset should be written for every source
+                // partition of the connector. A replace tombstones those same partitions and then overlays the
+                // requested offsets on top of them.
+                if (offsets == null || replaceAllOffsets) {
+                    Map<Map<String, ?>, Map<String, ?>> requestedOffsets = offsets == null ? Map.of() : offsets;
                     offsetsToWrite = new HashMap<>();
                     offsetStore.connectorPartitions(connName).forEach(partition -> offsetsToWrite.put(partition, null));
-                    log.debug("Found the following partitions (to reset offsets) for source connector {}: {}", connName, offsetsToWrite.keySet());
+                    log.debug("Found the following existing partitions for source connector {}: {}", connName, offsetsToWrite.keySet());
+                    // Requested offsets win over the tombstones for any partition that appears in both
+                    offsetsToWrite.putAll(requestedOffsets);
                 } else {
-                    isReset = false;
                     offsetsToWrite = offsets;
                 }
 
@@ -1666,7 +1712,7 @@ public final class Worker {
                 if (normalizedOffsets.isEmpty()) {
                     log.info("No offsets found for source connector {} - this can occur due to a prior attempt to reset offsets or if the " +
                             "source connector hasn't committed any offsets yet", connName);
-                    completeModifyOffsetsCallback(alterOffsetsResult, isReset, cb);
+                    completeModifyOffsetsCallback(alterOffsetsResult, modificationType, cb);
                     return;
                 }
 
@@ -1700,7 +1746,7 @@ public final class Worker {
                     throw new ConnectException("Unexpectedly interrupted while attempting to modify offsets for source connector " + connName, e);
                 }
 
-                completeModifyOffsetsCallback(alterOffsetsResult, isReset, cb);
+                completeModifyOffsetsCallback(alterOffsetsResult, modificationType, cb);
             } catch (Throwable t) {
                 log.error("Failed to modify offsets for source connector {}", connName, t);
                 cb.onCompletion(ConnectUtils.maybeWrap(t, "Failed to modify offsets for source connector " + connName), null);
@@ -1708,6 +1754,14 @@ public final class Worker {
                 Utils.closeQuietly(offsetStore::stop, "Offset store for offset modification request for connector " + connName);
             }
         }));
+    }
+
+    // The verb ("reset", "altered", or "set") used in the message reported back to the user.
+    private static String offsetModificationType(Map<Map<String, ?>, Map<String, ?>> offsets, boolean replaceAllOffsets) {
+        if (offsets == null) {
+            return "reset";
+        }
+        return replaceAllOffsets ? "set" : "altered";
     }
 
     /**
@@ -1756,13 +1810,12 @@ public final class Worker {
      * Complete the alter / reset offsets callback with a potential-success or a definite-success message.
      *
      * @param alterOffsetsResult the result of the call to {@link SinkConnector#alterOffsets} / {@link SourceConnector#alterOffsets}
-     * @param isReset whether this callback if for an offsets reset operation
+     * @param modificationType the verb describing what was done to the offsets ("reset", "altered", or "set")
      * @param cb the callback to complete
      *
      * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect">KIP-875</a>
      */
-    private void completeModifyOffsetsCallback(boolean alterOffsetsResult, boolean isReset, Callback<Message> cb) {
-        String modificationType = isReset ? "reset" : "altered";
+    private void completeModifyOffsetsCallback(boolean alterOffsetsResult, String modificationType, Callback<Message> cb) {
         if (alterOffsetsResult) {
             cb.onCompletion(null, new Message("The offsets for this connector have been " + modificationType + " successfully"));
         } else {
