@@ -24,6 +24,7 @@ import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -39,9 +40,13 @@ import scala.collection.mutable
  * the controller. Therefore, the validation here is just a kind of sanity check, which
  * should never fail under normal conditions.
  *
- * GROUP resources only receive the subset of validation in {@link GroupConfig#validateOnController}.
- * The remaining checks, which depend on broker-only state, are performed by the forwarding broker
- * in {@link kafka.server.ConfigAdminManager#preprocess()} via {@link GroupConfig#validateOnBroker}.
+ * GROUP resources are validated here too, via {@link GroupConfig#validateOnController}, even
+ * though the forwarding broker already performs the same full validation in
+ * {@link kafka.server.ConfigAdminManager#preprocess()} via {@link GroupConfig#validateOnBroker}.
+ * This is kept, gated on {@code metadataVersion}, so that the cluster is never left without GROUP
+ * config validation while it may still contain brokers that predate the broker-side check
+ * (KAFKA-20790). It can be dropped once upgrading directly from a pre-{@link MetadataVersion#IBP_4_5_IV0}
+ * cluster is no longer supported.
  *
  * This validator does not handle changes to BROKER_LOGGER resources. Despite being bundled
  * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
@@ -124,7 +129,8 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
   override def validate(
     resource: ConfigResource,
     newConfigs: util.Map[String, String],
-    oldConfigs: util.Map[String, String]
+    oldConfigs: util.Map[String, String],
+    metadataVersion: MetadataVersion
   ): Unit = {
     resource.`type`() match {
       case TOPIC =>
@@ -138,8 +144,12 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
         ClientMetricsConfigs.validate(resource.name(), filteredConfigs)
       case GROUP =>
         validateGroupName(resource.name())
-        val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "group")
-        GroupConfig.validateOnController(filteredConfigs, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
+        // Skip once every broker in the cluster is guaranteed to already validate this on the
+        // forwarding broker. See the class-level doc for why this can't just be removed outright.
+        if (!metadataVersion.isAtLeast(MetadataVersion.IBP_4_5_IV0)) {
+          val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "group")
+          GroupConfig.validateOnController(filteredConfigs, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
+        }
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

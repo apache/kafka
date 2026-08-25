@@ -384,18 +384,17 @@ public class GroupConfigTest {
 
     @Test
     public void testStreamsAssignorNameValidation() {
-        List<String> registered = List.of("sticky", "custom");
-
-        // Every registered name is accepted, and values are trimmed the way ConfigDef parses them.
-        assertDoesNotThrow(() -> GroupConfig.validateAssignorName("sticky", registered));
-        assertDoesNotThrow(() -> GroupConfig.validateAssignorName("custom", registered));
-        assertDoesNotThrow(() -> GroupConfig.validateAssignorName(" custom ", registered));
+        // The default registered assignor (see createGroupCoordinatorConfig) is accepted, and its
+        // value is trimmed the way ConfigDef parses other STRING configs.
+        doTestValidProps(Map.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky"));
+        doTestValidProps(Map.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, " sticky "));
 
         // An unregistered name is rejected. The receiving broker turns this into INVALID_CONFIG.
+        Map<String, String> props = Map.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
         assertEquals("streams.assignor.name 'does-not-exist' is not a registered task assignor. " +
-                "Registered assignors are: [sticky, custom].",
+                "Registered assignors are: [sticky].",
             assertThrows(InvalidConfigurationException.class,
-                () -> GroupConfig.validateAssignorName("does-not-exist", registered)).getMessage());
+                () -> GroupConfig.validateOnController(props, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
     }
 
     @Test

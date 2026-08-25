@@ -65,17 +65,19 @@ import scala.jdk.CollectionConverters._
  *
  * Configuration processing is split into two parts.
  * - The first step, called "preprocessing," handles setting KIP-412 log levels, validating
- * BROKER configurations, and performing the broker-only subset of GROUP configuration
- * validation (see [[org.apache.kafka.coordinator.group.GroupConfig#validateOnBroker]]). We
- * also filter out some other things here like UNKNOWN resource types, etc.
+ * BROKER configurations, and performing the full GROUP configuration validation (see
+ * [[org.apache.kafka.coordinator.group.GroupConfig#validateOnBroker]]). We also filter out
+ * some other things here like UNKNOWN resource types, etc.
  * - The second step is "persistence," and handles storing the configurations durably to our
  * metadata store.
  *
  * The active controller performs its own configuration validation step in
  * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
- * TOPIC resources, since we already validated changes to BROKER resources, and the
- * broker-only subset of GROUP resource validation, on the forwarding broker. The
- * controller is also responsible for enforcing the configured
+ * TOPIC resources, since we already validated changes to BROKER resources on the
+ * forwarding broker. GROUP resources are validated on the controller too, so that the
+ * cluster stays protected while it may still contain brokers that predate the broker-side
+ * check; see [[kafka.server.ControllerConfigurationValidator]] for the upgrade-safety
+ * gating. The controller is also responsible for enforcing the configured
  * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
 class ConfigAdminManager(nodeId: Int,
@@ -207,17 +209,25 @@ class ConfigAdminManager(nodeId: Int,
  }
 
   /**
-   * Perform the broker-only subset of GROUP config validation on the forwarding broker,
-   * before the change is sent to the controller.
+   * Perform the full GROUP config validation on the forwarding broker, before the change is
+   * sent to the controller. See [[kafka.server.ControllerConfigurationValidator]] for why the
+   * controller also performs this validation while a cluster may still contain brokers that
+   * predate this broker-side check.
    */
   private def validateGroupConfigChangeOnBroker(resource: IAlterConfigsResource): Unit = {
-    val newGroupConfig = new util.HashMap[String, String]()
-    resource.configs().forEach { config =>
-      if (config.configOperation() == OpType.SET.id()) {
-        newGroupConfig.put(config.name(), config.value())
-      }
-    }
-    GroupConfig.validateOnBroker(newGroupConfig, conf.groupCoordinatorConfig, conf.shareGroupConfig)
+    val configResource = new ConfigResource(GROUP, resource.resourceName())
+    val configProps = new Properties()
+    configProps.putAll(configRepository.config(configResource))
+    val alterConfigOps = resource.configs().asScala.map {
+      config =>
+        val opType = AlterConfigOp.OpType.forId(config.configOperation())
+        if (opType == null) {
+          throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
+        }
+        new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
+    }.toSeq
+    prepareIncrementalConfigs(alterConfigOps, configProps, GroupConfig.CONFIG_DEF.configKeys.asScala)
+    GroupConfig.validateOnBroker(configProps.asScala.asJava, conf.groupCoordinatorConfig, conf.shareGroupConfig)
   }
 
   /**

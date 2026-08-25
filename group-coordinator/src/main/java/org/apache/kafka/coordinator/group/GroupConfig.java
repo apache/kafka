@@ -478,24 +478,8 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
-     * Check that the selected task assignor is one of the assignors registered on the broker.
-     *
-     * @param assignorName            The requested assignor name, as an unparsed config value.
-     * @param registeredAssignorNames The names of the assignors registered on the broker.
-     */
-    static void validateAssignorName(String assignorName, List<String> registeredAssignorNames) {
-        // ConfigDef trims STRING values while parsing, so trim here too in order to accept the same
-        // values as the rest of the validation.
-        String trimmed = assignorName.trim();
-        if (!registeredAssignorNames.contains(trimmed)) {
-            throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + trimmed +
-                "' is not a registered task assignor. Registered assignors are: " + registeredAssignorNames + ".");
-        }
-    }
-
-    /**
-     * Check the subset of group config validation that depends on broker-only state, such as
-     * the registry of task assignors.
+     * Validate a GROUP config change on the forwarding broker, before it is sent to the
+     * controller. Runs the full set of checks in {@link #validate}.
      *
      * @param newGroupConfig         The new unparsed group config overrides.
      * @param groupCoordinatorConfig The group coordinator config.
@@ -506,22 +490,34 @@ public final class GroupConfig extends AbstractConfig {
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
-        String assignorName = newGroupConfig.get(STREAMS_ASSIGNOR_NAME_CONFIG);
-        if (assignorName != null) {
-            validateAssignorName(assignorName, groupCoordinatorConfig.streamsGroupAssignorNames());
-        }
+        validate(newGroupConfig, groupCoordinatorConfig, shareGroupConfig);
     }
 
     /**
-     * Check that the given properties contain only valid group config names and that
-     * all values can be parsed and are valid. See {@link #validateOnBroker} for the
-     * remaining checks that require broker-only state.
+     * Validate a GROUP config change on the controller. Runs the full set of checks in
+     * {@link #validate}.
      *
      * @param newGroupConfig         The new unparsed group config overrides.
      * @param groupCoordinatorConfig The group coordinator config.
      * @param shareGroupConfig       The share group config.
      */
     public static void validateOnController(
+        Map<String, String> newGroupConfig,
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
+    ) {
+        validate(newGroupConfig, groupCoordinatorConfig, shareGroupConfig);
+    }
+
+    /**
+     * Check that the given properties contain only valid group config names and that
+     * all values can be parsed and are valid.
+     *
+     * @param newGroupConfig         The new unparsed group config overrides.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
+     */
+    private static void validate(
         Map<String, String> newGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
@@ -663,6 +659,16 @@ public final class GroupConfig extends AbstractConfig {
             STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
             groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
+
+        // The selected streams assignor must be one of the assignors registered on the broker.
+        if (parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) {
+            String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
+            List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
+            if (!registeredAssignors.contains(assignorName)) {
+                throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
+                    "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
+            }
+        }
 
         // Cross-field validations: session timeout must be greater than heartbeat interval.
         validateSessionExceedsHeartbeat(
