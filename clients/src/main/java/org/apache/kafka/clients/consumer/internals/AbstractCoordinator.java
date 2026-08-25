@@ -1069,7 +1069,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    private synchronized void resetStateAndRejoin(final String reason, final boolean shouldResetMemberId) {
+    synchronized void resetStateAndRejoin(final String reason, final boolean shouldResetMemberId) {
         resetStateAndGeneration(reason, shouldResetMemberId);
         requestRejoin(reason);
         needsJoinPrepare = true;
@@ -1078,10 +1078,6 @@ public abstract class AbstractCoordinator implements Closeable {
     synchronized void resetStateOnResponseError(ApiKeys api, Errors error, boolean shouldResetMemberId) {
         final String reason = String.format("encountered %s from %s response", error, api);
         resetStateAndRejoin(reason, shouldResetMemberId);
-    }
-
-    synchronized void resetGenerationOnLeaveGroup() {
-        resetStateAndRejoin("consumer pro-actively leaving the group", true);
     }
 
     public synchronized void requestRejoinIfNecessary(final String shortReason,
@@ -1168,7 +1164,8 @@ public abstract class AbstractCoordinator implements Closeable {
     public synchronized RequestFuture<Void> maybeLeaveGroup(CloseOptions.GroupMembershipOperation membershipOperation, String leaveReason) {
         RequestFuture<Void> future = null;
 
-        if (shouldSendLeaveGroupRequest(membershipOperation)) {
+        boolean shouldSendLeaveGroup = shouldSendLeaveGroupRequest(membershipOperation);
+        if (shouldSendLeaveGroup) {
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                 generation.memberId, coordinator, leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
@@ -1180,7 +1177,13 @@ public abstract class AbstractCoordinator implements Closeable {
             client.pollNoWakeup();
         }
 
-        resetGenerationOnLeaveGroup();
+        // A static member whose LeaveGroup is suppressed stays registered with the group
+        // coordinator under its current member id, so keep the id locally as well: resetting
+        // it would make the next rejoin carry UNKNOWN_MEMBER_ID, which the coordinator must
+        // treat as a new instance claiming this group.instance.id, fencing any still-pending
+        // join attempt of this same consumer (KAFKA-20985). State and generation are reset
+        // and a rejoin is requested exactly as before.
+        resetStateAndRejoin("consumer pro-actively leaving the group", shouldSendLeaveGroup || isDynamicMember());
 
         return future;
     }
