@@ -739,6 +739,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    @Deprecated(since = "4.1", forRemoval = true)
     @SuppressWarnings("removal")
     public synchronized ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
