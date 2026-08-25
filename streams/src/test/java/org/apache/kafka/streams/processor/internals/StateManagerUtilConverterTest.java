@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
@@ -43,6 +45,7 @@ import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowKeySchema;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -73,6 +76,7 @@ import static org.mockito.Mockito.withSettings;
 public class StateManagerUtilConverterTest {
 
     private static final long TIMESTAMP = 42L;
+    private static final long WINDOW_START = 0L;
 
     @Test
     public void shouldReturnIdentityConverterForPlainToTimestampedPersistentKeyValueStore() {
@@ -158,6 +162,43 @@ public class StateManagerUtilConverterTest {
     public void shouldRestorePersistentTimestampedKeyValueStoreInTimestampedFormat() {
         final TimestampedKeyValueStore<String, String> store =
             timestampedKeyValueStore(Stores.persistentTimestampedKeyValueStore("store"));
+
+        final ValueAndTimestamp<String> restored = restoreAndGet(store);
+
+        assertEquals("value", restored.value());
+        assertEquals(TIMESTAMP, restored.timestamp());
+    }
+
+    @Test
+    public void shouldRestorePlainPersistentTimestampedWindowStoreInPlainFormat() {
+        // restore bypasses WindowToTimestampedWindowByteStoreAdapter and writes plain values into the
+        // inner store; reads then surface the adapter's dummy `-1` timestamp
+        final TimestampedWindowStore<String, String> store = timestampedWindowStore(
+            Stores.persistentWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
+
+        final ValueAndTimestamp<String> restored = restoreAndGet(store);
+
+        assertEquals("value", restored.value());
+        assertEquals(-1L, restored.timestamp());
+    }
+
+    @Test
+    public void shouldRestoreInMemoryTimestampedWindowStoreInTimestampedFormat() {
+        // the InMemoryTimestampedWindowStoreMarker's inner store holds the timestamped format
+        // natively, so the record timestamp is retained through restore
+        final TimestampedWindowStore<String, String> store = timestampedWindowStore(
+            Stores.inMemoryWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
+
+        final ValueAndTimestamp<String> restored = restoreAndGet(store);
+
+        assertEquals("value", restored.value());
+        assertEquals(TIMESTAMP, restored.timestamp());
+    }
+
+    @Test
+    public void shouldRestorePersistentTimestampedWindowStoreInTimestampedFormat() {
+        final TimestampedWindowStore<String, String> store = timestampedWindowStore(
+            Stores.persistentTimestampedWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
 
         final ValueAndTimestamp<String> restored = restoreAndGet(store);
 
@@ -278,8 +319,49 @@ public class StateManagerUtilConverterTest {
         return new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), Time.SYSTEM).build();
     }
 
-    private static StateStore timestampedWindowStore(final WindowBytesStoreSupplier supplier) {
+    private static TimestampedWindowStore<String, String> timestampedWindowStore(final WindowBytesStoreSupplier supplier) {
         return new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), Time.SYSTEM).build();
+    }
+
+    /**
+     * Feeds a changelog-format record (plain value, timestamp in the record timestamp field) through
+     * the converter and the store's registered restore callback, mirroring the restore code path,
+     * and reads the restored value back through the store.
+     */
+    private static ValueAndTimestamp<String> restoreAndGet(final TimestampedWindowStore<String, String> store) {
+        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig())
+        );
+        store.init(context, store);
+        try {
+            // window changelog keys carry the window start (here WINDOW_START) in their binary encoding
+            final byte[] key = WindowKeySchema.toStoreKeyBinary(
+                Bytes.wrap("key".getBytes(StandardCharsets.UTF_8)), WINDOW_START, 0).get();
+            final byte[] plainValue = "value".getBytes(StandardCharsets.UTF_8);
+            final ConsumerRecord<byte[], byte[]> changelogRecord = new ConsumerRecord<>(
+                "changelog",
+                0,
+                0L,
+                TIMESTAMP,
+                TimestampType.CREATE_TIME,
+                key.length,
+                plainValue.length,
+                key,
+                plainValue,
+                new RecordHeaders(),
+                Optional.empty()
+            );
+
+            final RecordConverter converter = StateManagerUtil.converterForStore(store);
+            context.restoreWithHeaders(store.name(), List.of(converter.convert(changelogRecord)));
+
+            return store.fetch("key", WINDOW_START);
+        } finally {
+            store.close();
+        }
     }
 
     /**
