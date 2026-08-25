@@ -7217,7 +7217,7 @@ public class GroupMetadataManagerTest {
 
         // Superseded first join must be completed promptly with a retriable error.
         assertTrue(firstJoin.joinFuture.isDone());
-        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), firstJoin.joinFuture.get().errorCode());
+        assertEquals(Errors.NOT_COORDINATOR.code(), firstJoin.joinFuture.get().errorCode());
         assertFalse(secondJoin.joinFuture.isDone());
 
         // Leader rejoins, completing the rebalance.
@@ -9955,18 +9955,17 @@ public class GroupMetadataManagerTest {
 
         // Superseded first sync must be completed promptly with a retriable error.
         assertTrue(firstSync.syncFuture.isDone());
-        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), firstSync.syncFuture.get().errorCode());
+        assertEquals(Errors.NOT_COORDINATOR.code(), firstSync.syncFuture.get().errorCode());
         assertFalse(secondSync.syncFuture.isDone());
 
         // Leader syncs, completing the rebalance.
-        List<SyncGroupRequestAssignment> assignment = new ArrayList<>();
-        assignment.add(new SyncGroupRequestAssignment()
-            .setMemberId(leaderJoinResponse.memberId())
-            .setAssignment(new byte[]{0})
-        );
-        assignment.add(new SyncGroupRequestAssignment()
-            .setMemberId(followerId)
-            .setAssignment(new byte[]{1})
+        List<SyncGroupRequestAssignment> assignment = List.of(
+            new SyncGroupRequestAssignment()
+                .setMemberId(leaderJoinResponse.memberId())
+                .setAssignment(new byte[]{0}),
+            new SyncGroupRequestAssignment()
+                .setMemberId(followerId)
+                .setAssignment(new byte[]{1})
         );
 
         GroupMetadataManagerTestContext.SyncResult leaderSync = context.sendClassicGroupSync(

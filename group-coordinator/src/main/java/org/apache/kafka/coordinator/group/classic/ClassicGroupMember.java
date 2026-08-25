@@ -398,36 +398,60 @@ public class ClassicGroupMember {
     }
 
     /**
-     * Set the member's join future. If a join future is already pending when a new,
-     * non-null one is set, the new request supersedes it, so the earlier one is
-     * completed with REBALANCE_IN_PROGRESS first -- otherwise it would never resolve
-     * on its own.
+     * Set the member's join future, completing a pending one with NOT_COORDINATOR if it's
+     * being replaced, but leaving it untouched if cleared to null.
      *
      * @param value the updated join future.
      */
     public void setAwaitingJoinFuture(CompletableFuture<JoinGroupResponseData> value) {
-        if (value != null && awaitingJoinFuture != null) {
-            awaitingJoinFuture.complete(new JoinGroupResponseData()
+        // null detaches without completing -- the caller (e.g. a revert) is expected to complete it itself.
+        if (value != null) {
+            completeJoinFuture(new JoinGroupResponseData()
                 .setMemberId(memberId)
-                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
+                .setErrorCode(Errors.NOT_COORDINATOR.code()));
         }
         this.awaitingJoinFuture = value;
     }
 
     /**
-     * Set the member's sync future. If a sync future is already pending when a new,
-     * non-null one is set, the new request supersedes it, so the earlier one is
-     * completed with REBALANCE_IN_PROGRESS first -- otherwise it would never resolve
-     * on its own.
+     * Complete the member's join future, if one is pending, with the given response, and clear it.
+     *
+     * @param response the join response to complete the future with.
+     * @return true if a join future was completed.
+     */
+    public boolean completeJoinFuture(JoinGroupResponseData response) {
+        if (isAwaitingJoin()) {
+            awaitingJoinFuture.complete(response);
+            awaitingJoinFuture = null;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Set the member's sync future, completing any pending one with NOT_COORDINATOR first.
      *
      * @param value the updated sync future.
      */
     public void setAwaitingSyncFuture(CompletableFuture<SyncGroupResponseData> value) {
-        if (value != null && awaitingSyncFuture != null) {
-            awaitingSyncFuture.complete(new SyncGroupResponseData()
-                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
-        }
+        completeSyncFuture(new SyncGroupResponseData()
+            .setErrorCode(Errors.NOT_COORDINATOR.code()));
         this.awaitingSyncFuture = value;
+    }
+
+    /**
+     * Complete the member's sync future, if one is pending, with the given response, and clear it.
+     *
+     * @param response the sync response to complete the future with.
+     * @return true if a sync future was completed.
+     */
+    public boolean completeSyncFuture(SyncGroupResponseData response) {
+        if (isAwaitingSync()) {
+            awaitingSyncFuture.complete(response);
+            awaitingSyncFuture = null;
+            return true;
+        }
+        return false;
     }
 
     /**
