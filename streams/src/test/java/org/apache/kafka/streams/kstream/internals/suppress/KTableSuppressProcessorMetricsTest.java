@@ -166,22 +166,15 @@ public class KTableSuppressProcessorMetricsTest {
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(new Record<>(key, value, timestamp));
 
-        final MetricName evictionRateMetric = evictionRateMetricLatest;
-        final MetricName evictionTotalMetric = evictionTotalMetricLatest;
-        final MetricName bufferSizeAvgMetric = bufferSizeAvgMetricLatest;
-        final MetricName bufferSizeMaxMetric = bufferSizeMaxMetricLatest;
-        final MetricName bufferCountAvgMetric = bufferCountAvgMetricLatest;
-        final MetricName bufferCountMaxMetric = bufferCountMaxMetricLatest;
-
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-            verifyMetric(metrics, evictionRateMetric, is(0.0));
-            verifyMetric(metrics, evictionTotalMetric, is(0.0));
-            verifyMetric(metrics, bufferSizeAvgMetric, is(21.5));
-            verifyMetric(metrics, bufferSizeMaxMetric, is(43.0));
-            verifyMetric(metrics, bufferCountAvgMetric, is(0.5));
-            verifyMetric(metrics, bufferCountMaxMetric, is(1.0));
+            verifyMetric(metrics, evictionRateMetricLatest, is(0.0));
+            verifyMetric(metrics, evictionTotalMetricLatest, is(0.0));
+            verifyMetric(metrics, bufferSizeAvgMetricLatest, is(21.5));
+            verifyMetric(metrics, bufferSizeMaxMetricLatest, is(43.0));
+            verifyMetric(metrics, bufferCountAvgMetricLatest, is(0.5));
+            verifyMetric(metrics, bufferCountMaxMetricLatest, is(1.0));
         }
 
         context.setRecordMetadata("", 0, 1L);
@@ -191,12 +184,12 @@ public class KTableSuppressProcessorMetricsTest {
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-            verifyMetric(metrics, evictionRateMetric, greaterThan(0.0));
-            verifyMetric(metrics, evictionTotalMetric, is(1.0));
-            verifyMetric(metrics, bufferSizeAvgMetric, is(41.0));
-            verifyMetric(metrics, bufferSizeMaxMetric, is(82.0));
-            verifyMetric(metrics, bufferCountAvgMetric, is(1.0));
-            verifyMetric(metrics, bufferCountMaxMetric, is(2.0));
+            verifyMetric(metrics, evictionRateMetricLatest, greaterThan(0.0));
+            verifyMetric(metrics, evictionTotalMetricLatest, is(1.0));
+            verifyMetric(metrics, bufferSizeAvgMetricLatest, is(41.0));
+            verifyMetric(metrics, bufferSizeMaxMetricLatest, is(82.0));
+            verifyMetric(metrics, bufferCountAvgMetricLatest, is(1.0));
+            verifyMetric(metrics, bufferCountMaxMetricLatest, is(2.0));
         }
     }
 
