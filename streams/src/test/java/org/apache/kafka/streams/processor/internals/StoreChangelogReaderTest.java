@@ -2433,6 +2433,59 @@ public class StoreChangelogReaderTest {
     }
 
     /**
+     * A probe that resolves at or below the checkpoint skipped nothing, so it must arm the backoff
+     * just like a probe that never answered: an immediate re-registration should replay from the
+     * checkpoint without probing again, rather than re-paying for a probe that cannot help.
+     */
+    @Test
+    public void shouldBackOffWhenTimestampOffsetClampsToCheckpoint() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long checkpoint = 100L;
+        final long endOffset = 100_000L;
+        final long offsetForTimestamp = 90L;   // at or below the checkpoint: nothing in the gap expired
+        final int[] probeRounds = {0};
+
+        final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                probeRounds[0]++;
+                final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                timestampsToSearch.forEach((key, value) -> result.put(key, new OffsetAndTimestamp(offsetForTimestamp, value)));
+                return result;
+            }
+        };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        // the probe resolves a stream time from the head record, then offsetsForTimes clamps to the checkpoint
+        probeConsumer.schedulePollTask(() -> probeConsumer.addRecord(changelogRecord(tp, endOffset - 1, 10_000_000L)));
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+        final TaskId taskId = new TaskId(0, 0);
+
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenReturn(checkpoint);
+        reader.register(tp, windowedActiveManager(meta, tp, taskId, retentionMs));
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(checkpoint + 1, probeConsumer.position(tp),
+            "a probe that clamps to the checkpoint must resume there, not rewind below it");
+        assertEquals(1, probeRounds[0], "the first registration probes once");
+
+        reader.unregister(Collections.singleton(tp));
+
+        final StateStoreMetadata meta2 = mock(StateStoreMetadata.class);
+        when(meta2.offset()).thenReturn(checkpoint);
+        reader.register(tp, windowedActiveManager(meta2, tp, taskId, retentionMs));
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(1, probeRounds[0],
+            "a probe that skipped nothing must arm the backoff, so re-registering immediately replays from the checkpoint without probing");
+        assertEquals(checkpoint + 1, probeConsumer.position(tp), "the backed-off registration replays from the checkpoint");
+    }
+
+    /**
      * A small checkpoint gap is not worth a probe: replaying it costs about what the probe spends,
      * and the probe pauses every restoring partition while it runs. Common restores should pay no
      * new RPCs.

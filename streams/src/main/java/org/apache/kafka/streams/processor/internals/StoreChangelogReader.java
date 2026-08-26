@@ -1395,12 +1395,15 @@ public class StoreChangelogReader implements ChangelogReader {
             final Map<TopicPartition, OffsetAndTimestamp> offsetsByTimestamp =
                 restoreConsumer.offsetsForTimes(seekTimestamps);
             offsetsByTimestamp.forEach((partition, offsetAndTimestamp) -> {
-                if (offsetAndTimestamp != null) {
-                    // never seek below the checkpoint floor: a timestamp offset at or before it would
-                    // re-apply applied records and rewind the checkpoint (floor is 0 with no checkpoint)
-                    final long floor = newPartitionsFloor.getOrDefault(partition, 0L);
-                    restoreConsumer.seek(partition, Math.max(floor, offsetAndTimestamp.offset()));
+                final Long floor = newPartitionsFloor.get(partition);
+                if (offsetAndTimestamp != null && (floor == null || offsetAndTimestamp.offset() > floor)) {
+                    // a genuine skip past expired data; floor is null with no checkpoint, so any
+                    // resolved offset is honoured as before
+                    restoreConsumer.seek(partition, offsetAndTimestamp.offset());
                 } else {
+                    // no benefit: offsetsForTimes could not resolve, or resolved at or below the
+                    // checkpoint floor so the probe would skip nothing. Fall back to the floor (or the
+                    // beginning) and arm the backoff so a re-registration does not re-pay for the probe.
                     addProbeFallback(Collections.singleton(partition), newPartitionsFloor, seekToBeginningPartitions, floorFallbackPartitions);
                 }
             });
