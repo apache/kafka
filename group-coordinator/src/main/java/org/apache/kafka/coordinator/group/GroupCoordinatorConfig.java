@@ -819,13 +819,13 @@ public class GroupCoordinatorConfig {
             props
         );
 
-        clampDynamicIntConfig(props, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        clampDynamicIntConfig(props, groupCoordinatorConfig, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.getInt(CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
             groupCoordinatorConfig.getInt(CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
-        clampDynamicIntConfig(props, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        clampDynamicIntConfig(props, groupCoordinatorConfig, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.getInt(SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
             groupCoordinatorConfig.getInt(SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
-        clampDynamicIntConfig(props, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        clampDynamicIntConfig(props, groupCoordinatorConfig, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.getInt(STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
             groupCoordinatorConfig.getInt(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
     }
@@ -834,21 +834,22 @@ public class GroupCoordinatorConfig {
      * Clamp a config value to [min, max]. A WARN log is emitted on adjustment.
      * No-op when the key is absent from props.
      *
-     * @param props   The properties to modify in place.
-     * @param key     The config key.
-     * @param min     The minimum allowed value (inclusive).
-     * @param max     The maximum allowed value (inclusive).
+     * @param props          The properties to modify in place.
+     * @param resolvedConfig Config-provider-resolved view of props.
+     * @param key            The config key.
+     * @param min            The minimum allowed value (inclusive).
+     * @param max            The maximum allowed value (inclusive).
      */
     private static void clampDynamicIntConfig(
         Map<String, String> props,
+        AbstractConfig resolvedConfig,
         String key,
         int min,
         int max
     ) {
-        Object rawValue = props.get(key);
-        if (rawValue == null) return;
+        if (props.get(key) == null) return;
 
-        int value = Integer.parseInt(rawValue.toString());
+        int value = resolvedConfig.getInt(key);
         if (value < min) {
             LOG.warn("The config '{}' has value {} which is below the " +
                     "allowed minimum {}. The effective value will be capped to {}.",
