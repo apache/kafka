@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -75,7 +76,7 @@ public class PositionBoundTest {
     @Test
     public void shouldNotEqualNull() {
         final PositionBound bound1 = PositionBound.at(Position.emptyPosition());
-        assertNotNull(bound1);
+        assertNotEquals(bound1, null);
     }
 
     @Test

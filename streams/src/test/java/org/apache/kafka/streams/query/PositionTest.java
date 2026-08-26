@@ -66,8 +66,8 @@ public class PositionTest {
 
         // so the position is still the original one
         assertEquals(mkMap(
-                mkEntry(0, 5L),
-                mkEntry(7, 0L)
+            mkEntry(0, 5L),
+            mkEntry(7, 0L)
         ), position.getPartitionPositions("topic1"));
     }
 
@@ -98,9 +98,9 @@ public class PositionTest {
         assertEquals(Set.of("topic", "topic1", "topic2"), merged.getTopics());
         assertEquals(mkMap(mkEntry(0, 7L)), merged.getPartitionPositions("topic"));
         assertEquals(mkMap(
-                mkEntry(0, 5L),
-                mkEntry(7, 0L),
-                mkEntry(8, 1L)
+            mkEntry(0, 5L),
+            mkEntry(7, 0L),
+            mkEntry(8, 1L)
         ), merged.getPartitionPositions("topic1"));
         assertEquals(mkMap(mkEntry(9, 5L)), merged.getPartitionPositions("topic2"));
     }
@@ -136,17 +136,17 @@ public class PositionTest {
         assertEquals(Set.of("topic", "topic1"), copy.getTopics());
         assertEquals(mkMap(mkEntry(0, 5L)), copy.getPartitionPositions("topic"));
         assertEquals(mkMap(
-                mkEntry(0, 5L),
-                mkEntry(7, 0L)
+            mkEntry(0, 5L),
+            mkEntry(7, 0L)
         ), copy.getPartitionPositions("topic1"));
 
         // original has changed
         assertEquals(Set.of("topic", "topic1", "topic2"), position.getTopics());
         assertEquals(mkMap(mkEntry(0, 6L)), position.getPartitionPositions("topic"));
         assertEquals(mkMap(
-                mkEntry(0, 5L),
-                mkEntry(7, 0L),
-                mkEntry(8, 1L)
+            mkEntry(0, 5L),
+            mkEntry(7, 0L),
+            mkEntry(8, 1L)
         ), position.getPartitionPositions("topic1"));
         assertEquals(mkMap(mkEntry(2, 4L)), position.getPartitionPositions("topic2"));
     }
@@ -166,8 +166,8 @@ public class PositionTest {
         assertEquals(Set.of("topic", "topic1"), merged.getTopics());
         assertEquals(mkMap(mkEntry(0, 5L)), merged.getPartitionPositions("topic"));
         assertEquals(mkMap(
-                mkEntry(0, 5L),
-                mkEntry(7, 0L)
+            mkEntry(0, 5L),
+            mkEntry(7, 0L)
         ), merged.getPartitionPositions("topic1"));
     }
 
