@@ -58,7 +58,7 @@ public class RemoteLogMetadataTransformTest {
         RemoteLogSegmentMetadataUpdateTransform metadataUpdateTransform = new RemoteLogSegmentMetadataUpdateTransform();
         RemoteLogSegmentMetadataUpdate metadataUpdate = new RemoteLogSegmentMetadataUpdate(
                 new RemoteLogSegmentId(TP0, Uuid.randomUuid()), time.milliseconds(),
-                Optional.of(new CustomMetadata(new byte[]{0, 1, 2, 3})), COPY_SEGMENT_FINISHED, 1);
+                Optional.of(new CustomMetadata(new byte[]{0, 1, 2, 3})), COPY_SEGMENT_FINISHED, 1, 0, 100L);
         ApiMessageAndVersion apiMessageAndVersion = metadataUpdateTransform.toApiMessageAndVersion(metadataUpdate);
         RemoteLogSegmentMetadataUpdate metadataUpdateFromRecord =
                 metadataUpdateTransform.fromApiMessageAndVersion(apiMessageAndVersion);
@@ -68,14 +68,14 @@ public class RemoteLogMetadataTransformTest {
     private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata() {
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1,
-                time.milliseconds(), 1024, Map.of(0, 0L));
+                time.milliseconds(), 1024, Map.of(0, 0L), 0);
     }
 
     @Test
     public void testRemoteLogPartitionMetadataTransform() {
         RemotePartitionDeleteMetadataTransform transform = new RemotePartitionDeleteMetadataTransform();
         RemotePartitionDeleteMetadata partitionDeleteMetadata
-                = new RemotePartitionDeleteMetadata(TP0, DELETE_PARTITION_STARTED, time.milliseconds(), 1);
+                = new RemotePartitionDeleteMetadata(TP0, DELETE_PARTITION_STARTED, time.milliseconds(), 1, 0, 0L);
         ApiMessageAndVersion apiMessageAndVersion = transform.toApiMessageAndVersion(partitionDeleteMetadata);
         RemotePartitionDeleteMetadata partitionDeleteMetadataFromRecord =
                 transform.fromApiMessageAndVersion(apiMessageAndVersion);

@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -31,7 +32,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -50,7 +53,15 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
     private Map<TopicIdPartition, RemoteLogMetadataCache> idToRemoteLogMetadataCache =
             new ConcurrentHashMap<>();
 
-    public RemotePartitionMetadataStore() {
+    public Iterator<String> listRemoteLogSegmentKeysByEndOffset(TopicIdPartition topicIdPartition, long endOffset, int maxLeaderEpoch) {
+        List<String> metadataKeys = new ArrayList<>();
+        try {
+            metadataKeys = getRemoteLogMetadataCache(topicIdPartition).listRemoteLogSegmentKeysByEndOffset(endOffset, maxLeaderEpoch);
+        } catch (RemoteResourceNotFoundException e) {
+            log.error("Failed to list all the keys those are no greater than the endOffset and maxLeadeerEpoch");
+        }
+        return metadataKeys.iterator();
+
     }
 
     @Override
@@ -180,5 +191,22 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
     public boolean isInitialized(TopicIdPartition topicIdPartition) {
         RemoteLogMetadataCache metadataCache = idToRemoteLogMetadataCache.get(topicIdPartition);
         return metadataCache != null && metadataCache.isInitialized();
+    }
+
+    @Override
+    public void handleTombstoneEvent(Uuid topicId, String topicName, int partition, long endOffset, int brokerLeaderEpoch) {
+        // Construct TopicIdPartition from the parsed tombstone key
+        TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition, topicName);
+
+        // Try to remove from the endOffsetToSegments index
+        try {
+            String metadataKey = topicId + ":" + topicName + ":" + partition + ":" + endOffset + ":" + brokerLeaderEpoch;
+            getRemoteLogMetadataCache(topicIdPartition).removeFromEndOffsetIndex(endOffset, brokerLeaderEpoch, metadataKey);
+            log.debug("Removed metadata key {} from endOffsetToSegments index for partition {} due to tombstone",
+                      metadataKey, topicIdPartition);
+        } catch (RemoteResourceNotFoundException e) {
+            // Partition not assigned to this broker or cache not initialized, skip
+            log.warn("Skipping tombstone cleanup for partition {}: {}", topicIdPartition, e.getMessage());
+        }
     }
 }

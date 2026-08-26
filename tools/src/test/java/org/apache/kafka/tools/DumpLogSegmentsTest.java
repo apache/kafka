@@ -389,7 +389,7 @@ public class DumpLogSegmentsTest {
 
         List<RemotePartitionDeleteMetadata> metadata = List.of(
             new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-                RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds(), 0)
+                RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds(), 0, 0, 100L)
         );
 
         SimpleRecord[] records = metadata.stream()
@@ -426,13 +426,17 @@ public class DumpLogSegmentsTest {
                 time.milliseconds(),
                 Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(new byte[] {0, 1, 2, 3})),
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                0
+                0,
+                0,
+                100L
             ),
             new RemotePartitionDeleteMetadata(
                 topicIdPartition,
                 RemotePartitionDeleteState.DELETE_PARTITION_MARKED,
                 time.milliseconds(),
-                0
+                0,
+                0,
+                100L
             )
         );
 
@@ -475,13 +479,17 @@ public class DumpLogSegmentsTest {
                 time.milliseconds(),
                 Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(new byte[] {0, 1, 2, 3})),
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                0
+                0,
+                0,
+                100L
             ),
             new RemotePartitionDeleteMetadata(
                 topicIdPartition,
                 RemotePartitionDeleteState.DELETE_PARTITION_MARKED,
                 time.milliseconds(),
-                0
+                0,
+                0,
+                100L
             )
         );
 
@@ -517,7 +525,7 @@ public class DumpLogSegmentsTest {
 
         List<RemotePartitionDeleteMetadata> metadata = List.of(
             new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-                RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds(), 0)
+                RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds(), 0, 0, 100L)
         );
 
         SimpleRecord[] metadataRecords = metadata.stream()
@@ -566,7 +574,7 @@ public class DumpLogSegmentsTest {
 
         List<RemotePartitionDeleteMetadata> metadata = List.of(
             new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-                RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds(), 0)
+                RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds(), 0, 0, 100L)
         );
 
         SimpleRecord[] metadataRecords = metadata.stream()

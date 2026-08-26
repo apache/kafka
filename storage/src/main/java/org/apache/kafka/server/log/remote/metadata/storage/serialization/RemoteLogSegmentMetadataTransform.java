@@ -44,7 +44,8 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                 .setSegmentSizeInBytes(segmentMetadata.segmentSizeInBytes())
                 .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(segmentMetadata))
                 .setRemoteLogSegmentState(segmentMetadata.state().id())
-                .setTxnIndexEmpty(segmentMetadata.isTxnIdxEmpty());
+                .setTxnIndexEmpty(segmentMetadata.isTxnIdxEmpty())
+                .setBrokerLeaderEpoch(segmentMetadata.brokerLeaderEpoch());
         segmentMetadata.customMetadata().ifPresent(md -> record.setCustomMetadata(md.value()));
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
@@ -83,12 +84,14 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                 new RemoteLogSegmentMetadata(remoteLogSegmentId, record.startOffset(), record.endOffset(),
                                              record.maxTimestampMs(), record.brokerId(),
                                              record.eventTimestampMs(), record.segmentSizeInBytes(),
-                                             segmentLeaderEpochs, record.txnIndexEmpty());
+                                             segmentLeaderEpochs, record.txnIndexEmpty(), record.brokerLeaderEpoch());
         RemoteLogSegmentMetadataUpdate rlsmUpdate
                 = new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, record.eventTimestampMs(),
                                                      customMetadata,
                                                      RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
-                                                     record.brokerId());
+                                                     record.brokerId(),
+                                                     record.brokerLeaderEpoch(),
+                                                     record.endOffset());
 
         return remoteLogSegmentMetadata.createWithUpdates(rlsmUpdate);
     }

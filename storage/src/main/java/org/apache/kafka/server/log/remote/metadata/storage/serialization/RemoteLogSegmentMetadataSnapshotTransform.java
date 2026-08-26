@@ -73,7 +73,8 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                                                     customMetadata,
                                                     RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
                                                     segmentLeaderEpochs,
-                                                    record.txnIndexEmpty());
+                                                    record.txnIndexEmpty(),
+                                                    record.brokerLeaderEpoch());
     }
 
 }

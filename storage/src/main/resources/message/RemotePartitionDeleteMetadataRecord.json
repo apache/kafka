@@ -17,7 +17,7 @@
   "apiKey": 2,
   "type": "metadata",
   "name": "RemotePartitionDeleteMetadataRecord",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     {
@@ -63,6 +63,24 @@
       "type": "int8",
       "versions": "0+",
       "about": "Deletion state identifier of the remote partition, which is RemotePartitionDeleteState.id()."
+    },
+    {
+      "name": "BrokerLeaderEpoch",
+      "type": "int32",
+      "versions": "1+",
+      "default": "-1",
+      "about": "The leader epoch of the broker (partition leader epoch) at the time this update is being published.",
+      "taggedVersions": "1+",
+      "tag": 0
+    },
+    {
+      "name": "EndOffset",
+      "type": "int64",
+      "versions": "1+",
+      "default": "-1",
+      "about": "End offset of the segment being updated.",
+      "taggedVersions": "1+",
+      "tag": 1
     }
   ]
 }

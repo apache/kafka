@@ -84,6 +84,27 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
      */
     private final boolean txnIdxEmpty;
 
+
+    //for test only
+    public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
+                                    long startOffset,
+                                    long endOffset,
+                                    long maxTimestampMs,
+                                    int brokerId,
+                                    long eventTimestampMs,
+                                    int segmentSizeInBytes,
+                                    Map<Integer, Long> segmentLeaderEpochs) {
+        this(remoteLogSegmentId,
+                startOffset,
+                endOffset,
+                maxTimestampMs,
+                brokerId,
+                eventTimestampMs, segmentSizeInBytes,
+                Optional.empty(),
+                RemoteLogSegmentState.COPY_SEGMENT_STARTED,
+                segmentLeaderEpochs, -1);
+    }
+
     /**
      * Creates an instance with the given metadata of remote log segment.
      * <p>
@@ -110,9 +131,10 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                                     int segmentSizeInBytes,
                                     Optional<CustomMetadata> customMetadata,
                                     RemoteLogSegmentState state,
-                                    Map<Integer, Long> segmentLeaderEpochs) {
+                                    Map<Integer, Long> segmentLeaderEpochs,
+                                    int brokerLeaderEpoch) {
         this(remoteLogSegmentId, startOffset, endOffset, maxTimestampMs, brokerId, eventTimestampMs, segmentSizeInBytes,
-                customMetadata, state, segmentLeaderEpochs, false);
+                customMetadata, state, segmentLeaderEpochs, false, brokerLeaderEpoch);
     }
 
     /**
@@ -143,8 +165,9 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                                     Optional<CustomMetadata> customMetadata,
                                     RemoteLogSegmentState state,
                                     Map<Integer, Long> segmentLeaderEpochs,
-                                    boolean txnIdxEmpty) {
-        super(brokerId, eventTimestampMs);
+                                    boolean txnIdxEmpty,
+                                    int brokerLeaderEpoch)  {
+        super(brokerId, eventTimestampMs, brokerLeaderEpoch, endOffset);
         this.remoteLogSegmentId = Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId can not be null");
         this.state = Objects.requireNonNull(state, "state can not be null");
 
@@ -192,7 +215,8 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                                     int brokerId,
                                     long eventTimestampMs,
                                     int segmentSizeInBytes,
-                                    Map<Integer, Long> segmentLeaderEpochs) {
+                                    Map<Integer, Long> segmentLeaderEpochs,
+                                    int brokerLeaderEpoch) {
         this(remoteLogSegmentId,
                 startOffset,
                 endOffset,
@@ -201,7 +225,8 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                 eventTimestampMs, segmentSizeInBytes,
                 Optional.empty(),
                 RemoteLogSegmentState.COPY_SEGMENT_STARTED,
-                segmentLeaderEpochs);
+                segmentLeaderEpochs,
+                brokerLeaderEpoch);
     }
 
     /**
@@ -228,9 +253,11 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                                     long eventTimestampMs,
                                     int segmentSizeInBytes,
                                     Map<Integer, Long> segmentLeaderEpochs,
-                                    boolean txnIdxEmpty) {
+                                    boolean txnIdxEmpty,
+                                    int brokerLeaderEpoch) {
         this(remoteLogSegmentId, startOffset, endOffset, maxTimestampMs, brokerId, eventTimestampMs, segmentSizeInBytes,
-                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_STARTED, segmentLeaderEpochs, txnIdxEmpty);
+                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_STARTED, segmentLeaderEpochs, txnIdxEmpty,
+                brokerLeaderEpoch);
     }
 
     /**
@@ -317,7 +344,8 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
 
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, startOffset,
                 endOffset, maxTimestampMs, rlsmUpdate.brokerId(), rlsmUpdate.eventTimestampMs(),
-                segmentSizeInBytes, rlsmUpdate.customMetadata(), rlsmUpdate.state(), segmentLeaderEpochs, txnIdxEmpty);
+                segmentSizeInBytes, rlsmUpdate.customMetadata(), rlsmUpdate.state(), segmentLeaderEpochs, txnIdxEmpty,
+                brokerLeaderEpoch());
     }
 
     @Override

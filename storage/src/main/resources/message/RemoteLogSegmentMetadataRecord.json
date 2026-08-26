@@ -17,7 +17,7 @@
   "apiKey": 0,
   "type": "metadata",
   "name": "RemoteLogSegmentMetadataRecord",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     {
@@ -137,6 +137,15 @@
       "about": "Flag to indicate if the transaction index is empty.",
       "taggedVersions": "0+",
       "tag": 0
+    },
+    {
+      "name": "BrokerLeaderEpoch",
+      "type": "int32",
+      "versions": "1+",
+      "taggedVersions": "1+",
+      "tag": 1,
+      "default": "-1",
+      "about": "The leader epoch of the broker (partition leader epoch) at the time this segment is being uploaded."
     }
   ]
 }

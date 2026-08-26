@@ -37,4 +37,6 @@ public interface TopicPartitionLog {
      * @return The log of the partition or empty
      */
     Optional<UnifiedLog> unifiedLog();
+
+    int getLeaderEpoch();
 }
