@@ -4832,7 +4832,7 @@ org.apache.kafka.common.requests.RequestResponseTest:
 - testApiVersionsRequestBeforeV3Validation
 - testApiVersionsSerialization
 - testBatchedFindCoordinatorRequestSerialization
-- testClientThrottlesResponsesWithThrottleTime
+- testClientThrottleForCommonResponses
 - testCreateTopicRequestV0FailsIfValidateOnly
 - testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas
 - testDeletableTopicResultErrorMessageIsNullByDefault
@@ -4848,6 +4848,8 @@ org.apache.kafka.common.requests.RequestResponseTest:
 - testInvalidSaslHandShakeRequest
 - testInvalidTaggedFieldsWithSaslAuthenticateRequest
 - testJoinGroupRequestV0RebalanceTimeout
+- testKip219BoundariesAreStillNeeded
+- testKip219BoundariesHaveThrottleTimeField
 - testListConfigResourcesRequestV0FailsWithConfigResourceTypeOtherThanClientMetrics
 - testListGroupRequestV3FailsWithStates
 - testProduceRequestPartitionSize
