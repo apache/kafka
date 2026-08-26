@@ -111,10 +111,10 @@ public class StateSerdesTest {
         final Integer myInt = 123;
         final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(myInt, new RecordHeaders()));
         assertEquals(
-                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
+            "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
                 "is not compatible to the actual value type (value type: java.lang.Integer). " +
                 "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters.",
-                e.getMessage());
+            e.getMessage());
     }
 
     @Test
