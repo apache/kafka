@@ -607,7 +607,11 @@ class KafkaApisTest extends Logging {
 
     val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
 
-    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(Seq(localResource, forwardedResource))
+    val resourceMap = Map(
+      localResource -> Set(new AlterConfigOp(new ConfigEntry("foo", "bar"), OpType.SET)).asJavaCollection,
+      forwardedResource -> Set(new AlterConfigOp(new ConfigEntry(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "45000"), OpType.SET)).asJavaCollection
+    ).asJava
+    val incrementalAlterConfigsRequest = new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
       .build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
@@ -621,16 +625,6 @@ class KafkaApisTest extends Logging {
       any(),
       any()
     )
-  }
-
-  private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
-    val resourceMap = configResources.map(configResource => {
-      configResource -> Set(
-        new AlterConfigOp(new ConfigEntry("foo", "bar"),
-        OpType.SET)).asJavaCollection
-    }).toMap.asJava
-
-    new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
   }
 
   @ParameterizedTest

@@ -23,7 +23,7 @@ import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, GROUP, TOPIC}
-import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.message.{AlterConfigsRequestData, AlterConfigsResponseData, IncrementalAlterConfigsRequestData, IncrementalAlterConfigsResponseData}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
@@ -31,7 +31,7 @@ import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsRes
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
+import org.apache.kafka.common.protocol.Errors.{INVALID_CONFIG, INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.coordinator.group.GroupConfig
@@ -158,6 +158,8 @@ class ConfigAdminManager(nodeId: Int,
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
           }
         } catch {
+          case e: ConfigException =>
+            results.put(resource, new ApiError(INVALID_CONFIG, e.getMessage))
           case t: Throwable =>
             val err = ApiError.fromThrowable(t)
             error(s"Error preprocessing incrementalAlterConfigs request on $configResource", t)
@@ -215,6 +217,9 @@ class ConfigAdminManager(nodeId: Int,
    * predate this broker-side check.
    */
   private def validateGroupConfigChangeOnBroker(resource: IAlterConfigsResource): Unit = {
+    if (resource.resourceName().isEmpty) {
+      throw new InvalidRequestException("Default group resources are not allowed.")
+    }
     val configResource = new ConfigResource(GROUP, resource.resourceName())
     val configProps = new Properties()
     configProps.putAll(configRepository.config(configResource))
