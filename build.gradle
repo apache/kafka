@@ -2737,7 +2737,6 @@ project(':tools') {
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
-    testRuntimeOnly libs.hamcrest
   }
 
   javadoc {
@@ -3118,7 +3117,6 @@ project(':streams:test-utils') {
     testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.hamcrest
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
