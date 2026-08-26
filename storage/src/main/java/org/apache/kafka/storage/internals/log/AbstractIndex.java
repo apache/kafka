@@ -203,7 +203,7 @@ public abstract class AbstractIndex implements Closeable {
 
     /**
      * @param newSize new size of the index file
-     * @param sync if true, fsync the file after resizing to ensure both content and size are durable
+     * @param sync if true, fsync the file after resizing to ensure the size is durable
      * @return true if the index was resized, false otherwise
      */
     public boolean resize(int newSize, boolean sync) throws IOException {
@@ -292,6 +292,7 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     public void close() throws IOException {
+        flush(); // Ensure the index content is flushed to disk as LogSegment.close may append an entry
         trimToValidSize(true);
         closeHandler();
     }
