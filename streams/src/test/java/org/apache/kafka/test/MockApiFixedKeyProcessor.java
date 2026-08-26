@@ -92,7 +92,7 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     }
 
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
-        assertEquals(expected.length, processed.size(), "the number of outputs:" + processed);
+        assertEquals(expected.length, processed.size(), () -> "the number of outputs:" + processed);
         for (int i = 0; i < expected.length; i++) {
             final FixedKeyRecord<KIn, VIn> record = processed.get(i);
             assertEquals(
@@ -106,7 +106,7 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     }
 
     public void checkAndClearProcessedRecords(final Record<?, ?>... expected) {
-        assertEquals(expected.length, processed.size(), "the number of outputs:" + processed);
+        assertEquals(expected.length, processed.size(), () -> "the number of outputs:" + processed);
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processed.get(i), "output[" + i + "]:");
         }
