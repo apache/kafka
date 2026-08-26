@@ -47,7 +47,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG;
-import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC;
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.MESSAGE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         //  15200 is filed replicaFetchMaxBytes
         @ClusterConfigProperty(key = REPLICA_FETCH_MAX_BYTES_CONFIG, value = "15200"),
         //  15400 is filed replicaFetchMaxResponseBytes
-        @ClusterConfigProperty(key = REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC, value = "15400"),
+        @ClusterConfigProperty(key = REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG, value = "15400"),
         // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
         // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
@@ -217,13 +217,10 @@ public class ProducerFailureHandlingTest {
 
     @ClusterTest
     public void testCannotSendToInternalTopic(ClusterInstance clusterInstance) throws InterruptedException {
-        try (Admin admin = clusterInstance.admin()) {
-            Map<String, String> topicConfig = clusterInstance.brokers().get(0)
-                .groupCoordinator()
-                .groupMetadataTopicConfigs();
-            admin.createTopics(List.of(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1).configs(topicConfig)));
-            clusterInstance.waitTopicDeletion(Topic.GROUP_METADATA_TOPIC_NAME);
-        }
+        Map<String, String> topicConfig = clusterInstance.brokers().get(0)
+            .groupCoordinator()
+            .groupMetadataTopicConfigs();
+        clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1, topicConfig);
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
             Exception thrown = assertThrows(ExecutionException.class,
