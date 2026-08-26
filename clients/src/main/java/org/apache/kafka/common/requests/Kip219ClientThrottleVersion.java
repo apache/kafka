@@ -22,8 +22,8 @@ import java.util.Map;
 
 final class Kip219ClientThrottleVersion {
 
-    // Each value is the first version of the corresponding API after KIP-219 was introduced. An entry should be
-    // removed once no supported version below the boundary contains throttle_time_ms.
+    // Each value is the first version of the corresponding API after KIP-219 was introduced. Remove an entry when
+    // there are no supported versions below the boundary.
     static final Map<ApiKeys, Short> BOUNDARIES = Map.ofEntries(
         Map.entry(ApiKeys.PRODUCE, (short) 6),
         Map.entry(ApiKeys.FETCH, (short) 8),

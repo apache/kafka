@@ -372,22 +372,9 @@ public class RequestResponseTest {
 
     @Test
     public void testKip219BoundariesAreStillNeeded() {
-        List<ApiKeys> obsoleteApiKeys = new ArrayList<>();
-        Kip219ClientThrottleVersion.BOUNDARIES.forEach((apiKey, boundaryVersion) -> {
-            boolean stillNeeded = false;
-            for (short version : apiKey.allVersions()) {
-                if (version < boundaryVersion &&
-                    apiKey.messageType.responseSchemas()[version].get("throttle_time_ms") != null) {
-                    stillNeeded = true;
-                    break;
-                }
-            }
-            if (!stillNeeded) {
-                obsoleteApiKeys.add(apiKey);
-            }
-        });
-        assertEquals(List.of(), obsoleteApiKeys,
-            "These BOUNDARIES entries are obsolete and should be removed");
+        Kip219ClientThrottleVersion.BOUNDARIES.forEach((apiKey, boundaryVersion) ->
+            assertTrue(apiKey.messageType.lowestSupportedVersion() < boundaryVersion,
+                apiKey + " KIP-219 boundary " + boundaryVersion + " is obsolete and should be removed"));
     }
 
     @Test
