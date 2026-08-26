@@ -64,21 +64,18 @@ import scala.jdk.CollectionConverters._
  * However, we have to handle it here now in order to maintain compatibility.
  *
  * Configuration processing is split into two parts.
- * - The first step, called "preprocessing," handles setting KIP-412 log levels, validating
- * BROKER configurations, and performing the full GROUP configuration validation (see
- * [[org.apache.kafka.coordinator.group.GroupConfig#validateOnBroker]]). We also filter out
- * some other things here like UNKNOWN resource types, etc.
+ * - The first step, called "preprocessing," handles setting KIP-412 log levels, and validating
+ * BROKER and GROUP configurations. We also filter out some other things here like UNKNOWN
+ * resource types, etc.
  * - The second step is "persistence," and handles storing the configurations durably to our
  * metadata store.
  *
  * The active controller performs its own configuration validation step in
  * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
- * TOPIC resources, since we already validated changes to BROKER resources on the
- * forwarding broker. GROUP resources are validated on the controller too, so that the
- * cluster stays protected while it may still contain brokers that predate the broker-side
- * check; see [[kafka.server.ControllerConfigurationValidator]] for the upgrade-safety
- * gating. The controller is also responsible for enforcing the configured
- * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
+ * TOPIC resources, since we already validated changes to BROKER and GROUP resources on the
+ * forwarding broker. When the cluster may contain brokers that predate the broker-side GROUP
+ * validation, GROUP resources are validated on the controller too. The controller is also
+ * responsible for enforcing the configured [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
 class ConfigAdminManager(nodeId: Int,
                          conf: KafkaConfig,
@@ -151,7 +148,7 @@ class ConfigAdminManager(nodeId: Int,
               }
               validateBrokerConfigChange(resource, configResource)
             case GROUP =>
-              validateGroupConfigChangeOnBroker(resource)
+              validateGroupConfigChange(resource, configResource)
             case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
             case _ =>
@@ -210,17 +207,13 @@ class ConfigAdminManager(nodeId: Int,
     }
  }
 
-  /**
-   * Perform the full GROUP config validation on the forwarding broker, before the change is
-   * sent to the controller. See [[kafka.server.ControllerConfigurationValidator]] for why the
-   * controller also performs this validation while a cluster may still contain brokers that
-   * predate this broker-side check.
-   */
-  private def validateGroupConfigChangeOnBroker(resource: IAlterConfigsResource): Unit = {
+  private def validateGroupConfigChange(
+    resource: IAlterConfigsResource,
+    configResource: ConfigResource
+  ): Unit = {
     if (resource.resourceName().isEmpty) {
       throw new InvalidRequestException("Default group resources are not allowed.")
     }
-    val configResource = new ConfigResource(GROUP, resource.resourceName())
     val configProps = new Properties()
     configProps.putAll(configRepository.config(configResource))
     val alterConfigOps = resource.configs().asScala.map {
@@ -284,7 +277,9 @@ class ConfigAdminManager(nodeId: Int,
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
               validateBrokerConfigChange(resource, configResource)
-            case TOPIC | CLIENT_METRICS | GROUP =>
+            case GROUP =>
+              validateGroupConfigChange(resource)
+            case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
             case _ =>
               // Since legacy AlterConfigs does not support BROKER_LOGGER, any attempt to use it
@@ -292,6 +287,8 @@ class ConfigAdminManager(nodeId: Int,
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
           }
         } catch {
+          case e: ConfigException =>
+            results.put(resource, new ApiError(INVALID_CONFIG, e.getMessage))
           case t: Throwable =>
             val err = ApiError.fromThrowable(t)
             error(s"Error preprocessing alterConfigs request on ${configResource}: ${err}")
@@ -311,6 +308,19 @@ class ConfigAdminManager(nodeId: Int,
       config => props.setProperty(config.name(), config.value())
     }
     validateBrokerConfigChange(props, configResource)
+  }
+
+  private def validateGroupConfigChange(resource: LAlterConfigsResource): Unit = {
+    if (resource.resourceName().isEmpty) {
+      throw new InvalidRequestException("Default group resources are not allowed.")
+    }
+    // Legacy AlterConfigs replaces the entire group config, so the request holds the complete
+    // new configuration and can be validated as-is.
+    val configProps = new Properties()
+    resource.configs().forEach {
+      config => configProps.setProperty(config.name(), config.value())
+    }
+    GroupConfig.validateOnBroker(configProps.asScala.asJava, conf.groupCoordinatorConfig, conf.shareGroupConfig)
   }
 
   def validateResourceNameIsCurrentNodeId(name: String): Unit = {

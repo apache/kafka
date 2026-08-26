@@ -495,7 +495,8 @@ public final class GroupConfig extends AbstractConfig {
 
     /**
      * Validate a GROUP config change on the controller. Runs the full set of checks in
-     * {@link #validate}.
+     * {@link #validate}. The forwarding broker runs the same checks in {@link #validateOnBroker},
+     * so this is only called while the cluster may contain brokers that do not.
      *
      * @param newGroupConfig         The new unparsed group config overrides.
      * @param groupCoordinatorConfig The group coordinator config.

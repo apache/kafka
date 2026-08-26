@@ -37,15 +37,11 @@ class ControllerConfigurationValidatorTest {
   val config = new KafkaConfig(TestUtils.createDummyBrokerConfig())
   val validator = new ControllerConfigurationValidator(config)
 
-  // The metadata.version in effect prior to this feature shipping (KAFKA-20790), used for all
-  // tests that are not specifically about the upgrade-safety gate below.
-  val preGroupBrokerValidationMv: MetadataVersion = MetadataVersion.LATEST_PRODUCTION
-
   @Test
   def testDefaultTopicResourceIsRejected(): Unit = {
     assertEquals("Default topic resources are not allowed.",
         assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(TOPIC, ""), emptyMap(), emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(TOPIC, ""), emptyMap(), emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
@@ -53,14 +49,14 @@ class ControllerConfigurationValidatorTest {
     assertEquals("Topic name is invalid: '(<-invalid->)' contains " +
       "one or more characters other than ASCII alphanumerics, '.', '_' and '-'",
         assertThrows(classOf[InvalidTopicException], () => validator.validate(
-          new ConfigResource(TOPIC, "(<-invalid->)"), emptyMap(), emptyMap(), preGroupBrokerValidationMv)). getMessage)
+          new ConfigResource(TOPIC, "(<-invalid->)"), emptyMap(), emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
   def testUnknownResourceType(): Unit = {
     assertEquals("Unknown resource type BROKER_LOGGER",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(BROKER_LOGGER, "foo"), emptyMap(), emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(BROKER_LOGGER, "foo"), emptyMap(), emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
@@ -71,7 +67,7 @@ class ControllerConfigurationValidatorTest {
     config.put(SEGMENT_MS_CONFIG, null)
     assertEquals("Null value not supported for topic configs: segment.bytes,segment.ms",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(TOPIC, "foo"), config, emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(TOPIC, "foo"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
@@ -79,7 +75,7 @@ class ControllerConfigurationValidatorTest {
     val config = new util.TreeMap[String, String]()
     config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
     config.put(SEGMENT_BYTES_CONFIG, "67108864")
-    validator.validate(new ConfigResource(TOPIC, "foo"), config, emptyMap(), preGroupBrokerValidationMv)
+    validator.validate(new ConfigResource(TOPIC, "foo"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)
   }
 
   @Test
@@ -90,7 +86,7 @@ class ControllerConfigurationValidatorTest {
     config.put("foobar", "abc")
     assertEquals("Unknown topic config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(TOPIC, "foo"), config, emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(TOPIC, "foo"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @ParameterizedTest(name = "testDisablingRemoteStorageTopicConfig with wasRemoteStorageEnabled: {0}")
@@ -103,12 +99,12 @@ class ControllerConfigurationValidatorTest {
         "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.log.copy.disable=true`. " +
         "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`.",
         assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-          new ConfigResource(TOPIC, "foo"), config, util.Collections.singletonMap(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"), preGroupBrokerValidationMv)).getMessage)
+          new ConfigResource(TOPIC, "foo"), config, util.Collections.singletonMap(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"), MetadataVersion.LATEST_PRODUCTION)).getMessage)
     } else {
       validator.validate(
-        new ConfigResource(TOPIC, "foo"), config, util.Collections.emptyMap(), preGroupBrokerValidationMv)
+        new ConfigResource(TOPIC, "foo"), config, util.Collections.emptyMap(), MetadataVersion.LATEST_PRODUCTION)
       validator.validate(
-        new ConfigResource(TOPIC, "foo"), config, util.Collections.singletonMap(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"), preGroupBrokerValidationMv)
+        new ConfigResource(TOPIC, "foo"), config, util.Collections.singletonMap(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"), MetadataVersion.LATEST_PRODUCTION)
     }
   }
 
@@ -118,7 +114,7 @@ class ControllerConfigurationValidatorTest {
     config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
     assertEquals("Unable to parse broker name as a base 10 number.",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(BROKER, "blah"), config, emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(BROKER, "blah"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
@@ -127,7 +123,7 @@ class ControllerConfigurationValidatorTest {
     config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
     assertEquals("Invalid negative broker ID.",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(BROKER, "-1"), config, emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(BROKER, "-1"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
@@ -138,7 +134,7 @@ class ControllerConfigurationValidatorTest {
     config.put(ClientMetricsConfigs.MATCH_CONFIG, "client_instance_id=b69cc35a-7a54-4790-aa69-cc2bd4ee4538,client_id=1" +
       ",client_software_name=apache-kafka-java,client_software_version=2.8.0-SNAPSHOT,client_source_address=127.0.0.1," +
       "client_source_port=1234")
-    validator.validate(new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), preGroupBrokerValidationMv)
+    validator.validate(new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)
   }
 
   @Test
@@ -146,7 +142,7 @@ class ControllerConfigurationValidatorTest {
     val config = new util.TreeMap[String, String]()
     assertEquals("Subscription name can't be empty",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(CLIENT_METRICS, ""), config, emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(CLIENT_METRICS, ""), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
@@ -155,12 +151,12 @@ class ControllerConfigurationValidatorTest {
     config.put(ClientMetricsConfigs.INTERVAL_MS_CONFIG, "10")
     assertEquals("Invalid value 10 for interval.ms, interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
 
     config.put(ClientMetricsConfigs.INTERVAL_MS_CONFIG, "3600001")
     assertEquals("Invalid value 3600001 for interval.ms, interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
@@ -169,7 +165,7 @@ class ControllerConfigurationValidatorTest {
     config.put("random", "10")
     assertEquals("Unknown client metrics configuration: random",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
@@ -178,7 +174,7 @@ class ControllerConfigurationValidatorTest {
     config.put(ClientMetricsConfigs.MATCH_CONFIG, "10")
     assertEquals("Illegal client matching pattern: 10",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), preGroupBrokerValidationMv)). getMessage)
+        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)). getMessage)
   }
 
   @Test
@@ -186,7 +182,7 @@ class ControllerConfigurationValidatorTest {
     val config = new util.TreeMap[String, String]()
     config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
     config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000")
-    validator.validate(new ConfigResource(GROUP, "group"), config, emptyMap(), preGroupBrokerValidationMv)
+    validator.validate(new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)
   }
 
   @Test
@@ -194,7 +190,7 @@ class ControllerConfigurationValidatorTest {
     val config = new util.TreeMap[String, String]()
     assertEquals("Default group resources are not allowed.",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(GROUP, ""), config, emptyMap(), preGroupBrokerValidationMv)).getMessage)
+        new ConfigResource(GROUP, ""), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)).getMessage)
   }
 
   @Test
@@ -204,7 +200,7 @@ class ControllerConfigurationValidatorTest {
     config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, null)
     assertEquals("Null value not supported for group configs: consumer.heartbeat.interval.ms",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config, emptyMap(), preGroupBrokerValidationMv)).getMessage)
+        new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)).getMessage)
   }
 
   @Test
@@ -214,7 +210,7 @@ class ControllerConfigurationValidatorTest {
     config.put(ClientMetricsConfigs.MATCH_CONFIG, null)
     assertEquals("Null value not supported for client metrics configs: match",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), preGroupBrokerValidationMv)).getMessage)
+        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)).getMessage)
   }
 
   @Test
@@ -224,22 +220,13 @@ class ControllerConfigurationValidatorTest {
     config.put("foobar", "abc")
     assertEquals("Unknown group config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config, emptyMap(), preGroupBrokerValidationMv)).getMessage)
+        new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)).getMessage)
   }
 
   @Test
-  def testInvalidGroupConfigStillRejectedBelowGatedMetadataVersion(): Unit = {
-    val config = new util.TreeMap[String, String]()
-    config.put("foobar", "abc")
-    assertEquals("Unknown group config name: foobar",
-      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.IBP_4_4_IV2)).getMessage)
-  }
-
-  @Test
-  def testInvalidGroupConfigSkippedOnceMetadataVersionGuaranteesBrokerValidation(): Unit = {
+  def testInvalidGroupConfigNotValidatedAfterMetadataVersion4_5(): Unit = {
     // Once every broker in the cluster is guaranteed to already validate this on the forwarding
-    // broker (see ConfigAdminManager#validateGroupConfigChangeOnBroker), the controller no longer
+    // broker (see ConfigAdminManager#validateGroupConfigChange), the controller no longer
     // needs to, and an otherwise-invalid config is let through here.
     val config = new util.TreeMap[String, String]()
     config.put("foobar", "abc")
