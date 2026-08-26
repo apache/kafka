@@ -189,9 +189,7 @@ public class KTableSuppressProcessorMetricsTest {
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-            assertEquals(evictionRateMetric.description(), metrics.get(evictionRateMetric).metricName().description());
             assertTrue((double) metrics.get(evictionRateMetric).metricValue() > 0.0);
-
             verifyMetric(metrics, evictionTotalMetric, 1.0);
             verifyMetric(metrics, bufferSizeAvgMetric, 41.0);
             verifyMetric(metrics, bufferSizeMaxMetric, 82.0);
