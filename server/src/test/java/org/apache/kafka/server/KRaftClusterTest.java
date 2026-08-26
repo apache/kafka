@@ -1198,20 +1198,13 @@ public class KRaftClusterTest {
                 assertTrue(controllerIds.contains(quorumInfo.leaderId()),
                     "Leader ID " + quorumInfo.leaderId() + " was not a controller ID.");
 
-                // Force a leader election by shutting down the current leader. Resign its raft client
-                // first so the remaining controllers hold a prompt election, then fully shut the
-                // controller down so the admin client is forced to re-route DescribeQuorum requests to
-                // a surviving controller.
+                // Force a leader election by shutting down the current leader.
                 int oldLeaderId = quorumInfo.leaderId();
-                cluster.controllers().get(oldLeaderId).sharedServer().raftManager().client().shutdown(1000);
                 cluster.controllers().get(oldLeaderId).shutdown();
 
                 // Poll until the admin client observes the new leader. describeMetadataQuorum retries
                 // through the NOT_LEADER_OR_FOLLOWER errors and re-resolves the active controller while
-                // the election completes. Polling (rather than relying on a single in-flight request)
-                // avoids racing the request against the leadership transition: previously the old leader
-                // could answer before it had resigned, reporting itself as the leader and failing the
-                // "leader has changed" assertion.
+                // the election completes.
                 AtomicReference<QuorumInfo> quorumInfo2Ref = new AtomicReference<>();
                 TestUtils.waitForCondition(() -> {
                     QuorumInfo qi = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions()).quorumInfo().get();
@@ -1220,8 +1213,6 @@ public class KRaftClusterTest {
                 }, "Timed out waiting for a new metadata quorum leader after shutting down node " + oldLeaderId);
                 QuorumInfo quorumInfo2 = quorumInfo2Ref.get();
 
-                // The leader must have moved to a different controller. The voter set is unchanged by an
-                // election, since voters are only removed via RemoveVoter.
                 assertNotEquals(oldLeaderId, quorumInfo2.leaderId());
                 Set<Integer> voterIds2 = quorumInfo2.voters().stream()
                     .map(QuorumInfo.ReplicaState::replicaId)
