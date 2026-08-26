@@ -430,10 +430,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
-    val propsForClamping = new java.util.HashMap[String, String](newProps.asJava)
-    propsForClamping.keySet().removeIf(k => k.startsWith("config.providers"))
-    KafkaConfig.clampDynamicConfigs(propsForClamping)
-    propsForClamping.forEach((k, v) => newProps(k) = v)
+    KafkaConfig.clampDynamicConfigs(newProps.asJava)
 
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false, doLog)
