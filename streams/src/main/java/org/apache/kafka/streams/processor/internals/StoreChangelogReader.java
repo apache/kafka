@@ -228,6 +228,11 @@ public class StoreChangelogReader implements ChangelogReader {
     // probe that is working is never suppressed.
     private static final Duration PROBE_RETRY_BACKOFF = Duration.ofSeconds(60);
 
+    // Smallest checkpoint gap worth a probe: below it, replaying the gap costs about what the probe
+    // spends, and the probe pauses every restoring partition while it runs. Tied to the widest probe
+    // window so the relationship survives retuning.
+    private static final long PROBE_MIN_CHECKPOINT_GAP = 8 * PROBE_WINDOWS[PROBE_WINDOWS.length - 1];
+
     private ChangelogReaderState state;
 
     // deliberately outlives unregister: a changelog that is corrupted and re-registered in a loop
@@ -781,7 +786,12 @@ public class StoreChangelogReader implements ChangelogReader {
                                            final long numRecords,
                                            final Long lastRestoredOffset, // this is not a "position" so we need to correct it below
                                            final long restoredToOffset) {
-        final long restoredFromOffset = lastRestoredOffset == null ? changelogMetadata.restoreStartOffset : lastRestoredOffset + 1;
+        // clamp to the position restoration started from: after skipping past a checkpoint, the first
+        // batch's lastRestoredOffset is the checkpoint, which is behind restoreStartOffset; measuring
+        // from the checkpoint would decrement the remaining-records metric by the whole skipped gap
+        final long restoredFromOffset = lastRestoredOffset == null
+            ? changelogMetadata.restoreStartOffset
+            : Math.max(changelogMetadata.restoreStartOffset, lastRestoredOffset + 1);
         final long numOffsets = Math.max(restoredToOffset - restoredFromOffset, 0L);
         task.recordRestoration(time, numRecords, numOffsets, false);
     }
@@ -1045,6 +1055,8 @@ public class StoreChangelogReader implements ChangelogReader {
         // separate those who do not have the current offset loaded from checkpoint
         final Set<TopicPartition> newSeekToBeginningPartitions = new HashSet<>();
         final Map<TopicPartition, Long> newWindowedPartitionsRetention = new HashMap<>();
+        // for a checkpointed partition routed through the probe, the checkpoint + 1 it may never seek below
+        final Map<TopicPartition, Long> newPartitionsFloor = new HashMap<>();
 
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
@@ -1053,13 +1065,23 @@ public class StoreChangelogReader implements ChangelogReader {
             final Long endOffset = changelogs.get(partition).restoreEndOffset;
 
             if (currentOffset != null) {
-                // the current offset is the offset of the last record, so we should set the position
-                // as that offset + 1 as the "next" record to fetch; seek is not a blocking call so
-                // there's nothing to capture
-                restoreConsumer.seek(partition, currentOffset + 1);
+                // the current offset is the offset of the last record, so the "next" record to fetch is
+                // that offset + 1; it is also the floor the probe may never seek below, since doing so
+                // would re-apply applied records and rewind the checkpoint
+                final long floor = currentOffset + 1;
+                if (shouldProbePastCheckpoint(changelogMetadata, partition, floor, endOffset)) {
+                    newWindowedPartitionsRetention.put(partition, storeMetadata.retentionPeriod());
+                    newPartitionsFloor.put(partition, floor);
 
-                log.debug("Start restoring changelog partition {} from current offset {} to end offset {}.",
-                    partition, currentOffset, recordEndOffset(endOffset));
+                    log.debug("Start restoring windowed changelog partition {} by probing to skip expired data " +
+                        "past checkpoint {} to end offset {}.", partition, currentOffset, recordEndOffset(endOffset));
+                } else {
+                    // seek is not a blocking call so there's nothing to capture
+                    restoreConsumer.seek(partition, floor);
+
+                    log.debug("Start restoring changelog partition {} from current offset {} to end offset {}.",
+                        partition, currentOffset, recordEndOffset(endOffset));
+                }
             } else {
                 final long retentionPeriod = storeMetadata.retentionPeriod();
                 if (retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE) {
@@ -1084,7 +1106,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
-        seekNewPartitions(newWindowedPartitionsRetention, newSeekToBeginningPartitions);
+        seekNewPartitions(newWindowedPartitionsRetention, newSeekToBeginningPartitions, newPartitionsFloor);
 
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
@@ -1128,12 +1150,39 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    /**
+     * Whether a checkpointed active windowed changelog should probe to skip expired data instead of
+     * replaying from its checkpoint; the guards below exclude standbys, stores without usable
+     * retention, backed-off partitions, and gaps too small to be worth a probe.
+     */
+    private boolean shouldProbePastCheckpoint(final ChangelogMetadata changelogMetadata,
+                                              final TopicPartition partition,
+                                              final long floor,
+                                              final Long endOffset) {
+        if (changelogMetadata.stateManager.taskType() != TaskType.ACTIVE) {
+            return false;
+        }
+        final long retentionPeriod = changelogMetadata.storeMetadata.retentionPeriod();
+        if (retentionPeriod <= 0 || retentionPeriod == Long.MAX_VALUE) {
+            return false;
+        }
+        if (!probeIsDue(partition)) {
+            return false;
+        }
+        return endOffset != null && endOffset - floor >= PROBE_MIN_CHECKPOINT_GAP;
+    }
+
     private void seekNewPartitions(final Map<TopicPartition, Long> windowedPartitionsRetention,
-                                    final Set<TopicPartition> seekToBeginningPartitions) {
+                                    final Set<TopicPartition> seekToBeginningPartitions,
+                                    final Map<TopicPartition, Long> newPartitionsFloor) {
         // Seek non-windowed partitions to beginning.
         if (!seekToBeginningPartitions.isEmpty()) {
             restoreConsumer.seekToBeginning(seekToBeginningPartitions);
         }
+
+        // Checkpointed partitions routed through the probe that fall back are sent to their floor
+        // (checkpoint + 1), never to the beginning; collected here and seeked at the end.
+        final Set<TopicPartition> floorFallbackPartitions = new HashSet<>();
 
         // Try to optimize windowed partitions by seeking past expired data.
         if (!windowedPartitionsRetention.isEmpty()) {
@@ -1149,6 +1198,24 @@ public class StoreChangelogReader implements ChangelogReader {
                 final Map<TopicPartition, Long> beginningOffsets =
                     restoreConsumer.beginningOffsets(windowedPartitionsRetention.keySet());
 
+                // A checkpoint below the log start (truncated head) or on an empty/shrunk log cannot be
+                // certified by the skip. Seek it to its floor, pause it, and drop it from the probe, so
+                // the next restore poll -- not the probe's -- takes the InvalidOffsetException ->
+                // TaskCorrupted wipe path a plain seek(checkpoint + 1) would; probe from scratch afterward.
+                final Set<TopicPartition> demotedToFloor = new HashSet<>();
+                for (final TopicPartition partition : windowedPartitionsRetention.keySet()) {
+                    final Long floor = newPartitionsFloor.get(partition);
+                    final Long endOffset = endOffsets.get(partition);
+                    if (floor != null &&
+                        (floor < beginningOffsets.getOrDefault(partition, 0L) || endOffset == null || endOffset <= 0)) {
+                        restoreConsumer.seek(partition, floor);
+                        restoreConsumer.pause(Collections.singleton(partition));
+                        demotedToFloor.add(partition);
+                    }
+                }
+                windowedPartitionsRetention.keySet().removeAll(demotedToFloor);
+
+                // partitions with no checkpoint on an empty/unreadable log seek to the beginning
                 for (final TopicPartition partition : windowedPartitionsRetention.keySet()) {
                     final Long endOffset = endOffsets.get(partition);
                     if (endOffset == null || endOffset <= 0) {
@@ -1164,19 +1231,22 @@ public class StoreChangelogReader implements ChangelogReader {
                 final Set<TopicPartition> unresolved = new HashSet<>(windowedPartitionsRetention.keySet());
                 runBackwardProbe(unresolved, latestTimestamps, beginningOffsets, endOffsets);
 
-                seekByRetention(latestTimestamps, windowedPartitionsRetention, seekToBeginningPartitions);
+                seekByRetention(latestTimestamps, windowedPartitionsRetention, seekToBeginningPartitions,
+                    newPartitionsFloor, floorFallbackPartitions);
             } catch (final TimeoutException e) {
                 log.debug("Could not seek by timestamp for changelog partitions {}, falling back to seek-to-beginning",
                     windowedPartitionsRetention.keySet(), e);
-                seekToBeginningPartitions.addAll(windowedPartitionsRetention.keySet());
+                addProbeFallback(windowedPartitionsRetention.keySet(), newPartitionsFloor,
+                    seekToBeginningPartitions, floorFallbackPartitions);
             } catch (final KafkaException e) {
                 log.warn("Failed to seek by timestamp for changelog partitions {}, falling back to seek-to-beginning",
                     windowedPartitionsRetention.keySet(), e);
-                seekToBeginningPartitions.addAll(windowedPartitionsRetention.keySet());
+                addProbeFallback(windowedPartitionsRetention.keySet(), newPartitionsFloor,
+                    seekToBeginningPartitions, floorFallbackPartitions);
             } finally {
                 // in the finally, not after the probe: a lookup that times out leaves through a
                 // catch, and a probe that fails that way must arm the backoff like any other
-                recordProbeOutcomes(windowedPartitionsRetention, seekToBeginningPartitions);
+                recordProbeOutcomes(windowedPartitionsRetention, seekToBeginningPartitions, floorFallbackPartitions);
                 restoreConsumer.pause(allAssigned);
                 final Set<TopicPartition> toResume = new HashSet<>(allAssigned);
                 toResume.removeAll(previouslyPaused);
@@ -1190,6 +1260,24 @@ public class StoreChangelogReader implements ChangelogReader {
         // Their position was moved by seek+poll above.
         if (!seekToBeginningPartitions.isEmpty()) {
             restoreConsumer.seekToBeginning(seekToBeginningPartitions);
+        }
+        // Checkpointed partitions that fell back seek to their floor, never to the beginning.
+        for (final TopicPartition partition : floorFallbackPartitions) {
+            restoreConsumer.seek(partition, newPartitionsFloor.get(partition));
+        }
+    }
+
+    /** A partition the probe could not place goes to its floor if checkpointed, else to the beginning. */
+    private static void addProbeFallback(final Collection<TopicPartition> partitions,
+                                         final Map<TopicPartition, Long> newPartitionsFloor,
+                                         final Set<TopicPartition> seekToBeginningPartitions,
+                                         final Set<TopicPartition> floorFallbackPartitions) {
+        for (final TopicPartition partition : partitions) {
+            if (newPartitionsFloor.containsKey(partition)) {
+                floorFallbackPartitions.add(partition);
+            } else {
+                seekToBeginningPartitions.add(partition);
+            }
         }
     }
 
@@ -1282,7 +1370,9 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private void seekByRetention(final Map<TopicPartition, Long> latestTimestamps,
                                  final Map<TopicPartition, Long> windowedPartitionsRetention,
-                                 final Set<TopicPartition> seekToBeginningPartitions) {
+                                 final Set<TopicPartition> seekToBeginningPartitions,
+                                 final Map<TopicPartition, Long> newPartitionsFloor,
+                                 final Set<TopicPartition> floorFallbackPartitions) {
         final Map<TopicPartition, Long> seekTimestamps = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> entry : windowedPartitionsRetention.entrySet()) {
             final TopicPartition partition = entry.getKey();
@@ -1297,8 +1387,8 @@ public class StoreChangelogReader implements ChangelogReader {
                     continue;
                 }
             }
-            log.debug("Start restoring changelog partition {} from the beginning.", partition);
-            seekToBeginningPartitions.add(partition);
+            log.debug("Start restoring changelog partition {} from its fallback position.", partition);
+            addProbeFallback(Collections.singleton(partition), newPartitionsFloor, seekToBeginningPartitions, floorFallbackPartitions);
         }
 
         if (!seekTimestamps.isEmpty()) {
@@ -1306,9 +1396,12 @@ public class StoreChangelogReader implements ChangelogReader {
                 restoreConsumer.offsetsForTimes(seekTimestamps);
             offsetsByTimestamp.forEach((partition, offsetAndTimestamp) -> {
                 if (offsetAndTimestamp != null) {
-                    restoreConsumer.seek(partition, offsetAndTimestamp.offset());
+                    // never seek below the checkpoint floor: a timestamp offset at or before it would
+                    // re-apply applied records and rewind the checkpoint (floor is 0 with no checkpoint)
+                    final long floor = newPartitionsFloor.getOrDefault(partition, 0L);
+                    restoreConsumer.seek(partition, Math.max(floor, offsetAndTimestamp.offset()));
                 } else {
-                    seekToBeginningPartitions.add(partition);
+                    addProbeFallback(Collections.singleton(partition), newPartitionsFloor, seekToBeginningPartitions, floorFallbackPartitions);
                 }
             });
         }
@@ -1316,9 +1409,10 @@ public class StoreChangelogReader implements ChangelogReader {
 
     /** Arms the backoff for partitions the probe could not place, and clears it for those it did. */
     private void recordProbeOutcomes(final Map<TopicPartition, Long> windowedPartitionsRetention,
-                                     final Set<TopicPartition> seekToBeginningPartitions) {
+                                     final Set<TopicPartition> seekToBeginningPartitions,
+                                     final Set<TopicPartition> floorFallbackPartitions) {
         for (final TopicPartition partition : windowedPartitionsRetention.keySet()) {
-            if (seekToBeginningPartitions.contains(partition)) {
+            if (seekToBeginningPartitions.contains(partition) || floorFallbackPartitions.contains(partition)) {
                 probeFailedAtMs.put(partition, time.milliseconds());
             } else {
                 probeFailedAtMs.remove(partition);
