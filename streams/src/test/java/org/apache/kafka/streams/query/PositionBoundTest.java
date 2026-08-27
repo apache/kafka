@@ -75,7 +75,7 @@ public class PositionBoundTest {
     @Test
     public void shouldNotEqualNull() {
         final PositionBound bound1 = PositionBound.at(Position.emptyPosition());
-        assertNotEquals(bound1, null);
+        assertNotEquals(null, bound1);
     }
 
     @Test

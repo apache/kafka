@@ -38,7 +38,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -211,7 +210,7 @@ public class PositionTest {
     @Test
     public void shouldNotMatchNull() {
         final Position position = Position.emptyPosition();
-        assertNotNull(position);
+        assertNotEquals(null, position);
     }
 
     @Test
