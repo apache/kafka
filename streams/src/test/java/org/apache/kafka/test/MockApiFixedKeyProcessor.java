@@ -22,7 +22,6 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.time.Duration;
@@ -31,8 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcessor<KIn, VIn, VOut> {
 
@@ -91,47 +88,8 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
         }
     }
 
-    public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
-        assertEquals(expected.length, processed.size(), "the number of outputs:" + processed);
-        for (int i = 0; i < expected.length; i++) {
-            final FixedKeyRecord<KIn, VIn> record = processed.get(i);
-            assertEquals(
-                expected[i],
-                new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()),
-                "output[" + i + "]:"
-            );
-        }
-
-        processed.clear();
-    }
-
-    public void checkAndClearProcessedRecords(final Record<?, ?>... expected) {
-        assertEquals(expected.length, processed.size(), "the number of outputs:" + processed);
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processed.get(i), "output[" + i + "]:");
-        }
-
-        processed.clear();
-    }
-
     public void requestCommit() {
         commitRequested = true;
-    }
-
-    public void checkEmptyAndClearProcessResult() {
-        assertEquals(0, processed.size(), "the number of outputs:" + processed);
-        processed.clear();
-    }
-
-    public void checkAndClearPunctuateResult(final PunctuationType type, final long... expected) {
-        final ArrayList<Long> punctuated = type == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime;
-        assertEquals(expected.length, punctuated.size(), "the number of outputs:" + punctuated);
-
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], punctuated.get(i), "output[" + i + "]:");
-        }
-
-        processed.clear();
     }
 
     public ArrayList<KeyValueTimestamp<KIn, VIn>> processed() {
