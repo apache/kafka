@@ -1198,23 +1198,28 @@ public class KRaftClusterTest {
                 assertTrue(controllerIds.contains(quorumInfo.leaderId()),
                     "Leader ID " + quorumInfo.leaderId() + " was not a controller ID.");
 
-                // Try to bring down the raft client in the active controller node to force the leader election.
-                // Stop raft client but not the controller, because we would like to get NOT_LEADER_OR_FOLLOWER error first.
-                // If the controller is shutdown, the client can't send request to the original leader.
-                cluster.controllers().get(quorumInfo.leaderId()).sharedServer().raftManager().client().shutdown(1000);
-                // Send another describe metadata quorum request, it'll get NOT_LEADER_OR_FOLLOWER error first and then re-retrieve the metadata update
-                // and send to the correct active controller.
-                KafkaFuture<QuorumInfo> quorumInfo2Future = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions()).quorumInfo();
-                // If raft client finishes shutdown before returning NOT_LEADER_OR_FOLLOWER error, the request will not be handled.
-                // This makes test fail. Shutdown the controller to make sure the request is handled by another controller.
-                cluster.controllers().get(quorumInfo.leaderId()).shutdown();
-                QuorumInfo quorumInfo2 = quorumInfo2Future.get();
-                // Make sure the leader has changed
-                assertTrue(quorumInfo.leaderId() != quorumInfo2.leaderId());
+                // Force a leader election by shutting down the current leader.
+                int oldLeaderId = quorumInfo.leaderId();
+                cluster.controllers().get(oldLeaderId).shutdown();
 
-                assertEquals(controllerIds, voterIds);
-                assertTrue(controllerIds.contains(quorumInfo.leaderId()),
-                    "Leader ID " + quorumInfo.leaderId() + " was not a controller ID.");
+                // Poll until the admin client observes the new leader. describeMetadataQuorum retries
+                // through the NOT_LEADER_OR_FOLLOWER errors and re-resolves the active controller while
+                // the election completes.
+                AtomicReference<QuorumInfo> quorumInfo2Ref = new AtomicReference<>();
+                TestUtils.waitForCondition(() -> {
+                    QuorumInfo qi = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions()).quorumInfo().get();
+                    quorumInfo2Ref.set(qi);
+                    return qi.leaderId() != oldLeaderId && controllerIds.contains(qi.leaderId());
+                }, "Timed out waiting for a new metadata quorum leader after shutting down node " + oldLeaderId);
+                QuorumInfo quorumInfo2 = quorumInfo2Ref.get();
+
+                assertNotEquals(oldLeaderId, quorumInfo2.leaderId());
+                Set<Integer> voterIds2 = quorumInfo2.voters().stream()
+                    .map(QuorumInfo.ReplicaState::replicaId)
+                    .collect(Collectors.toSet());
+                assertEquals(controllerIds, voterIds2);
+                assertTrue(controllerIds.contains(quorumInfo2.leaderId()),
+                    "Leader ID " + quorumInfo2.leaderId() + " was not a controller ID.");
             }
         }
     }
