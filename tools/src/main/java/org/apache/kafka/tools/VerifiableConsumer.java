@@ -671,6 +671,15 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         return parser;
     }
 
+    private static String validatedSubscribedRegex(Namespace res, GroupProtocol groupProtocol, ArgumentParser parser) throws ArgumentParserException {
+        String subscribedRegex = res.getString("subscribedRegex");
+        if (subscribedRegex != null && groupProtocol != GroupProtocol.CONSUMER) {
+            throw new ArgumentParserException("--subscribed-regex requires the "
+                    + GroupProtocol.CONSUMER.name() + " group protocol.", parser);
+        }
+        return subscribedRegex;
+    }
+
     public static VerifiableConsumer createFromArgs(ArgumentParser parser, String[] args) throws ArgumentParserException {
         Namespace res = parser.parseArgs(args);
 
