@@ -226,7 +226,7 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
-def run_tests(image, mode, fixtures_dir, container_runtime="docker", report_path=None):
+def run_tests(image, mode, fixtures_dir, container_runtime="docker"):
     DockerSanityTest.IMAGE = image
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
     DockerSanityTest.MODE = mode
