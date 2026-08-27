@@ -226,6 +226,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
         case ApiKeys.UNREGISTER_BROKER => forwardToController(request)
+        case ApiKeys.UNREGISTER_CONTROLLER => forwardToController(request)
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case ApiKeys.DESCRIBE_QUORUM => forwardToController(request)
@@ -1564,9 +1565,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     // client is connecting to the correct broker. If both are specified, they must match
     // the expected values for this broker.
     def clusterIdOrNodeIdIsInvalid(apiVersionRequest: ApiVersionsRequest): Boolean = {
-      apiVersionRequest.version >= 5 &&
+      val invalid = apiVersionRequest.version >= 5 &&
         apiVersionRequest.data.clusterId != null &&
         (apiVersionRequest.data.clusterId != clusterId || apiVersionRequest.data.nodeId != brokerId)
+      if (invalid && isTraceEnabled) {
+        trace(s"Rejecting ApiVersionsRequest v${apiVersionRequest.version} from ${request.context.connectionId} " +
+          s"with clusterId=${apiVersionRequest.data.clusterId}, nodeId=${apiVersionRequest.data.nodeId}; " +
+          s"expected clusterId=$clusterId, nodeId=$brokerId for clientId=${request.context.clientId}")
+      }
+      invalid
     }
 
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)
@@ -2226,7 +2233,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterConfigsRequest(request: Request): Unit = {
     val original = request.body(classOf[AlterConfigsRequest])
-    val preprocessingResponses = configManager.preprocess(original.data())
+    val preprocessingResponses = configManager.preprocess(original.data(),
+      (rType, rName) => authHelper.authorize(request.context, ALTER_CONFIGS, rType, rName))
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
     def sendResponse(secondPart: Optional[ApiMessage]): Unit = {
       secondPart.toScala match {

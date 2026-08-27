@@ -234,6 +234,14 @@ public class MockController implements Controller {
         throw new UnsupportedOperationException();
     }
 
+    @Override
+    public CompletableFuture<Void> unregisterController(
+        ControllerRequestContext context,
+        int controllerId
+    ) {
+        throw new UnsupportedOperationException();
+    }
+
     static class MockTopic {
         private final String name;
         private final Uuid id;

@@ -164,8 +164,4 @@ public class OffsetDeleteResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 0;
-    }
 }

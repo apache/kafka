@@ -171,6 +171,7 @@ import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
+import org.apache.kafka.common.message.UnregisterControllerRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -252,6 +253,8 @@ import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerRequest;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
+import org.apache.kafka.common.requests.UnregisterControllerRequest;
+import org.apache.kafka.common.requests.UnregisterControllerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -270,6 +273,7 @@ import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -586,8 +590,18 @@ public class KafkaAdminClient extends AdminClient {
                 ? config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)
                 : config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
 
-            // Don't create bootstrap cluster here - let NetworkClient.ensureBootstrapped() handle it
-            // during the first poll after DNS resolution succeeds
+            // bootstrap.resolve.timeout.ms=0 resolves DNS synchronously here and primes the
+            // metadata manager, so any DNS failure surfaces as a ConfigException and no admin
+            // client instance is created. A positive value opts in to asynchronous bootstrap
+            // resolution, where resolution is deferred to the first poll.
+            if (config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG) == 0L) {
+                List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+                    bootstrapAddressesToUse,
+                    config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
+                metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
+            }
+            // Otherwise, let NetworkClient.ensureBootstrapped() handle it during the first poll
+            // after DNS resolution succeeds.
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             clientTelemetryReporter.ifPresent(reporters::add);
@@ -4933,6 +4947,48 @@ public class KafkaAdminClient extends AdminClient {
         };
         runnable.call(call, now);
         return new UnregisterBrokerResult(future);
+    }
+
+    @Override
+    public UnregisterControllerResult unregisterController(int controllerId, UnregisterControllerOptions options) {
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call("unregisterController", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedBrokerOrActiveKController()) {
+
+            @Override
+            UnregisterControllerRequest.Builder createRequest(int timeoutMs) {
+                UnregisterControllerRequestData data =
+                    new UnregisterControllerRequestData().setControllerId(controllerId);
+                return new UnregisterControllerRequest.Builder(data);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final UnregisterControllerResponse response =
+                    (UnregisterControllerResponse) abstractResponse;
+                Errors error = Errors.forCode(response.data().errorCode());
+                switch (error) {
+                    case NONE:
+                        future.complete(null);
+                        break;
+                    case REQUEST_TIMED_OUT:
+                        throw error.exception(response.data().errorMessage());
+                    default:
+                        log.error("Unregister controller request for controller ID {} failed: {}",
+                            controllerId, response.data().errorMessage());
+                        future.completeExceptionally(error.exception(response.data().errorMessage()));
+                        break;
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new UnregisterControllerResult(future);
     }
 
     @Override

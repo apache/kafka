@@ -49,7 +49,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
-object KafkaConfig {
+object KafkaConfig extends Logging {
 
   def main(args: Array[String]): Unit = {
     val combined = new ConfigDef(configDef)
@@ -73,8 +73,15 @@ object KafkaConfig {
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
 
-  def fromProps(props: Properties, doLog: Boolean): KafkaConfig =
+  def fromProps(props: Properties, doLog: Boolean): KafkaConfig = {
+    // Checked on the raw properties because populateSynonyms copies node.id into broker.id.
+    // Do not add a doLog guard: the broker startup path calls this with doLog = false.
+    if (props.containsKey(ServerConfigs.BROKER_ID_CONFIG)) {
+      warn(s"The '${ServerConfigs.BROKER_ID_CONFIG}' configuration is deprecated and will be removed in " +
+        s"Apache Kafka 5.0. Please use '${KRaftConfigs.NODE_ID_CONFIG}' instead.")
+    }
     new KafkaConfig(props, doLog)
+  }
 
   def fromProps(defaults: Properties, overrides: Properties): KafkaConfig =
     fromProps(defaults, overrides, true)
@@ -87,6 +94,9 @@ object KafkaConfig {
   }
 
   def apply(props: java.util.Map[_, _], doLog: Boolean = true): KafkaConfig = new KafkaConfig(props, doLog)
+
+  def apply(props: java.util.Map[_, _], doLog: Boolean, enforceProviderAllowlist: Boolean): KafkaConfig =
+    new KafkaConfig(doLog, AbstractKafkaConfig.populateSynonyms(props), enforceProviderAllowlist)
 
   def configType(configName: String): Option[ConfigDef.Type] =
     AbstractKafkaConfig.configType(configName).toScala
@@ -102,11 +112,16 @@ object KafkaConfig {
  * Any code depends on kafka.server.KafkaConfig will keep for using kafka.server.KafkaConfig for the time being until we move it out of core
  * For more details check KAFKA-15853
  */
-class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
-  extends AbstractKafkaConfig(KafkaConfig.configDef, props, Utils.castToStringObjectMap(props), doLog) with Logging {
+class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProviderAllowlist: Boolean)
+  extends AbstractKafkaConfig(
+    KafkaConfig.configDef,
+    props,
+    if (enforceProviderAllowlist) util.Map.of() else Utils.castToStringObjectMap(props),
+    doLog
+  ) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(true, AbstractKafkaConfig.populateSynonyms(props))
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, AbstractKafkaConfig.populateSynonyms(props))
+  def this(props: java.util.Map[_, _]) = this(true, AbstractKafkaConfig.populateSynonyms(props), false)
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, AbstractKafkaConfig.populateSynonyms(props), false)
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
@@ -427,7 +442,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
-      throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
+      throw new ConfigException(s"`${KRaftConfigs.NODE_ID_CONFIG}` and `${ServerConfigs.BROKER_ID_CONFIG}` must be set to the same value. " +
+        s"`${ServerConfigs.BROKER_ID_CONFIG}` is deprecated, please use `${KRaftConfigs.NODE_ID_CONFIG}` instead.")
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")

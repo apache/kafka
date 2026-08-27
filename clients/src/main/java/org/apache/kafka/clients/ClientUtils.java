@@ -114,14 +114,49 @@ public final class ClientUtils {
         return addresses;
     }
 
-    public static List<InetSocketAddress> parseAndValidateAddresses(AbstractConfig config) {
-        List<String> urls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
-        String clientDnsLookupConfig = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
-        return parseAndValidateAddresses(urls, clientDnsLookupConfig);
-    }
-
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookupConfig) {
         return parseAndValidateAddresses(urls, ClientDnsLookup.forConfig(clientDnsLookupConfig));
+    }
+
+    /**
+     * If {@code bootstrap.resolve.timeout.ms=0} (the default), resolves DNS for the given bootstrap
+     * servers synchronously and primes {@code metadata} with the resulting cluster. A DNS failure
+     * surfaces as {@link ConfigException} and no client instance is created.
+     * <p>
+     * A positive value opts in to asynchronous bootstrap resolution, in which case this method is
+     * a no-op — {@link NetworkClient} will resolve DNS on the first poll and defer failures to
+     * subsequent API calls as {@link org.apache.kafka.common.errors.BootstrapResolutionException}.
+     */
+    public static void maybeBootstrapMetadataSynchronously(AbstractConfig config,
+                                                           List<String> bootstrapServers,
+                                                           Metadata metadata) {
+        if (config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG) == 0L) {
+            metadata.bootstrap(parseAndValidateAddresses(bootstrapServers,
+                config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)));
+        }
+    }
+
+    /**
+     * Returns {@link BootstrapConfiguration#DISABLED} when {@code bootstrap.resolve.timeout.ms=0}
+     * (the caller is expected to have primed metadata synchronously via
+     * {@link #maybeBootstrapMetadataSynchronously}), otherwise an enabled configuration that
+     * lets {@link NetworkClient} resolve DNS asynchronously up to the configured budget.
+     */
+    public static BootstrapConfiguration bootstrapConfiguration(AbstractConfig config, List<String> bootstrapServers) {
+        long bootstrapResolveTimeoutMs = config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
+        if (bootstrapResolveTimeoutMs == 0L) {
+            return BootstrapConfiguration.DISABLED;
+        }
+        log.info(
+            "Asynchronous bootstrap DNS resolution is enabled via {}={}. This evolving feature may undergo compatibility-breaking changes in a minor release.", 
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, 
+            bootstrapResolveTimeoutMs
+        );
+        return BootstrapConfiguration.enabled(
+            bootstrapServers,
+            ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+            bootstrapResolveTimeoutMs,
+            config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
     }
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
@@ -247,13 +282,7 @@ public final class ClientUtils {
                     metricsGroupPrefix,
                     channelBuilder,
                     logContext);
-            ClientDnsLookup dnsLookup = ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
-
-            BootstrapConfiguration bootstrapConfiguration = BootstrapConfiguration.enabled(
-                bootstrapServers,
-                dnsLookup,
-                config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
-                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
+            BootstrapConfiguration bootstrapConfiguration = bootstrapConfiguration(config, bootstrapServers);
 
             return new NetworkClient(metadataUpdater,
                     metadata,

@@ -33,7 +33,7 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
         this.serializer = serializer;
     }
 
-    @SuppressWarnings({"removal"})
+    @SuppressWarnings("removal")
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
         throw new UnsupportedOperationException("This method is deprecated and should not be called.");

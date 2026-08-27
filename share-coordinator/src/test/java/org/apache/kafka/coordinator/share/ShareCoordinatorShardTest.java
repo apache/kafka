@@ -163,6 +163,7 @@ class ShareCoordinatorShardTest {
 
         shard.replay(0L, 0L, (short) 0, result.records().get(0));
 
+        int readStateEpoch = result.response().results().get(0).partitions().get(0).stateEpoch();
         WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
             .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
@@ -171,7 +172,7 @@ class ShareCoordinatorShardTest {
                     .setPartition(PARTITION)
                     .setStartOffset(0)
                     .setDeliveryCompleteCount(0)
-                    .setStateEpoch(0)
+                    .setStateEpoch(readStateEpoch)
                     .setLeaderEpoch(leaderEpoch)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
                         .setFirstOffset(0)
@@ -606,6 +607,420 @@ class ShareCoordinatorShardTest {
 
         // No changes to the stateEpochMap.
         assertEquals(1, shard.getStateEpochMapValue(SHARE_PARTITION_KEY));
+    }
+
+    /**
+     * The test validates that if a previous write state request with higher start offset
+     * had been applied to the state machine, then a subsequent write request
+     * on the same share partition key with lower start offset will have the start offset value
+     * superseded by the previous higher value.
+     * <p>
+     * For example,
+     * req1: {
+     *  startOffset: 5,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  stateBatches: [(11, 20, 1, ARCHIVED)]
+     * }
+     * <p>
+     * req2: {
+     *  startOffset: 2,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  stateBatches: [(0, 20, 1, AVAILABLE)]
+     * }
+     * <p>
+     * Then, final state would be
+     * result: {
+     *  startOffset: 5,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  stateBatches: [(5, 10, 1, AVAILABLE), (11, 20, 1, ARCHIVED)]
+     * }
+     *
+     */
+    @Test
+    public void testWriteStateDiscardsStartOffsetRegression() {
+        initSharePartition(shard, SHARE_PARTITION_KEY, 5);
+        writeAndReplayRecord(shard, 3);
+        int request1StartOffset = 5;
+        int request2StartOffset = 2;
+
+        WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request1StartOffset)
+                    .setDeliveryCompleteCount(10)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(11)
+                        .setLastOffset(20)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 4)))))));
+
+        WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request2StartOffset)  // Lower start offset in second request
+                    .setDeliveryCompleteCount(10)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)  // First offset lower than in request1
+                        .setLastOffset(20)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request1);
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        // Verify request2
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result2 = shard.writeState(request2);
+        shard.replay(0L, 0L, (short) 0, result2.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData2 = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords2 = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), TIME.milliseconds()).builderSupplier()
+                .setStartOffset(request1StartOffset)
+                .setStateBatches(List.of(new PersisterStateBatch(request1StartOffset, 20, (byte) 0, (short) 1)))
+                .build()
+        ));
+
+        assertEquals(expectedData2, result2.response());
+        assertEquals(expectedRecords2, result2.records());
+
+        ShareGroupOffset expectedFinalValue = new ShareGroupOffset.Builder()
+            .setStartOffset(request1StartOffset)
+            .setStateEpoch(5)
+            .setLeaderEpoch(3)
+            .setDeliveryCompleteCount(10)
+            .setStateBatches(List.of(
+                new PersisterStateBatch(5, 10, (byte) 0, (short) 1),
+                new PersisterStateBatch(11, 20, (byte) 4, (short) 1)
+            ))
+            .build();
+
+        assertEquals(expectedFinalValue, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+    }
+
+    /**
+     * This test validates that the delivery complete count advances correctly, in relation to
+     * start offset.
+     * case 1: incoming request start offset > current state
+     * <p>
+     * For example,
+     * req1: {
+     *  startOffset: 5,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10
+     *  stateBatches: []
+     * }
+     * <p>
+     * req2: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 4
+     *  stateBatches: []
+     * }
+     * <p>
+     * Then, final state would be
+     * result: {
+     *  startOffset: 5,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 4    // req2 delivery count preferred as start offset advanced
+     *  stateBatches: []
+     * }
+     *
+     */
+    @Test
+    public void testWriteStateDiscardsDeliveryCompleteCountRegressionIncomingStartOffsetGreater() {
+        initSharePartition(shard, SHARE_PARTITION_KEY, 5);
+        writeAndReplayRecord(shard, 3);
+        int request1StartOffset = 5;
+        int request2StartOffset = 11;
+        int request2DeliveryCompleteCount = 4;
+
+        WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request1StartOffset)
+                    .setDeliveryCompleteCount(10)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request2StartOffset)    // higher start offset than req1
+                    .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request1);
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        // Verify request2
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result2 = shard.writeState(request2);
+        shard.replay(0L, 0L, (short) 0, result2.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData2 = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords2 = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), TIME.milliseconds()).builderSupplier()
+                .setStartOffset(request2StartOffset)
+                .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+                .build()
+        ));
+
+        assertEquals(expectedData2, result2.response());
+        assertEquals(expectedRecords2, result2.records());
+
+        ShareGroupOffset expectedFinalValue = new ShareGroupOffset.Builder()
+            .setStartOffset(request2StartOffset)
+            .setStateEpoch(5)
+            .setLeaderEpoch(3)
+            .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+            .setStateBatches(List.of())
+            .build();
+
+        assertEquals(expectedFinalValue, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+    }
+
+    /**
+     * This test validates that the delivery complete count advances correctly, in relation to
+     * start offset.
+     * case 1: incoming request start offset > current state
+     * <p>
+     * For example,
+     * req1: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10
+     *  stateBatches: []
+     * }
+     * <p>
+     * req2: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 5
+     *  stateBatches: []
+     * }
+     * <p>
+     * Then, final state would be
+     * result: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10    // req1 delivery count preferred as start offsets equal
+     *  stateBatches: []
+     * }
+     *
+     */
+    @Test
+    public void testWriteStateDiscardsDeliveryCompleteCountRegressionIncomingStartOffsetEqual() {
+        initSharePartition(shard, SHARE_PARTITION_KEY, 5);
+        writeAndReplayRecord(shard, 3);
+        int request1StartOffset = 11;
+        int request2StartOffset = 11;
+        int request1DeliveryCompleteCount = 10;
+        int request2DeliveryCompleteCount = 5;
+
+        WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request1StartOffset)
+                    .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request2StartOffset)    // same start offset than req1
+                    .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request1);
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        // Verify request2
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result2 = shard.writeState(request2);
+        shard.replay(0L, 0L, (short) 0, result2.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData2 = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords2 = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), TIME.milliseconds()).builderSupplier()
+                .setStartOffset(request2StartOffset)
+                .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+                .build()
+        ));
+
+        assertEquals(expectedData2, result2.response());
+        assertEquals(expectedRecords2, result2.records());
+
+        ShareGroupOffset expectedFinalValue = new ShareGroupOffset.Builder()
+            .setStartOffset(request2StartOffset)
+            .setStateEpoch(5)
+            .setLeaderEpoch(3)
+            .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+            .setStateBatches(List.of())
+            .build();
+
+        assertEquals(expectedFinalValue, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+    }
+
+    /**
+     * This test validates that the delivery complete count advances correctly, in relation to
+     * start offset.
+     * case 1: incoming request start offset > current state
+     * <p>
+     * For example,
+     * req1: {
+     *  startOffset: 15,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10
+     *  stateBatches: []
+     * }
+     * <p>
+     * req2: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 20
+     *  stateBatches: []
+     * }
+     * <p>
+     * Then, final state would be
+     * result: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10    // req1 delivery count preferred as incoming start offset smaller
+     *  stateBatches: []
+     * }
+     *
+     */
+    @Test
+    public void testWriteStateDiscardsDeliveryCompleteCountRegressionIncomingStartOffsetSmaller() {
+        initSharePartition(shard, SHARE_PARTITION_KEY, 5);
+        writeAndReplayRecord(shard, 3);
+        int request1StartOffset = 15;
+        int request2StartOffset = 11;
+        int request1DeliveryCompleteCount = 10;
+        int request2DeliveryCompleteCount = 20;
+
+        WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request1StartOffset)
+                    .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request2StartOffset)    // same start offset than req1
+                    .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request1);
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        // Verify request2
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result2 = shard.writeState(request2);
+        shard.replay(0L, 0L, (short) 0, result2.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData2 = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords2 = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), TIME.milliseconds()).builderSupplier()
+                .setStartOffset(request1StartOffset)
+                .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+                .build()
+        ));
+
+        assertEquals(expectedData2, result2.response());
+        assertEquals(expectedRecords2, result2.records());
+
+        ShareGroupOffset expectedFinalValue = new ShareGroupOffset.Builder()
+            .setStartOffset(request1StartOffset)
+            .setStateEpoch(5)
+            .setLeaderEpoch(3)
+            .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+            .setStateBatches(List.of())
+            .build();
+
+        assertEquals(expectedFinalValue, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
     }
 
     @Test
@@ -1302,26 +1717,21 @@ class ShareCoordinatorShardTest {
 
     @Test
     public void testInitializeStateSuccess() {
-        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
-                    .setPartition(PARTITION)
-                    .setStartOffset(10)
-                    .setStateEpoch(5)))
-            ));
+        InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(PARTITION)
+            .setStartOffset(10)
+            .setStateEpoch(5);
 
         assertNull(shard.getShareStateMapValue(SHARE_PARTITION_KEY));
         assertNull(shard.getStateEpochMapValue(SHARE_PARTITION_KEY));
 
-        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
         result.records().forEach(record -> shard.replay(0L, 0L, (short) 0, record));
 
         InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = List.of(
             ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), TIME.milliseconds())
+                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(partitionData, TIME.milliseconds())
             ));
 
         assertEquals(expectedData, result.response());
@@ -1332,20 +1742,72 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
+    public void testInitializeStateIdempotent() {
+        InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(PARTITION)
+            .setStartOffset(10)
+            .setStateEpoch(5);
+
+        // First call initializes the state and writes a record.
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
+        result.records().forEach(record -> shard.replay(0L, 0L, (short) 0, record));
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+
+        assertEquals(expectedData, result.response());
+        assertEquals(1, result.records().size());
+
+        ShareGroupOffset stateAfterFirstCall = shard.getShareStateMapValue(SHARE_PARTITION_KEY);
+        Integer stateEpochAfterFirstCall = shard.getStateEpochMapValue(SHARE_PARTITION_KEY);
+        assertNotNull(stateAfterFirstCall);
+        assertNotNull(stateEpochAfterFirstCall);
+
+        // A retry of the exact same request (same stateEpoch and startOffset) should be
+        // treated as a no-op -- it should return the same successful response but generate
+        // no new record, and the in-memory state should remain unchanged.
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> retryResult = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
+
+        assertEquals(expectedData, retryResult.response());
+        assertEquals(List.of(), retryResult.records());
+
+        assertEquals(stateAfterFirstCall, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+        assertEquals(stateEpochAfterFirstCall, shard.getStateEpochMapValue(SHARE_PARTITION_KEY));
+    }
+
+    @Test
+    public void testInitializeStateNotIdempotentWhenStartOffsetChanges() {
+        InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(PARTITION)
+            .setStartOffset(10)
+            .setStateEpoch(5);
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
+        result.records().forEach(record -> shard.replay(0L, 0L, (short) 0, record));
+        assertEquals(1, result.records().size());
+
+        // Same stateEpoch but a different startOffset should not be treated as a duplicate
+        // and must produce a new record.
+        InitializeShareGroupStateRequestData.PartitionData sameEpochDifferentOffsetPartitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(PARTITION)
+            .setStartOffset(20)
+            .setStateEpoch(5);
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> secondResult = shard.initializeState(GROUP_ID, TOPIC_ID, sameEpochDifferentOffsetPartitionData);
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        assertEquals(expectedData, secondResult.response());
+        assertEquals(1, secondResult.records().size());
+    }
+
+    @Test
     public void testInitializeStateInvalidRequestData() {
         // invalid partition
         int partition = -1;
 
-        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
-                    .setPartition(partition)
-                ))
-            ));
+        InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(partition);
 
-        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
 
         InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
             TOPIC_ID, partition, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_PARTITION_ID.getMessage());
@@ -1364,16 +1826,10 @@ class ShareCoordinatorShardTest {
                 .build()
         ));
 
-        request = new InitializeShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
-                    .setPartition(partition)
-                ))
-            ));
+        partitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(partition);
 
-        result = shard.initializeState(request);
+        result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
 
         expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
             TOPIC_ID, partition, Errors.FENCED_STATE_EPOCH, Errors.FENCED_STATE_EPOCH.exception().getMessage());
@@ -1388,18 +1844,12 @@ class ShareCoordinatorShardTest {
         // invalid stateEpoch
         int stateEpoch = -1;
 
-        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
-                    .setPartition(0)
-                    .setStateEpoch(stateEpoch)
-                    .setStartOffset(1)
-                ))
-            ));
+        InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(0)
+            .setStateEpoch(stateEpoch)
+            .setStartOffset(1);
 
-        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
 
         InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
             TOPIC_ID, 0, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_STATE_EPOCH.getMessage());
@@ -1413,16 +1863,10 @@ class ShareCoordinatorShardTest {
     public void testInitializeNullMetadataImage() {
         shard.onMetadataUpdate(null, null);
 
-        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
-                    .setPartition(0)
-                ))
-            ));
+        InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(0);
 
-        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
 
         InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
             TOPIC_ID, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
@@ -1437,20 +1881,14 @@ class ShareCoordinatorShardTest {
         MetadataImage image = mock(MetadataImage.class);
         shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
-        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
-                    .setPartition(0)
-                ))
-            ));
+        InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(0);
 
         // topic id not found in cache
         TopicsImage topicsImage = mock(TopicsImage.class);
         when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(null);
         when(image.topics()).thenReturn(topicsImage);
-        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
 
         InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
             TOPIC_ID, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
@@ -1467,14 +1905,8 @@ class ShareCoordinatorShardTest {
         when(image.cluster()).thenReturn(mock(ClusterImage.class));
         shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
-        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
-                    .setPartition(0)
-                ))
-            ));
+        InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(0);
 
         // topic id found in cache
         TopicImage topicImage = mock(TopicImage.class);
@@ -1485,7 +1917,7 @@ class ShareCoordinatorShardTest {
 
         // partition id not found
         when(topicsImage.getPartition(eq(TOPIC_ID), eq(0))).thenReturn(null);
-        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
 
         InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
             TOPIC_ID, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
@@ -1950,6 +2382,7 @@ class ShareCoordinatorShardTest {
     private void initSharePartition(ShareCoordinatorShard shard, SharePartitionKey key) {
         initSharePartition(shard, key, 0);
     }
+
     private void initSharePartition(ShareCoordinatorShard shard, SharePartitionKey key, int stateEpoch) {
         shard.replay(0L, 0L, (short) 0, CoordinatorRecord.record(
             new ShareSnapshotKey()
