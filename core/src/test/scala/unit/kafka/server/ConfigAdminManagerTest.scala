@@ -40,7 +40,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, NONE}
 import org.apache.kafka.common.requests.ApiError
-import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.MockConfigRepository
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Assertions, Test}
@@ -49,12 +49,8 @@ import org.slf4j.LoggerFactory
 class ConfigAdminManagerTest {
   val logger = LoggerFactory.getLogger(classOf[ConfigAdminManagerTest])
 
-  def newConfigAdminManager(brokerId: Integer): ConfigAdminManager =
-    newConfigAdminManager(brokerId, Map.empty)
-
-  def newConfigAdminManager(brokerId: Integer, overrides: Map[String, String]): ConfigAdminManager = {
+  def newConfigAdminManager(brokerId: Integer): ConfigAdminManager = {
     val config = TestUtils.createBrokerConfig(nodeId = brokerId)
-    overrides.foreach { case (key, value) => config.setProperty(key, value) }
     new ConfigAdminManager(brokerId, new KafkaConfig(config), new MockConfigRepository())
   }
 
@@ -432,19 +428,24 @@ class ConfigAdminManagerTest {
           setConfigOperation(opType.id()))))
 
   @Test
-  def testPreprocessIncrementalWithUnregisteredBuiltinStreamsAssignorName(): Unit = {
-    // Only the custom assignor is registered on this broker. "sticky" is a valid built-in
-    // assignor name in general, but is rejected here because this broker's own registry, not
-    // the controller's, is what preprocess validates against.
-    val manager = newConfigAdminManager(1,
-      Map(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG -> classOf[CustomStreamsTaskAssignor].getName))
-    val sticky = groupIncremental(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky", OpType.SET)
-    assertEquals(Collections.singletonMap(sticky,
-      new ApiError(Errors.INVALID_CONFIG, "streams.assignor.name 'sticky' is not a " +
-        "registered task assignor. Registered assignors are: [custom].")),
+  def testPreprocessIncrementalWithGroupConfig(): Unit = {
+    val manager = newConfigAdminManager(1)
+    // A valid GROUP config change is not preprocessed; it is forwarded to the controller.
+    val valid = groupIncremental(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000", OpType.SET)
+    assertEquals(Collections.emptyMap(),
       manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-          sticky))),
+          valid))),
+        (_, _) => true))
+
+    // An invalid GROUP config change is rejected on the broker instead of being forwarded.
+    val invalid = groupIncremental(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10", OpType.SET)
+    assertEquals(Collections.singletonMap(invalid,
+      new ApiError(Errors.INVALID_CONFIG,
+        "consumer.session.timeout.ms must be in the range 45000 to 60000 inclusive.")),
+      manager.preprocess(new IncrementalAlterConfigsRequestData().
+        setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
+          invalid))),
         (_, _) => true))
   }
 
@@ -457,18 +458,24 @@ class ConfigAdminManagerTest {
           setValue(value))))
 
   @Test
-  def testPreprocessLegacyWithUnregisteredBuiltinStreamsAssignorName(): Unit = {
-    // Like the incremental path, the legacy path validates GROUP configs against this broker's
-    // own assignor registry.
-    val manager = newConfigAdminManager(1,
-      Map(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG -> classOf[CustomStreamsTaskAssignor].getName))
-    val sticky = groupLegacy(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky")
-    assertEquals(Collections.singletonMap(sticky,
-      new ApiError(Errors.INVALID_CONFIG, "streams.assignor.name 'sticky' is not a " +
-        "registered task assignor. Registered assignors are: [custom].")),
+  def testPreprocessLegacyWithGroupConfig(): Unit = {
+    val manager = newConfigAdminManager(1)
+    // A valid GROUP config change is not preprocessed; it is forwarded to the controller.
+    val valid = groupLegacy(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    assertEquals(Collections.emptyMap(),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-          sticky))),
+          valid))),
+        (_, _) => true))
+
+    // An invalid GROUP config change is rejected on the broker instead of being forwarded.
+    val invalid = groupLegacy(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10")
+    assertEquals(Collections.singletonMap(invalid,
+      new ApiError(Errors.INVALID_CONFIG,
+        "consumer.session.timeout.ms must be in the range 45000 to 60000 inclusive.")),
+      manager.preprocess(new AlterConfigsRequestData().
+        setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
+          invalid))),
         (_, _) => true))
   }
 

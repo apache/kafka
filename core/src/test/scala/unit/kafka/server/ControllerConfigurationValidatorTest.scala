@@ -214,13 +214,13 @@ class ControllerConfigurationValidatorTest {
   }
 
   @Test
-  def testInvalidGroupConfig(): Unit = {
+  def testInvalidGroupConfigRejectedBelowMetadataVersion4_5(): Unit = {
     val config = new util.TreeMap[String, String]()
     config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
     config.put("foobar", "abc")
     assertEquals("Unknown group config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION)).getMessage)
+        new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.IBP_4_4_IV2)).getMessage)
   }
 
   @Test

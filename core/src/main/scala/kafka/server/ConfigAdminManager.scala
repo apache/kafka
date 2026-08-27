@@ -211,9 +211,7 @@ class ConfigAdminManager(nodeId: Int,
     resource: IAlterConfigsResource,
     configResource: ConfigResource
   ): Unit = {
-    if (resource.resourceName().isEmpty) {
-      throw new InvalidRequestException("Default group resources are not allowed.")
-    }
+    validateGroupResourceName(resource.resourceName())
     val configProps = new Properties()
     configProps.putAll(configRepository.config(configResource))
     val alterConfigOps = resource.configs().asScala.map {
@@ -311,9 +309,7 @@ class ConfigAdminManager(nodeId: Int,
   }
 
   private def validateGroupConfigChange(resource: LAlterConfigsResource): Unit = {
-    if (resource.resourceName().isEmpty) {
-      throw new InvalidRequestException("Default group resources are not allowed.")
-    }
+    validateGroupResourceName(resource.resourceName())
     // Legacy AlterConfigs replaces the entire group config, so the request holds the complete
     // new configuration and can be validated as-is.
     val configProps = new Properties()
@@ -336,6 +332,15 @@ class ConfigAdminManager(nodeId: Int,
 
 object ConfigAdminManager {
   val log: Logger = LoggerFactory.getLogger(classOf[ConfigAdminManager])
+
+  /**
+   * Validate that a GROUP resource name is not empty; there is no default group configuration.
+   */
+  def validateGroupResourceName(resourceName: String): Unit = {
+    if (resourceName.isEmpty) {
+      throw new InvalidRequestException("Default group resources are not allowed.")
+    }
+  }
 
   /**
    * Copy the incremental configs request data without any already-processed elements.

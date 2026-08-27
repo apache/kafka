@@ -75,14 +75,6 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
     }
   }
 
-  private def validateGroupName(
-    name: String
-  ): Unit = {
-    if (name.isEmpty) {
-      throw new InvalidRequestException("Default group resources are not allowed.")
-    }
-  }
-
   private def filterAndValidateNullConfigs(
     newConfigs: util.Map[String, String],
     resourceTypeName: String
@@ -140,7 +132,7 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
         val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "client metrics")
         ClientMetricsConfigs.validate(resource.name(), filteredConfigs)
       case GROUP =>
-        validateGroupName(resource.name())
+        ConfigAdminManager.validateGroupResourceName(resource.name())
         // Validate on the controller when the cluster may contain forwarding brokers that do
         // not validate. Can be removed once upgrading directly from a
         // pre-{@link MetadataVersion#IBP_4_5_IV0} cluster is no longer supported.
