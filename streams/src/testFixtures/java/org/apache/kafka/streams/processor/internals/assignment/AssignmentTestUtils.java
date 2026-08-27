@@ -503,6 +503,25 @@ public final class AssignmentTestUtils {
         return new TaskSkewReport(maxTaskSkew, skewedSubtopologies, subtopologyToClientsWithPartition);
     }
 
+    static void assertHasAssignedTasks(final ClientState clientState, final int taskCount) {
+        assertEquals(taskCount, clientState.assignedTaskCount());
+    }
+
+    static void assertHasActiveTasks(final ClientState clientState, final int taskCount) {
+        assertEquals(taskCount, clientState.activeTaskCount());
+    }
+
+    static void assertHasStandbyTasks(final ClientState clientState, final int taskCount) {
+        assertEquals(taskCount, clientState.standbyTaskCount());
+    }
+
+    static <V> void assertHasProperty(final ClientState clientState,
+                                      final String propertyName,
+                                      final Function<ClientState, V> propertyExtractor,
+                                      final V propertyValue) {
+        assertEquals(propertyValue, propertyExtractor.apply(clientState), propertyName);
+    }
+
     static void appendClientStates(final StringBuilder stringBuilder,
                                    final Map<ProcessId, ClientState> clientStates) {
         stringBuilder.append('{').append('\n');

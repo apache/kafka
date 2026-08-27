@@ -69,6 +69,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedActiveAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedStatefulAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasActiveTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasAssignedTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasStandbyTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.copyClientStateMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
@@ -87,7 +90,6 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.spy;
 
@@ -178,11 +180,11 @@ public class HighAvailabilityTaskAssignorTest {
             configs
         );
 
-        assertEquals(allTaskIds.size(), clientState1.assignedTaskCount());
+        assertHasAssignedTasks(clientState1, allTaskIds.size());
 
-        assertEquals(allTaskIds.size(), clientState2.assignedTaskCount());
+        assertHasAssignedTasks(clientState2, allTaskIds.size());
 
-        assertEquals(2, clientState3.assignedTaskCount());
+        assertHasAssignedTasks(clientState3, 2);
 
         assertThat(unstable, is(true));
 
@@ -235,9 +237,9 @@ public class HighAvailabilityTaskAssignorTest {
             configs
         );
 
-        assertEquals(6, clientState1.assignedTaskCount());
-        assertEquals(6, clientState2.assignedTaskCount());
-        assertEquals(6, clientState3.assignedTaskCount());
+        assertHasAssignedTasks(clientState1, 6);
+        assertHasAssignedTasks(clientState2, 6);
+        assertHasAssignedTasks(clientState3, 6);
         assertThat(unstable, is(false));
 
         verifyTaskPlacementWithRackAwareAssignor(rackAwareTaskAssignor, allTaskIds, clientStates, true, enableRackAwareTaskAssignor);
@@ -449,9 +451,9 @@ public class HighAvailabilityTaskAssignorTest {
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
 
-        assertEquals(1, clientState1.activeTaskCount());
-        assertEquals(2, clientState2.activeTaskCount());
-        assertEquals(3, clientState3.activeTaskCount());
+        assertHasActiveTasks(clientState1, 1);
+        assertHasActiveTasks(clientState2, 2);
+        assertHasActiveTasks(clientState3, 3);
         final AssignmentTestUtils.TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates, 1);
         if (taskSkewReport.totalSkewedTasks() == 0) {
             fail("Expected a skewed task assignment, but was: " + taskSkewReport);
@@ -727,8 +729,8 @@ public class HighAvailabilityTaskAssignorTest {
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
-        assertEquals(6, clientState1.activeTaskCount());
-        assertEquals(3, clientState2.activeTaskCount());
+        assertHasActiveTasks(clientState1, 6);
+        assertHasActiveTasks(clientState2, 3);
 
         verifyTaskPlacementWithRackAwareAssignor(rackAwareTaskAssignor, allTaskIds, clientStates, false, enableRackAwareTaskAssignor);
     }
@@ -757,8 +759,8 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                          configs);
 
         assertThat(probingRebalanceNeeded, is(false));
-        assertEquals(2, client1.activeTaskCount());
-        assertEquals(0, client1.standbyTaskCount());
+        assertHasActiveTasks(client1, 2);
+        assertHasStandbyTasks(client1, 0);
 
         assertValidAssignment(0, allTasks, emptySet(), clientStates, new StringBuilder());
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
@@ -1724,7 +1726,7 @@ public class HighAvailabilityTaskAssignorTest {
 
     private static void assertHasNoStandbyTasks(final ClientState... clients) {
         for (final ClientState client : clients) {
-            assertEquals(0, client.standbyTaskCount());
+            assertHasStandbyTasks(client, 0);
         }
     }
 
