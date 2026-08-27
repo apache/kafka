@@ -418,8 +418,8 @@ public class KTableSuppressProcessorTest {
 
         context.setRecordMetadata("", 0, 1L);
         context.setTimestamp(timestamp);
-        assertThrows(StreamsException.class, () ->
-                harness.processor.process(new Record<>("dummyKey", value, timestamp)),
+        assertThrows(StreamsException.class,
+            () -> harness.processor.process(new Record<>("dummyKey", value, timestamp)),
             "buffer exceeded its max capacity"
         );
     }
@@ -440,8 +440,8 @@ public class KTableSuppressProcessorTest {
 
         context.setRecordMetadata("", 0, 1L);
         context.setTimestamp(1L);
-        assertThrows(StreamsException.class, () ->
-                harness.processor.process(new Record<>("dummyKey", value, timestamp)),
+        assertThrows(StreamsException.class,
+            () -> harness.processor.process(new Record<>("dummyKey", value, timestamp)),
             "buffer exceeded its max capacity"
         );
     }
