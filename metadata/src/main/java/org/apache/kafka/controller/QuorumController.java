@@ -307,7 +307,7 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+        public Builder setControllerMaxRecordsPerBatch(int maxRecordsPerBatch) {
             this.maxRecordsPerBatch = maxRecordsPerBatch;
             return this;
         }

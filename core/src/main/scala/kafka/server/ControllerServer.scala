@@ -268,7 +268,7 @@ class ControllerServer(
           setUncleanLeaderElectionCheckIntervalMs(config.uncleanLeaderElectionCheckIntervalMs).
           setControllerPerformanceSamplePeriodMs(config.controllerPerformanceSamplePeriodMs).
           setControllerPerformanceAlwaysLogThresholdMs(config.controllerPerformanceAlwaysLogThresholdMs).
-          setMaxRecordsPerBatch(config.controllerMaxRecordsPerBatch)
+          setControllerMaxRecordsPerBatch(config.controllerMaxRecordsPerBatch)
       }
       controller = controllerBuilder.build()
 
