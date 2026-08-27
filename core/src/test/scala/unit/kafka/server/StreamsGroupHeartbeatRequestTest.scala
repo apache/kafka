@@ -1046,7 +1046,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      // Registered on the broker only, so that the controller has never heard of this assignor.
+      // Registered on the broker only, not on the controller.
       // The class name has to be spelled out because annotation values must be compile-time constants.
       new ClusterConfigProperty(
         id = 0,
@@ -1068,8 +1068,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
       val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
 
-      // An assignor registered on the broker is accepted even though the controller does not have it,
-      // because the name is checked by the broker that receives the request.
+      // An assignor registered only on the broker is accepted, since the broker validates the name.
       val customAlterOp = new AlterConfigOp(
         new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME),
         AlterConfigOp.OpType.SET
@@ -1084,8 +1083,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           CustomStreamsTaskAssignor.NAME
       }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not updated to the expected value within the timeout period.")
 
-      // Conversely, the built-in assignor is rejected: it is not registered on this broker, even though
-      // it is the assignor that the controller itself has registered.
+      // Conversely, an assignor not registered on the broker is rejected.
       val stickyAlterOp = new AlterConfigOp(
         new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky"),
         AlterConfigOp.OpType.SET
