@@ -102,9 +102,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForChangelog;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForRandomChangelog;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.verifyStandbySatisfyRackReplica;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -605,7 +602,7 @@ public class RackAwareTaskAssignorTest {
         assertTrue(assignor.canEnableRackAwareAssignor());
         final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost);
-        assertThat(cost, lessThanOrEqualTo(originalCost));
+        assertTrue(cost <= originalCost);
 
         for (final Entry<ProcessId, ClientState> entry : clientStateMap.entrySet()) {
             assertEquals((int) clientTaskCount.get(entry.getKey()), entry.getValue().activeTasks().size());
@@ -1161,11 +1158,11 @@ public class RackAwareTaskAssignorTest {
             replicaCount, false, null);
 
         final long originalCost = assignor.standByTasksCost(taskIds, clientStateMap, 10, 1);
-        assertThat(originalCost, greaterThanOrEqualTo(0L));
+        assertTrue(originalCost >= 0L);
 
         final long cost = assignor.optimizeStandbyTasks(clientStateMap, 10, 1,
             standbyTaskAssignor::isAllowedTaskMovement);
-        assertThat(cost, lessThanOrEqualTo(originalCost));
+        assertTrue(cost <= originalCost);
         // Validate tasks in different racks after moving
         verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap,
             replicaCount, false, standbyTaskCount);

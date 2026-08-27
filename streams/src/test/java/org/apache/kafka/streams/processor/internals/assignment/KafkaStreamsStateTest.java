@@ -33,8 +33,7 @@ import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_1_0;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KafkaStreamsStateTest {
@@ -60,13 +59,14 @@ public class KafkaStreamsStateTest {
         );
 
         assertThrows(IllegalStateException.class, () -> state.lagFor(NAMED_TASK_T0_1_0));
-        assertThat(state.lagFor(NAMED_TASK_T0_0_0), equalTo(2000L));
-        assertThat(state.lagFor(NAMED_TASK_T0_0_1), equalTo(1000L));
+        assertEquals(2000L, state.lagFor(NAMED_TASK_T0_0_0));
+        assertEquals(1000L, state.lagFor(NAMED_TASK_T0_0_1));
 
-        assertThat(state.prevTasksByLag("c0"), equalTo(new TreeSet<>()));
-        assertThat(state.prevTasksByLag("c1"), equalTo(new TreeSet<>(
-            Arrays.asList(NAMED_TASK_T0_0_1, NAMED_TASK_T0_0_0)
-        )));
+        assertEquals(new TreeSet<>(), state.prevTasksByLag("c0"));
+        assertEquals(
+            new TreeSet<>(Arrays.asList(NAMED_TASK_T0_0_1, NAMED_TASK_T0_0_0)),
+            state.prevTasksByLag("c1")
+        );
     }
 
     @Test
