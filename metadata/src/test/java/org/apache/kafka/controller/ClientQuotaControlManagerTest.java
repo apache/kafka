@@ -25,6 +25,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.QuotaConfig;
 
@@ -63,7 +64,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testInvalidEntityTypes() {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
 
         // Unknown type "foo"
         assertInvalidEntity(manager, entity("foo", "bar"));
@@ -89,7 +90,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testInvalidQuotaKeys() {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
         ClientQuotaEntity entity = entity(ClientQuotaEntity.USER, "user-1");
 
         // Invalid + valid keys
@@ -112,7 +113,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testAlterAndRemove() {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
 
         ClientQuotaEntity userEntity = userEntity("user-1");
         List<ClientQuotaAlteration> alters = new ArrayList<>();
@@ -186,7 +187,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testEntityTypes() throws Exception {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(10_000).build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
 
         Map<ClientQuotaEntity, Map<String, Double>> quotasToTest = new HashMap<>();
         quotasToTest.put(userClientEntity("user-1", "client-id-1"),
