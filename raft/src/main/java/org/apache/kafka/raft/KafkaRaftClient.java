@@ -2716,8 +2716,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             }
         } else if (
             leaderId.isPresent() &&
-                (!quorum.hasLeader() || leaderEndpoints.size() > quorum.leaderEndpoints().size() ||
-                    (quorum.isUnattached() && !leaderEndpoints.isEmpty()))
+                (!quorum.hasLeader() || leaderEndpoints.size() > quorum.leaderEndpoints().size())
         ) {
             // The request or response indicates the leader of the current epoch
             // is currently unknown, the replica has discovered more endpoints,
