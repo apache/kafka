@@ -60,8 +60,6 @@ import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.apache.kafka.streams.kstream.WindowedSerdes.sessionWindowedSerdeFrom;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
@@ -420,11 +418,10 @@ public class KTableSuppressProcessorTest {
 
         context.setRecordMetadata("", 0, 1L);
         context.setTimestamp(timestamp);
-        final Throwable exception = assertThrows(StreamsException.class, () -> {
-            harness.processor.process(new Record<>("dummyKey", value, timestamp));
-            fail("expected an exception");
-        });
-        assertTrue(exception.getMessage().contains("buffer exceeded its max capacity"));
+        assertThrows(StreamsException.class, () ->
+                harness.processor.process(new Record<>("dummyKey", value, timestamp)),
+            "buffer exceeded its max capacity"
+        );
     }
 
     @Test
@@ -443,11 +440,10 @@ public class KTableSuppressProcessorTest {
 
         context.setRecordMetadata("", 0, 1L);
         context.setTimestamp(1L);
-        final Throwable exception = assertThrows(StreamsException.class, () -> {
-            harness.processor.process(new Record<>("dummyKey", value, timestamp));
-            fail("expected an exception");
-        });
-        assertTrue(exception.getMessage().contains("buffer exceeded its max capacity"));
+        assertThrows(StreamsException.class, () ->
+                harness.processor.process(new Record<>("dummyKey", value, timestamp)),
+            "buffer exceeded its max capacity"
+        );
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
