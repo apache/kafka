@@ -92,11 +92,6 @@ public class DescribeAclsResponse extends AbstractResponse {
         return new DescribeAclsResponse(new DescribeAclsResponseData(readable, version), version);
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
-
     private void validate(Optional<Short> version) {
         if (version.isPresent() && version.get() == 0) {
             final boolean unsupported = acls().stream()

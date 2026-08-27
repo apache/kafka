@@ -25,12 +25,16 @@ class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
     FIXTURES_DIR="."
     MODE="jvm"
-    
+    CONTAINER_RUNTIME="docker"
+
+    def compose_command(self):
+        return [f"{self.CONTAINER_RUNTIME}-compose"]
+
     def resume_container(self):
-        subprocess.run(["docker", "start", constants.BROKER_CONTAINER])
+        subprocess.run([self.CONTAINER_RUNTIME, "start", constants.BROKER_CONTAINER])
 
     def stop_container(self) -> None:
-        subprocess.run(["docker", "stop", constants.BROKER_CONTAINER])
+        subprocess.run([self.CONTAINER_RUNTIME, "stop", constants.BROKER_CONTAINER])
 
     def update_file(self, filename, old_string, new_string):
         with open(filename) as f:
@@ -42,10 +46,10 @@ class DockerSanityTest(unittest.TestCase):
     def start_compose(self, filename) -> None:
         self.update_file(filename, "image: {$IMAGE}", f"image: {self.IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", "{$DIR}", self.FIXTURES_DIR)
-        subprocess.run(["docker-compose", "-f", filename, "up", "-d"])
-    
+        subprocess.run(self.compose_command() + ["-f", filename, "up", "-d"])
+
     def destroy_compose(self, filename) -> None:
-        subprocess.run(["docker-compose", "-f", filename, "down"])
+        subprocess.run(self.compose_command() + ["-f", filename, "down"])
         self.update_file(filename, f"image: {self.IMAGE}", "image: {$IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", self.FIXTURES_DIR, "{$DIR}")
 
@@ -221,10 +225,11 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
-def run_tests(image, mode, fixtures_dir):
+def run_tests(image, mode, fixtures_dir, container_runtime="docker"):
     DockerSanityTest.IMAGE = image
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
     DockerSanityTest.MODE = mode
+    DockerSanityTest.CONTAINER_RUNTIME = container_runtime
 
     test_classes_to_run = []
     if mode == "jvm" or mode == "native":
@@ -244,4 +249,4 @@ def run_tests(image, mode, fixtures_dir):
                 description='This demonstrates the report output.'
                 )
     result = runner.run(combined_suite)
-    return result.failure_count
+    return (result.failure_count, result.error_count)

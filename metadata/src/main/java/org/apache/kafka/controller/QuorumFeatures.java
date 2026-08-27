@@ -28,16 +28,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Supplier;
 
 /**
- * A holder class of the local node's supported feature flags as well as the quorum node IDs.
+ * A holder class of the local node's supported feature flags as well as a supplier of the current
+ * voter IDs.
  */
 public final class QuorumFeatures {
     public static final VersionRange DISABLED = VersionRange.of(0, 0);
 
     private final int nodeId;
     private final Map<String, VersionRange> localSupportedFeatures;
-    private final List<Integer> quorumNodeIds;
+    private final Supplier<Set<Integer>> votersSupplier;
 
     public static Optional<String> reasonNotSupported(
         short newVersion,
@@ -73,27 +76,27 @@ public final class QuorumFeatures {
     public QuorumFeatures(
         int nodeId,
         Map<String, VersionRange> localSupportedFeatures,
-        List<Integer> quorumNodeIds
+        Supplier<Set<Integer>> votersSupplier
     ) {
         this.nodeId = nodeId;
         this.localSupportedFeatures = Collections.unmodifiableMap(localSupportedFeatures);
-        this.quorumNodeIds = Collections.unmodifiableList(quorumNodeIds);
+        this.votersSupplier = votersSupplier;
     }
 
     public int nodeId() {
         return nodeId;
     }
 
-    public List<Integer> quorumNodeIds() {
-        return quorumNodeIds;
+    public Set<Integer> voterIds() {
+        return votersSupplier.get();
     }
 
     public VersionRange localSupportedFeature(String name) {
         return localSupportedFeatures.getOrDefault(name, DISABLED);
     }
 
-    public boolean isControllerId(int nodeId) {
-        return quorumNodeIds.contains(nodeId);
+    public boolean isVoterId(int nodeId) {
+        return voterIds().contains(nodeId);
     }
 
     public Optional<String> reasonNotLocallySupported(
@@ -107,16 +110,16 @@ public final class QuorumFeatures {
 
     @Override
     public int hashCode() {
-        return Objects.hash(nodeId, localSupportedFeatures, quorumNodeIds);
+        return Objects.hash(nodeId, localSupportedFeatures);
     }
 
     @Override
     public boolean equals(Object o) {
         if (o == null || !(o.getClass().equals(QuorumFeatures.class))) return false;
         QuorumFeatures other = (QuorumFeatures) o;
+        // votersSupplier is deliberately excluded from this method
         return nodeId == other.nodeId &&
-            localSupportedFeatures.equals(other.localSupportedFeatures) &&
-            quorumNodeIds.equals(other.quorumNodeIds);
+            localSupportedFeatures.equals(other.localSupportedFeatures);
     }
 
     @Override
@@ -124,13 +127,9 @@ public final class QuorumFeatures {
         List<String> features = new ArrayList<>();
         localSupportedFeatures.forEach((key, value) -> features.add(key + ": " + value));
         features.sort(String::compareTo);
-        List<String> nodeIds = new ArrayList<>();
-        quorumNodeIds.forEach(id -> nodeIds.add("" + id));
-        nodeIds.sort(String::compareTo);
         return "QuorumFeatures" +
             "(nodeId=" + nodeId +
             ", localSupportedFeatures={" + features + "}" +
-            ", quorumNodeIds=[" + nodeIds + "]" +
             ")";
     }
 }

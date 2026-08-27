@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
@@ -365,57 +366,34 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testClientThrottlesResponsesWithThrottleTime() {
-        Map<ApiKeys, Short> postKip219Version = Map.ofEntries(
-            Map.entry(ApiKeys.PRODUCE, (short) 6),
-            Map.entry(ApiKeys.FETCH, (short) 8),
-            Map.entry(ApiKeys.LIST_OFFSETS, (short) 3),
-            Map.entry(ApiKeys.METADATA, (short) 6),
-            Map.entry(ApiKeys.OFFSET_COMMIT, (short) 4),
-            Map.entry(ApiKeys.OFFSET_FETCH, (short) 4),
-            Map.entry(ApiKeys.FIND_COORDINATOR, (short) 2),
-            Map.entry(ApiKeys.JOIN_GROUP, (short) 3),
-            Map.entry(ApiKeys.HEARTBEAT, (short) 2),
-            Map.entry(ApiKeys.LEAVE_GROUP, (short) 2),
-            Map.entry(ApiKeys.SYNC_GROUP, (short) 2),
-            Map.entry(ApiKeys.DESCRIBE_GROUPS, (short) 2),
-            Map.entry(ApiKeys.LIST_GROUPS, (short) 2),
-            Map.entry(ApiKeys.API_VERSIONS, (short) 2),
-            Map.entry(ApiKeys.CREATE_TOPICS, (short) 3),
-            Map.entry(ApiKeys.DELETE_TOPICS, (short) 2),
-            Map.entry(ApiKeys.DELETE_RECORDS, (short) 1),
-            Map.entry(ApiKeys.INIT_PRODUCER_ID, (short) 1),
-            Map.entry(ApiKeys.ADD_PARTITIONS_TO_TXN, (short) 1),
-            Map.entry(ApiKeys.ADD_OFFSETS_TO_TXN, (short) 1),
-            Map.entry(ApiKeys.END_TXN, (short) 1),
-            Map.entry(ApiKeys.TXN_OFFSET_COMMIT, (short) 1),
-            Map.entry(ApiKeys.DESCRIBE_ACLS, (short) 1),
-            Map.entry(ApiKeys.CREATE_ACLS, (short) 1),
-            Map.entry(ApiKeys.DELETE_ACLS, (short) 1),
-            Map.entry(ApiKeys.DESCRIBE_CONFIGS, (short) 2),
-            Map.entry(ApiKeys.ALTER_CONFIGS, (short) 1),
-            Map.entry(ApiKeys.ALTER_REPLICA_LOG_DIRS, (short) 1),
-            Map.entry(ApiKeys.DESCRIBE_LOG_DIRS, (short) 1),
-            Map.entry(ApiKeys.CREATE_PARTITIONS, (short) 1),
-            Map.entry(ApiKeys.CREATE_DELEGATION_TOKEN, (short) 1),
-            Map.entry(ApiKeys.RENEW_DELEGATION_TOKEN, (short) 1),
-            Map.entry(ApiKeys.EXPIRE_DELEGATION_TOKEN, (short) 1),
-            Map.entry(ApiKeys.DESCRIBE_DELEGATION_TOKEN, (short) 1),
-            Map.entry(ApiKeys.DELETE_GROUPS, (short) 1)
-        );
+    public void testKip219BoundariesHaveThrottleTimeField() {
+        Kip219ClientThrottleVersion.BOUNDARIES.forEach((apiKey, boundaryVersion) -> {
+            assertTrue(getResponse(apiKey, boundaryVersion).shouldClientThrottle(boundaryVersion),
+                apiKey + " should client throttle at KIP-219 boundary " + boundaryVersion);
+            assertNotNull(apiKey.messageType.responseSchemas()[boundaryVersion].get("throttle_time_ms"),
+                apiKey + " KIP-219 boundary " + boundaryVersion +
+                    " precedes the version that added throttle_time_ms");
+        });
+    }
 
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            for (short version : apiKey.allVersions()) {
-                boolean responseHasThrottleTime =
-                    apiKey.messageType.responseSchemas()[version].get("throttle_time_ms") != null;
-                short firstPostKip219Version = postKip219Version.getOrDefault(apiKey, apiKey.oldestVersion());
-                boolean shouldClientThrottle = responseHasThrottleTime &&
-                    version >= firstPostKip219Version;
-                assertEquals(shouldClientThrottle, getResponse(apiKey, version).shouldClientThrottle(version),
-                    "Unexpected shouldClientThrottle result for " + apiKey + " version " + version +
-                        ": responseHasThrottleTime=" + responseHasThrottleTime +
-                        ", firstPostKip219Version=" + firstPostKip219Version);
-            }
+    @Test
+    public void testKip219BoundariesAreStillNeeded() {
+        Kip219ClientThrottleVersion.BOUNDARIES.forEach((apiKey, boundaryVersion) ->
+            assertTrue(apiKey.messageType.lowestSupportedVersion() < boundaryVersion,
+                apiKey + " KIP-219 boundary " + boundaryVersion + " is obsolete and should be removed"));
+    }
+
+    @Test
+    public void testClientThrottleForCommonResponses() {
+        assertClientThrottle(PRODUCE, (short) 6);
+        assertClientThrottle(FETCH, (short) 8);
+        assertClientThrottle(METADATA, (short) 6);
+    }
+
+    private void assertClientThrottle(ApiKeys apiKey, short boundaryVersion) {
+        for (short version : apiKey.allVersions()) {
+            assertEquals(version >= boundaryVersion, getResponse(apiKey, version).shouldClientThrottle(version),
+                "Unexpected shouldClientThrottle result for " + apiKey + " version " + version);
         }
     }
 
@@ -745,8 +723,8 @@ public class RequestResponseTest {
 
     @Test
     public void testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas() {
-        final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> {
+        final UnsupportedProtocolFieldException exception = assertThrows(
+            UnsupportedProtocolFieldException.class, () -> {
                 CreateTopicsRequestData data = new CreateTopicsRequestData()
                     .setTimeoutMs(123)
                     .setValidateOnly(false);
@@ -761,8 +739,7 @@ public class RequestResponseTest {
 
                 new Builder(data).build((short) 3);
             });
-        assertTrue(exception.getMessage().contains("supported in CreateTopicRequest version 4+"));
-        assertTrue(exception.getMessage().contains("[foo, bar]"));
+        assertTrue(exception.getMessage().contains("does not support [default partitions/replication for topics [foo,bar]] in CREATE_TOPICS API version 3"));
     }
 
     @Test

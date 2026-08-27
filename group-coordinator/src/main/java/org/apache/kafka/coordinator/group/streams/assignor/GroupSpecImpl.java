@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentState;
@@ -30,17 +31,17 @@ import java.util.Objects;
  *
  * @param members The member metadata keyed by member Id. Each value provides both the
  *                {@link MemberAssignmentMetadata} and the {@link MemberAssignmentState} for the member.
- * @param configs Any configurations passed to the assignor.
+ * @param configs The assignment configurations passed to the assignor.
  */
 public record GroupSpecImpl(
     Map<String, MemberMetadataAndStateImpl> members,
-    Map<String, String> configs
+    AssignmentConfigs configs
 ) implements GroupSpec {
 
     public GroupSpecImpl {
-        // Both maps are exposed to a custom assignor through the public GroupSpec interface.
+        // The map is exposed to a custom assignor through the public GroupSpec interface.
         members = Collections.unmodifiableMap(Objects.requireNonNull(members));
-        configs = Collections.unmodifiableMap(Objects.requireNonNull(configs));
+        Objects.requireNonNull(configs);
     }
 
     @Override

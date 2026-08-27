@@ -33,7 +33,7 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
         this.keySerializer = keySerializer;
     }
 
-    @SuppressWarnings({"removal"})
+    @SuppressWarnings("removal")
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final int numPartitions) {
         throw new UnsupportedOperationException("This method is deprecated and should not be called.");
