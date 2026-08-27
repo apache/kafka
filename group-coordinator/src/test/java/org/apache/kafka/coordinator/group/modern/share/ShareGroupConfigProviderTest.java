@@ -132,4 +132,27 @@ public class ShareGroupConfigProviderTest {
 
         assertEquals(GroupConfig.defaultShareAutoOffsetReset(), provider.autoOffsetReset("test-group"));
     }
+
+    @Test
+    void testShareGroupDLQTopicWithGroupConfig() {
+        String shareGroupDLQTopicName = "dlq.testGroupDLQTopic";
+        String shareGroupId = "test-group";
+        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        GroupConfig groupConfig = mock(GroupConfig.class);
+        when(groupConfig.errorsDLQTopicName()).thenReturn(shareGroupDLQTopicName);
+        when(groupConfigManager.groupConfig(shareGroupId)).thenReturn(Optional.of(groupConfig));
+        provider = new ShareGroupConfigProvider(groupConfigManager);
+
+        assertEquals(Optional.of(shareGroupDLQTopicName), provider.errorsDLQTopicName(shareGroupId));
+    }
+
+    @Test
+    void testShareGroupDLQTopicWithoutGroupConfig() {
+        String shareGroupId = "test-group";
+        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(shareGroupId)).thenReturn(Optional.empty());
+        provider = new ShareGroupConfigProvider(groupConfigManager);
+
+        assertEquals(Optional.empty(), provider.errorsDLQTopicName(shareGroupId));
+    }
 }

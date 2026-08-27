@@ -78,7 +78,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -627,7 +627,8 @@ public class ReplicationControlManager {
     ControllerResult<CreateTopicsResponseData> createTopics(
         ControllerRequestContext context,
         CreateTopicsRequestData request,
-        Set<String> describable
+        Set<String> describable,
+        boolean forwarded
     ) {
         Map<String, ApiError> topicErrors = new HashMap<>();
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -657,7 +658,7 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> configRecords;
             if (keyToOps != null) {
                 ControllerResult<ApiError> configResult =
-                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true);
+                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true, forwarded);
                 if (configResult.response().isFailure()) {
                     topicErrors.put(topic.name(), configResult.response());
                     continue;
@@ -1210,7 +1211,7 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Validates that a batch of topics will create less than {@value MAX_PARTITIONS_PER_BATCH}. Exceeding this number of topics per batch
+     * Validates that a batch of topics will create at most {@value MAX_PARTITIONS_PER_BATCH}. Exceeding this number of topics per batch
      * has led to out-of-memory exceptions. We use this validation to fail earlier to avoid allocating the memory.
      * Validates an upper bound number of partitions. The actual number may be smaller if some topics are misconfigured.
      *
@@ -1219,7 +1220,7 @@ public class ReplicationControlManager {
      * @throws PolicyViolationException if total number of partitions exceeds {@value MAX_PARTITIONS_PER_BATCH}.
      */
     static void validateTotalNumberOfPartitions(CreateTopicsRequestData request, int defaultNumPartitions) {
-        int totalPartitions = 0;
+        long totalPartitions = 0;
         for (CreatableTopic topic: request.topics()) {
             if (topic.assignments().isEmpty()) {
                 if (topic.numPartitions() == -1) {
@@ -1230,10 +1231,9 @@ public class ReplicationControlManager {
             } else {
                 totalPartitions += topic.assignments().size();
             }
-
-        }
-        if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
-            throw new PolicyViolationException("Excessively large number of partitions per request.");
+            if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
+                throw new PolicyViolationException("Excessively large number of partitions per request.");
+            }
         }
     }
 
@@ -1545,17 +1545,17 @@ public class ReplicationControlManager {
             List<Uuid> cordonedDirs,
             List<ApiMessageAndVersion> records
     ) {
+        // cordonedDirs is null until a broker has caught up with the latest metadata, so just ignore
+        if (cordonedDirs == null) return;
         BrokerRegistration registration = clusterControl.registration(brokerId);
-        List<Uuid> newCordonedDirs = registration.directoryIntersection(cordonedDirs);
-        if (!newCordonedDirs.isEmpty()) {
+        boolean cordonedDirsChanged = registration.cordonedDirChanged(cordonedDirs);
+        if (cordonedDirsChanged) {
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                     setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
-                    setCordonedLogDirs(newCordonedDirs),
+                    setCordonedLogDirs(cordonedDirs),
                     (short) 3));
             if (log.isDebugEnabled()) {
-                List<Uuid> newUncordonedDirs = registration.directoryDifference(newCordonedDirs);
-                log.debug("Directories {} in broker {} marked cordoned, uncordoned directories: {}",
-                        newCordonedDirs, brokerId, newUncordonedDirs);
+                log.debug("Directories {} in broker {} marked cordoned", cordonedDirs, brokerId);
             }
         }
     }
@@ -1697,7 +1697,6 @@ public class ReplicationControlManager {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
         }
         if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
-            clusterControl.updateCordonedLogDirs(brokerId, request.cordonedLogDirs());
             handleDirectoriesCordoned(brokerId, brokerEpoch, request.cordonedLogDirs(), records);
         }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;
@@ -2015,6 +2014,10 @@ public class ReplicationControlManager {
                 throw new InvalidReplicaAssignmentException("The manual partition " +
                     "assignment includes broker " + brokerId + ", but no such broker is " +
                     "registered.");
+            }
+            if (!clusterControl.brokerRegistrations().get(brokerId).hasUncordonedDirs()) {
+                throw new InvalidReplicaAssignmentException("The manual partition " +
+                    "assignment includes broker " + brokerId + ", but all its log directories are cordoned.");
             }
             if (brokerId.equals(prevBrokerId)) {
                 throw new InvalidReplicaAssignmentException("The manual partition " +

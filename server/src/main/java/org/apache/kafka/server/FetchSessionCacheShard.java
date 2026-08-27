@@ -17,8 +17,8 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.requests.FetchMetadata;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.FetchSession.EvictableKey;
 import org.apache.kafka.server.FetchSession.LastUsedKey;
 

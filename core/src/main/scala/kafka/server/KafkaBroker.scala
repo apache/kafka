@@ -27,6 +27,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.{BrokerState, MetadataCache}
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.BrokerLifecycleManager
 import org.apache.kafka.server.authorizer.Authorizer
@@ -118,7 +119,6 @@ trait KafkaBroker extends Logging {
   private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM)
 
   if (linuxIoMetricsCollector.usable()) {
-    metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
-    metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+    linuxIoMetricsCollector.registerMetrics(metricsGroup)
   }
 }

@@ -42,23 +42,13 @@ class TestUtils {
 
     /* A consistent random number generator to make tests repeatable */
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
-    
+
     public static final String LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     public static final String DIGITS = "0123456789";
     public static final String LETTERS_AND_DIGITS = LETTERS + DIGITS;
 
     private static final long DEFAULT_POLL_INTERVAL_MS = 100;
     private static final long DEFAULT_MAX_WAIT_MS = 15_000;
-
-    /**
-     * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
-     * suffix to generate its name.
-     */
-    public static File tempFile() throws IOException {
-        final File file = Files.createTempFile("kafka", ".tmp").toFile();
-        file.deleteOnExit();
-        return file;
-    }
 
     /**
      * Generate a random string of letters and digits of the given length

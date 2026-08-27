@@ -31,10 +31,10 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.KafkaThread;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -267,7 +267,10 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 }
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {
-                log.warn("Error processing event {}", t.getMessage(), t);
+                log.error("Error processing event {}", t.getMessage(), t);
+                if (event instanceof CompletableEvent) {
+                    ((CompletableEvent<?>) event).future().completeExceptionally(t);
+                }
             }
         }
         asyncConsumerMetrics.recordApplicationEventQueueProcessingTime(time.milliseconds() - startMs);

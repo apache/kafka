@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import kafka.network.RequestChannel
-
 import java.util.{Collections, Properties}
 import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS
@@ -34,6 +32,8 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
+import org.apache.kafka.network.Request
+import org.apache.kafka.server.AuthHelper
 import org.apache.kafka.server.ConfigHelperUtils.createResponseConfig
 import org.apache.kafka.server.config.{DynamicBrokerConfig, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.logger.LoggingController
@@ -47,10 +47,10 @@ import scala.jdk.OptionConverters.RichOptional
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
 
   def handleDescribeConfigsRequest(
-    request: RequestChannel.Request,
+    request: Request,
     authHelper: AuthHelper
   ): DescribeConfigsResponseData = {
-    val describeConfigsRequest = request.body[DescribeConfigsRequest]
+    val describeConfigsRequest = request.body(classOf[DescribeConfigsRequest])
     val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.partition { resource =>
       ConfigResource.Type.forId(resource.resourceType) match {
         case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER | ConfigResource.Type.CLIENT_METRICS =>
@@ -133,7 +133,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException("Group name must not be empty")
             } else {
               val groupProps = configRepository.groupConfig(group)
-              val groupConfig = GroupConfig.fromProps(config.extractGroupConfigMap, groupProps)
+              val groupConfig = GroupConfig.fromProps(config.extractGroupConfigMap(config.groupCoordinatorConfig), groupProps)
               createResponseConfig(resource, groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation)(_, _))
             }
 

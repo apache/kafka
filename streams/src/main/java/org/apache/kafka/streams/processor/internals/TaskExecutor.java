@@ -21,8 +21,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -124,6 +124,8 @@ public class TaskExecutor {
         } finally {
             now = time.milliseconds();
             task.recordProcessBatchTime(now - then);
+            // record terminal e2e latency for the batch against this single end-of-batch time
+            task.maybeFlushTerminalE2ELatency(now);
         }
         return processed;
     }

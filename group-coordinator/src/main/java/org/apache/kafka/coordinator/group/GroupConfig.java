@@ -27,16 +27,20 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
+import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
@@ -101,9 +105,20 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG = "streams.assignment.interval.ms";
 
+    public static final String STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "streams.rack.aware.assignment.tags";
+
     public static final String STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "streams.assignor.offload.enable";
 
     public static final String STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG = "streams.task.offset.interval.ms";
+
+    public static final String STREAMS_NUM_WARMUP_REPLICAS_CONFIG = "streams.num.warmup.replicas";
+
+    public static final String STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG = "streams.acceptable.recovery.lag";
+
+    public static final String STREAMS_ASSIGNOR_NAME_CONFIG = "streams.assignor.name";
+    public static final String STREAMS_ASSIGNOR_NAME_DOC = "The task assignor to use for this streams group, selected by short name from the assignors registered via the broker configuration " +
+        GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG + ". When unset, the group defaults to the first assignor configured in the broker's " +
+        GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG + " setting. Changing the assignor does not trigger a rebalance for the group; the new assignor takes effect on the next rebalance.";
 
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG = "errors.deadletterqueue.topic.name";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT = "";
@@ -147,9 +162,17 @@ public final class GroupConfig extends AbstractConfig {
 
     private final Optional<Integer> streamsAssignmentIntervalMs;
 
+    private final Optional<List<String>> streamsRackAwareAssignmentTags;
+
     private final Optional<Boolean> streamsAssignorOffloadEnable;
 
     private final Optional<Integer> streamsTaskOffsetIntervalMs;
+
+    private final Optional<Integer> streamsNumWarmupReplicas;
+
+    private final Optional<Long> streamsAcceptableRecoveryLag;
+
+    private final Optional<String> streamsAssignorName;
 
     private final Optional<IsolationLevel> shareIsolationLevel;
 
@@ -282,6 +305,29 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(1),
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
+        .define(STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT,
+            atLeast(0),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
+        .define(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+            LIST,
+            GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT,
+            ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+            LOW,
+            GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
+        .define(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG,
+            LONG,
+            GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT,
+            atLeast(0),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC)
+        .define(STREAMS_ASSIGNOR_NAME_CONFIG,
+            STRING,
+            null,
+            MEDIUM,
+            STREAMS_ASSIGNOR_NAME_DOC)
 
         // DLQ configurations (KIP-1191)
         .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG,
@@ -326,6 +372,10 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG)),
         Map.entry(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)),
         Map.entry(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG)),
+        Map.entry(STREAMS_NUM_WARMUP_REPLICAS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG)),
+        Map.entry(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG)),
+        Map.entry(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG)),
+        Map.entry(STREAMS_ASSIGNOR_NAME_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)),
 
         // DLQ configs
         Map.entry(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, Optional.empty()),
@@ -333,8 +383,20 @@ public final class GroupConfig extends AbstractConfig {
     );
 
     /**
+     * Returns {@code true} if the given config name is defined as internal in {@link #CONFIG_DEF}.
+     * Returns {@code false} for unknown names or non-internal configs.
+     */
+    public static boolean isInternal(String configName) {
+        ConfigDef.ConfigKey configKey = CONFIG_DEF.configKeys().get(configName);
+        return configKey != null && configKey.internalConfig;
+    }
+
+    /**
      * Returns the broker-level synonym config name for the given group config name,
      * or {@code Optional.empty()} if no broker-level synonym exists.
+     *
+     * @param groupConfigName The group-level config name.
+     * @return The broker-level config name, or {@code Optional.empty()} if no broker-level config exists.
      */
     public static Optional<String> brokerSynonym(String groupConfigName) {
         return ALL_GROUP_CONFIG_SYNONYMS.getOrDefault(groupConfigName, Optional.empty());
@@ -360,8 +422,12 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsNumStandbyReplicas = optionalInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsInitialRebalanceDelayMs = optionalInt(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.streamsAssignmentIntervalMs = optionalInt(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG);
+        this.streamsRackAwareAssignmentTags = optionalList(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         this.streamsAssignorOffloadEnable = optionalBoolean(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG);
         this.streamsTaskOffsetIntervalMs = optionalInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
+        this.streamsNumWarmupReplicas = optionalInt(STREAMS_NUM_WARMUP_REPLICAS_CONFIG);
+        this.streamsAcceptableRecoveryLag = optionalLong(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG);
+        this.streamsAssignorName = optionalString(STREAMS_ASSIGNOR_NAME_CONFIG);
         this.shareIsolationLevel = optionalString(SHARE_ISOLATION_LEVEL_CONFIG)
             .map(s -> IsolationLevel.valueOf(s.toUpperCase(Locale.ROOT)));
         this.shareRenewAcknowledgeEnable = optionalBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
@@ -373,12 +439,20 @@ public final class GroupConfig extends AbstractConfig {
         return originals().containsKey(key) ? Optional.of(getInt(key)) : Optional.empty();
     }
 
+    private Optional<Long> optionalLong(String key) {
+        return originals().containsKey(key) ? Optional.of(getLong(key)) : Optional.empty();
+    }
+
     private Optional<Boolean> optionalBoolean(String key) {
         return originals().containsKey(key) ? Optional.of(getBoolean(key)) : Optional.empty();
     }
 
     private Optional<String> optionalString(String key) {
         return originals().containsKey(key) ? Optional.of(getString(key)) : Optional.empty();
+    }
+
+    private Optional<List<String>> optionalList(String key) {
+        return originals().containsKey(key) ? Optional.of(getList(key)) : Optional.empty();
     }
 
     public static Optional<Type> configType(String configName) {
@@ -391,10 +465,12 @@ public final class GroupConfig extends AbstractConfig {
 
     /**
      * Check that property names are valid.
+     *
+     * @param newGroupConfig         The new group config overrides.
      */
-    public static void validateNames(Map<String, ?> props) {
+    public static void validateNames(Map<String, String> newGroupConfig) {
         Set<String> names = configNames();
-        for (String name : props.keySet()) {
+        for (String name : newGroupConfig.keySet()) {
             if (!names.contains(name)) {
                 throw new InvalidConfigurationException("Unknown group config name: " + name);
             }
@@ -404,15 +480,22 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * Check that the given properties contain only valid group config names and that
      * all values can be parsed and are valid.
+     *
+     * @param newGroupConfig         The new unparsed group config overrides.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
      */
     public static void validate(
-        Map<String, ?> props,
+        Map<String, String> newGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
-        validateNames(props);
-        var parsed = CONFIG_DEF.parse(props);
-        parsed.keySet().retainAll(props.keySet());
+        validateNames(newGroupConfig);
+        // ConfigDef silently de-duplicates LIST values during parsing, so inspect the raw value to make
+        // sure an alterConfigs request with duplicate rack-aware assignment tags is rejected.
+        validateNoDuplicateRackAwareAssignmentTags(newGroupConfig);
+        var parsed = CONFIG_DEF.parse(newGroupConfig);
+        parsed.keySet().retainAll(newGroupConfig.keySet());
         validateValues(
             parsed,
             groupCoordinatorConfig,
@@ -421,8 +504,31 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
+     * Rejects an alterConfigs request whose rack-aware assignment tags contain duplicate keys, inspecting the
+     * raw value because {@link ConfigDef} removes duplicates from LIST values before they can be validated.
+     *
+     * @param newGroupConfig The new unparsed group config overrides.
+     */
+    private static void validateNoDuplicateRackAwareAssignmentTags(Map<String, String> newGroupConfig) {
+        String rawValue = newGroupConfig.get(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        if (rawValue == null) {
+            return;
+        }
+        String trimmed = rawValue.trim();
+        List<String> rawTags = trimmed.isEmpty() ? List.of() : List.of(trimmed.split("\\s*,\\s*", -1));
+        if (Set.copyOf(rawTags).size() != rawTags.size()) {
+            throw new InvalidConfigurationException(
+                STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG + " must not contain duplicate tag keys.");
+        }
+    }
+
+    /**
      * Validates the parsed values against broker-level bounds.
      * Only configs explicitly present in the parsed map are validated.
+     *
+     * @param parsed                 The parsed group config overrides.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
      */
     private static void validateValues(
         Map<String, Object> parsed,
@@ -434,25 +540,19 @@ public final class GroupConfig extends AbstractConfig {
             parsed,
             CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs()
         );
         validateIntRange(
             parsed,
             CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG
+            groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs()
         );
         validateIntRange(
             parsed,
             CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinAssignmentIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupMaxAssignmentIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.consumerGroupMaxAssignmentIntervalMs()
         );
 
         // Share group configs.
@@ -460,49 +560,37 @@ public final class GroupConfig extends AbstractConfig {
             parsed,
             SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs()
         );
         validateIntRange(
             parsed,
             SHARE_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinSessionTimeoutMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG
+            groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs()
         );
         validateIntRange(
             parsed,
             SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
             shareGroupConfig.shareGroupMinRecordLockDurationMs(),
-            ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG,
-            shareGroupConfig.shareGroupMaxRecordLockDurationMs(),
-            ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG
+            shareGroupConfig.shareGroupMaxRecordLockDurationMs()
         );
         validateIntRange(
             parsed,
             SHARE_DELIVERY_COUNT_LIMIT_CONFIG,
             shareGroupConfig.shareGroupMinDeliveryCountLimit(),
-            ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG,
-            shareGroupConfig.shareGroupMaxDeliveryCountLimit(),
-            ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG
+            shareGroupConfig.shareGroupMaxDeliveryCountLimit()
         );
         validateIntRange(
             parsed,
             SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG,
             shareGroupConfig.shareGroupMinPartitionMaxRecordLocks(),
-            ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG,
-            shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks(),
-            ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG
+            shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks()
         );
         validateIntRange(
             parsed,
             SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinAssignmentIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupMaxAssignmentIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.shareGroupMaxAssignmentIntervalMs()
         );
 
         // Streams group configs.
@@ -510,38 +598,45 @@ public final class GroupConfig extends AbstractConfig {
             parsed,
             STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs()
         );
         validateIntRange(
             parsed,
             STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinSessionTimeoutMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs()
         );
         validateIntMax(
             parsed,
             STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas()
         );
         validateIntRange(
             parsed,
             STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinAssignmentIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxAssignmentIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxAssignmentIntervalMs()
         );
         validateIntMin(
             parsed,
             STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs()
         );
+        validateIntMax(
+            parsed,
+            STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
+        );
+
+        // The selected streams assignor must be one of the assignors registered on the broker.
+        if (parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) {
+            String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
+            List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
+            if (!registeredAssignors.contains(assignorName)) {
+                throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
+                    "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
+            }
+        }
 
         // Cross-field validations: session timeout must be greater than heartbeat interval.
         validateSessionExceedsHeartbeat(
@@ -578,58 +673,71 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * Validates that an integer config value falls within [min, max].
      * No-op when the key is absent from the parsed map.
+     *
+     * @param parsed                 The parsed group config overrides.
+     * @param key                    The config key.
+     * @param min                    The minimum allowed value (inclusive).
+     * @param max                    The maximum allowed value (inclusive).
      */
     private static void validateIntRange(
         Map<String, Object> parsed,
         String key,
         int min,
-        String minConfigName,
-        int max,
-        String maxConfigName
+        int max
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
-        if (value < min)
-            throw new InvalidConfigurationException(key + " must be greater than or equal to " + minConfigName);
-        if (value > max)
-            throw new InvalidConfigurationException(key + " must be less than or equal to " + maxConfigName);
+        if (value < min || value > max)
+            throw new InvalidConfigurationException(key + " must be in the range " + min + " to " + max + " inclusive.");
     }
 
     /**
      * Validates that an integer config value does not exceed max.
      * No-op when the key is absent from the parsed map.
+     *
+     * @param parsed                 The parsed group config overrides.
+     * @param key                    The config key.
+     * @param max                    The maximum allowed value (inclusive).
      */
     private static void validateIntMax(
         Map<String, Object> parsed,
         String key,
-        int max,
-        String maxConfigName
+        int max
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
         if (value > max)
-            throw new InvalidConfigurationException(key + " must be less than or equal to " + maxConfigName);
+            throw new InvalidConfigurationException(key + " must be less than or equal to " + max);
     }
 
     /**
      * Validates that an integer config value is at least min.
      * No-op when the key is absent from the parsed map.
+     *
+     * @param parsed                 The parsed group config overrides.
+     * @param key                    The config key.
+     * @param min                    The minimum allowed value (inclusive).
      */
     private static void validateIntMin(
         Map<String, Object> parsed,
         String key,
-        int min,
-        String minConfigName
+        int min
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
         if (value < min)
-            throw new InvalidConfigurationException(key + " must be greater than or equal to " + minConfigName);
+            throw new InvalidConfigurationException(key + " must be greater than or equal to " + min);
     }
 
     /**
      * Validates that the session timeout is greater than the heartbeat interval.
      * Uses broker defaults for any config not present in the parsed map.
+     *
+     * @param parsed                 The parsed group config overrides.
+     * @param sessionKey             The session timeout config key.
+     * @param defaultSession         The default session timeout value when there is no override.
+     * @param heartbeatKey           The heartbeat interval config key.
+     * @param defaultHeartbeat       The default heartbeat interval value when there is no override.
      */
     private static void validateSessionExceedsHeartbeat(
         Map<String, Object> parsed,
@@ -652,52 +760,61 @@ public final class GroupConfig extends AbstractConfig {
      * Evaluate group config values to their effective values within broker-level bounds.
      * Out-of-range values are capped and a WARN log is emitted.
      *
-     * @param props                  The raw group config properties.
+     * @param newGroupConfig         The new unparsed group config overrides.
      * @param groupId                The group id.
      * @param groupCoordinatorConfig The group coordinator config.
      * @param shareGroupConfig       The share group config.
-     * @return A new Properties with out-of-range values capped.
+     * @return A new {@link Properties} with out-of-range values capped.
      */
     public static Properties evaluate(
-        Properties props,
+        Properties newGroupConfig,
         String groupId,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
-        Properties effective = new Properties();
-        effective.putAll(props);
+        Properties evaluatedGroupConfig = new Properties();
+        evaluatedGroupConfig.putAll(newGroupConfig);
         evaluateValues(
-            effective,
+            evaluatedGroupConfig,
             groupId,
             groupCoordinatorConfig,
             shareGroupConfig
         );
-        return effective;
+        return evaluatedGroupConfig;
     }
 
+    /**
+     * Evaluate group config values to their effective values within broker-level bounds.
+     * Out-of-range values are capped and a WARN log is emitted.
+     *
+     * @param evaluatedGroupConfig   The unparsed group config overrides to modify in place.
+     * @param groupId                The group id.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
+     */
     private static void evaluateValues(
-        Properties props,
+        Properties evaluatedGroupConfig,
         String groupId,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
         // Consumer group configs.
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs(),
             groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs()
         );
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs(),
             groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs()
         );
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinAssignmentIntervalMs(),
@@ -706,42 +823,42 @@ public final class GroupConfig extends AbstractConfig {
 
         // Share group configs.
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             SHARE_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinSessionTimeoutMs(),
             groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs()
         );
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinHeartbeatIntervalMs(),
             groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs()
         );
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
             shareGroupConfig.shareGroupMinRecordLockDurationMs(),
             shareGroupConfig.shareGroupMaxRecordLockDurationMs()
         );
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             SHARE_DELIVERY_COUNT_LIMIT_CONFIG,
             shareGroupConfig.shareGroupMinDeliveryCountLimit(),
             shareGroupConfig.shareGroupMaxDeliveryCountLimit()
         );
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG,
             shareGroupConfig.shareGroupMinPartitionMaxRecordLocks(),
             shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks()
         );
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinAssignmentIntervalMs(),
@@ -750,42 +867,48 @@ public final class GroupConfig extends AbstractConfig {
 
         // Streams group configs.
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinSessionTimeoutMs(),
             groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs()
         );
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs(),
             groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs()
         );
         clampToMax(
-            props,
+            evaluatedGroupConfig,
             groupId,
             STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
             groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas()
         );
         clampToRange(
-            props,
+            evaluatedGroupConfig,
             groupId,
             STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinAssignmentIntervalMs(),
             groupCoordinatorConfig.streamsGroupMaxAssignmentIntervalMs()
         );
         clampToMin(
-            props,
+            evaluatedGroupConfig,
             groupId,
             STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs()
         );
+        clampToMax(
+            evaluatedGroupConfig,
+            groupId,
+            STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
+        );
 
         // Verify that clamping did not break the session > heartbeat invariant.
         checkSessionExceedsHeartbeat(
-            props,
+            evaluatedGroupConfig,
             groupId,
             CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupSessionTimeoutMs(),
@@ -793,7 +916,7 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig.consumerGroupHeartbeatIntervalMs()
         );
         checkSessionExceedsHeartbeat(
-            props,
+            evaluatedGroupConfig,
             groupId,
             SHARE_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
@@ -801,7 +924,7 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig.shareGroupHeartbeatIntervalMs()
         );
         checkSessionExceedsHeartbeat(
-            props,
+            evaluatedGroupConfig,
             groupId,
             STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupSessionTimeoutMs(),
@@ -812,18 +935,25 @@ public final class GroupConfig extends AbstractConfig {
 
     /**
      * Log a WARN if the session timeout is not greater than the heartbeat interval after
-     * evaluation. When a key is absent from props, the broker-level default is used.
+     * evaluation. When a key is absent from newGroupConfig, the broker-level default is used.
+     *
+     * @param newGroupConfig         The new unparsed group config overrides.
+     * @param groupId                The group id.
+     * @param sessionKey             The session timeout config key.
+     * @param defaultSession         The default session timeout value when there is no override.
+     * @param heartbeatKey           The heartbeat interval config key.
+     * @param defaultHeartbeat       The default heartbeat interval value when there is no override.
      */
     private static void checkSessionExceedsHeartbeat(
-        Properties props,
+        Properties newGroupConfig,
         String groupId,
         String sessionKey,
         int defaultSession,
         String heartbeatKey,
         int defaultHeartbeat
     ) {
-        Object rawSession = props.get(sessionKey);
-        Object rawHeartbeat = props.get(heartbeatKey);
+        Object rawSession = newGroupConfig.get(sessionKey);
+        Object rawHeartbeat = newGroupConfig.get(heartbeatKey);
         if (rawSession == null && rawHeartbeat == null) return;
 
         int session = rawSession != null ? Integer.parseInt(rawSession.toString()) : defaultSession;
@@ -838,22 +968,22 @@ public final class GroupConfig extends AbstractConfig {
 
     /**
      * Clamp a config value to [min, max]. A WARN log is emitted on adjustment.
-     * No-op when the key is absent from props.
+     * No-op when the key is absent from evaluatedGroupConfig.
      *
-     * @param props   The properties to modify in place.
-     * @param groupId The group id.
-     * @param key     The config key.
-     * @param min     The minimum allowed value (inclusive).
-     * @param max     The maximum allowed value (inclusive).
+     * @param evaluatedGroupConfig   The unparsed group config overrides to modify in place.
+     * @param groupId                The group id.
+     * @param key                    The config key.
+     * @param min                    The minimum allowed value (inclusive).
+     * @param max                    The maximum allowed value (inclusive).
      */
     private static void clampToRange(
-        Properties props,
+        Properties evaluatedGroupConfig,
         String groupId,
         String key,
         int min,
         int max
     ) {
-        Object rawValue = props.get(key);
+        Object rawValue = evaluatedGroupConfig.get(key);
         if (rawValue == null) return;
 
         int value = Integer.parseInt(rawValue.toString());
@@ -861,31 +991,31 @@ public final class GroupConfig extends AbstractConfig {
             LOG.warn("The group config '{}' for group '{}' has value {} which is below the broker's " +
                     "allowed minimum {}. The effective value will be capped to {}.",
                 key, groupId, value, min, min);
-            props.put(key, min);
+            evaluatedGroupConfig.put(key, min);
         } else if (value > max) {
             LOG.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
                     "allowed maximum {}. The effective value will be capped to {}.",
                 key, groupId, value, max, max);
-            props.put(key, max);
+            evaluatedGroupConfig.put(key, max);
         }
     }
 
     /**
      * Clamp a config value to at most max. A WARN log is emitted on adjustment.
-     * No-op when the key is absent from props.
+     * No-op when the key is absent from evaluatedGroupConfig.
      *
-     * @param props   The properties to modify in place.
-     * @param groupId The group id.
-     * @param key     The config key.
-     * @param max     The maximum allowed value (inclusive).
+     * @param evaluatedGroupConfig   The unparsed group config overrides to modify in place.
+     * @param groupId                The group id.
+     * @param key                    The config key.
+     * @param max                    The maximum allowed value (inclusive).
      */
     private static void clampToMax(
-        Properties props,
+        Properties evaluatedGroupConfig,
         String groupId,
         String key,
         int max
     ) {
-        Object rawValue = props.get(key);
+        Object rawValue = evaluatedGroupConfig.get(key);
         if (rawValue == null) return;
 
         int value = Integer.parseInt(rawValue.toString());
@@ -893,26 +1023,26 @@ public final class GroupConfig extends AbstractConfig {
             LOG.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
                     "allowed maximum {}. The effective value will be capped to {}.",
                 key, groupId, value, max, max);
-            props.put(key, max);
+            evaluatedGroupConfig.put(key, max);
         }
     }
 
     /**
      * Clamp a config value to at least min. A WARN log is emitted on adjustment.
-     * No-op when the key is absent from props.
+     * No-op when the key is absent from evaluatedGroupConfig.
      *
-     * @param props   The properties to modify in place.
-     * @param groupId The group id.
-     * @param key     The config key.
-     * @param min     The minimum allowed value (inclusive).
+     * @param evaluatedGroupConfig   The unparsed group config overrides to modify in place.
+     * @param groupId                The group id.
+     * @param key                    The config key.
+     * @param min                    The minimum allowed value (inclusive).
      */
     private static void clampToMin(
-        Properties props,
+        Properties evaluatedGroupConfig,
         String groupId,
         String key,
         int min
     ) {
-        Object rawValue = props.get(key);
+        Object rawValue = evaluatedGroupConfig.get(key);
         if (rawValue == null) return;
 
         int value = Integer.parseInt(rawValue.toString());
@@ -920,12 +1050,15 @@ public final class GroupConfig extends AbstractConfig {
             LOG.warn("The group config '{}' for group '{}' has value {} which is below the broker's " +
                     "allowed minimum {}. The effective value will be capped to {}.",
                 key, groupId, value, min, min);
-            props.put(key, min);
+            evaluatedGroupConfig.put(key, min);
         }
     }
 
     /**
      * Create a group config instance using the given properties and defaults.
+     *
+     * @param defaults  The full default group config values.
+     * @param overrides The group config overrides.
      */
     public static GroupConfig fromProps(
         Map<?, ?> defaults,
@@ -1082,6 +1215,34 @@ public final class GroupConfig extends AbstractConfig {
      */
     public Optional<Integer> streamsTaskOffsetIntervalMs() {
         return streamsTaskOffsetIntervalMs;
+    }
+
+    /**
+     * The number of warmup replicas for each task.
+     */
+    public Optional<Integer> streamsNumWarmupReplicas() {
+        return streamsNumWarmupReplicas;
+    }
+
+    /**
+     * The list of client tag keys used for rack-aware standby task assignment.
+     */
+    public Optional<List<String>> streamsRackAwareAssignmentTags() {
+        return streamsRackAwareAssignmentTags;
+    }
+
+    /**
+     * The acceptable recovery lag for streams groups.
+     */
+    public Optional<Long> streamsAcceptableRecoveryLag() {
+        return streamsAcceptableRecoveryLag;
+    }
+
+    /**
+     * The task assignor selected for streams groups.
+     */
+    public Optional<String> streamsAssignorName() {
+        return streamsAssignorName;
     }
 
     /**

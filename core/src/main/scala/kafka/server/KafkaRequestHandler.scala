@@ -27,20 +27,22 @@ import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.internals.{Exit, KafkaThread}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.network.{CallbackRequest, Request, ShutdownRequest, WakeupRequest}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
+import java.util.OptionalLong
 import scala.collection.mutable
 
 trait ApiRequestHandler {
-  def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit
+  def handle(request: Request, requestLocal: RequestLocal): Unit
   def tryCompleteActions(): Unit = {}
 }
 
 object KafkaRequestHandler {
   // Support for scheduling callbacks on a request thread.
   private val threadRequestChannel = new ThreadLocal[RequestChannel]
-  private val threadCurrentRequest = new ThreadLocal[RequestChannel.Request]
+  private val threadCurrentRequest = new ThreadLocal[Request]
 
   // For testing
   @volatile private var bypassThreadCheck = false
@@ -76,7 +78,7 @@ object KafkaRequestHandler {
         } else {
           // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
           // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => asyncCompletionCallback(newRequestLocal, t), currentRequest))
+          requestChannel.sendCallbackRequest(new CallbackRequest(newRequestLocal => asyncCompletionCallback(newRequestLocal, t), currentRequest))
         }
       }
     }
@@ -121,28 +123,29 @@ class KafkaRequestHandler(
       aggregateIdleMeter.mark(idleTime / aggregateThreads.get)
 
       req match {
-        case RequestChannel.ShutdownRequest =>
+        case _: ShutdownRequest =>
           debug(s"Kafka request handler $id on broker $brokerId received shut down command")
           completeShutdown()
           return
 
-        case callback: RequestChannel.CallbackRequest =>
+        case callback: CallbackRequest =>
           val originalRequest = callback.originalRequest
           try {
 
-            // If we've already executed a callback for this request, reset the times and subtract the callback time from the 
+            // If we've already executed a callback for this request, reset the times and subtract the callback time from the
             // new dequeue time. This will allow calculation of multiple callback times.
             // Otherwise, set dequeue time to now.
-            if (originalRequest.callbackRequestDequeueTimeNanos.isDefined) {
-              val prevCallbacksTimeNanos = originalRequest.callbackRequestCompleteTimeNanos.getOrElse(0L) - originalRequest.callbackRequestDequeueTimeNanos.getOrElse(0L)
-              originalRequest.callbackRequestCompleteTimeNanos = None
-              originalRequest.callbackRequestDequeueTimeNanos = Some(time.nanoseconds() - prevCallbacksTimeNanos)
+            if (originalRequest.callbackRequestDequeueTimeNanos.isPresent) {
+              val prevCallbacksTimeNanos = originalRequest.callbackRequestCompleteTimeNanos.orElse(0L) -
+                originalRequest.callbackRequestDequeueTimeNanos.orElse(0L)
+              originalRequest.callbackRequestCompleteTimeNanos(OptionalLong.empty)
+              originalRequest.callbackRequestDequeueTimeNanos(OptionalLong.of(time.nanoseconds() - prevCallbacksTimeNanos))
             } else {
-              originalRequest.callbackRequestDequeueTimeNanos = Some(time.nanoseconds())
+              originalRequest.callbackRequestDequeueTimeNanos(OptionalLong.of(time.nanoseconds()))
             }
-            
+
             threadCurrentRequest.set(originalRequest)
-            callback.fun(requestLocal)
+            callback.fun().accept(requestLocal)
           } catch {
             case e: FatalExitError =>
               completeShutdown()
@@ -152,13 +155,13 @@ class KafkaRequestHandler(
             // When handling requests, we try to complete actions after, so we should try to do so here as well.
             apis.tryCompleteActions()
             if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
-              originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
+              originalRequest.callbackRequestCompleteTimeNanos(OptionalLong.of(time.nanoseconds()))
             threadCurrentRequest.remove()
           }
 
-        case request: RequestChannel.Request =>
+        case request: Request =>
           try {
-            request.requestDequeueTimeNanos = endTime
+            request.requestDequeueTimeNanos(endTime)
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
             threadCurrentRequest.set(request)
             apis.handle(request, requestLocal)
@@ -172,7 +175,7 @@ class KafkaRequestHandler(
             request.releaseBuffer()
           }
 
-        case RequestChannel.WakeupRequest => 
+        case _: WakeupRequest =>
           // We should handle this in receiveRequest by polling callbackQueue.
           warn("Received a wakeup request outside of typical usage.")
 

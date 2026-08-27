@@ -81,8 +81,8 @@ public class OffsetsApiIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(OffsetsApiIntegrationTest.class);
 
-    private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(1);
-    private static final long OFFSET_READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
+    private static final long OFFSET_COMMIT_INTERVAL_MS = 500L;
+    private static final long OFFSET_READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
     private static final int NUM_WORKERS = 3;
     private static final int NUM_TASKS = 2;
     private static final int NUM_RECORDS_PER_PARTITION = 10;
@@ -703,7 +703,6 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
-    @Flaky("KAFKA-15918")
     @Test
     public void testResetSinkConnectorOffsets() throws Exception {
         resetAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());

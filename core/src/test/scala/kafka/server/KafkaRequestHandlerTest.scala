@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.internals.BufferSupplier
 import org.apache.kafka.common.utils.{MockTime, Time}
+import org.apache.kafka.network.Request
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
@@ -76,15 +77,15 @@ class KafkaRequestHandlerTest {
           RequestLocal.noCaching)
         // Execute the callback asynchronously.
         CompletableFuture.runAsync(() => callback(1))
-        request.apiLocalCompleteTimeNanos = time.nanoseconds
+        request.apiLocalCompleteTimeNanos(time.nanoseconds)
       }
 
       handler.run()
 
       assertEquals(startTime, request.requestDequeueTimeNanos)
       assertEquals(startTime + 2000000, request.apiLocalCompleteTimeNanos)
-      assertEquals(Some(startTime + 2000000), request.callbackRequestDequeueTimeNanos)
-      assertEquals(Some(startTime + 3000000), request.callbackRequestCompleteTimeNanos)
+      assertEquals(startTime + 2000000, request.callbackRequestDequeueTimeNanos.getAsLong)
+      assertEquals(startTime + 3000000, request.callbackRequestCompleteTimeNanos.getAsLong)
     } finally {
       metrics.close()
     }
@@ -231,7 +232,7 @@ class KafkaRequestHandlerTest {
     })
   }
 
-  def makeRequest(time: Time, metrics: RequestChannelMetrics): RequestChannel.Request = {
+  def makeRequest(time: Time, metrics: RequestChannelMetrics): Request = {
     // Make unsupported API versions request to avoid having to parse a real request
     val requestHeader = mock(classOf[RequestHeader])
     when(requestHeader.apiKey()).thenReturn(ApiKeys.API_VERSIONS)
@@ -239,8 +240,7 @@ class KafkaRequestHandlerTest {
 
     val context = new RequestContext(requestHeader, "0", mock(classOf[InetAddress]), new KafkaPrincipal("", ""),
       new ListenerName(""), SecurityProtocol.PLAINTEXT, mock(classOf[ClientInformation]), false)
-    new RequestChannel.Request(0, context, time.nanoseconds(),
-      mock(classOf[MemoryPool]), ByteBuffer.allocate(0), metrics)
+    new Request(0, context, time.nanoseconds(), mock(classOf[MemoryPool]), ByteBuffer.allocate(0), metrics)
   }
 
   def setupBrokerTopicMetrics(systemRemoteStorageEnabled: Boolean = true): BrokerTopicMetrics = {

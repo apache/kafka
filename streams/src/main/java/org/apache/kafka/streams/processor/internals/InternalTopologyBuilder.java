@@ -1457,6 +1457,18 @@ public class InternalTopologyBuilder {
         return decorateTopic(topic);
     }
 
+    /**
+     * If {@code topic} is an internally-managed topic in this topology (a repartition topic,
+     * a changelog topic, etc.), return the decorated name with the applicationId prefix.
+     * Otherwise return the topic name unchanged.
+     */
+    public String maybeDecorateInternalTopic(final String topic) {
+        if (topic != null && internalTopicNamesWithProperties.containsKey(topic)) {
+            return decorateTopic(topic);
+        }
+        return topic;
+    }
+
     @SuppressWarnings("deprecation")
     private String decorateTopic(final String topic) {
         if (applicationId == null) {

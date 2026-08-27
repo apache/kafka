@@ -16,20 +16,33 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
 /**
  * Runtime configuration parameters
  */
 @Evolving
+@InterfaceAudience.Public
 public class QueryConfig {
     final boolean collectExecutionInfo;
+    final IsolationLevel isolationLevel;
 
     public QueryConfig(final boolean collectExecutionInfo) {
+        this(collectExecutionInfo, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    public QueryConfig(final boolean collectExecutionInfo, final IsolationLevel isolationLevel) {
         this.collectExecutionInfo = collectExecutionInfo;
+        this.isolationLevel = isolationLevel;
     }
 
     public boolean isCollectExecutionInfo() {
         return collectExecutionInfo;
+    }
+
+    public IsolationLevel getIsolationLevel() {
+        return isolationLevel;
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -33,6 +34,7 @@ import org.apache.kafka.streams.kstream.Predicate;
  * is represented as a {@code KeyValueStore KeyValueStore<Bytes, byte[]>} by interpreting the
  * value bytes as containing record timestamp information in addition to raw record values.
  */
+@InterfaceAudience.Public
 public interface VersionedBytesStoreSupplier extends KeyValueBytesStoreSupplier {
 
     /**

@@ -26,6 +26,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -138,7 +140,9 @@ public class IQv2StoreIntegrationTest {
     private static final long WINDOW_START =
         (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS,
+        // Each test application has one Streams group member, so waiting for more members only delays startup.
+        Utils.mkProperties(Map.of(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")));
     private static final Position POSITION_0 =
         Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 5L)))));
 
@@ -807,7 +811,7 @@ public class IQv2StoreIntegrationTest {
                                 shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, -1L));
                             }
                         } else {
-                            assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5)));
+                            shouldHandleFailedTimestampedKeyQuery(2);
                             assertThrows(AssertionError.class, () -> shouldHandleTimestampedRangeQueries(false));
                         }
 
@@ -1710,6 +1714,27 @@ public class IQv2StoreIntegrationTest {
         assertThat(queryResult.getPosition(), is(POSITION_0));
     }
 
+    public <V> void shouldHandleFailedTimestampedKeyQuery(final Integer key) {
+        final TimestampedKeyQuery<Integer, V> query = TimestampedKeyQuery.withKey(key);
+        final StateQueryRequest<ValueAndTimestamp<V>> request =
+                inStore(STORE_NAME)
+                        .withQuery(query)
+                        .withPartitions(Set.of(0))
+                        .withPositionBound(PositionBound.at(INPUT_POSITION));
+
+        final StateQueryResult<ValueAndTimestamp<V>> result =
+                IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+
+        final QueryResult<ValueAndTimestamp<V>> queryResult =
+                result.getOnlyPartitionResult();
+
+        assertThat(queryResult.isFailure(), is(true));
+        assertThat(queryResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
+        assertThat(queryResult.getFailureMessage(), containsString("TimestampedKeyQuery"));
+
+        assertThrows(IllegalArgumentException.class, queryResult::getResult);
+    }
+
     public <V> void shouldHandleRangeQuery(
         final Optional<Integer> lower,
         final Optional<Integer> upper,
@@ -1823,7 +1848,7 @@ public class IQv2StoreIntegrationTest {
         final Integer key,
         final Instant timeFrom,
         final Instant timeTo,
-        final Function<V, Integer> valueExtactor,
+        final Function<V, Integer> valueExtractor,
         final Set<Integer> expectedValues) {
 
         final WindowKeyQuery<Integer, V> query = WindowKeyQuery.withKeyAndWindowStartRange(
@@ -1864,7 +1889,7 @@ public class IQv2StoreIntegrationTest {
 
                 try (final WindowStoreIterator<V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValues.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
@@ -1877,7 +1902,7 @@ public class IQv2StoreIntegrationTest {
     public <V> void shouldHandleWindowRangeQuery(
         final Instant timeFrom,
         final Instant timeTo,
-        final Function<V, Integer> valueExtactor,
+        final Function<V, Integer> valueExtractor,
         final Set<Integer> expectedValues) {
 
         final WindowRangeQuery<Integer, V> query = WindowRangeQuery.withWindowStartRange(timeFrom, timeTo);
@@ -1914,7 +1939,7 @@ public class IQv2StoreIntegrationTest {
 
                 try (final KeyValueIterator<Windowed<Integer>, V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValues.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));

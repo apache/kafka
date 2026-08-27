@@ -25,8 +25,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
@@ -393,6 +393,34 @@ public class GlobalStateManagerImplTest {
         assertEquals(5, stateRestoreCallback.restored.size());
     }
 
+
+    @Test
+    public void shouldReportZeroApproximateNumUncommittedBytesBeforeStoresAreRegistered() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        stateManager.initialize();
+        assertEquals(0L, stateManager.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldAggregateApproximateNumUncommittedBytesAcrossRegisteredStores() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        stateManager.initialize();
+        initializeConsumer(1, 0, t1);
+        stateManager.registerStore(new NoOpReadOnlyStore<>(store1.name()) {
+            @Override
+            public long approximateNumUncommittedBytes() {
+                return 100L;
+            }
+        }, stateRestoreCallback, null);
+        initializeConsumer(1, 0, t2);
+        stateManager.registerStore(new NoOpReadOnlyStore<>(store2.name()) {
+            @Override
+            public long approximateNumUncommittedBytes() {
+                return 250L;
+            }
+        }, stateRestoreCallback, null);
+        assertEquals(350L, stateManager.approximateNumUncommittedBytes());
+    }
 
     @Test
     public void shouldCommitStateStores() {

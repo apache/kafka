@@ -56,7 +56,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.tools.OffsetsUtils;
+import org.apache.kafka.tools.GroupOffsetsResetter;
 import org.apache.kafka.tools.consumer.group.CsvUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -109,7 +109,7 @@ public class StreamsGroupCommand {
             if (numberOfActions != 1)
                 throw new IllegalArgumentException("Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
 
-            run(opts);
+            exitCode = run(opts);
         } catch (IllegalArgumentException | OptionException e) {
             System.err.println(e.getMessage());
             if (opts != null) {
@@ -128,12 +128,12 @@ public class StreamsGroupCommand {
         return exitCode;
     }
 
-    public static void run(StreamsGroupCommandOptions opts) throws ExecutionException, InterruptedException {
+    public static int run(StreamsGroupCommandOptions opts) throws ExecutionException, InterruptedException {
         try (StreamsGroupService streamsGroupService = new StreamsGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt)) {
                 streamsGroupService.listGroups();
             } else if (opts.options.has(opts.describeOpt)) {
-                streamsGroupService.describeGroups();
+                return streamsGroupService.describeGroups();
             } else if (opts.options.has(opts.resetOffsetsOpt)) {
                 Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetsToReset = streamsGroupService.resetOffsets();
                 if (opts.options.has(opts.exportOpt)) {
@@ -149,6 +149,7 @@ public class StreamsGroupCommand {
                 throw new IllegalArgumentException("Unknown action!");
             }
         }
+        return 0;
     }
 
     static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
@@ -187,7 +188,7 @@ public class StreamsGroupCommand {
     static class StreamsGroupService implements AutoCloseable {
         final StreamsGroupCommandOptions opts;
         private final Admin adminClient;
-        private final OffsetsUtils offsetsUtils;
+        private final GroupOffsetsResetter groupOffsetsResetter;
 
         public StreamsGroupService(StreamsGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
@@ -196,18 +197,18 @@ public class StreamsGroupCommand {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+            this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
         public StreamsGroupService(StreamsGroupCommandOptions opts, Admin adminClient) {
             this.opts = opts;
             this.adminClient = adminClient;
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+            this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
-        private OffsetsUtils.OffsetsUtilsOptions getOffsetsUtilsOptions(StreamsGroupCommandOptions opts) {
+        private GroupOffsetsResetter.GroupOffsetsResetterOptions getGroupOffsetsResetterOptions(StreamsGroupCommandOptions opts) {
             return
-                new OffsetsUtils.OffsetsUtilsOptions(opts.options.valuesOf(opts.groupOpt),
+                new GroupOffsetsResetter.GroupOffsetsResetterOptions(opts.options.valuesOf(opts.groupOpt),
                     opts.options.valuesOf(opts.resetToOffsetOpt),
                     opts.options.valuesOf(opts.resetFromFileOpt),
                     opts.options.valuesOf(opts.resetToDatetimeOpt),
@@ -262,15 +263,21 @@ public class StreamsGroupCommand {
             }
         }
 
-        public void describeGroups() throws ExecutionException, InterruptedException {
+        public int describeGroups() throws ExecutionException, InterruptedException {
             List<String> groupIds = opts.options.has(opts.allGroupsOpt)
                 ? new ArrayList<>(listStreamsGroups())
                 : new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
+            int exitCode = 0;
             if (!groupIds.isEmpty()) {
+                boolean topology = opts.options.has(opts.topologyOpt);
                 for (String groupId : groupIds) {
-                    StreamsGroupDescription description = getDescribeGroup(groupId);
+                    StreamsGroupDescription description = getDescribeGroup(groupId, topology);
                     boolean verbose = opts.options.has(opts.verboseOpt);
-                    if (opts.options.has(opts.membersOpt)) {
+                    if (topology) {
+                        if (!printTopology(description)) {
+                            exitCode = 1;
+                        }
+                    } else if (opts.options.has(opts.membersOpt)) {
                         printMembers(description, verbose);
                     } else if (opts.options.has(opts.stateOpt)) {
                         printStates(description, verbose);
@@ -279,14 +286,42 @@ public class StreamsGroupCommand {
                     }
                 }
             }
+            return exitCode;
         }
 
         StreamsGroupDescription getDescribeGroup(String group) throws ExecutionException, InterruptedException {
+            return getDescribeGroup(group, false);
+        }
+
+        StreamsGroupDescription getDescribeGroup(String group, boolean includeTopologyDescription) throws ExecutionException, InterruptedException {
             DescribeStreamsGroupsResult result = adminClient.describeStreamsGroups(
                 List.of(group),
-                withTimeoutMs(new DescribeStreamsGroupsOptions()));
+                withTimeoutMs(new DescribeStreamsGroupsOptions().includeTopologyDescription(includeTopologyDescription)));
             Map<String, StreamsGroupDescription> descriptionMap = result.all().get();
             return descriptionMap.get(group);
+        }
+
+        /**
+         * Prints the topology description for the given group. Returns {@code true} if a description was available and
+         * printed, {@code false} otherwise (so the caller can surface a non-zero exit code).
+         */
+        private boolean printTopology(StreamsGroupDescription description) {
+            switch (description.topologyDescriptionStatus()) {
+                case AVAILABLE:
+                    System.out.println(TopologyDescriptionFormatter.format(description.topologyDescription().orElseThrow()));
+                    return true;
+                case NOT_STORED:
+                    printError("No topology description is stored for streams group '" + description.groupId() + "'.", Optional.empty());
+                    return false;
+                case ERROR:
+                    printError("The broker failed to fetch the topology description for streams group '" + description.groupId()
+                        + "'. See the broker logs for details.", Optional.empty());
+                    return false;
+                default:
+                    printError("No topology description is available for streams group '" + description.groupId()
+                        + "' (status: " + description.topologyDescriptionStatus() + ").", Optional.empty());
+                    return false;
+            }
         }
 
         private void printMembers(StreamsGroupDescription description, boolean verbose) {
@@ -379,15 +414,17 @@ public class StreamsGroupCommand {
 
             final int coordinatorLen = Math.max(25, coordinator.length());
             final int stateLen = 25;
+            String assignor = description.assignorName().orElse("");
+            final int assignorLen = Math.max(15, assignor.length());
             if (!verbose) {
-                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -stateLen + "s %s\n";
-                System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
-                System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.members().size());
+                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -assignorLen + "s %" + -stateLen + "s %s\n";
+                System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "ASSIGNOR", "STATE", "#MEMBERS");
+                System.out.printf(fmt, description.groupId(), coordinator, assignor, description.groupState().toString(), description.members().size());
             } else {
                 final int groupEpochLen = 15, targetAssignmentEpochLen = 25;
-                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -stateLen + "s %" + -groupEpochLen + "s %" + -targetAssignmentEpochLen + "s %s\n";
-                System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-                System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
+                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -assignorLen + "s %" + -stateLen + "s %" + -groupEpochLen + "s %" + -targetAssignmentEpochLen + "s %s\n";
+                System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "ASSIGNOR", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
+                System.out.printf(fmt, description.groupId(), coordinator, assignor, description.groupState().toString(), description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
             }
         }
 
@@ -604,7 +641,7 @@ public class StreamsGroupCommand {
                     topicWithoutPartitions.add(topic);
             }
 
-            List<TopicPartition> specifiedPartitions = topicWithPartitions.stream().flatMap(offsetsUtils::parseTopicsWithPartitions).toList();
+            List<TopicPartition> specifiedPartitions = topicWithPartitions.stream().flatMap(groupOffsetsResetter::parseTopicsWithPartitions).toList();
 
             // Get the partitions of topics that the user did not explicitly specify the partitions
             DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(
@@ -951,14 +988,14 @@ public class StreamsGroupCommand {
             } else if (opts.options.has(opts.inputTopicOpt)) {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
 
-                List<TopicPartition> partitions = offsetsUtils.parseTopicPartitionsToReset(topics);
-                offsetsUtils.checkAllTopicPartitionsValid(partitions);
+                List<TopicPartition> partitions = groupOffsetsResetter.parseTopicPartitionsToReset(topics);
+                groupOffsetsResetter.checkAllTopicPartitionsValid(partitions);
                 // if the user specified topics that do not belong to this group, we filter them out
                 partitions = filterExistingGroupTopics(groupId, partitions);
                 return partitions;
             } else {
                 if (!opts.options.has(opts.resetFromFileOpt))
-                    CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
+                    CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-input-topics, --input-topic.");
 
                 return List.of();
             }
@@ -966,23 +1003,23 @@ public class StreamsGroupCommand {
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
             if (opts.options.has(opts.resetToOffsetOpt)) {
-                return offsetsUtils.resetToOffset(partitionsToReset);
+                return groupOffsetsResetter.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
-                return offsetsUtils.resetToEarliest(partitionsToReset);
+                return groupOffsetsResetter.resetToEarliest(partitionsToReset);
             } else if (opts.options.has(opts.resetToLatestOpt)) {
-                return offsetsUtils.resetToLatest(partitionsToReset);
+                return groupOffsetsResetter.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetShiftByOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                return offsetsUtils.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
+                return groupOffsetsResetter.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
-                return offsetsUtils.resetToDateTime(partitionsToReset);
+                return groupOffsetsResetter.resetToDateTime(partitionsToReset);
             } else if (opts.options.has(opts.resetByDurationOpt)) {
-                return offsetsUtils.resetByDuration(partitionsToReset);
-            } else if (offsetsUtils.resetPlanFromFile().isPresent()) {
-                return offsetsUtils.resetFromFile(groupId);
+                return groupOffsetsResetter.resetByDuration(partitionsToReset);
+            } else if (groupOffsetsResetter.resetPlanFromFile().isPresent()) {
+                return groupOffsetsResetter.resetFromFile(groupId);
             } else if (opts.options.has(opts.resetToCurrentOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                return offsetsUtils.resetToCurrent(partitionsToReset, currentCommittedOffsets);
+                return groupOffsetsResetter.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
             CommandLineUtils

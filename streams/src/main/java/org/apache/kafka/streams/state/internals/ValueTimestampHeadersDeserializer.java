@@ -95,13 +95,5 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         initNullableDeserializer(valueDeserializer, getter);
     }
 
-    /**
-     * Extract value from serialized ValueTimestampHeaders.
-     */
-    static <T> T value(final byte[] rawValueTimestampHeaders, final Deserializer<T> deserializer) {
-        if (rawValueTimestampHeaders == null) {
-            return null;
-        }
-        return deserializer.deserialize("", Utils.rawPlainValue(rawValueTimestampHeaders));
-    }
+
 }

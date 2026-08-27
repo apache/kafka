@@ -1,6 +1,6 @@
 ---
 title: Protocol
-description: 
+description: Kafka communication protocol, request formats, API versions, and client implementation details.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 
@@ -138,6 +138,8 @@ The protocol is built out of the following primitive types.
 
 {{< include-html file="/static/{version}/generated/protocol_types.html" >}} 
 
+Message versions marked as flexible use the compact encoding for variable-length fields. In particular, arrays use `COMPACT_ARRAY` rather than `ARRAY`; strings and byte arrays similarly use their corresponding `COMPACT_*` types. Compact encodings store their length as an unsigned variable-length integer instead of a fixed-width integer. Flexible versions also include a tagged-fields section at the end of every request and response component.
+
 ### Notes on reading the request format grammars
 
 The [BNF](https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_Form)s below give an exact context free grammar for the request and response binary format. The BNF is intentionally not compact in order to give human-readable name. As always in a BNF a sequence of productions indicates concatenation. When there are multiple possible productions these are separated with '|' and may be enclosed in parenthesis for grouping. The top-level definition is always given first and subsequent sub-parts are indented.
@@ -215,3 +217,19 @@ Others have asked if maybe we shouldn't support many different protocols. Prior 
 Another question is why we don't adopt XMPP, STOMP, AMQP or an existing protocol. The answer to this varies by protocol, but in general the problem is that the protocol does determine large parts of the implementation and we couldn't do what we are doing if we didn't have control over the protocol. Our belief is that it is possible to do better than existing messaging systems have in providing a truly distributed messaging system, and to do this we need to build something that works differently.
 
 A final question is why we don't use a system like Protocol Buffers or Thrift to define our request messages. These packages excel at helping you to managing lots and lots of serialized messages. However we have only a few messages. Support across languages is somewhat spotty (depending on the package). Finally the mapping between binary log format and wire protocol is something we manage somewhat carefully and this would not be possible with these systems. Finally we prefer the style of versioning APIs explicitly and checking this to inferring new values as nulls as it allows more nuanced control of compatibility.
+
+## Recommendations for 3rd‑party Clients: Member ID Format
+
+When a Kafka client participates in group protocols (e.g., `ConsumerGroupHeartbeat` RPC), it must generate a **member ID** to identify itself to the broker. While the protocol does not strictly enforce the format of this ID, we strongly recommend the following:
+
+1. **Use a base64‑encoded UUID** as the member ID.
+2. **Encode the UUID using URL‑safe base64** (without `+` or `/` characters).
+3. **Omit hyphens** — the resulting string should be a continuous sequence of alphanumeric characters (e.g., `abc123def456`).
+
+**Example**  
+A standard UUID (`00000000-0000-0000-0000-000000000000`) should be transformed into a URL‑safe base64 string like: `YzYxNjQ4OTItZDE1Mi00Y2E4LWIyNzUtYmIwMzAwMDAwMDAw`
+
+*(Note: This is illustrative; actual encoding depends on the UUID bytes.)*
+
+**Important**  
+While this is a strong recommendation, the protocol does **not** reject member IDs that deviate from this format.
