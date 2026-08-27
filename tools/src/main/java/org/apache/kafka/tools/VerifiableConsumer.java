@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -99,6 +100,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private final PrintStream out;
     private final KafkaConsumer<String, String> consumer;
     private final String topic;
+    private final String subscribedRegex;
     private final boolean useAutoCommit;
     private final boolean useAsyncCommit;
     private final boolean verbose;
@@ -110,6 +112,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
                               PrintStream out,
                               String topic,
+                              String subscribedRegex,
                               int maxMessages,
                               boolean useAutoCommit,
                               boolean useAsyncCommit,
@@ -118,6 +121,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         this.consumer = consumer;
         this.out = out;
         this.topic = topic;
+        this.subscribedRegex = subscribedRegex;
         this.maxMessages = maxMessages;
         this.useAutoCommit = useAutoCommit;
         this.useAsyncCommit = useAsyncCommit;
@@ -236,7 +240,11 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public void run() {
         try {
             printJson(new StartupComplete());
-            consumer.subscribe(List.of(topic), this);
+            if (subscribedRegex != null) {
+                consumer.subscribe(new SubscriptionPattern(subscribedRegex), this);
+            } else {
+                consumer.subscribe(List.of(topic), this);
+            }
 
             while (!isFinished()) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
@@ -534,12 +542,23 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
             .help("The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
-        parser.addArgument("--topic")
+        MutuallyExclusiveGroup subscriptionGroup = parser.addMutuallyExclusiveGroup("Subscription Group")
+            .description("Group of arguments for the consumer subscription")
+            .required(true);
+
+        subscriptionGroup.addArgument("--topic")
             .action(store())
-            .required(true)
             .type(String.class)
             .metavar("TOPIC")
             .help("Consumes messages from this topic.");
+
+        subscriptionGroup.addArgument("--subscribed-regex")
+            .action(store())
+            .type(String.class)
+            .dest("subscribedRegex")
+            .metavar("SUBSCRIBED-REGEX")
+            .help("Consumes messages from all topics matching this regular expression; " +
+                    "requires the " + GroupProtocol.CONSUMER.name() + " group protocol.");
 
         parser.addArgument("--group-protocol")
             .action(store())
@@ -720,6 +739,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);
 
         String topic = res.getString("topic");
+        String subscribedRegex = validatedSubscribedRegex(res, groupProtocol, parser);
         int maxMessages = res.getInt("maxMessages");
         boolean verbose = res.getBoolean("verbose");
 
@@ -727,6 +747,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 consumer,
                 System.out,
                 topic,
+                subscribedRegex,
                 maxMessages,
                 useAutoCommit,
                 false,
