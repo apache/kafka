@@ -92,7 +92,7 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     }
 
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
-        assertEquals(expected.length, processed.size(), () -> "the number of outputs:" + processed);
+        assertEquals(expected.length, processed.size(), "the number of outputs:" + processed);
         for (int i = 0; i < expected.length; i++) {
             final FixedKeyRecord<KIn, VIn> record = processed.get(i);
             assertEquals(
@@ -106,7 +106,7 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     }
 
     public void checkAndClearProcessedRecords(final Record<?, ?>... expected) {
-        assertEquals(expected.length, processed.size(), () -> "the number of outputs:" + processed);
+        assertEquals(expected.length, processed.size(), "the number of outputs:" + processed);
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processed.get(i), "output[" + i + "]:");
         }
@@ -119,13 +119,13 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     }
 
     public void checkEmptyAndClearProcessResult() {
-        assertEquals(0, processed.size(), "the number of outputs:");
+        assertEquals(0, processed.size(), "the number of outputs:" + processed);
         processed.clear();
     }
 
     public void checkAndClearPunctuateResult(final PunctuationType type, final long... expected) {
         final ArrayList<Long> punctuated = type == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime;
-        assertEquals(expected.length, punctuated.size(), "the number of outputs:");
+        assertEquals(expected.length, punctuated.size(), "the number of outputs:" + punctuated);
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], punctuated.get(i), "output[" + i + "]:");
