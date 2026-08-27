@@ -1606,6 +1606,7 @@ public final class QuorumController implements Controller {
         this.scramControlManager = new ScramControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.delegationTokenControlManager = new DelegationTokenControlManager.Builder().
             setLogContext(logContext).
