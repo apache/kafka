@@ -48,10 +48,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasProperty;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TaskMovementTest {
     @Test
@@ -70,15 +68,15 @@ public class TaskMovementTest {
         final ClientState client2 = getClientStateWithActiveAssignment(Set.of(TASK_0_1, TASK_1_1), allTasks, allTasks);
         final ClientState client3 = getClientStateWithActiveAssignment(Set.of(TASK_0_2, TASK_1_2), allTasks, allTasks);
 
-        assertThat(
+        assertEquals(
+            0,
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
                 getClientStatesMap(client1, client2, client3),
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
-            ),
-            is(0)
+            )
         );
     }
 
@@ -107,15 +105,15 @@ public class TaskMovementTest {
             mkEntry(TASK_1_1, mkOrderedSet(PID_1, PID_2, PID_3)),
             mkEntry(TASK_1_2, mkOrderedSet(PID_1, PID_2, PID_3))
         );
-        assertThat(
+        assertEquals(
+            0,
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
                 getClientStatesMap(client1, client2, client3),
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
-            ),
-            is(0)
+            )
         );
     }
 
@@ -139,8 +137,8 @@ public class TaskMovementTest {
             mkEntry(TASK_0_2, mkOrderedSet(PID_2, PID_1, PID_3))
         );
 
-        assertThat(
-            "should have assigned movements",
+        assertEquals(
+            2,
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
@@ -148,17 +146,17 @@ public class TaskMovementTest {
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
             ),
-            is(2)
+            "should have assigned movements"
         );
         // The active tasks have changed to the ones that each client is caught up on
-        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_0)));
-        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_2)));
-        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_1)));
+        assertEquals(Set.of(TASK_0_0), client1.activeTasks());
+        assertEquals(Set.of(TASK_0_2), client2.activeTasks());
+        assertEquals(Set.of(TASK_0_1), client3.activeTasks());
 
         // we assigned warmups to migrate to the input active assignment
-        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
-        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_1)));
-        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_2)));
+        assertEquals(Set.of(), client1.standbyTasks());
+        assertEquals(Set.of(TASK_0_1), client2.standbyTasks());
+        assertEquals(Set.of(TASK_0_2), client3.standbyTasks());
     }
 
     @Test
@@ -186,8 +184,8 @@ public class TaskMovementTest {
                 mkEntry(TASK_0_2, mkOrderedSet(PID_2, PID_3, PID_1))
         );
 
-        assertThat(
-                "should have assigned movements",
+        assertEquals(
+                2,
                 assignActiveTaskMovements(
                         tasksToCaughtUpClients,
                         tasksToClientByLag,
@@ -195,17 +193,17 @@ public class TaskMovementTest {
                         new TreeMap<>(),
                         new AtomicInteger(maxWarmupReplicas)
                 ),
-                is(2)
+                "should have assigned movements"
         );
         // The active tasks have changed to the ones that each client is most caught up on
-        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_0)));
-        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_2)));
-        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_1)));
+        assertEquals(Set.of(TASK_0_0), client1.activeTasks());
+        assertEquals(Set.of(TASK_0_2), client2.activeTasks());
+        assertEquals(Set.of(TASK_0_1), client3.activeTasks());
 
         // we assigned warmups to migrate to the input active assignment
-        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
-        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_1)));
-        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_2)));
+        assertEquals(Set.of(), client1.standbyTasks());
+        assertEquals(Set.of(TASK_0_1), client2.standbyTasks());
+        assertEquals(Set.of(TASK_0_2), client3.standbyTasks());
     }
 
     @Test
@@ -228,8 +226,8 @@ public class TaskMovementTest {
             mkEntry(TASK_0_2, mkOrderedSet(PID_2, PID_1, PID_3))
         );
 
-        assertThat(
-            "should have assigned movements",
+        assertEquals(
+            2,
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
@@ -237,17 +235,17 @@ public class TaskMovementTest {
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
             ),
-            is(2)
+            "should have assigned movements"
         );
         // The active tasks have changed to the ones that each client is caught up on
-        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_0)));
-        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_2)));
-        assertThat(client3, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_1)));
+        assertEquals(Set.of(TASK_0_0), client1.activeTasks());
+        assertEquals(Set.of(TASK_0_2), client2.activeTasks());
+        assertEquals(Set.of(TASK_0_1), client3.activeTasks());
 
         // we should only assign one warmup, and the task movement should have the highest priority
-        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
-        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_1)));
-        assertThat(client3, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
+        assertEquals(Set.of(), client1.standbyTasks());
+        assertEquals(Set.of(TASK_0_1), client2.standbyTasks());
+        assertEquals(Set.of(), client3.standbyTasks());
     }
 
     @Test
@@ -266,8 +264,8 @@ public class TaskMovementTest {
             mkEntry(TASK_0_0, mkOrderedSet(PID_1, PID_2))
         );
 
-        assertThat(
-            "should have assigned movements",
+        assertEquals(
+            1,
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
@@ -275,7 +273,7 @@ public class TaskMovementTest {
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
             ),
-            is(1)
+            "should have assigned movements"
         );
         // Even though we have no warmups allowed, we still let client1 take over active processing while
         // client2 "warms up" because client1 was a caught-up standby, so it can "trade" standby status with
@@ -283,11 +281,11 @@ public class TaskMovementTest {
 
         // I.e., when you have a caught-up standby and a not-caught-up active, you can just swap their roles
         // and not call it a "warmup".
-        assertThat(client1, hasProperty("activeTasks", ClientState::activeTasks, Set.of(TASK_0_0)));
-        assertThat(client2, hasProperty("activeTasks", ClientState::activeTasks, Set.of()));
+        assertEquals(Set.of(TASK_0_0), client1.activeTasks());
+        assertEquals(Set.of(), client2.activeTasks());
 
-        assertThat(client1, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of()));
-        assertThat(client2, hasProperty("standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_0)));
+        assertEquals(Set.of(), client1.standbyTasks());
+        assertEquals(Set.of(TASK_0_0), client2.standbyTasks());
 
     }
 
