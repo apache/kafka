@@ -942,14 +942,46 @@ public class LogSegmentTest {
             seg.close();
 
             try (RandomAccessFile raf = new RandomAccessFile(timeIndexFile, "rw")) {
-                int size = (int) raf.length();
+                raf.setLength(1500);
                 raf.seek(0);
-                raf.write(new byte[size]);
+                raf.write(new byte[1500]);
             }
 
             try (LogSegment reopened = LogTestUtils.createSegment(0, logDir, 10, Time.SYSTEM)) {
                 assertThrows(CorruptIndexException.class, () -> reopened.sanityCheck(false));
             }
+        }
+    }
+
+    @Test
+    public void testSanityCheckSkipsTimeIndexForTrimmedFile() throws Exception {
+        try (LogSegment seg = createSegment(0)) {
+            for (int i = 0; i < 5; i++) {
+                seg.append(i, v1Records(i, String.valueOf(i)));
+            }
+            seg.close();
+        }
+
+        // Reopen. File is trimmed (small), not at preAllocatedSize (1500).
+        // sanityCheck should not throw for a healthy trimmed file.
+        try (LogSegment reopened = LogTestUtils.createSegment(0, logDir, 10, Time.SYSTEM)) {
+            reopened.sanityCheck(false);
+        }
+    }
+
+    @Test
+    public void testSanityCheckPassesForLegitimatelyFullTimeIndex() throws Exception {
+        // A time index that is genuinely full (all entries written with real timestamps)
+        // is at preAllocatedSize on disk but is NOT corrupt. sanityCheck must not throw.
+        try (LogSegment seg = createSegment(0, 1)) {
+            // indexIntervalBytes=1 ensures every append writes a time index entry.
+            // maxIndexSize for time index in createSegment is 1500; 1500/12 = 125 entries.
+            for (int i = 0; i < 125; i++) {
+                seg.append(i, v1Records(i, String.valueOf(i)));
+            }
+            // Time index is now full. Do not close (which would trim).
+            // Verify sanityCheck passes on the full-but-valid index.
+            seg.sanityCheck(false);
         }
     }
 }

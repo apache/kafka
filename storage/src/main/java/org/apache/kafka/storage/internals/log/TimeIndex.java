@@ -53,7 +53,7 @@ import java.nio.MappedByteBuffer;
  */
 public class TimeIndex extends AbstractIndex {
     private static final Logger log = LoggerFactory.getLogger(TimeIndex.class);
-    private static final int ENTRY_SIZE = 12;
+    static final int ENTRY_SIZE = 12;
 
     private volatile TimestampOffset lastEntry;
 

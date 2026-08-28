@@ -183,11 +183,13 @@ public class LogSegment implements Closeable {
             // Resize the time index file to 0 if it is newly created.
             if (timeIndexFileNewlyCreated)
                 timeIndex().resize(0);
-            // A time index left at its pre-allocated size with no valid entries causes
-            // BufferOverflowException on the next roll. Checking it here triggers LogLoader
-            // to rebuild the index from the log. The offset index is not checked because a
-            // pre-allocated offset index does not cause failures on roll.
-            timeIndex().sanityCheck();
+            // A pre-allocated, untrimmed time index causes BufferOverflowException on the
+            // next segment roll. To avoid eagerly mmapping every time index on startup, only
+            // materialize and check when the file is at its full pre-allocated size.
+            long preAllocatedSize = AbstractIndex.roundDownToExactMultiple(lazyTimeIndex.maxIndexSize(), TimeIndex.ENTRY_SIZE);
+            if (timeIndexFile().length() == preAllocatedSize) {
+                timeIndex().sanityCheck();
+            }
             txnIndex.sanityCheck();
         } else
             throw new NoSuchFileException("Offset index file " + offsetIndexFile().getAbsolutePath() + " does not exist");
