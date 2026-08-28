@@ -164,22 +164,15 @@ public class KTableSuppressProcessorMetricsTest {
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(new Record<>(key, value, timestamp));
 
-        final MetricName evictionRateMetric = evictionRateMetricLatest;
-        final MetricName evictionTotalMetric = evictionTotalMetricLatest;
-        final MetricName bufferSizeAvgMetric = bufferSizeAvgMetricLatest;
-        final MetricName bufferSizeMaxMetric = bufferSizeMaxMetricLatest;
-        final MetricName bufferCountAvgMetric = bufferCountAvgMetricLatest;
-        final MetricName bufferCountMaxMetric = bufferCountMaxMetricLatest;
-
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-            verifyMetric(metrics, evictionRateMetric, 0.0);
-            verifyMetric(metrics, evictionTotalMetric, 0.0);
-            verifyMetric(metrics, bufferSizeAvgMetric, 21.5);
-            verifyMetric(metrics, bufferSizeMaxMetric, 43.0);
-            verifyMetric(metrics, bufferCountAvgMetric, 0.5);
-            verifyMetric(metrics, bufferCountMaxMetric, 1.0);
+            verifyMetric(metrics, evictionRateMetricLatest, 0.0);
+            verifyMetric(metrics, evictionTotalMetricLatest, 0.0);
+            verifyMetric(metrics, bufferSizeAvgMetricLatest, 21.5);
+            verifyMetric(metrics, bufferSizeMaxMetricLatest, 43.0);
+            verifyMetric(metrics, bufferCountAvgMetricLatest, 0.5);
+            verifyMetric(metrics, bufferCountMaxMetricLatest, 1.0);
         }
 
         context.setRecordMetadata("", 0, 1L);
@@ -189,12 +182,12 @@ public class KTableSuppressProcessorMetricsTest {
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-            assertTrue((double) metrics.get(evictionRateMetric).metricValue() > 0.0);
-            verifyMetric(metrics, evictionTotalMetric, 1.0);
-            verifyMetric(metrics, bufferSizeAvgMetric, 41.0);
-            verifyMetric(metrics, bufferSizeMaxMetric, 82.0);
-            verifyMetric(metrics, bufferCountAvgMetric, 1.0);
-            verifyMetric(metrics, bufferCountMaxMetric, 2.0);
+            assertTrue((double) metrics.get(evictionRateMetricLatest).metricValue() > 0.0);
+            verifyMetric(metrics, evictionTotalMetricLatest, 1.0);
+            verifyMetric(metrics, bufferSizeAvgMetricLatest, 41.0);
+            verifyMetric(metrics, bufferSizeMaxMetricLatest, 82.0);
+            verifyMetric(metrics, bufferCountAvgMetricLatest, 1.0);
+            verifyMetric(metrics, bufferCountMaxMetricLatest, 2.0);
         }
     }
 

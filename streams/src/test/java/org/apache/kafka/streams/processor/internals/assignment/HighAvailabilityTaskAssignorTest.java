@@ -69,6 +69,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedActiveAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedStatefulAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasActiveTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasAssignedTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasStandbyTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.copyClientStateMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
@@ -79,9 +82,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomSubset;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskTopicPartitionMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTasksForTopicGroup;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasAssignedTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForRandomChangelog;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.verifyTaskPlacementWithRackAwareAssignor;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -180,11 +180,11 @@ public class HighAvailabilityTaskAssignorTest {
             configs
         );
 
-        assertThat(clientState1, hasAssignedTasks(allTaskIds.size()));
+        assertHasAssignedTasks(clientState1, allTaskIds.size());
 
-        assertThat(clientState2, hasAssignedTasks(allTaskIds.size()));
+        assertHasAssignedTasks(clientState2, allTaskIds.size());
 
-        assertThat(clientState3, hasAssignedTasks(2));
+        assertHasAssignedTasks(clientState3, 2);
 
         assertThat(unstable, is(true));
 
@@ -237,9 +237,9 @@ public class HighAvailabilityTaskAssignorTest {
             configs
         );
 
-        assertThat(clientState1, hasAssignedTasks(6));
-        assertThat(clientState2, hasAssignedTasks(6));
-        assertThat(clientState3, hasAssignedTasks(6));
+        assertHasAssignedTasks(clientState1, 6);
+        assertHasAssignedTasks(clientState2, 6);
+        assertHasAssignedTasks(clientState3, 6);
         assertThat(unstable, is(false));
 
         verifyTaskPlacementWithRackAwareAssignor(rackAwareTaskAssignor, allTaskIds, clientStates, true, enableRackAwareTaskAssignor);
@@ -451,9 +451,9 @@ public class HighAvailabilityTaskAssignorTest {
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
 
-        assertThat(clientState1, hasActiveTasks(1));
-        assertThat(clientState2, hasActiveTasks(2));
-        assertThat(clientState3, hasActiveTasks(3));
+        assertHasActiveTasks(clientState1, 1);
+        assertHasActiveTasks(clientState2, 2);
+        assertHasActiveTasks(clientState3, 3);
         final AssignmentTestUtils.TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates, 1);
         if (taskSkewReport.totalSkewedTasks() == 0) {
             fail("Expected a skewed task assignment, but was: " + taskSkewReport);
@@ -729,8 +729,8 @@ public class HighAvailabilityTaskAssignorTest {
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
-        assertThat(clientState1, hasActiveTasks(6));
-        assertThat(clientState2, hasActiveTasks(3));
+        assertHasActiveTasks(clientState1, 6);
+        assertHasActiveTasks(clientState2, 3);
 
         verifyTaskPlacementWithRackAwareAssignor(rackAwareTaskAssignor, allTaskIds, clientStates, false, enableRackAwareTaskAssignor);
     }
@@ -759,8 +759,8 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                          configs);
 
         assertThat(probingRebalanceNeeded, is(false));
-        assertThat(client1, hasActiveTasks(2));
-        assertThat(client1, hasStandbyTasks(0));
+        assertHasActiveTasks(client1, 2);
+        assertHasStandbyTasks(client1, 0);
 
         assertValidAssignment(0, allTasks, emptySet(), clientStates, new StringBuilder());
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
@@ -1726,7 +1726,7 @@ public class HighAvailabilityTaskAssignorTest {
 
     private static void assertHasNoStandbyTasks(final ClientState... clients) {
         for (final ClientState client : clients) {
-            assertThat(client, hasStandbyTasks(0));
+            assertHasStandbyTasks(client, 0);
         }
     }
 

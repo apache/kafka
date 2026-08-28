@@ -26,7 +26,7 @@ notifications:
   jira_options: link label
 
 github:
-  description: "Apache Kafka - A distributed event streaming platform"
+  description: Apache Kafka - A distributed event streaming platform
   homepage: https://kafka.apache.org/
   labels:
     - java
@@ -37,16 +37,16 @@ github:
   # This list allows you to triage pull requests and trigger workflow runs on GitHub Actions. It can have a maximum of 10 collaborators.
   # Read more here: https://github.com/apache/infrastructure-asfyaml
   collaborators:
-    - brandboat
-    - chirag-wadhwa5
+    - aliehsaeedii
     - DL1231
-    - m1a2st
+    - lucliu1108
+    - majialoong
     - mingyen066
-    - Rancho-7
+    - nicktelford
+    - Nikita-Shupletsov
+    - see-quick
     - sjhajharia
     - smjn
-    - TaiJuWu
-    - Yunyung
   enabled_merge_buttons:
     squash: true
     squash_commit_message: PR_TITLE_AND_DESC
