@@ -751,6 +751,7 @@ org.apache.kafka.storage.internals.log.TransactionIndexTest:
 org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - followerShouldSaveEpochInformationFromReplicatedMessagesToTheEpochCache
 - magic
+- onlyLocalLogSegmentsExcludeCopiedBoundarySegment
 - shouldApplyEpochToMessageOnAppendIfLeader
 - shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithMsRetention
 - shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithSizeRetention
