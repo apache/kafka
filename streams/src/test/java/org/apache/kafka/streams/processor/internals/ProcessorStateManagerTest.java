@@ -311,6 +311,66 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldNoOpAdvanceRestoredOffsetWhenNextFetchIsZero() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
+            final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
+            stateMgr.advanceRestoredOffsetTo(storeMetadata, 0L);
+            assertNull(storeMetadata.offset());
+            assertEquals(singletonMap(persistentStorePartition, 0L), stateMgr.changelogOffsets());
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldConvertNextFetchToLastAppliedOffsetWhenAdvancingRestoredOffset() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
+            final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
+            stateMgr.advanceRestoredOffsetTo(storeMetadata, 20_000L);
+            assertEquals(19_999L, storeMetadata.offset());
+            assertEquals(singletonMap(persistentStorePartition, 20_000L), stateMgr.changelogOffsets());
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldNotMoveRestoredOffsetBackwards() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
+            final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
+            stateMgr.advanceRestoredOffsetTo(storeMetadata, 20_000L);
+            stateMgr.advanceRestoredOffsetTo(storeMetadata, 10_000L);
+            assertEquals(19_999L, storeMetadata.offset());
+            assertEquals(singletonMap(persistentStorePartition, 20_000L), stateMgr.changelogOffsets());
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldNotAdvanceOffsetWhenAlreadyAtRestoreBoundary() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
+            final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
+            stateMgr.restore(storeMetadata, singletonList(consumerRecord), OptionalLong.of(2L));
+            assertEquals(100L, storeMetadata.offset());
+            assertEquals(singletonMap(persistentStorePartition, 101L), stateMgr.changelogOffsets());
+            stateMgr.advanceRestoredOffsetTo(storeMetadata, 101L);
+            assertEquals(100L, storeMetadata.offset());
+            assertEquals(singletonMap(persistentStorePartition, 101L), stateMgr.changelogOffsets());
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
     public void shouldCloseStateStoresOnStateManagerClose() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         final StateStore store = mock(StateStore.class);

@@ -749,6 +749,10 @@ public class StoreChangelogReader implements ChangelogReader {
             // markers) so the remaining-records metric reaches exactly zero on completion
             recordRestorationProgress(task, changelogMetadata, 0, storeMetadata.offset(), changelogMetadata.restoreEndOffset);
 
+            // Catch-up boundary: advertise restoreEndOffset, not the live consumer position, which may
+            // already be past records that were buffered and never applied (KAFKA-14302).
+            stateManager.advanceRestoredOffsetTo(storeMetadata, changelogMetadata.restoreEndOffset);
+
             changelogMetadata.transitTo(ChangelogState.COMPLETED);
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
             if (storeMetadata.store() instanceof MeteredStateStore) {
@@ -760,6 +764,8 @@ public class StoreChangelogReader implements ChangelogReader {
             } catch (final Exception e) {
                 throw new StreamsException("State restore listener failed on restore completed", e);
             }
+        } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
+            maybeAdvanceStandbyRestoredOffset(stateManager, changelogMetadata, storeMetadata, partition);
         }
 
         if (numRecords > 0 || changelogMetadata.state().equals(ChangelogState.COMPLETED)) {
@@ -767,6 +773,41 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         return numRecords;
+    }
+
+    /**
+     * Advance a standby store's restored offset only at a confirmed catch-up boundary (KAFKA-14302).
+     * A zero-record poll is not sufficient: retention seeks, source-changelog buffering, and incomplete
+     * fetches can all leave the consumer at a non-zero position while records remain to apply.
+     */
+    private void maybeAdvanceStandbyRestoredOffset(final ProcessorStateManager stateManager,
+                                                   final ChangelogMetadata changelogMetadata,
+                                                   final StateStoreMetadata storeMetadata,
+                                                   final TopicPartition partition) {
+        if (!changelogMetadata.bufferedRecords().isEmpty()) {
+            return;
+        }
+        try {
+            final Long restoreEndOffset = changelogMetadata.restoreEndOffset;
+            if (restoreEndOffset == null) {
+                // Dedicated changelog: no restoreEndOffset. lag == 0 with an empty buffer means
+                // the restore consumer is at LEO and every fetched record has already been applied.
+                // position() is the next-fetch boundary, not a last-applied offset.
+                final OptionalLong lag = restoreConsumer.currentLag(partition);
+                if (lag.isPresent() && lag.getAsLong() == 0L) {
+                    stateManager.advanceRestoredOffsetTo(storeMetadata, restoreConsumer.position(partition));
+                }
+            } else if (restoreEndOffset > 0L) {
+                // Source changelog: restoreEndOffset is the committed-offset limit. Advertise
+                // only that boundary, never live position past unapplied/uncommitted records.
+                final long position = restoreConsumer.position(partition);
+                if (position >= restoreEndOffset) {
+                    stateManager.advanceRestoredOffsetTo(storeMetadata, restoreEndOffset);
+                }
+            }
+        } catch (final TimeoutException timeoutException) {
+            // Leave the offset unchanged; the next restore loop retries.
+        }
     }
 
     /**
