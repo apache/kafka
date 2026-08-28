@@ -59,6 +59,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.lang.Math.max;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
@@ -67,24 +68,43 @@ import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticHear
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoinHeartbeat;
 
 /**
- * Compaction replay tests for the group coordinator.
- *
- * Tests check partition loading after compaction for non-trivial scenarios involving offset
- * commits and member joins/rebalances for an online classic -> consumer upgrade and an
- * offline classic -> streams upgrade. Both tests capture written records, compact the
- * resulting log, and replay records through a new group coordinator shard to verify loading.
- * Multiple contiguous log segments are tested, including prefix and mid-log windows.
+ * Compaction replay tests for the group coordinator. Tests capture written records, 
+ * compact the resulting log, and replay records through a new group coordinator 
+ * shard to verify loading.
  * 
+ * Two compaction cases are tested:
+ *  - Prefix compaction (standard): A prefix of the log is compacted, so during loading,
+ *    the group coordinator reads a compacted section followed by an uncompacted section.
+ *  - Concurrent compaction: When compaction occurs concurrent with a load, the group 
+ *    coordinator can read a compacted section in between uncompacted sections. 
+ *    More precisely, something like the following can happen -
+ *      1. Group coordinator loads segment A (uncompacted)
+ *      2. Sections A and B are compacted
+ *      3. Group coordinator loads sections B (compacted) then C (active, uncompacted)
+ *    This scenario has been seen in production and caused KAFKA-19862. 
+ * 
+ * The compaction model in this test class aligns compaction to batch boundaries to match
+ * realistic compaction performance. Consider a scenario like the following:
+ *   1. ConsumerGroupMemberMetadataKey <- memberEpoch=0
+ *   ...
+ *   2. ConsumerGroupCurrentMemberAssignmentKey, compacted
+ *   --- batch boundary ---
+ *   3. ConsumerGroupCurrentMemberAssignmentKey = tombstone, compacted
+ *   4. ConsumerGroupTargetAssignmentMemberKey = tombstone
+ *   5. ConsumerGroupMemberMetadataKey = tombstone
+ * 
+ * If we were to compact records 2,3 across a batch boundary, then record 5 will fail on load
+ * because it will see memberEpoch=0 (from record 1) but expect LEAVE_GROUP_MEMBER_EPOCH. Put
+ * another way, the batch boundaries mean that either all or no records for a given group
+ * operation are compacted. 
  */
-public class GroupMetadataManagerCompactionReplayTest {
+public class GroupCoordinatorShardCompactionReplayTest {
 
     private static final String FOO_TOPIC_NAME = "foo";
     private static final String BAR_TOPIC_NAME = "bar";
     private static final String SUBTOPOLOGY_ID = "subtopology-1";
 
     private static final int MAX_RECONCILIATION_ROUNDS = 10;
-    private static final long ASSIGNMENT_INTERVAL_ADVANCE_MS =
-        GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT + 1;
     private static final int LONG_TIMEOUT_MS = 60000;
 
     private static final GroupCoordinatorConfig REPLAY_CONFIG = GroupCoordinatorConfig.fromProps(Map.of());
@@ -128,12 +148,12 @@ public class GroupMetadataManagerCompactionReplayTest {
      *  Consumer group rebalance
      */
     @Test
-    public void testClassicGroupUpgradeToConsumerGroupWithOffsetCommit() throws Exception {
+    public void testClassicGroupUpgradeToConsumerGroup() throws Exception {
         String groupId = "consumer-lifecycle-group";
         CapturedLog capturedLog = new CapturedLog();
 
         // A classic group is created when its first member joins and syncs
-        JoinGroupResponseData joinResponseA = createClassicGroupWithFirstMember(groupId, capturedLog);
+        JoinGroupResponseData joinResponseA = joinFirstClassicMember(groupId, capturedLog);
         String classicMemberA = joinResponseA.memberId();
         syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
@@ -195,7 +215,7 @@ public class GroupMetadataManagerCompactionReplayTest {
             classicMemberB, mkAssignment(mkTopicAssignment(fooTopicId, 2, 3), mkTopicAssignment(barTopicId, 1)),
             memberC, mkAssignment(mkTopicAssignment(fooTopicId, 4, 5), mkTopicAssignment(barTopicId, 2)),
             memberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1), mkTopicAssignment(barTopicId, 0))));
-        letAssignmentIntervalElapse(capturedLog);
+        waitForAssignmentInterval(capturedLog);
         joinConsumerMember(groupId, memberA, members, capturedLog);
         completeConsumerGroupRebalance(groupId, members, capturedLog);
 
@@ -209,7 +229,7 @@ public class GroupMetadataManagerCompactionReplayTest {
             memberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1), mkTopicAssignment(barTopicId, 0)),
             memberB, mkAssignment(mkTopicAssignment(fooTopicId, 2, 3), mkTopicAssignment(barTopicId, 1)),
             memberC, mkAssignment(mkTopicAssignment(fooTopicId, 4, 5), mkTopicAssignment(barTopicId, 2))));
-        letAssignmentIntervalElapse(capturedLog);
+        waitForAssignmentInterval(capturedLog);
         joinConsumerMember(groupId, memberB, members, capturedLog);
         completeConsumerGroupRebalance(groupId, members, capturedLog);
 
@@ -220,7 +240,7 @@ public class GroupMetadataManagerCompactionReplayTest {
             memberB, mkAssignment(mkTopicAssignment(fooTopicId, 0), mkTopicAssignment(barTopicId, 0)),
             memberC, mkAssignment(mkTopicAssignment(fooTopicId, 1), mkTopicAssignment(barTopicId, 1)),
             memberD, mkAssignment(mkTopicAssignment(fooTopicId, 2, 3), mkTopicAssignment(barTopicId, 2))));
-        letAssignmentIntervalElapse(capturedLog);
+        waitForAssignmentInterval(capturedLog);
         joinConsumerMember(groupId, memberD, members, capturedLog);
         completeConsumerGroupRebalance(groupId, members, capturedLog);
 
@@ -242,12 +262,12 @@ public class GroupMetadataManagerCompactionReplayTest {
      *  Members join/leave and group rebalances accordingly
      */
     @Test
-    public void testClassicGroupMigratedToStreamsGroupLoadsCleanlyUnderCompaction() throws Exception {
+    public void testClassicGroupMigratedToStreamsGroup() throws Exception {
         String groupId = "streams-lifecycle-group";
         CapturedLog capturedLog = new CapturedLog();
 
         // A classic group is created when its first member joins and syncs
-        JoinGroupResponseData joinResponseA = createClassicGroupWithFirstMember(groupId, capturedLog);
+        JoinGroupResponseData joinResponseA = joinFirstClassicMember(groupId, capturedLog);
         String classicMemberA = joinResponseA.memberId();
         syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
@@ -300,7 +320,7 @@ public class GroupMetadataManagerCompactionReplayTest {
         streamsAssignor.prepareGroupAssignment(Map.of(
             streamsMemberA, tasks(0, 1, 2),
             streamsMemberB, tasks(3, 4, 5)));
-        letAssignmentIntervalElapse(capturedLog);
+        waitForAssignmentInterval(capturedLog);
         joinStreamsMember(groupId, streamsMemberB, "process-b", members, capturedLog);
         completeStreamsGroupRebalance(groupId, members, capturedLog);
 
@@ -310,7 +330,7 @@ public class GroupMetadataManagerCompactionReplayTest {
             streamsMemberA, tasks(0, 1),
             streamsMemberB, tasks(2, 3),
             streamsMemberC, tasks(4, 5)));
-        letAssignmentIntervalElapse(capturedLog);
+        waitForAssignmentInterval(capturedLog);
         joinStreamsMember(groupId, streamsMemberC, "process-c", members, capturedLog);
         completeStreamsGroupRebalance(groupId, members, capturedLog);
 
@@ -318,13 +338,13 @@ public class GroupMetadataManagerCompactionReplayTest {
         streamsAssignor.prepareGroupAssignment(Map.of(
             streamsMemberB, tasks(0, 1, 2),
             streamsMemberC, tasks(3, 4, 5)));
-        letAssignmentIntervalElapse(capturedLog);
+        waitForAssignmentInterval(capturedLog);
         leaveStreamsMember(groupId, streamsMemberA, members, capturedLog);
         completeStreamsGroupRebalance(groupId, members, capturedLog);
 
         // Member B leaves and group rebalances (all tasks now owned by member C).
         streamsAssignor.prepareGroupAssignment(Map.of(streamsMemberC, tasks(0, 1, 2, 3, 4, 5)));
-        letAssignmentIntervalElapse(capturedLog);
+        waitForAssignmentInterval(capturedLog);
         leaveStreamsMember(groupId, streamsMemberB, members, capturedLog);
         completeStreamsGroupRebalance(groupId, members, capturedLog);
 
@@ -356,7 +376,7 @@ public class GroupMetadataManagerCompactionReplayTest {
     /**
      * Creates a classic group when the first member joins.
      */
-    private JoinGroupResponseData createClassicGroupWithFirstMember(
+    private JoinGroupResponseData joinFirstClassicMember(
         String groupId,
         CapturedLog capturedLog
     ) throws Exception {
@@ -367,6 +387,7 @@ public class GroupMetadataManagerCompactionReplayTest {
 
         var secondJoin = context.sendClassicGroupJoin(classicJoinRequest(groupId, memberId), true);
         capturedLog.append(secondJoin.records);
+        secondJoin.appendFuture.complete(null);
         // The first generation only forms once the initial rebalance delay has elapsed.
         sleepCapturing(context.classicGroupInitialRebalanceDelayMs, capturedLog);
         return secondJoin.joinFuture.get();
@@ -383,8 +404,12 @@ public class GroupMetadataManagerCompactionReplayTest {
      * Advances the clock past the assignment interval so that the next heartbeat is allowed to run the
      * assignor and move partitions or tasks between members.
      */
-    private void letAssignmentIntervalElapse(CapturedLog capturedLog) {
-        sleepCapturing(ASSIGNMENT_INTERVAL_ADVANCE_MS, capturedLog);
+    private void waitForAssignmentInterval(CapturedLog capturedLog) {
+        long assignmentIntervalAdvanceMs = 
+            max(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT,
+                GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT
+            ) + 1;
+        sleepCapturing(assignmentIntervalAdvanceMs, capturedLog);
     }
 
     /**
@@ -485,7 +510,7 @@ public class GroupMetadataManagerCompactionReplayTest {
         Function<String, List<CoordinatorRecord>> heartbeat
     ) {
         for (int round = 0; round < MAX_RECONCILIATION_ROUNDS; round++) {
-            letAssignmentIntervalElapse(capturedLog);
+            waitForAssignmentInterval(capturedLog);
             boolean progressed = false;
             for (String memberId : memberIds) {
                 List<CoordinatorRecord> records = heartbeat.apply(memberId);
@@ -618,7 +643,7 @@ public class GroupMetadataManagerCompactionReplayTest {
                 "",
                 context.time.milliseconds(),
                 OptionalLong.empty(),
-                topic.equals(FOO_TOPIC_NAME) ? fooTopicId : barTopicId));
+                metadataImage.topicMetadata(topic).orElseThrow().id()));
     }
 
     // ------------------------------------------------------------------------------------------
