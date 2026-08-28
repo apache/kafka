@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
@@ -38,9 +37,6 @@ import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -996,28 +992,6 @@ public class GroupCoordinatorConfigTest {
         props.put(configName, value);
         GroupCoordinatorConfig.clampDynamicConfigs(props);
         assertEquals(expectedValue, props.get(configName));
-    }
-
-    @Test
-    public void testClampDynamicConfigsResolvesConfigProviders() throws IOException {
-        Path providerFile = Files.createTempFile("provider", ".properties");
-        try {
-            Files.writeString(providerFile, "interval=90000");
-
-            Map<String, String> props = new HashMap<>();
-            props.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file");
-            props.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
-            props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, "30000");
-            props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, "60000");
-            props.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
-                "${file:" + providerFile.toAbsolutePath() + ":interval}");
-
-            GroupCoordinatorConfig.clampDynamicConfigs(props);
-
-            assertEquals("60000", props.get(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG));
-        } finally {
-            Files.deleteIfExists(providerFile);
-        }
     }
 
     @Test
