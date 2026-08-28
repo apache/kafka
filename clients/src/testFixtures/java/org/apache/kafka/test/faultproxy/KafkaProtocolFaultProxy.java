@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.integration.utils;
+package org.apache.kafka.test.faultproxy;
 
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ProduceResponseData;
@@ -42,6 +42,7 @@ import java.io.EOFException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
@@ -71,6 +72,7 @@ import java.util.function.BiConsumer;
  *         proxy.injectError(ApiKeys.END_TXN, Errors.CONCURRENT_TRANSACTIONS).once();
  *         proxy.injectError(ApiKeys.PRODUCE, Errors.NOT_ENOUGH_REPLICAS).onCall(2);
  *         proxy.disconnectOn(ApiKeys.END_TXN).once();      // the EOS "commit gap"
+ *         proxy.delayOn(ApiKeys.FETCH, Duration.ofSeconds(2)).everyTime();  // slow broker
  *     }
  * }
  * }</pre>
@@ -180,12 +182,27 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
         if (apiKey == ApiKeys.METADATA || apiKey == ApiKeys.FIND_COORDINATOR) {
             throw new IllegalArgumentException(apiKey + " is reserved for routing and cannot carry injected errors.");
         }
-        return new FaultRule.Builder(this, apiKey, FaultRule.Action.INJECT_ERROR, error);
+        return new FaultRule.Builder(this, apiKey, FaultRule.Action.INJECT_ERROR, error, 0L);
     }
 
     /** Drop the connection when a response of {@code apiKey} would be returned (models the EOS commit gap). */
     public FaultRule.Builder disconnectOn(final ApiKeys apiKey) {
-        return new FaultRule.Builder(this, apiKey, FaultRule.Action.DISCONNECT, null);
+        return new FaultRule.Builder(this, apiKey, FaultRule.Action.DISCONNECT, null, 0L);
+    }
+
+    /**
+     * Hold back a response of {@code apiKey} by {@code delay} before forwarding it to the client, modelling a
+     * slow broker. Only the matching response on its own connection is delayed (each connection/direction runs
+     * on its own thread), so other clients and the request path are unaffected. Follow with a trigger, e.g.
+     * {@code .everyTime()}. A delay longer than the client's {@code request.timeout.ms} will be seen by the
+     * client as a timeout (and handled like a disconnect), so size the delay against the timeout under test.
+     */
+    public FaultRule.Builder delayOn(final ApiKeys apiKey, final Duration delay) {
+        final long millis = delay.toMillis();
+        if (millis < 0) {
+            throw new IllegalArgumentException("delay must not be negative: " + delay);
+        }
+        return new FaultRule.Builder(this, apiKey, FaultRule.Action.DELAY, null, millis);
     }
 
     /**
@@ -301,8 +318,13 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
                     break; // closes both sockets via try-with-resources
                 }
 
-                if (!routing && fired == null) {
-                    writeFrame(out, frame);
+                if (fired != null && fired.action() == FaultRule.Action.DELAY) {
+                    LOG.info("Fault: delaying {} response by {}ms ({})", apiKey, fired.delayMillis(), fired);
+                    Thread.sleep(fired.delayMillis()); // blocks only this connection's response thread
+                }
+
+                if (!routing && (fired == null || fired.action() == FaultRule.Action.DELAY)) {
+                    writeFrame(out, frame); // DELAY does not alter the bytes, only their timing
                     continue;
                 }
 

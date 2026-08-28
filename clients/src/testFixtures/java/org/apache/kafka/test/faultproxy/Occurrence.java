@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.integration.utils;
+package org.apache.kafka.test.faultproxy;
 
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.IntPredicate;

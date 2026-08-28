@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.integration.utils;
+package org.apache.kafka.test.faultproxy;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -34,12 +34,13 @@ import java.util.function.IntPredicate;
  */
 public final class FaultRule {
 
-    enum Action { INJECT_ERROR, DISCONNECT }
+    enum Action { INJECT_ERROR, DISCONNECT, DELAY }
 
     private final KafkaProtocolFaultProxy owner;
     private final ApiKeys apiKey;
     private final Action action;
     private final Errors error; // only for INJECT_ERROR
+    private final long delayMillis; // only for DELAY
     private final IntPredicate trigger;
     private final String clientIdFilter; // null = any client; otherwise the request clientId must contain it
     private final String description;
@@ -51,6 +52,7 @@ public final class FaultRule {
               final ApiKeys apiKey,
               final Action action,
               final Errors error,
+              final long delayMillis,
               final IntPredicate trigger,
               final String clientIdFilter,
               final String description) {
@@ -58,6 +60,7 @@ public final class FaultRule {
         this.apiKey = apiKey;
         this.action = action;
         this.error = error;
+        this.delayMillis = delayMillis;
         this.trigger = trigger;
         this.clientIdFilter = clientIdFilter;
         this.description = description;
@@ -82,6 +85,10 @@ public final class FaultRule {
 
     Errors error() {
         return error;
+    }
+
+    long delayMillis() {
+        return delayMillis;
     }
 
     /** Called by the proxy for each response of this rule's API; returns true if the fault should fire. */
@@ -123,13 +130,16 @@ public final class FaultRule {
         private final ApiKeys apiKey;
         private final Action action;
         private final Errors error;
+        private final long delayMillis;
         private String clientIdFilter; // null = any client
 
-        Builder(final KafkaProtocolFaultProxy owner, final ApiKeys apiKey, final Action action, final Errors error) {
+        Builder(final KafkaProtocolFaultProxy owner, final ApiKeys apiKey, final Action action,
+                final Errors error, final long delayMillis) {
             this.owner = owner;
             this.apiKey = apiKey;
             this.action = action;
             this.error = error;
+            this.delayMillis = delayMillis;
         }
 
         /**
@@ -143,9 +153,20 @@ public final class FaultRule {
         }
 
         private FaultRule register(final IntPredicate trigger, final String triggerDesc) {
-            final String verb = action == Action.DISCONNECT ? "disconnect" : "inject " + error;
+            final String verb;
+            switch (action) {
+                case DISCONNECT:
+                    verb = "disconnect";
+                    break;
+                case DELAY:
+                    verb = "delay " + delayMillis + "ms";
+                    break;
+                default:
+                    verb = "inject " + error;
+                    break;
+            }
             final String scope = clientIdFilter == null ? "" : " client~" + clientIdFilter;
-            final FaultRule rule = new FaultRule(owner, apiKey, action, error, trigger, clientIdFilter,
+            final FaultRule rule = new FaultRule(owner, apiKey, action, error, delayMillis, trigger, clientIdFilter,
                     verb + " on " + apiKey + scope + " [" + triggerDesc + "]");
             owner.addFault(rule);
             return rule;
