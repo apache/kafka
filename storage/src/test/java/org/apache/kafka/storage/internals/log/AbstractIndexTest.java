@@ -42,9 +42,9 @@ public class AbstractIndexTest {
         }
 
         @Override
-        public void flush() {
+        public void flush(boolean metadata) throws IOException {
             flushInvoked = true;
-            super.flush();
+            super.flush(metadata);
         }
 
         @Override

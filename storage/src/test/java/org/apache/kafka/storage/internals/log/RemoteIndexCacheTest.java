@@ -1221,7 +1221,7 @@ public class RemoteIndexCacheTest {
         return metadataList;
     }
 
-    private void maybeAppendIndexEntries(OffsetIndex offsetIndex, TimeIndex timeIndex) {
+    private void maybeAppendIndexEntries(OffsetIndex offsetIndex, TimeIndex timeIndex) throws IOException {
         if (!offsetIndex.isFull()) {
             long curTime = time.milliseconds();
             for (int i = 0; i < offsetIndex.maxEntries(); i++) {
@@ -1229,8 +1229,8 @@ public class RemoteIndexCacheTest {
                 offsetIndex.append(offset, i);
                 timeIndex.maybeAppend(curTime + i, offset, true);
             }
-            offsetIndex.flush();
-            timeIndex.flush();
+            offsetIndex.flush(false);
+            timeIndex.flush(false);
         }
     }
 
