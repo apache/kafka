@@ -31,9 +31,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
 import static java.util.Collections.emptySortedSet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -291,7 +288,7 @@ public class TaskMovementTest {
 
     private static ClientState getClientStateWithLags(final Set<TaskId> activeTasks,
                                                       final Map<TaskId, Long> taskLags) {
-        final ClientState client1 = new ClientState(activeTasks, emptySet(), taskLags, emptyMap(), 1);
+        final ClientState client1 = new ClientState(activeTasks, Set.of(), taskLags, Map.of(), 1);
         client1.assignActiveTasks(activeTasks);
         return client1;
     }
@@ -300,7 +297,7 @@ public class TaskMovementTest {
      * Creates a SortedSet with the sort order being the order of elements in the parameter list
      */
     private static SortedSet<ProcessId> mkOrderedSet(final ProcessId... clients) {
-        final List<ProcessId> clientList = asList(clients);
+        final List<ProcessId> clientList = List.of(clients);
         final SortedSet<ProcessId> set = new TreeSet<>(Comparator.comparing(clientList::indexOf));
         set.addAll(clientList);
         return set;

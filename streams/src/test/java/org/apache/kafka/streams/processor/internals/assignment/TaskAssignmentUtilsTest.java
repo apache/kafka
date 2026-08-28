@@ -37,7 +37,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +69,7 @@ public class TaskAssignmentUtilsTest {
     })
     public void shouldOptimizeActiveTaskSimple(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            strategy, 100, 1, 1, Collections.emptyList());
+            strategy, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, Set.of("rack-2")),
             mkTaskInfo(TASK_0_1, true, Set.of("rack-1"))
@@ -109,7 +108,7 @@ public class TaskAssignmentUtilsTest {
     })
     public void shouldOptimizeStandbyTasksBasic(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            strategy, 100, 1, 1, Collections.emptyList());
+            strategy, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, Set.of("rack-2")),
             mkTaskInfo(TASK_0_1, true, Set.of("rack-3"))
@@ -139,7 +138,7 @@ public class TaskAssignmentUtilsTest {
     @Test
     public void shouldAssignStandbyTasksWithClientTags() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 2, Collections.singletonList("az"));
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 2, List.of("az"));
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true)
         );
@@ -178,7 +177,7 @@ public class TaskAssignmentUtilsTest {
     @Test
     public void shouldAssignStandbyTasksByClientLoad() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 3, Collections.emptyList());
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 3, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, false),
@@ -218,7 +217,7 @@ public class TaskAssignmentUtilsTest {
     })
     public void shouldNotViolateClientTagsAssignmentDuringStandbyOptimization(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            strategy, 100, 1, 2, Collections.singletonList("az"));
+            strategy, 100, 1, 2, List.of("az"));
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, Set.of("r1")),
             mkTaskInfo(TASK_0_1, true, Set.of("r1"))
@@ -275,7 +274,7 @@ public class TaskAssignmentUtilsTest {
     })
     public void shouldOptimizeStandbyTasksWithMultipleRacks(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            strategy, 100, 1, 1, Collections.emptyList());
+            strategy, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, Set.of("rack-1", "rack-2")),
             mkTaskInfo(TASK_0_1, true, Set.of("rack-2", "rack-3")),
@@ -310,7 +309,7 @@ public class TaskAssignmentUtilsTest {
     @Test
     public void shouldCorrectlyReturnIdentityAssignment() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 1, Collections.emptyList());
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, true),
@@ -340,7 +339,7 @@ public class TaskAssignmentUtilsTest {
     @Test
     public void testValidateTaskAssignment() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 1, Collections.emptyList());
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_1_1, false)
         );

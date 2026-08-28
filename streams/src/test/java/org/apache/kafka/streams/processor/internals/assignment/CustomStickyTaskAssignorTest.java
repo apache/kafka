@@ -49,7 +49,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.ACTIVE;
 import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.STANDBY;
@@ -783,7 +782,7 @@ public class CustomStickyTaskAssignorTest {
             1,
             numStandbys,
             60_000L,
-            Collections.emptyList(),
+            List.of(),
             OptionalInt.of(1),
             OptionalInt.of(2),
             rackAwareStrategy
@@ -832,7 +831,7 @@ public class CustomStickyTaskAssignorTest {
             1,
             numStandbys,
             60_000L,
-            Collections.emptyList(),
+            List.of(),
             OptionalInt.empty(),
             OptionalInt.empty(),
             rackAwareStrategy
@@ -897,7 +896,7 @@ public class CustomStickyTaskAssignorTest {
                 topicGroupIds.add(activeTask.subtopology());
             }
             Collections.sort(topicGroupIds);
-            assertEquals(asList(1, 2), topicGroupIds);
+            assertEquals(List.of(1, 2), topicGroupIds);
         }
     }
 

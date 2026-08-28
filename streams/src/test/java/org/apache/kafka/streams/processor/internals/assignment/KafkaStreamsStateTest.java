@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -64,7 +64,7 @@ public class KafkaStreamsStateTest {
 
         assertEquals(new TreeSet<>(), state.prevTasksByLag("c0"));
         assertEquals(
-            new TreeSet<>(Arrays.asList(NAMED_TASK_T0_0_1, NAMED_TASK_T0_0_0)),
+            new TreeSet<>(List.of(NAMED_TASK_T0_0_1, NAMED_TASK_T0_0_0)),
             state.prevTasksByLag("c1")
         );
     }

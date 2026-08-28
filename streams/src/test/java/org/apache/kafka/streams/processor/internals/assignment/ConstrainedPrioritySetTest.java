@@ -22,10 +22,10 @@ import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Set;
 import java.util.function.BiFunction;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_3;
@@ -41,7 +41,7 @@ public class ConstrainedPrioritySetTest {
     @Test
     public void shouldReturnOnlyClient() {
         final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(alwaysTrue, client -> 1.0);
-        queue.offerAll(singleton(PID_1));
+        queue.offerAll(Set.of(PID_1));
 
         assertEquals(PID_1, queue.poll(DUMMY_TASK));
         assertNull(queue.poll(DUMMY_TASK));
@@ -50,7 +50,7 @@ public class ConstrainedPrioritySetTest {
     @Test
     public void shouldReturnNull() {
         final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(alwaysFalse, client -> 1.0);
-        queue.offerAll(singleton(PID_1));
+        queue.offerAll(Set.of(PID_1));
 
         assertNull(queue.poll(DUMMY_TASK));
     }
@@ -62,7 +62,7 @@ public class ConstrainedPrioritySetTest {
             client -> (client == PID_1) ? 3.0 : (client == PID_2) ? 2.0 : 1.0
         );
 
-        queue.offerAll(asList(PID_1, PID_2, PID_3));
+        queue.offerAll(List.of(PID_1, PID_2, PID_3));
 
         assertEquals(PID_3, queue.poll(DUMMY_TASK));
         assertEquals(PID_2, queue.poll(DUMMY_TASK));
@@ -74,7 +74,7 @@ public class ConstrainedPrioritySetTest {
     public void shouldNotRetainDuplicates() {
         final ConstrainedPrioritySet queue = new ConstrainedPrioritySet(alwaysTrue, client -> 1.0);
 
-        queue.offerAll(singleton(PID_1));
+        queue.offerAll(Set.of(PID_1));
         queue.offer(PID_1);
 
         assertEquals(PID_1, queue.poll(DUMMY_TASK));
@@ -88,7 +88,7 @@ public class ConstrainedPrioritySetTest {
             client -> 1.0
         );
 
-        queue.offerAll(asList(PID_1, PID_2));
+        queue.offerAll(List.of(PID_1, PID_2));
 
         assertEquals(PID_1, queue.poll(DUMMY_TASK));
         assertNull(queue.poll(DUMMY_TASK));
@@ -101,7 +101,7 @@ public class ConstrainedPrioritySetTest {
             client -> 1.0
         );
 
-        queue.offerAll(asList(PID_1, PID_2));
+        queue.offerAll(List.of(PID_1, PID_2));
 
         assertEquals(PID_1, queue.poll(DUMMY_TASK, client -> client.equals(PID_1)));
         assertNull(queue.poll(DUMMY_TASK, client -> client.equals(PID_1)));
