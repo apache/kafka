@@ -94,6 +94,10 @@ public final class HeaderVersions {
             throw new RuntimeException("Message " + messageName +
                 " specifies an invalid version range \"" + key + "\" in headerVersions.");
         }
+        if (value == null || value.trim().isEmpty()) {
+            throw new RuntimeException("Message " + messageName +
+                " specifies a blank header version for range \"" + key + "\" in headerVersions.");
+        }
         short headerVersion;
         try {
             headerVersion = Short.parseShort(value.trim());

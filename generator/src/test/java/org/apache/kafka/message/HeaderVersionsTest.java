@@ -158,6 +158,16 @@ public class HeaderVersionsTest {
     }
 
     @Test
+    public void testNullValue() {
+        assertMessageContains("blank header version", () -> parse(requestSpec("0-5", "2+", "{'0+': null}")));
+    }
+
+    @Test
+    public void testBlankValue() {
+        assertMessageContains("blank header version", () -> parse(requestSpec("0-5", "2+", "{'0+': ''}")));
+    }
+
+    @Test
     public void testDoesNotStartAtLowestValidVersion() {
         assertMessageContains("lowest valid version", () -> parse(requestSpec("0-9", "2+", "{'2+': '2'}")));
     }
