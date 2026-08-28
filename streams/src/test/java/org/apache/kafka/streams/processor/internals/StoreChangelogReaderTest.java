@@ -1613,7 +1613,7 @@ public class StoreChangelogReaderTest {
             final StateStore store = mock(StateStore.class);
             when(meta.changelogPartition()).thenReturn(tps[i]);
             when(meta.store()).thenReturn(store);
-            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
+            when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
             when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
             when(store.name()).thenReturn(storeName);
             when(manager.storeMetadata(tps[i])).thenReturn(meta);
@@ -1702,7 +1702,7 @@ public class StoreChangelogReaderTest {
             final StateStore store = mock(StateStore.class);
             when(meta.changelogPartition()).thenReturn(tps[i]);
             when(meta.store()).thenReturn(store);
-            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
+            when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
             when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
             when(store.name()).thenReturn(storeName);
             when(manager.storeMetadata(tps[i])).thenReturn(meta);
@@ -1791,7 +1791,7 @@ public class StoreChangelogReaderTest {
             final StateStore store = mock(StateStore.class);
             when(meta.changelogPartition()).thenReturn(tps[i]);
             when(meta.store()).thenReturn(store);
-            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
+            when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
             when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
             when(store.name()).thenReturn(storeName);
             when(manager.storeMetadata(tps[i])).thenReturn(meta);
@@ -1886,7 +1886,7 @@ public class StoreChangelogReaderTest {
             final StateStore store = mock(StateStore.class);
             when(meta.changelogPartition()).thenReturn(tps[i]);
             when(meta.store()).thenReturn(store);
-            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
+            when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
             when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
             when(store.name()).thenReturn(storeName);
             when(manager.storeMetadata(tps[i])).thenReturn(meta);
@@ -2113,7 +2113,7 @@ public class StoreChangelogReaderTest {
         final StateStore store = mock(StateStore.class);
         when(meta.changelogPartition()).thenReturn(tp);
         when(meta.store()).thenReturn(store);
-        when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
+        when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
         when(meta.retentionPeriod()).thenReturn(retentionMs);
         when(store.name()).thenReturn(storeName);
         when(manager.storeMetadata(tp)).thenReturn(meta);
@@ -2129,7 +2129,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldSeekByTimestampForWindowedStoreWithoutCheckpoint() {
+    public void shouldSeekByTimestampForWindowedStoreWithoutStoredOffset() {
         final long retentionMs = Duration.ofHours(2).toMillis();
         final long offsetForTimestamp = 42L;
         final long latestRecordTimestamp = 10_000_000L;
@@ -2228,7 +2228,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldSeekToBeginningForNonWindowedStoreWithoutCheckpoint() {
+    public void shouldSeekToBeginningForNonWindowedStoreWithoutStoredOffset() {
         final StateStoreMetadata kvStoreMetadata = mock(StateStoreMetadata.class);
         final ProcessorStateManager kvStateManager = mock(ProcessorStateManager.class);
         final StateStore kvStore = mock(StateStore.class);
@@ -2279,16 +2279,16 @@ public class StoreChangelogReaderTest {
     }
 
     /**
-     * With a checkpoint far behind a large changelog, the reader used to replay the whole gap. It
+     * With a stored offset far behind a large changelog, the reader used to replay the whole gap. It
      * should instead probe for observed stream time and skip data the store discards on restore,
      * just as it does when restoring from scratch.
      */
     @Test
-    public void shouldSeekPastCheckpointByTimestampWhenGapIsLarge() {
+    public void shouldSeekPastStoredOffsetByTimestampWhenGapIsLarge() {
         final long retentionMs = Duration.ofHours(2).toMillis();
-        final long checkpoint = 100L;
-        final long endOffset = 100_000L;          // gap far exceeds PROBE_MIN_CHECKPOINT_GAP
-        final long offsetForTimestamp = 50_000L;  // well past the checkpoint
+        final long storedOffset = 100L;
+        final long endOffset = 100_000L;          // gap far exceeds PROBE_MIN_OFFSET_GAP
+        final long offsetForTimestamp = 50_000L;  // well past the stored offset
 
         final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
@@ -2305,7 +2305,7 @@ public class StoreChangelogReaderTest {
 
         final TaskId taskId = new TaskId(0, 0);
         final StateStoreMetadata meta = mock(StateStoreMetadata.class);
-        when(meta.offset()).thenReturn(checkpoint);
+        when(meta.offset()).thenReturn(storedOffset);
         final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
 
         final StoreChangelogReader reader =
@@ -2314,20 +2314,20 @@ public class StoreChangelogReaderTest {
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
         assertEquals(offsetForTimestamp, timestampConsumer.position(tp),
-            "a checkpoint far behind a large changelog should skip expired data, not replay from the checkpoint");
+            "a stored offset far behind a large changelog should skip expired data, not replay from the stored offset");
         assertEquals(offsetForTimestamp, callback.restoreStartOffset,
             "restoration should be reported as starting at the skipped-to offset");
     }
 
     /**
-     * After skipping past a checkpoint, the first restored batch begins at the skip target, not at
-     * the checkpoint. Measuring the batch from the checkpoint would decrement the remaining-records
+     * After skipping past a stored offset, the first restored batch begins at the skip target, not at
+     * the stored offset. Measuring the batch from the stored offset would decrement the remaining-records
      * metric by the whole skipped gap and drive it negative.
      */
     @Test
-    public void shouldNotDecrementRemainingRecordsBelowZeroWhenSkippingPastCheckpoint() {
+    public void shouldNotDecrementRemainingRecordsBelowZeroWhenSkippingPastStoredOffset() {
         final long retentionMs = Duration.ofHours(2).toMillis();
-        final long checkpoint = 100L;
+        final long storedOffset = 100L;
         final long endOffset = 100_000L;
         final long offsetForTimestamp = 50_000L;
         final long batchRecordOffset = 60_000L;
@@ -2351,7 +2351,7 @@ public class StoreChangelogReaderTest {
         });
 
         // storeMetadata.offset() advances as records are restored, mirroring ProcessorStateManager.restore
-        final long[] storeOffset = {checkpoint};
+        final long[] storeOffset = {storedOffset};
         final TaskId taskId = new TaskId(0, 0);
         final StateStoreMetadata meta = mock(StateStoreMetadata.class);
         when(meta.offset()).thenAnswer(invocation -> storeOffset[0]);
@@ -2387,20 +2387,20 @@ public class StoreChangelogReaderTest {
             "restoration should be reported as starting at the skipped-to offset");
         assertTrue(decremented <= initialized,
             "remaining-records was initialised to " + initialized + " but decremented by " + decremented
-                + "; measuring the first batch from the checkpoint instead of the skip target drives it negative");
+                + "; measuring the first batch from the stored offset instead of the skip target drives it negative");
     }
 
     /**
      * When little of the gap is expired, offsetsForTimes returns an offset at or before the
-     * checkpoint. Seeking there would re-apply already-applied records and rewind the checkpoint, so
-     * the seek must be floored at the checkpoint.
+     * stored offset. Seeking there would re-apply already-applied records and rewind the stored offset, so
+     * the seek must be floored at the stored offset.
      */
     @Test
-    public void shouldNotSeekBelowCheckpointWhenTimestampOffsetIsBehindIt() {
+    public void shouldNotSeekBelowStoredOffsetWhenTimestampOffsetIsBehindIt() {
         final long retentionMs = Duration.ofHours(2).toMillis();
-        final long checkpoint = 100L;
+        final long storedOffset = 100L;
         final long endOffset = 100_000L;
-        final long offsetForTimestamp = 90L;   // behind the checkpoint: almost all of the gap is live
+        final long offsetForTimestamp = 90L;   // behind the stored offset: almost all of the gap is live
 
         final Map<TopicPartition, Long> probed = new HashMap<>();
         final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
@@ -2419,7 +2419,7 @@ public class StoreChangelogReaderTest {
 
         final TaskId taskId = new TaskId(0, 0);
         final StateStoreMetadata meta = mock(StateStoreMetadata.class);
-        when(meta.offset()).thenReturn(checkpoint);
+        when(meta.offset()).thenReturn(storedOffset);
         final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
 
         final StoreChangelogReader reader =
@@ -2427,22 +2427,22 @@ public class StoreChangelogReaderTest {
         reader.register(tp, manager);
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        assertTrue(probed.containsKey(tp), "a large gap should route the checkpointed partition through the probe");
-        assertEquals(checkpoint + 1, timestampConsumer.position(tp),
-            "when offsetsForTimes lands at or before the checkpoint, restoration must resume at the checkpoint, never rewind below it");
+        assertTrue(probed.containsKey(tp), "a large gap should route the stored-offset partition through the probe");
+        assertEquals(storedOffset + 1, timestampConsumer.position(tp),
+            "when offsetsForTimes lands at or before the stored offset, restoration must resume at the stored offset, never rewind below it");
     }
 
     /**
-     * A probe that resolves at or below the checkpoint skipped nothing, so it must arm the backoff
+     * A probe that resolves at or below the stored offset skipped nothing, so it must arm the backoff
      * just like a probe that never answered: an immediate re-registration should replay from the
-     * checkpoint without probing again, rather than re-paying for a probe that cannot help.
+     * stored offset without probing again, rather than re-paying for a probe that cannot help.
      */
     @Test
-    public void shouldBackOffWhenTimestampOffsetClampsToCheckpoint() {
+    public void shouldBackOffWhenTimestampOffsetClampsToStoredOffset() {
         final long retentionMs = Duration.ofHours(2).toMillis();
-        final long checkpoint = 100L;
+        final long storedOffset = 100L;
         final long endOffset = 100_000L;
-        final long offsetForTimestamp = 90L;   // at or below the checkpoint: nothing in the gap expired
+        final long offsetForTimestamp = 90L;   // at or below the stored offset: nothing in the gap expired
         final int[] probeRounds = {0};
 
         final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
@@ -2457,7 +2457,7 @@ public class StoreChangelogReaderTest {
         probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
         probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
-        // the probe resolves a stream time from the head record, then offsetsForTimes clamps to the checkpoint
+        // the probe resolves a stream time from the head record, then offsetsForTimes clamps to the stored offset
         probeConsumer.schedulePollTask(() -> probeConsumer.addRecord(changelogRecord(tp, endOffset - 1, 10_000_000L)));
 
         final StoreChangelogReader reader =
@@ -2465,58 +2465,58 @@ public class StoreChangelogReaderTest {
         final TaskId taskId = new TaskId(0, 0);
 
         final StateStoreMetadata meta = mock(StateStoreMetadata.class);
-        when(meta.offset()).thenReturn(checkpoint);
+        when(meta.offset()).thenReturn(storedOffset);
         reader.register(tp, windowedActiveManager(meta, tp, taskId, retentionMs));
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        assertEquals(checkpoint + 1, probeConsumer.position(tp),
-            "a probe that clamps to the checkpoint must resume there, not rewind below it");
+        assertEquals(storedOffset + 1, probeConsumer.position(tp),
+            "a probe that clamps to the stored offset must resume there, not rewind below it");
         assertEquals(1, probeRounds[0], "the first registration probes once");
 
         reader.unregister(Collections.singleton(tp));
 
         final StateStoreMetadata meta2 = mock(StateStoreMetadata.class);
-        when(meta2.offset()).thenReturn(checkpoint);
+        when(meta2.offset()).thenReturn(storedOffset);
         reader.register(tp, windowedActiveManager(meta2, tp, taskId, retentionMs));
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
         assertEquals(1, probeRounds[0],
-            "a probe that skipped nothing must arm the backoff, so re-registering immediately replays from the checkpoint without probing");
-        assertEquals(checkpoint + 1, probeConsumer.position(tp), "the backed-off registration replays from the checkpoint");
+            "a probe that skipped nothing must arm the backoff, so re-registering immediately replays from the stored offset without probing");
+        assertEquals(storedOffset + 1, probeConsumer.position(tp), "the backed-off registration replays from the stored offset");
     }
 
     /**
-     * A small checkpoint gap is not worth a probe: replaying it costs about what the probe spends,
+     * A small stored offset gap is not worth a probe: replaying it costs about what the probe spends,
      * and the probe pauses every restoring partition while it runs. Common restores should pay no
      * new RPCs.
      */
     @Test
-    public void shouldNotProbeWhenCheckpointGapIsSmall() {
+    public void shouldNotProbeWhenStoredOffsetGapIsSmall() {
         final long retentionMs = Duration.ofHours(2).toMillis();
-        final long checkpoint = 100L;
-        final long endOffset = 200L;   // gap far below PROBE_MIN_CHECKPOINT_GAP
+        final long storedOffset = 100L;
+        final long endOffset = 200L;   // gap far below PROBE_MIN_OFFSET_GAP
 
         final MockConsumer<byte[], byte[]> noProbeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
-                throw new AssertionError("a small checkpoint gap must not trigger a probe");
+                throw new AssertionError("a small stored offset gap must not trigger a probe");
             }
 
             @Override
             public synchronized Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
-                throw new AssertionError("a small checkpoint gap must not trigger a probe");
+                throw new AssertionError("a small stored offset gap must not trigger a probe");
             }
 
             @Override
             public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
-                throw new AssertionError("a small checkpoint gap must not trigger a probe");
+                throw new AssertionError("a small stored offset gap must not trigger a probe");
             }
         };
         adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
 
         final TaskId taskId = new TaskId(0, 0);
         final StateStoreMetadata meta = mock(StateStoreMetadata.class);
-        when(meta.offset()).thenReturn(checkpoint);
+        when(meta.offset()).thenReturn(storedOffset);
         final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
 
         final StoreChangelogReader reader =
@@ -2524,17 +2524,17 @@ public class StoreChangelogReaderTest {
         reader.register(tp, manager);
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        assertEquals(checkpoint + 1, noProbeConsumer.position(tp), "a small gap should replay from the checkpoint, cheaply");
+        assertEquals(storedOffset + 1, noProbeConsumer.position(tp), "a small gap should replay from the stored offset, cheaply");
     }
 
     /**
-     * A probe that never answers must send a checkpointed partition back to its checkpoint, not to
+     * A probe that never answers must send a stored-offset partition back to its stored offset, not to
      * the beginning, and arm the backoff so a re-registration loop does not probe on every iteration.
      */
     @Test
-    public void shouldFallBackToCheckpointAndBackOffWhenProbeNeverAnswers() {
+    public void shouldFallBackToStoredOffsetAndBackOffWhenProbeNeverAnswers() {
         final long retentionMs = Duration.ofHours(2).toMillis();
-        final long checkpoint = 100L;
+        final long storedOffset = 100L;
         final long endOffset = 100_000L;
         final int[] probeRounds = {0};
 
@@ -2555,34 +2555,34 @@ public class StoreChangelogReaderTest {
         final TaskId taskId = new TaskId(0, 0);
 
         final StateStoreMetadata meta = mock(StateStoreMetadata.class);
-        when(meta.offset()).thenReturn(checkpoint);
+        when(meta.offset()).thenReturn(storedOffset);
         reader.register(tp, windowedActiveManager(meta, tp, taskId, retentionMs));
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        assertEquals(checkpoint + 1, probeConsumer.position(tp),
-            "a probe that never answers must fall back to the checkpoint, not the beginning");
+        assertEquals(storedOffset + 1, probeConsumer.position(tp),
+            "a probe that never answers must fall back to the stored offset, not the beginning");
         assertEquals(1, probeRounds[0], "the first registration probes once");
 
         reader.unregister(Collections.singleton(tp));
 
         final StateStoreMetadata meta2 = mock(StateStoreMetadata.class);
-        when(meta2.offset()).thenReturn(checkpoint);
+        when(meta2.offset()).thenReturn(storedOffset);
         reader.register(tp, windowedActiveManager(meta2, tp, taskId, retentionMs));
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
         assertEquals(1, probeRounds[0],
-            "the probe just fell back, so re-registering immediately must replay from the checkpoint without probing");
-        assertEquals(checkpoint + 1, probeConsumer.position(tp), "the backed-off registration replays from the checkpoint");
+            "the probe just fell back, so re-registering immediately must replay from the stored offset without probing");
+        assertEquals(storedOffset + 1, probeConsumer.position(tp), "the backed-off registration replays from the stored offset");
     }
 
     /**
      * When a probe falls back for a mixed set, each partition must land on its own safe position: a
-     * partition with no checkpoint at the beginning, a checkpointed one at its checkpoint.
+     * partition with no stored offset at the beginning, a stored-offset one at its stored offset.
      */
     @Test
-    public void shouldFallBackNoCheckpointToBeginningAndCheckpointedToItsFloor() {
+    public void shouldFallBackNoStoredOffsetToBeginningAndStoredOffsetToItsFloor() {
         final long retentionMs = Duration.ofHours(2).toMillis();
-        final long checkpoint = 100L;
+        final long storedOffset = 100L;
         final long endOffset = 100_000L;
 
         final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
@@ -2603,7 +2603,7 @@ public class StoreChangelogReaderTest {
         final StateStoreMetadata meta0 = mock(StateStoreMetadata.class);
         when(meta0.offset()).thenReturn(null);
         final StateStoreMetadata meta1 = mock(StateStoreMetadata.class);
-        when(meta1.offset()).thenReturn(checkpoint);
+        when(meta1.offset()).thenReturn(storedOffset);
 
         final StoreChangelogReader reader =
             new StoreChangelogReader(time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
@@ -2615,22 +2615,22 @@ public class StoreChangelogReaderTest {
         tasks.put(taskId1, mock(Task.class));
         reader.restore(tasks);
 
-        assertEquals(0L, probeConsumer.position(tp), "the partition with no checkpoint falls back to the beginning");
-        assertEquals(checkpoint + 1, probeConsumer.position(tp1),
-            "the checkpointed partition falls back to its checkpoint, not the beginning");
+        assertEquals(0L, probeConsumer.position(tp), "the partition with no stored offset falls back to the beginning");
+        assertEquals(storedOffset + 1, probeConsumer.position(tp1),
+            "the stored-offset partition falls back to its stored offset, not the beginning");
     }
 
     /**
-     * A checkpoint below the current log start means records in (checkpoint, logStart) were deleted
+     * A stored offset below the current log start means records in (stored offset, logStart) were deleted
      * before they could be verified. The skip cannot certify them, so the partition takes the
      * deterministic InvalidOffsetException -> TaskCorruptedException wipe path, exactly as a plain
-     * seek to the checkpoint would.
+     * seek to the stored offset would.
      */
     @Test
-    public void shouldMarkTaskCorruptedWhenCheckpointIsBelowTheLogStart() {
+    public void shouldMarkTaskCorruptedWhenStoredOffsetIsBelowTheLogStart() {
         final long retentionMs = Duration.ofHours(2).toMillis();
-        final long checkpoint = 100L;
-        final long logStart = 5_000L;   // (checkpoint, logStart) has been truncated
+        final long storedOffset = 100L;
+        final long logStart = 5_000L;   // (stored offset, logStart) has been truncated
         final long endOffset = 100_000L;
 
         final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
@@ -2642,7 +2642,7 @@ public class StoreChangelogReaderTest {
 
         final TaskId taskId = new TaskId(0, 0);
         final StateStoreMetadata meta = mock(StateStoreMetadata.class);
-        when(meta.offset()).thenReturn(checkpoint);
+        when(meta.offset()).thenReturn(storedOffset);
         final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
 
         final StoreChangelogReader reader =
@@ -2651,16 +2651,16 @@ public class StoreChangelogReaderTest {
 
         assertThrows(TaskCorruptedException.class,
             () -> reader.restore(Collections.singletonMap(taskId, mock(Task.class))),
-            "a checkpoint below the log start cannot be verified and must trigger the wipe path");
+            "a stored offset below the log start cannot be verified and must trigger the wipe path");
     }
 
     /**
-     * The skip optimisation is active-only: a standby with a checkpoint replays its gap and is never
+     * The skip optimisation is active-only: a standby with a stored offset replays its gap and is never
      * probed.
      */
     @Test
-    public void shouldNotProbeStandbyWithCheckpoint() {
-        final long checkpoint = 100L;
+    public void shouldNotProbeStandbyWithStoredOffset() {
+        final long storedOffset = 100L;
 
         final MockConsumer<byte[], byte[]> noProbeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
@@ -2685,7 +2685,7 @@ public class StoreChangelogReaderTest {
         final StateStore windowStore = mock(StateStore.class);
         when(meta.changelogPartition()).thenReturn(tp);
         when(meta.store()).thenReturn(windowStore);
-        when(meta.offset()).thenReturn(checkpoint);
+        when(meta.offset()).thenReturn(storedOffset);
         when(windowStore.name()).thenReturn(storeName);
         when(manager.storeMetadata(tp)).thenReturn(meta);
         when(manager.taskType()).thenReturn(STANDBY);
@@ -2697,8 +2697,8 @@ public class StoreChangelogReaderTest {
         reader.register(tp, manager);
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        assertEquals(checkpoint + 1, noProbeConsumer.position(tp),
-            "a standby replays its checkpoint gap; the skip optimisation is active-only");
+        assertEquals(storedOffset + 1, noProbeConsumer.position(tp),
+            "a standby replays its stored offset gap; the skip optimisation is active-only");
     }
 
     private void assignPartition(final long messages,
