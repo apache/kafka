@@ -214,6 +214,18 @@ public class MessageGeneratorTest {
     }
 
     @Test
+    public void testHeaderVersionExplicitApiVersionsResponse() throws Exception {
+        String source = generateApiMessageTypeSource(
+            spec(18, "request", "ApiVersionsRequest", "0-3", "3+", "{'0-2': '1', '3+': '2'}"),
+            spec(18, "response", "ApiVersionsResponse", "0-3", "3+", "{'0+': '0'}"));
+        assertTrue(source.contains(
+            "case 18: // ApiVersions\n" +
+            "// ApiVersionsResponse always includes a v0 header.\n" +
+            "// See KIP-511 for details.\n" +
+            "return (short) 0;\n"), source);
+    }
+
+    @Test
     public void testHeaderVersionMixedExplicitAndFallback() throws Exception {
         String source = generateApiMessageTypeSource(
             spec(1, "request", "BarRequest", "0-5", "0+", "{'0+': '2'}"),
