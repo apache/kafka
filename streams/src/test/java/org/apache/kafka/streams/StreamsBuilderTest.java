@@ -715,6 +715,101 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldReuseSourceTopicAsChangelogsWithOptimization20AndKeepWrapperStoreWiring() {
+        // GIVEN
+        final String topic = "topic";
+        final String sourceName = "source-table";
+
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder =
+                new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        builder.table(
+                topic,
+                Consumed.as(sourceName),
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store")
+        );
+
+        // WHEN
+        final Topology topology = builder.build(props);
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+        internalTopologyBuilder.rewriteTopology(new StreamsConfig(props));
+
+        // THEN
+        assertThat(
+                internalTopologyBuilder.buildTopology().storeToChangelogTopic(),
+                equalTo(Collections.singletonMap("store", topic)));
+        assertThat(
+                internalTopologyBuilder.stateStores().keySet(),
+                equalTo(Collections.singleton("store")));
+        assertThat(
+                internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
+                equalTo(false));
+        assertThat(
+                internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).nonSourceChangelogTopics().isEmpty(),
+                equalTo(true));
+
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(sourceName));
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(1));
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+    }
+
+    @Test
+    public void shouldNotReuseSourceTopicAsChangelogsWhenOptimizationOffAndKeepWrapperStoreWiring() {
+        // GIVEN
+        final String topic = "topic";
+        final String sourceName = "source-table";
+
+        final Properties props = StreamsTestUtils.getStreamsConfig("appId");
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder =
+                new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        builder.table(
+                topic,
+                Consumed.as(sourceName),
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store")
+        );
+
+        // WHEN
+        final Topology topology = builder.build(props);
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+        internalTopologyBuilder.rewriteTopology(new StreamsConfig(props));
+
+        // THEN
+        assertThat(
+                internalTopologyBuilder.buildTopology().storeToChangelogTopic(),
+                equalTo(Collections.singletonMap("store", "appId-store-changelog")));
+        assertThat(
+                internalTopologyBuilder.stateStores().keySet(),
+                equalTo(Collections.singleton("store")));
+        assertThat(
+                internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
+                equalTo(true));
+        assertThat(
+                internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.keySet(),
+                equalTo(Collections.singleton("appId-store-changelog")));
+
+        // Wrapper regression check (optimization OFF)
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(sourceName));
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(1));
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+    }
+
+
+    @Test
     public void shouldNotReuseRepartitionTopicAsChangelogs() {
         final String topic = "topic";
         builder.<Long, String>stream(topic).repartition().toTable(Materialized.as("store"));
