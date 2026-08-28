@@ -303,6 +303,7 @@ org.apache.kafka.server.KRaftClusterTest:
 - testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer
 - testCreateClusterWithAdvertisedPortZero
 - testCreatePartitions
+- testCreateTopicsRespectsConfiguredMaxRecordsPerBatch
 - testDefaultClientQuotas
 - testDescribeKRaftVersion
 - testDescribeQuorumRequestToBrokers

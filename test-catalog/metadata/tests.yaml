@@ -1,5 +1,6 @@
 org.apache.kafka.controller.AclControlManagerTest:
 - testAddAndDelete
+- testBuilderRequiresPositiveMaxRecordsPerBatch
 - testCreateAclDeleteAcl
 - testCreateAclWithCidrHosts
 - testCreateDedupe
@@ -46,6 +47,7 @@ org.apache.kafka.controller.BrokersToIsrsTest:
 - testNoLeader
 org.apache.kafka.controller.ClientQuotaControlManagerTest:
 - testAlterAndRemove
+- testBuilderRequiresPositiveMaxRecordsPerBatch
 - testConfigKeysForEmptyEntity
 - testConfigKeysForEntityTypeWithClientId
 - testConfigKeysForEntityTypeWithIp
@@ -93,6 +95,7 @@ org.apache.kafka.controller.ClusterControlManagerTest:
 - testUnregisterControllerWithUnsupportedMetadataVersion
 - testUnregisterUnknownController
 org.apache.kafka.controller.ConfigurationControlManagerTest:
+- testBuilderRequiresPositiveMaxRecordsPerBatch
 - testCordonedLogDirsFeature
 - testElrUpgrade
 - testIncrementalAlterConfig
@@ -123,6 +126,7 @@ org.apache.kafka.controller.EventPerformanceMonitorTest:
 - testSlowestEventWithThreeEvents
 org.apache.kafka.controller.FeatureControlManagerTest:
 - testApplyMetadataVersionChangeRecord
+- testBuilderRequiresPositiveMaxRecordsPerBatch
 - testCanUpgradeToHigherVersion
 - testCanUseSafeDowngradeIfMetadataDidNotChange
 - testCannotDowngradeBeforeMinimumKraftVersion
@@ -286,6 +290,7 @@ org.apache.kafka.controller.ReplicationControlManagerTest:
 - testAlterPartitionShouldRejectFencedBrokers
 - testAlterPartitionShouldRejectShuttingDownBrokers
 - testBalancePartitionLeaders
+- testBuilderRequiresPositiveMaxRecordsPerBatch
 - testCancelReassignPartitions
 - testCreatePartitions
 - testCreatePartitionsFailsWhenAllBrokersAreFencedOrInControlledShutdown
