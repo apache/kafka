@@ -749,12 +749,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     pre-abort epoch and is indistinguishable from a retry. The commit is guaranteed not to have taken effect.
     Under transaction V1 this race fails the strict epoch check above and returns the recoverable
     PRODUCER_FENCED; V2's retry-tolerant epoch check accepts the request instead, so the recoverable outcome
-    is restored here at the state check (KAFKA-20785). Strictly speaking no newer producer took over the
-    transactional.id — the epoch is merely stale after the coordinator-side bump — but transactional requests
-    conventionally return PRODUCER_FENCED for epoch mismatches, and the producer client folds
-    INVALID_PRODUCER_EPOCH into ProducerFencedException on EndTxn responses anyway, so the two codes behave
-    identically. The produce path's fix for the same race returns INVALID_PRODUCER_EPOCH, following the
-    produce-path convention (KAFKA-19690, UnifiedLog).
+    is restored here at the state check (KAFKA-20785).
    */
 
   /**
