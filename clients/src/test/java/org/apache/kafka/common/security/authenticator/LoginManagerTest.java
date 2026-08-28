@@ -31,6 +31,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -163,6 +165,48 @@ public class LoginManagerTest {
         verifyLoginManagerRelease(dynamicLogin2, 2, dynamicContext, configs2);
         verifyLoginManagerRelease(staticLogin1, 4, staticContext, configs1);
         verifyLoginManagerRelease(staticLogin2, 2, staticContext, configs2);
+    }
+
+    @Test
+    public void testLoginManagerWithDifferentContextClassLoaders() throws Exception {
+        Map<String, ?> configs = Collections.singletonMap("sasl.jaas.config", dynamicPlainContext);
+        JaasContext dynamicContext = JaasContext.loadClientContext(configs);
+
+        ClassLoader original = Thread.currentThread().getContextClassLoader();
+        try (URLClassLoader deployment1 = new URLClassLoader(new URL[0], original);
+             URLClassLoader deployment2 = new URLClassLoader(new URL[0], original)) {
+
+            LoginManager login1 = acquireWithContextClassLoader(deployment1, dynamicContext, configs);
+            LoginManager login2 = acquireWithContextClassLoader(deployment2, dynamicContext, configs);
+            assertNotSame(login1, login2);
+            assertSame(login1, acquireWithContextClassLoader(deployment1, dynamicContext, configs));
+            assertSame(login2, acquireWithContextClassLoader(deployment2, dynamicContext, configs));
+
+            // Releasing every reference held by one deployment must dispose of its LoginManager even
+            // though the other deployment is still using an identical JAAS configuration.
+            login1.release();
+            login1.release();
+            LoginManager recreated = acquireWithContextClassLoader(deployment1, dynamicContext, configs);
+            assertNotSame(login1, recreated);
+            recreated.release();
+
+            login2.release();
+            login2.release();
+        } finally {
+            Thread.currentThread().setContextClassLoader(original);
+            LoginManager.closeAll();
+        }
+    }
+
+    private LoginManager acquireWithContextClassLoader(ClassLoader classLoader, JaasContext jaasContext,
+                                                       Map<String, ?> configs) throws Exception {
+        ClassLoader previous = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(classLoader);
+        try {
+            return LoginManager.acquireLoginManager(jaasContext, "PLAIN", DefaultLogin.class, configs);
+        } finally {
+            Thread.currentThread().setContextClassLoader(previous);
+        }
     }
 
     @Test
