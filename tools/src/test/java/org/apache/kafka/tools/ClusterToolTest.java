@@ -259,7 +259,7 @@ public class ClusterToolTest {
                 if (apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) {
                     lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): UNSUPPORTED").append(terminator);
                 } else {
-                    lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): ").append(versionRangeStr).append(" [usable: ").append(usableVersion).append("]").append(terminator);
+                    lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): ").append(versionRangeStr).append(" [usable: ").append(usableVersion).append(", request header: ").append(apiKey.requestHeaderVersion(usableVersion)).append("]").append(terminator);
                 }
             } else {
                 lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): UNSUPPORTED").append(terminator);
