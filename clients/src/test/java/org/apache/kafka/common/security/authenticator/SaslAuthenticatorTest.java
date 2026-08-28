@@ -80,6 +80,7 @@ import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.Dige
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerConfigException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
@@ -146,6 +147,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -1672,6 +1674,31 @@ public class SaslAuthenticatorTest {
         // ensure metrics are as expected
         server.verifyAuthenticationMetrics(0, 0);
         server.verifyReauthenticationMetrics(0, 0);
+    }
+
+    @Test
+    public void testSaslClientFromLocalFactory() throws Exception {
+        // Sasl finds a SaslClientFactory through the JVM-wide security provider registry, which holds only
+        // the first provider registered under a given name. When Kafka is loaded in several class loaders
+        // the factory found there cannot use this callback handler, so the mechanisms Kafka provides itself
+        // must be creatable from the factory of this class loader.
+        String[] mechs = {OAuthBearerLoginModule.OAUTHBEARER_MECHANISM};
+        assertNotNull(localFactoryAuthenticator(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM)
+                .createSaslClientFromLocalFactory(mechs));
+
+        // Mechanisms Kafka does not provide are left to the security provider registry.
+        assertNull(localFactoryAuthenticator("PLAIN").createSaslClientFromLocalFactory(new String[] {"PLAIN"}));
+    }
+
+    private SaslClientAuthenticator localFactoryAuthenticator(String mechanism) {
+        // The constructor creates a SaslClient, which is not what this test is about.
+        return new SaslClientAuthenticator(Collections.emptyMap(), new OAuthBearerSaslClientCallbackHandler(),
+                "node", null, null, "host", mechanism, null, null, new LogContext()) {
+            @Override
+            SaslClient createSaslClient() {
+                return null;
+            }
+        };
     }
 
     @Test
