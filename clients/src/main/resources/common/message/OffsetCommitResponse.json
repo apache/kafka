@@ -38,6 +38,10 @@
   // Version 10 adds support for topic ids and removes support for topic names (KIP-848).
   "validVersions": "2-10",
   "flexibleVersions": "8+",
+  "headerVersions": {
+    "2-7": "0",
+    "8+": "1"
+  },
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
   // - NOT_COORDINATOR (version 0+)

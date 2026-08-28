@@ -25,6 +25,9 @@
   // Version 2 introduces ShareAcquireMode and Renew acknowledgements (KIP-1206 and KIP-1222).
   "validVersions": "1-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "1+": "2"
+  },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "groupId",
       "about": "The group identifier." },

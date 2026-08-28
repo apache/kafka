@@ -43,6 +43,10 @@
   // Version 13 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
   "validVersions": "3-13",
   "flexibleVersions": "9+",
+  "headerVersions": {
+    "3-8": "0",
+    "9+": "1"
+  },
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",
       "about": "Each produce response.", "fields": [

@@ -44,6 +44,10 @@
   // Version 11 enables listing offsets by earliest pending upload offset (KIP-1023)
   "validVersions": "1-11",
   "flexibleVersions": "6+",
+  "headerVersions": {
+    "1-5": "0",
+    "6+": "1"
+  },
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

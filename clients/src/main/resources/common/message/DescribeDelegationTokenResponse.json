@@ -23,6 +23,10 @@
   // Version 3 adds token requester details
   "validVersions": "1-3",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "1": "0",
+    "2+": "1"
+  },
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },

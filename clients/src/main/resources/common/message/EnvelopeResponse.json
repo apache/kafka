@@ -20,6 +20,9 @@
   // Response struct for forwarding.
   "validVersions": "0",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   "fields": [
     { "name": "ResponseData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
       "zeroCopy": true, "default": "null",

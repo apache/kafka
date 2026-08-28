@@ -60,6 +60,10 @@
   // Version 18 adds high-watermark from KIP-1166
   "validVersions": "4-18",
   "flexibleVersions": "12+",
+  "headerVersions": {
+    "4-11": "1",
+    "12+": "2"
+  },
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
       "taggedVersions": "12+", "tag": 0, "ignorable": true,

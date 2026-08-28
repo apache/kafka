@@ -27,6 +27,10 @@
   // Version 3 adds owner principal
   "validVersions": "1-3",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "OwnerPrincipalType", "type": "string", "versions": "3+", "nullableVersions": "3+",
       "about": "The principal type of the owner of the token. If it's null it defaults to the token request principal." },

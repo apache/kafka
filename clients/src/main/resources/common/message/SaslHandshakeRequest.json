@@ -24,6 +24,9 @@
   // See https://issues.apache.org/jira/browse/KAFKA-9577
   "validVersions": "0-1",
   "flexibleVersions": "none",
+  "headerVersions": {
+    "0+": "1"
+  },
   "fields": [
     { "name": "Mechanism", "type": "string", "versions": "0+",
       "about": "The SASL mechanism chosen by the client." }

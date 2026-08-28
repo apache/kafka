@@ -27,6 +27,10 @@
   // Version 5 introduces ClusterId and NodeId checking and REBOOTSTRAP_REQUIRED error (KIP-1242).
   "validVersions": "0-5",
   "flexibleVersions": "3+",
+  "headerVersions": {
+    "0-2": "1",
+    "3+": "2"
+  },
   "fields": [
     { "name": "ClientSoftwareName", "type": "string", "versions": "3+",
       "ignorable": true, "about": "The name of the client." },

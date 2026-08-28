@@ -24,6 +24,10 @@
   // Version 2 enables flexible versions.
   "validVersions": "1-2",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "Dirs", "type": "[]AlterReplicaLogDir", "versions": "0+", 
       "about": "The alterations to make for each directory.", "fields": [

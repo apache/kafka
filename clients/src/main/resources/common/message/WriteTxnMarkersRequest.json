@@ -24,6 +24,9 @@
   // Version 2 adds TransactionVersion field to the WritableTxnMarker (KIP-1228).
   "validVersions": "1-2",
   "flexibleVersions": "1+",
+  "headerVersions": {
+    "1+": "2"
+  },
   "fields": [
     { "name": "Markers", "type": "[]WritableTxnMarker", "versions": "0+",
       "about": "The transaction markers to be written.", "fields": [

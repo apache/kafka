@@ -22,6 +22,9 @@
   // Version 2 adds additional fields in the response. The request is unchanged (KIP-853).
   "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "latestVersionUnstable": false,
   "fields": [
     { "name": "Topics", "type": "[]TopicData", "versions": "0+",

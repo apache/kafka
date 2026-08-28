@@ -24,6 +24,9 @@
   // Version 2 introduces Renew acknowledgements (KIP-1222).
   "validVersions": "1-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "1+": "1"
+  },
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
   // - TOPIC_AUTHORIZATION_FAILED (version 0+)

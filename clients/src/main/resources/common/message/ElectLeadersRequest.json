@@ -23,6 +23,10 @@
   // Version 2 is the first flexible version.
   "validVersions": "0-2",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "0-1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "ElectionType", "type": "int8", "versions": "1+",
       "about": "Type of elections to conduct for the partition. A value of '0' elects the preferred replica. A value of '1' elects the first live replica if there are no in-sync replica." },
