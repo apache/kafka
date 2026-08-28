@@ -8150,20 +8150,19 @@ public class GroupMetadataManager {
                             "group instance id {} due to {}. Reverting to old member id {}.",
                             group.groupId(), newMemberId, groupInstanceId, t.getMessage(), oldMemberId);
 
+                        group.completeJoinFuture(newMember, new JoinGroupResponseData()
+                            .setMemberId(UNKNOWN_MEMBER_ID)
+                            .setGenerationId(group.generationId())
+                            .setProtocolName(group.protocolName().orElse(null))
+                            .setProtocolType(group.protocolType().orElse(null))
+                            .setLeader(currentLeader)
+                            .setSkipAssignment(false)
+                            .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+
                         // Failed to persist the member id of the given static member, revert the update of the static member in the group.
                         group.updateMember(newMember, oldProtocols, oldRebalanceTimeoutMs, oldSessionTimeoutMs, null);
                         ClassicGroupMember oldMember = group.replaceStaticMember(groupInstanceId, newMemberId, oldMemberId);
                         rescheduleClassicGroupMemberHeartbeat(group, oldMember);
-
-                        responseFuture.complete(
-                            new JoinGroupResponseData()
-                                .setMemberId(UNKNOWN_MEMBER_ID)
-                                .setGenerationId(group.generationId())
-                                .setProtocolName(group.protocolName().orElse(null))
-                                .setProtocolType(group.protocolType().orElse(null))
-                                .setLeader(currentLeader)
-                                .setSkipAssignment(false)
-                                .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
 
                     } else if (JoinGroupRequest.supportsSkippingAssignment(context.requestVersion())) {
                         boolean isLeader = group.isLeader(newMemberId);

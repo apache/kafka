@@ -398,18 +398,14 @@ public class ClassicGroupMember {
     }
 
     /**
-     * Set the member's join future, completing a pending one with NOT_COORDINATOR if it's
-     * being replaced, but leaving it untouched if cleared to null.
+     * Set the member's join future, completing any pending one with NOT_COORDINATOR.
      *
      * @param value the updated join future.
      */
     public void setAwaitingJoinFuture(CompletableFuture<JoinGroupResponseData> value) {
-        // null detaches without completing -- the caller (e.g. a revert) is expected to complete it itself.
-        if (value != null) {
-            completeJoinFuture(new JoinGroupResponseData()
-                .setMemberId(memberId)
-                .setErrorCode(Errors.NOT_COORDINATOR.code()));
-        }
+        completeJoinFuture(new JoinGroupResponseData()
+            .setMemberId(memberId)
+            .setErrorCode(Errors.NOT_COORDINATOR.code()));
         this.awaitingJoinFuture = value;
     }
 
@@ -429,7 +425,7 @@ public class ClassicGroupMember {
     }
 
     /**
-     * Set the member's sync future, completing any pending one with NOT_COORDINATOR first.
+     * Set the member's sync future, completing any pending one with NOT_COORDINATOR.
      *
      * @param value the updated sync future.
      */
