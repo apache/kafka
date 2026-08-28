@@ -169,8 +169,8 @@ Now you should sanity check it before proceeding. All subsequent steps start mak
 Some suggested steps:
 
  * Grab the source archive and make sure it compiles: https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz
- * Grab one of the binary distros and run the quickstarts against them: https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka_2.13-{release_version}.tgz
- * Extract and verify one of the site docs jars: https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka_2.13-{release_version}-site-docs.tgz
+ * Grab one of the binary distros and run the quickstarts against them: https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}.tgz
+ * Extract and verify one of the site docs jars: https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-site-docs.tgz
  * Build a sample against jars in the staging repo: (TODO: Can we get a temporary URL before "closing" the staged artifacts?)
  * Validate GPG signatures on at least one file:
       wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz &&

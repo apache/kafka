@@ -140,7 +140,7 @@ def command_stage_docs():
     cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} aggregatedJavadoc --no-parallel", cwd=repo_dir, env=jdk25_env,)
 
 
-    docs_tar = os.path.join(repo_dir, "core", "build", "distributions", f"kafka_2.13-{gradle_version_override}-site-docs.tgz")
+    docs_tar = os.path.join(repo_dir, "core", "build", "distributions", f"kafka-{gradle_version_override}-site-docs.tgz")
 
     versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(project_version))
     if not os.path.exists(versioned_docs_path):
