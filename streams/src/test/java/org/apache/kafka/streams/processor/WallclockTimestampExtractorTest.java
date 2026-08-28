@@ -33,12 +33,15 @@ public class WallclockTimestampExtractorTest {
         final TimestampExtractor extractor = new WallclockTimestampExtractor();
 
         final long before = System.currentTimeMillis();
+        final long recordTimestamp = 41;
+        final long partitionTime = 42;
+        // The extractor should ignore the input timestamps and return the current wall-clock time.
         final long timestamp = extractor.extract(
             new ConsumerRecord<>(
                 "anyTopic",
                 0,
                 0,
-                41,
+                recordTimestamp,
                 TimestampType.CREATE_TIME,
                 0,
                 0,
@@ -46,7 +49,7 @@ public class WallclockTimestampExtractorTest {
                 null,
                 new RecordHeaders(),
                 Optional.empty()),
-            42);
+            partitionTime);
         final long after = System.currentTimeMillis();
 
         assertTrue(before <= timestamp);
