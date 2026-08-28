@@ -231,6 +231,7 @@ public class StoreChangelogReader implements ChangelogReader {
     // Smallest stored-offset gap worth a probe: below it, replaying the gap costs about what the probe
     // spends, and the probe pauses every restoring partition while it runs. Tied to the widest probe
     // window so the relationship survives retuning.
+    // The 8x is a conservative margin over the probe's cost as measured in load testing.
     private static final long PROBE_MIN_OFFSET_GAP = 8 * PROBE_WINDOWS[PROBE_WINDOWS.length - 1];
 
     private ChangelogReaderState state;
