@@ -18,21 +18,26 @@ package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.security.KeyFactory;
 import java.security.KeyStore;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DefaultSslEngineFactoryTest {
 
@@ -325,6 +330,27 @@ public class DefaultSslEngineFactoryTest {
         assertNotNull(keyStore.getCertificate("kafka"), "Certificate not found");
         assertNotNull(keyStore.getKey("kafka", KEY_PASSWORD.value().toCharArray()), "Private key not found");
         assertEquals(KeyStore.getDefaultType(), keyStore.getType());
+    }
+
+    @Test
+    public void testUnavailableKeyFactoryAlgorithmDoesNotThrow() {
+        List<KeyFactory> factories = DefaultSslEngineFactory.PemStore.keyFactories(List.of("RSA", "DSA", "EC", "BOGUS_FACTORY"));
+        assertFalse(factories.stream().anyMatch(f -> f.getAlgorithm().equals("BOGUS_FACTORY")));
+    }
+
+    @Test
+    public void testPemKeyStoreWithUnparseablePrivateKey() {
+        String bogusKey = "-----BEGIN PRIVATE KEY-----\n"
+                + Base64.getEncoder().encodeToString("not a valid key".getBytes()) + "\n"
+                + "-----END PRIVATE KEY-----";
+
+        assertThrows(InvalidConfigurationException.class, () ->
+                new DefaultSslEngineFactory.PemStore(
+                        new Password(CERTCHAIN),
+                        new Password(bogusKey),
+                        null
+                )
+        );
     }
 
     private String pemFilePath(String pem) throws Exception {
