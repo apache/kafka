@@ -31,6 +31,7 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.locks.ReentrantLock;
@@ -198,15 +199,6 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
-        return resize(newSize, false);
-    }
-
-    /**
-     * @param newSize new size of the index file
-     * @param sync if true, fsync the file after resizing to ensure the size is durable
-     * @return true if the index was resized, false otherwise
-     */
-    public boolean resize(int newSize, boolean sync) throws IOException {
         return inLock(() ->
                 inRemapWriteLock(() -> {
                     int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
@@ -225,9 +217,6 @@ public abstract class AbstractIndex implements Closeable {
                             mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
                             this.maxEntries = mmap.limit() / entrySize();
                             mmap.position(position);
-                            if (sync) {
-                                raf.getChannel().force(true);
-                            }
                             log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
                                     mmap.position(), mmap.limit());
                             return true;
@@ -253,11 +242,17 @@ public abstract class AbstractIndex implements Closeable {
 
     /**
      * Flush the data in the index to disk
+     * @param metadata true if the metadata should be flushed as well
      */
-    public void flush() {
+    public void flush(boolean metadata) throws IOException {
         inLock(() -> {
             if (mmap != null) {
                 mmap.force();
+                if (metadata) {
+                    try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE)) {
+                        channel.force(true);
+                    }
+                }
             }
         });
     }
@@ -276,12 +271,11 @@ public abstract class AbstractIndex implements Closeable {
 
     /**
      * Trim this index to fit just the valid entries, deleting all trailing unwritten bytes from the file.
-     * @param sync if true, fsync the file after resizing to ensure both content and size are durable
      */
-    public void trimToValidSize(boolean sync) throws IOException {
+    public void trimToValidSize() throws IOException {
         inLock(() -> {
             if (mmap != null) {
-                resize(entrySize() * entries, sync);
+                resize(entrySize() * entries);
             }
         });
     }
@@ -294,8 +288,9 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     public void close() throws IOException {
-        flush(); // Ensure the index content is flushed to disk as LogSegment.close may append an entry
-        trimToValidSize(true);
+        flush(false); // Ensure the index content is flushed to disk as LogSegment.close may append an entry
+        trimToValidSize();
+        flush(true); // Ensure the index metadata is durable
         closeHandler();
     }
 
