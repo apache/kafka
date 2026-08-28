@@ -2881,7 +2881,6 @@ project(':streams') {
     implementation libs.slf4jApi
 
     testFixturesImplementation testFixtures(project(':clients'))
-    testFixturesImplementation libs.hamcrest
     testFixturesImplementation libs.junitJupiter
     testFixturesImplementation libs.mockitoCore
     testFixturesImplementation libs.slf4jApi

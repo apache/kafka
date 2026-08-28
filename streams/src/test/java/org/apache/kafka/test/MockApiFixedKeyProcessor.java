@@ -32,8 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcessor<KIn, VIn, VOut> {
 
@@ -93,13 +92,13 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     }
 
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
-        assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
+        assertEquals(expected.length, processed.size(), "the number of outputs:" + processed);
         for (int i = 0; i < expected.length; i++) {
             final FixedKeyRecord<KIn, VIn> record = processed.get(i);
-            assertThat(
-                "output[" + i + "]:",
+            assertEquals(
+                expected[i],
                 new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()),
-                is(expected[i])
+                "output[" + i + "]:"
             );
         }
 
@@ -107,9 +106,9 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     }
 
     public void checkAndClearProcessedRecords(final Record<?, ?>... expected) {
-        assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
+        assertEquals(expected.length, processed.size(), "the number of outputs:" + processed);
         for (int i = 0; i < expected.length; i++) {
-            assertThat("output[" + i + "]:", processed.get(i), is(expected[i]));
+            assertEquals(expected[i], processed.get(i), "output[" + i + "]:");
         }
 
         processed.clear();
@@ -120,16 +119,16 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     }
 
     public void checkEmptyAndClearProcessResult() {
-        assertThat("the number of outputs:", processed.size(), is(0));
+        assertEquals(0, processed.size(), "the number of outputs:");
         processed.clear();
     }
 
     public void checkAndClearPunctuateResult(final PunctuationType type, final long... expected) {
         final ArrayList<Long> punctuated = type == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime;
-        assertThat("the number of outputs:", punctuated.size(), is(expected.length));
+        assertEquals(expected.length, punctuated.size(), "the number of outputs:");
 
         for (int i = 0; i < expected.length; i++) {
-            assertThat("output[" + i + "]:", punctuated.get(i), is(expected[i]));
+            assertEquals(expected[i], punctuated.get(i), "output[" + i + "]:");
         }
 
         processed.clear();
