@@ -57,7 +57,7 @@ public class ThreadMetadataImpl implements ThreadMetadata {
                               final Set<TaskMetadata> standbyTasks) {
         this.mainConsumerClientId = mainConsumerClientId;
         this.restoreConsumerClientId = restoreConsumerClientId;
-        this.producerClientIds = Set.of(producerClientIds);
+        this.producerClientIds = producerClientIds != null ? Set.of(producerClientIds) : Set.of();
         this.adminClientId = adminClientId;
         this.threadName = threadName;
         this.threadState = threadState;
