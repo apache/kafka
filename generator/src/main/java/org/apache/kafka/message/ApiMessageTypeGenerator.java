@@ -152,6 +152,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
     }
 
     private void generate() {
+        validateHeaderVersions();
         buffer.printf("public enum ApiMessageType {%n");
         buffer.incrementIndent();
         generateEnumValues();
@@ -376,7 +377,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 buffer.printf("// See KIP-511 for details.%n");
             }
             if (headerVersions.isPresent()) {
-                generateHeaderVersionFromMap(spec, headerVersions.get(), type);
+                generateHeaderVersionFromMap(headerVersions.get());
             } else if (type.equals("response") && apiKey == 18) {
                 buffer.printf("return (short) 0;%n");
             } else {
@@ -411,31 +412,40 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateHeaderVersionFromMap(MessageSpec spec, HeaderVersions headerVersions, String type) {
-        MessageSpec headerSpec = type.equals("request") ? requestHeaderSpec : responseHeaderSpec;
-        if (headerSpec != null) {
-            Versions validHeaderVersions = headerSpec.validVersions();
-            for (HeaderVersions.Entry entry : headerVersions.entries()) {
-                if (!validHeaderVersions.contains(entry.headerVersion())) {
-                    throw new RuntimeException("Message " + spec.name() + " maps versions " + entry.range() +
-                        " to " + type + " header version " + entry.headerVersion() + ", which is not among the " +
-                        "valid " + type + " header versions " + validHeaderVersions + ".");
-                }
+    private void validateHeaderVersions() {
+        for (ApiData apiData : apis.values()) {
+            checkHeaderVersionsInRange(apiData.requestSpec, requestHeaderSpec, "request");
+            checkHeaderVersionsInRange(apiData.responseSpec, responseHeaderSpec, "response");
+        }
+    }
+
+    private static void checkHeaderVersionsInRange(MessageSpec spec, MessageSpec headerSpec, String type) {
+        if (spec == null || headerSpec == null || spec.headerVersions().isEmpty()) {
+            return;
+        }
+        Versions validHeaderVersions = headerSpec.validVersions();
+        for (HeaderVersions.Entry entry : spec.headerVersions().get().entries()) {
+            if (!validHeaderVersions.contains(entry.headerVersion())) {
+                throw new RuntimeException("Message " + spec.name() + " maps versions " + entry.range() +
+                    " to " + type + " header version " + entry.headerVersion() + ", which is not among the " +
+                    "valid " + type + " header versions " + validHeaderVersions + ".");
             }
         }
+    }
+
+    private void generateHeaderVersionFromMap(HeaderVersions headerVersions) {
         List<HeaderVersions.Entry> entries = headerVersions.entries();
         if (entries.size() == 1) {
             buffer.printf("return (short) %d;%n", entries.get(0).headerVersion());
         } else {
+            boolean firstBranch = true;
             for (int i = entries.size() - 1; i >= 1; i--) {
-                if (i == entries.size() - 1) {
-                    buffer.printf("if (_version >= %d) {%n", entries.get(i).range().lowest());
-                } else {
-                    buffer.printf("} else if (_version >= %d) {%n", entries.get(i).range().lowest());
-                }
+                buffer.printf("%s (_version >= %d) {%n",
+                    firstBranch ? "if" : "} else if", entries.get(i).range().lowest());
                 buffer.incrementIndent();
                 buffer.printf("return (short) %d;%n", entries.get(i).headerVersion());
                 buffer.decrementIndent();
+                firstBranch = false;
             }
             buffer.printf("} else {%n");
             buffer.incrementIndent();
