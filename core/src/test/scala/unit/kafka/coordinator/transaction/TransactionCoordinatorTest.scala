@@ -675,7 +675,7 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldReturnInvalidProducerEpochOnEndTxnWhenStatusIsCompleteAbortAndCommitAtPreAbortEpochInV2(): Unit = {
+  def shouldReturnProducerFencedOnEndTxnWhenStatusIsCompleteAbortAndCommitAtPreAbortEpochInV2(): Unit = {
     val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, (producerEpoch - 1).toShort, 1, TransactionState.COMPLETE_ABORT, util.Set.of, 0, time.milliseconds(), clientTransactionVersion)
@@ -684,9 +684,10 @@ class TransactionCoordinatorTest {
 
     // The coordinator aborted the transaction (e.g. on timeout) and bumped the epoch while the commit was in
     // flight, so the commit arrives with the pre-abort epoch. This must not be the fatal INVALID_TXN_STATE:
-    // the commit did not take effect, and the producer can recover by aborting (KAFKA-20785).
+    // the commit did not take effect, and the producer can recover by aborting. PRODUCER_FENCED follows the
+    // transactional-request convention and matches what V1's strict epoch check returns for this race (KAFKA-20785).
     coordinator.handleEndTransaction(transactionalId, producerId, (producerEpoch - 1).toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
-    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
+    assertEquals(Errors.PRODUCER_FENCED, error)
     verify(transactionManager, never()).appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.any(),
@@ -699,7 +700,7 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldReturnInvalidProducerEpochOnEndTxnWhenStatusIsCompleteAbortAndCommitOnRetryOverflowInV2(): Unit = {
+  def shouldReturnProducerFencedOnEndTxnWhenStatusIsCompleteAbortAndCommitOnRetryOverflowInV2(): Unit = {
     val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
     // The coordinator-side abort exhausted the epoch, rotating to a new producer ID with epoch 0 and recording
     // the old producer ID in prevProducerId.
@@ -712,7 +713,7 @@ class TransactionCoordinatorTest {
     // Same race as above, but the pre-abort epoch was Short.MaxValue - 1, so the stale commit matches the
     // retry-on-overflow condition instead of the epoch-bump one.
     coordinator.handleEndTransaction(transactionalId, producerId, (Short.MaxValue - 1).toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
-    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
+    assertEquals(Errors.PRODUCER_FENCED, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 

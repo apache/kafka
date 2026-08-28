@@ -716,7 +716,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     Note:
     PF = PRODUCER_FENCED
     ITS = INVALID_TXN_STATE
-    IPE = INVALID_PRODUCER_EPOCH
     NONE = No error and no epoch bump
     EB = No error and epoch bump
 
@@ -739,21 +738,23 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     +----------------+-------+---------+-------+---------+
     | Empty          | PF    | EB      | PF    | ITS     |
     +----------------+-------+---------+-------+---------+
-    | CompleteAbort  | NONE  | EB      | IPE   | ITS     |
+    | CompleteAbort  | NONE  | EB      | PF    | ITS     |
     +----------------+-------+---------+-------+---------+
     | CompleteCommit | ITS   | EB      | NONE  | ITS     |
     +----------------+-------+---------+-------+---------+
 
-    CompleteAbort + Commit + Retry returns IPE rather than ITS because the coordinator may abort an open
+    CompleteAbort + Commit + Retry returns PF rather than ITS because the coordinator may abort an open
     transaction on its own (e.g. when it exceeds transaction.timeout.ms), bumping the epoch without the
     producer's knowledge. A commit that was already in flight when such an abort completed arrives with the
     pre-abort epoch and is indistinguishable from a retry. The commit is guaranteed not to have taken effect.
     Under transaction V1 this race fails the strict epoch check above and returns the recoverable
     PRODUCER_FENCED; V2's retry-tolerant epoch check accepts the request instead, so the recoverable outcome
-    is restored here at the state check. INVALID_PRODUCER_EPOCH is used rather than PRODUCER_FENCED because
-    no newer producer exists (the epoch is merely stale), mirroring the produce path's fix for the same race
-    (KAFKA-19690, UnifiedLog); the producer client treats the two errors identically on EndTxn responses
-    (KAFKA-20785).
+    is restored here at the state check (KAFKA-20785). Strictly speaking no newer producer took over the
+    transactional.id — the epoch is merely stale after the coordinator-side bump — but transactional requests
+    conventionally return PRODUCER_FENCED for epoch mismatches, and the producer client folds
+    INVALID_PRODUCER_EPOCH into ProducerFencedException on EndTxn responses anyway, so the two codes behave
+    identically. The produce path's fix for the same race returns INVALID_PRODUCER_EPOCH, following the
+    produce-path convention (KAFKA-19690, UnifiedLog).
    */
 
   /**
@@ -897,8 +898,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     // not to have taken effect; see the CompleteAbort + Commit + Retry note under the state table above (KAFKA-20785).
                     info(s"TransactionalId: $transactionalId's state is ${txnMetadata.state}, but received a COMMIT at " +
                       s"the pre-abort epoch $producerEpoch. The transaction was likely aborted by the coordinator on " +
-                      s"timeout while the commit was in flight. Returning ${Errors.INVALID_PRODUCER_EPOCH}.")
-                    Left(Errors.INVALID_PRODUCER_EPOCH)
+                      s"timeout while the commit was in flight. Returning ${Errors.PRODUCER_FENCED}.")
+                    Left(Errors.PRODUCER_FENCED)
                   } else {
                     logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                   }
