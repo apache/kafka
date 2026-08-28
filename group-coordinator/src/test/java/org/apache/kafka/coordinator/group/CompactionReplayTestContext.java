@@ -62,7 +62,7 @@ import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoin
  * read as a sequence of coordinator operations rather than of log bookkeeping.
  *
  * <p>The records a scenario wrote are kept grouped by the write that produced them. The records of
- * one write are appended as a single batch, which is the unit compaction cannot split.
+ * one write are appended as a single batch.
  */
 final class CompactionReplayTestContext {
 
@@ -91,8 +91,6 @@ final class CompactionReplayTestContext {
         this.streamsAssignor = streamsAssignor;
         this.metadataImage = metadataImage;
     }
-
-    // Captured log.
 
     private void append(List<CoordinatorRecord> batch) {
         if (!batch.isEmpty()) {
