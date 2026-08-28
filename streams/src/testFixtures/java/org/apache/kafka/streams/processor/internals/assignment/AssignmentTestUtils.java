@@ -361,7 +361,9 @@ public final class AssignmentTestUtils {
                 .collect(entriesToMap(TreeMap::new));
 
         if (!misassigned.isEmpty()) {
-            assertEquals(Map.of(), misassigned,
+            assertEquals(
+                Map.of(),
+                misassigned,
                 "Found some over- or under-assigned tasks in the final assignment with " + numStandbyReplicas +
                 " and max warmups " + maxWarmupReplicas + " standby replicas, stateful tasks:" + statefulTasks +
                 ", and stateless tasks:" + statelessTasks + failureContext);
@@ -495,6 +497,25 @@ public final class AssignmentTestUtils {
         }
 
         return new TaskSkewReport(maxTaskSkew, skewedSubtopologies, subtopologyToClientsWithPartition);
+    }
+
+    static void assertHasAssignedTasks(final ClientState clientState, final int taskCount) {
+        assertEquals(taskCount, clientState.assignedTaskCount());
+    }
+
+    static void assertHasActiveTasks(final ClientState clientState, final int taskCount) {
+        assertEquals(taskCount, clientState.activeTaskCount());
+    }
+
+    static void assertHasStandbyTasks(final ClientState clientState, final int taskCount) {
+        assertEquals(taskCount, clientState.standbyTaskCount());
+    }
+
+    static <V> void assertHasProperty(final ClientState clientState,
+                                      final String propertyName,
+                                      final Function<ClientState, V> propertyExtractor,
+                                      final V propertyValue) {
+        assertEquals(propertyValue, propertyExtractor.apply(clientState), propertyName);
     }
 
     static void appendClientStates(final StringBuilder stringBuilder,

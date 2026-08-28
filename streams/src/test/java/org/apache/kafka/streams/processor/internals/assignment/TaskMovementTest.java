@@ -44,6 +44,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasProperty;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,7 +72,8 @@ public class TaskMovementTest {
                 getClientStatesMap(client1, client2, client3),
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
-            ));
+            )
+        );
     }
 
     @Test
@@ -105,7 +107,8 @@ public class TaskMovementTest {
                 getClientStatesMap(client1, client2, client3),
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
-            ));
+            )
+        );
     }
 
     @Test
@@ -138,14 +141,14 @@ public class TaskMovementTest {
             ),
             "should have assigned movements");
         // The active tasks have changed to the ones that each client is caught up on
-        assertEquals(Set.of(TASK_0_0), client1.activeTasks());
-        assertEquals(Set.of(TASK_0_2), client2.activeTasks());
-        assertEquals(Set.of(TASK_0_1), client3.activeTasks());
+        assertHasProperty(client1, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_0));
+        assertHasProperty(client2, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_2));
+        assertHasProperty(client3, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_1));
 
         // we assigned warmups to migrate to the input active assignment
-        assertEquals(Set.of(), client1.standbyTasks());
-        assertEquals(Set.of(TASK_0_1), client2.standbyTasks());
-        assertEquals(Set.of(TASK_0_2), client3.standbyTasks());
+        assertHasProperty(client1, "standbyTasks", ClientState::standbyTasks, Set.of());
+        assertHasProperty(client2, "standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_1));
+        assertHasProperty(client3, "standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_2));
     }
 
     @Test
@@ -183,14 +186,14 @@ public class TaskMovementTest {
                 ),
             "should have assigned movements");
         // The active tasks have changed to the ones that each client is most caught up on
-        assertEquals(Set.of(TASK_0_0), client1.activeTasks());
-        assertEquals(Set.of(TASK_0_2), client2.activeTasks());
-        assertEquals(Set.of(TASK_0_1), client3.activeTasks());
+        assertHasProperty(client1, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_0));
+        assertHasProperty(client2, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_2));
+        assertHasProperty(client3, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_1));
 
         // we assigned warmups to migrate to the input active assignment
-        assertEquals(Set.of(), client1.standbyTasks());
-        assertEquals(Set.of(TASK_0_1), client2.standbyTasks());
-        assertEquals(Set.of(TASK_0_2), client3.standbyTasks());
+        assertHasProperty(client1, "standbyTasks", ClientState::standbyTasks, Set.of());
+        assertHasProperty(client2, "standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_1));
+        assertHasProperty(client3, "standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_2));
     }
 
     @Test
@@ -223,14 +226,14 @@ public class TaskMovementTest {
             ),
             "should have assigned movements");
         // The active tasks have changed to the ones that each client is caught up on
-        assertEquals(Set.of(TASK_0_0), client1.activeTasks());
-        assertEquals(Set.of(TASK_0_2), client2.activeTasks());
-        assertEquals(Set.of(TASK_0_1), client3.activeTasks());
+        assertHasProperty(client1, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_0));
+        assertHasProperty(client2, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_2));
+        assertHasProperty(client3, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_1));
 
         // we should only assign one warmup, and the task movement should have the highest priority
-        assertEquals(Set.of(), client1.standbyTasks());
-        assertEquals(Set.of(TASK_0_1), client2.standbyTasks());
-        assertEquals(Set.of(), client3.standbyTasks());
+        assertHasProperty(client1, "standbyTasks", ClientState::standbyTasks, Set.of());
+        assertHasProperty(client2, "standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_1));
+        assertHasProperty(client3, "standbyTasks", ClientState::standbyTasks, Set.of());
     }
 
     @Test
@@ -264,11 +267,11 @@ public class TaskMovementTest {
 
         // I.e., when you have a caught-up standby and a not-caught-up active, you can just swap their roles
         // and not call it a "warmup".
-        assertEquals(Set.of(TASK_0_0), client1.activeTasks());
-        assertEquals(Set.of(), client2.activeTasks());
+        assertHasProperty(client1, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_0));
+        assertHasProperty(client2, "activeTasks", ClientState::activeTasks, Set.of());
 
-        assertEquals(Set.of(), client1.standbyTasks());
-        assertEquals(Set.of(TASK_0_0), client2.standbyTasks());
+        assertHasProperty(client1, "standbyTasks", ClientState::standbyTasks, Set.of());
+        assertHasProperty(client2, "standbyTasks", ClientState::standbyTasks, Set.of(TASK_0_0));
 
     }
 
