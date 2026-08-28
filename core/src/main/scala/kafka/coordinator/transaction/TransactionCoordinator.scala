@@ -747,9 +747,13 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     CompleteAbort + Commit + Retry returns IPE rather than ITS because the coordinator may abort an open
     transaction on its own (e.g. when it exceeds transaction.timeout.ms), bumping the epoch without the
     producer's knowledge. A commit that was already in flight when such an abort completed arrives with the
-    pre-abort epoch and is indistinguishable from a retry. The commit is guaranteed not to have taken effect,
-    so the recoverable INVALID_PRODUCER_EPOCH is returned, matching the transaction V1 behavior for this race,
-    instead of the fatal INVALID_TXN_STATE (KAFKA-20785).
+    pre-abort epoch and is indistinguishable from a retry. The commit is guaranteed not to have taken effect.
+    Under transaction V1 this race fails the strict epoch check above and returns the recoverable
+    PRODUCER_FENCED; V2's retry-tolerant epoch check accepts the request instead, so the recoverable outcome
+    is restored here at the state check. INVALID_PRODUCER_EPOCH is used rather than PRODUCER_FENCED because
+    no newer producer exists (the epoch is merely stale), mirroring the produce path's fix for the same race
+    (KAFKA-19690, UnifiedLog); the producer client treats the two errors identically on EndTxn responses
+    (KAFKA-20785).
    */
 
   /**
@@ -889,11 +893,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 } else {
                   // Commit.
                   if (isRetry) {
-                    // The commit raced with an abort the producer did not request (e.g. the coordinator aborted the
-                    // transaction after transaction.timeout.ms elapsed) and lost: the abort bumped the epoch, so the
-                    // commit arrives with the pre-abort epoch. The commit is guaranteed not to have taken effect, so
-                    // return the recoverable INVALID_PRODUCER_EPOCH, matching the transaction V1 behavior for this
-                    // race, rather than the fatal INVALID_TXN_STATE (KAFKA-20785).
+                    // The commit raced with a coordinator-side abort (e.g. on transaction.timeout.ms) and is guaranteed
+                    // not to have taken effect; see the CompleteAbort + Commit + Retry note under the state table above (KAFKA-20785).
                     info(s"TransactionalId: $transactionalId's state is ${txnMetadata.state}, but received a COMMIT at " +
                       s"the pre-abort epoch $producerEpoch. The transaction was likely aborted by the coordinator on " +
                       s"timeout while the commit was in flight. Returning ${Errors.INVALID_PRODUCER_EPOCH}.")
