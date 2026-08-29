@@ -24,10 +24,9 @@ import java.time.Instant;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondInstant;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiUtilsTest {
     // This is the maximum limit that Duration accepts but fails when it converts to milliseconds.
@@ -39,12 +38,11 @@ public class ApiUtilsTest {
     public void shouldThrowNullPointerExceptionForNullDuration() {
         final String nullDurationPrefix = prepareMillisCheckFailMsgPrefix(null, "nullDuration");
 
-        try {
-            validateMillisecondDuration(null, nullDurationPrefix);
-            fail("Expected exception when null passed to duration.");
-        } catch (final IllegalArgumentException e) {
-            assertThat(e.getMessage(), containsString(nullDurationPrefix));
-        }
+        final IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> validateMillisecondDuration(null, nullDurationPrefix)
+        );
+        assertTrue(e.getMessage().contains(nullDurationPrefix));
     }
 
     @Test
@@ -52,36 +50,33 @@ public class ApiUtilsTest {
         final Duration maxDurationInDays = Duration.ofDays(MAX_ACCEPTABLE_DAYS_FOR_DURATION);
         final String maxDurationPrefix = prepareMillisCheckFailMsgPrefix(maxDurationInDays, "maxDuration");
 
-        try {
-            validateMillisecondDuration(maxDurationInDays, maxDurationPrefix);
-            fail("Expected exception when maximum days passed for duration, because of long overflow");
-        } catch (final IllegalArgumentException e) {
-            assertThat(e.getMessage(), containsString(maxDurationPrefix));
-        }
+        final IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> validateMillisecondDuration(maxDurationInDays, maxDurationPrefix)
+        );
+        assertTrue(e.getMessage().contains(maxDurationPrefix));
     }
 
     @Test
     public void shouldThrowNullPointerExceptionForNullInstant() {
         final String nullInstantPrefix = prepareMillisCheckFailMsgPrefix(null, "nullInstant");
 
-        try {
-            validateMillisecondInstant(null, nullInstantPrefix);
-            fail("Expected exception when null value passed for instant.");
-        } catch (final IllegalArgumentException e) {
-            assertThat(e.getMessage(), containsString(nullInstantPrefix));
-        }
+        final IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> validateMillisecondInstant(null, nullInstantPrefix)
+        );
+        assertTrue(e.getMessage().contains(nullInstantPrefix));
     }
 
     @Test
     public void shouldThrowArithmeticExceptionForMaxInstant() {
         final String maxInstantPrefix = prepareMillisCheckFailMsgPrefix(Instant.MAX, "maxInstant");
 
-        try {
-            validateMillisecondInstant(Instant.MAX, maxInstantPrefix);
-            fail("Expected exception when maximum value passed for instant, because of long overflow.");
-        } catch (final IllegalArgumentException e) {
-            assertThat(e.getMessage(), containsString(maxInstantPrefix));
-        }
+        final IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> validateMillisecondInstant(Instant.MAX, maxInstantPrefix)
+        );
+        assertTrue(e.getMessage().contains(maxInstantPrefix));
     }
 
     @Test
@@ -102,7 +97,7 @@ public class ApiUtilsTest {
     public void shouldContainsNameAndValueInFailMsgPrefix() {
         final String failMsgPrefix = prepareMillisCheckFailMsgPrefix("someValue", "variableName");
 
-        assertThat(failMsgPrefix, containsString("variableName"));
-        assertThat(failMsgPrefix, containsString("someValue"));
+        assertTrue(failMsgPrefix.contains("variableName"));
+        assertTrue(failMsgPrefix.contains("someValue"));
     }
 }
