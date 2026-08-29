@@ -471,8 +471,9 @@ public class OffsetsRequestManagerTest {
         verifyRequestSuccessfullyCompleted(fetchOffsetsFuture, expectedOffsets);
     }
 
-    @Test
-    public void testListOffsetsRetriedToNewLeaderAfterMetadataUpdate() throws ExecutionException,
+    @ParameterizedTest
+    @MethodSource("retriableErrors")
+    public void testListOffsetsRetriedToNewLeaderAfterMetadataUpdate(Errors error) throws ExecutionException,
             InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
@@ -490,7 +491,7 @@ public class OffsetsRequestManagerTest {
 
         // Original leader returns a retriable error, so the partition queued for retry and metadata update
         ClientResponse errorResponse = buildClientResponseWithErrors(firstRequest,
-                Collections.singletonMap(TEST_PARTITION_1, Errors.NOT_LEADER_OR_FOLLOWER));
+                Collections.singletonMap(TEST_PARTITION_1, error));
         errorResponse.onComplete();
         assertFalse(fetchOffsetsFuture.isDone());
 
