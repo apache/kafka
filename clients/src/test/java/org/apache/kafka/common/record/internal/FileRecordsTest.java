@@ -389,6 +389,25 @@ public class FileRecordsTest {
     }
 
     /**
+     * Closing a preallocated file must fsync after trimming so the truncated length is durable.
+     */
+    @Test
+    public void testCloseFlushesAfterTrim() throws IOException {
+        FileChannel channelMock = mock(FileChannel.class);
+
+        when(channelMock.size()).thenReturn(1024L);
+        when(channelMock.isOpen()).thenReturn(true);
+        when(channelMock.truncate(anyLong())).thenReturn(channelMock);
+        when(channelMock.position(anyLong())).thenReturn(channelMock);
+
+        FileRecords records = new FileRecords(tempFile(), channelMock, 100);
+        records.close();
+
+        verify(channelMock, times(1)).force(true);
+        verify(channelMock).truncate(100L);
+    }
+
+    /**
      * Test the new FileRecords with pre allocate as true and file has been clearly shut down, the file will be truncate to end of valid data.
      */
     @Test
