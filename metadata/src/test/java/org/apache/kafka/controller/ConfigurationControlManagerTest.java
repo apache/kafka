@@ -398,6 +398,24 @@ public class ConfigurationControlManagerTest {
                 false));
     }
 
+    @Test
+    public void testIncrementalDeletePolicyIncludesUnsetConfigs() {
+        MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(List.of(
+            new RequestMetadata(MYTOPIC, toMap(entry("abc", null))),
+            new RequestMetadata(BROKER0, toMap(entry("foo.bar", null)))));
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
+            setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+            setAlterConfigPolicy(Optional.of(policy)).
+            build();
+
+        assertEquals(ApiError.NONE, manager.incrementalAlterConfig(
+            MYTOPIC, toMap(entry("abc", entry(DELETE, null))), false, false).response());
+        assertEquals(ApiError.NONE, manager.incrementalAlterConfig(
+            BROKER0, toMap(entry("foo.bar", entry(DELETE, null))), false, false).response());
+    }
+
     private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
         @Override
         public void validate(RequestMetadata actual) throws PolicyViolationException {
