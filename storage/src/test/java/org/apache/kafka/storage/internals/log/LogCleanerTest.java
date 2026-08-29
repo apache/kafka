@@ -1886,6 +1886,59 @@ public class LogCleanerTest {
         log.close();
     }
 
+    @Test
+    public void testCleanedSegmentSizeOverflowWithAbortedTransaction() throws IOException {
+        // The overflowing chunk contains aborted batches and their abort marker. Since
+        // CleanedTransactionMetadata state is consumed during filtering, the chunk must
+        // not be filtered twice; otherwise the aborted data could be retained as
+        // committed, and its transaction index entry could be written to the segment
+        // preceding the marker.
+        Properties logProps = new Properties();
+        logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 4096);
+        UnifiedLog log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
+
+        short producerEpoch = 0;
+        long producerId = 1L;
+
+        log.appendAsLeader(record(0, 0), 0);
+        log.roll();
+
+        var appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch);
+        appendProducer.append(List.of(1));
+        log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.REPLICATION,
+            RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
+        log.appendAsLeader(record(2, 2), 0);
+        log.roll();
+
+        List<LogSegment> sourceSegments = log.logSegments().subList(0, 2);
+        // maxCleanedSize fits the first source segment only; the second segment's chunk overflows.
+        long maxCleanedSize = (long) sourceSegments.get(0).size() + 1L;
+
+        // No deletions; the offset map is empty.
+        Cleaner cleaner = makeCleaner(Integer.MAX_VALUE, tp -> { }, 64 * 1024, maxCleanedSize, Integer.MAX_VALUE);
+        var offsetMap = new LogTestUtils.FakeOffsetMap(Integer.MAX_VALUE);
+
+        AbortedTxn expectedAbortedTxn = new AbortedTxn().setProducerId(producerId)
+            .setFirstOffset(1).setLastOffset(2).setLastStableOffset(3);
+        assertAllAbortedTxns(List.of(expectedAbortedTxn), log);
+
+        log.updateHighWatermark(sourceSegments.get(1).readNextOffset());
+        cleaner.cleanSegments(log, sourceSegments, offsetMap, 0L,
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
+
+        // The aborted data must stay removed and the abort marker retained.
+        assertEquals(List.of(0L, 2L), LogTestUtils.keysInLog(log));
+        assertAllAbortedTxns(List.of(expectedAbortedTxn), log);
+
+        // The overflow rolls a second cleaned segment; the aborted transaction index entry must be
+        // in the cleaned segment that contains the transaction's offset range, not the previous one.
+        List<LogSegment> cleanedSegments = log.logSegments();
+        assertEquals(3, cleanedSegments.size());
+        assertEquals(List.of(), cleanedSegments.get(0).txnIndex().allAbortedTxns());
+        assertEquals(List.of(expectedAbortedTxn), cleanedSegments.get(1).txnIndex().allAbortedTxns());
+        log.close();
+    }
+
     /**
      * Tests recovery if broker crashes at the following stages during the cleaning sequence
      * <ol>
