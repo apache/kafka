@@ -259,6 +259,25 @@ public class ScramParserTest {
     }
 
     @Test
+    public void testParsePerMechanismDataFailsWithInvalidSaltedPasswordBase64() {
+        assertEquals("Failed to decode given saltedPassword",
+            assertThrows(FormatterException.class,
+                () -> new PerMechanismData(ScramMechanism.SCRAM_SHA_256,
+                    "name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\"," +
+                        "saltedpassword=\"not-valid-base64!!!\"")).
+                            getMessage());
+    }
+
+    @Test
+    public void testParsePerMechanismDataFailsWithInvalidSaltBase64() {
+        assertEquals("Failed to decode given salt",
+            assertThrows(FormatterException.class,
+                () -> new PerMechanismData(ScramMechanism.SCRAM_SHA_256,
+                    "name=alice,password=mypass,salt=\"%%%\"")).
+                        getMessage());
+    }
+
+    @Test
     public void testPerMechanismDataToRecord() throws Exception {
         ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_512);
         assertEquals(new UserScramCredentialRecord().
