@@ -38,7 +38,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Comparator.comparing;
 import static java.util.Comparator.comparingLong;
@@ -90,7 +89,7 @@ public class ClientState {
         taskLagTotals = new TreeMap<>();
         this.capacity = capacity;
         this.processId = processId;
-        this.clientTags = unmodifiableMap(clientTags);
+        this.clientTags = new TreeMap<>(clientTags);
     }
 
     // For testing only
@@ -112,9 +111,9 @@ public class ClientState {
         this.previousStandbyTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
         this.previousActiveTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
         taskOffsetSums = Map.of();
-        this.taskLagTotals = unmodifiableMap(taskLagTotals);
+        this.taskLagTotals = new TreeMap<>(taskLagTotals);
         this.capacity = capacity;
-        this.clientTags = unmodifiableMap(clientTags);
+        this.clientTags = new TreeMap<>(clientTags);
         this.processId = processId;
     }
 
