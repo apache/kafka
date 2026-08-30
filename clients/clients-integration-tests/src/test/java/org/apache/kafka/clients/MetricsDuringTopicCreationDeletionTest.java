@@ -78,12 +78,9 @@ public class MetricsDuringTopicCreationDeletionTest {
         final int initialPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
         final int initialUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
 
-        AtomicInteger offlinePartitionsCount =
-            new AtomicInteger(initialOfflinePartitionsCount);
-        AtomicInteger preferredReplicaImbalanceCount =
-            new AtomicInteger(initialPreferredReplicaImbalanceCount);
-        AtomicInteger underReplicatedPartitionsCount =
-            new AtomicInteger(initialUnderReplicatedPartitionsCount);
+        AtomicInteger offlinePartitionsCount = new AtomicInteger(initialOfflinePartitionsCount);
+        AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(initialPreferredReplicaImbalanceCount);
+        AtomicInteger underReplicatedPartitionsCount = new AtomicInteger(initialUnderReplicatedPartitionsCount);
 
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
             while (running) {
