@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -58,7 +59,7 @@ public class GraphTest {
     public void testBasic() {
         final Set<Integer> nodes = graph.nodes();
         assertEquals(6, nodes.size());
-        assertEquals(Set.of(-1, 0, 1, 2, 3, 99), nodes);
+        assertIterableEquals(List.of(-1, 0, 1, 2, 3, 99), nodes);
 
         Map<Integer, Graph<Integer>.Edge> edges = graph.edges(0);
         assertEquals(2, edges.size());
@@ -97,7 +98,7 @@ public class GraphTest {
 
         final Set<Integer> nodes = residualGraph.nodes();
         assertEquals(6, nodes.size());
-        assertEquals(Set.of(-1, 0, 1, 2, 3, 99), nodes);
+        assertIterableEquals(List.of(-1, 0, 1, 2, 3, 99), nodes);
 
         Map<Integer, Graph<Integer>.Edge> edges = residualGraph.edges(0);
         assertEquals(3, edges.size());

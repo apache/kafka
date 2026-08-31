@@ -30,6 +30,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class AssignorConfigurationTest {
@@ -44,11 +45,12 @@ public class AssignorConfigurationTest {
 
     @Test
     public void configsShouldRejectZeroWarmups() {
-        assertThrows(
+        final ConfigException exception = assertThrows(
             ConfigException.class,
-            () -> new AssignmentConfigs(1L, 0, 1, 1L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS),
-            "Invalid value 0 for configuration max.warmup.replicas"
+            () -> new AssignmentConfigs(1L, 0, 1, 1L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
+
+        assertTrue(exception.getMessage().contains("Invalid value 0 for configuration max.warmup.replicas"));
     }
 
     @Test
