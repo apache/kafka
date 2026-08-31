@@ -71,7 +71,7 @@ class StreamsUpgradeTest(Test):
     @matrix(from_version=smoke_test_versions, metadata_quorum=[quorum.combined_kraft])
     def test_app_upgrade(self, from_version, metadata_quorum):
         """
-        Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
+        Starts 3 KafkaStreams instances with <from_version> and upgrades them all at once to <DEV_VERSION>.
         """
         self._run_app_transition(from_version, str(DEV_VERSION))
 
