@@ -172,7 +172,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
         @Override
         public Map<String, String> logConfig() {
-            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Collections.emptyMap();
+            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Map.of();
         }
 
         @Override

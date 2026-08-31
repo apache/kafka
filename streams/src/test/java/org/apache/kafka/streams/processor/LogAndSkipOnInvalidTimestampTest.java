@@ -24,8 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class LogAndSkipOnInvalidTimestampTest extends TimestampExtractorTest {
 
@@ -55,7 +54,7 @@ public class LogAndSkipOnInvalidTimestampTest extends TimestampExtractorTest {
             0
         );
 
-        assertThat(timestamp, is(invalidMetadataTimestamp));
+        assertEquals(invalidMetadataTimestamp, timestamp);
     }
 
 }

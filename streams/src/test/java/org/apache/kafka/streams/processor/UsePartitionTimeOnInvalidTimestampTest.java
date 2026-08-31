@@ -21,8 +21,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class UsePartitionTimeOnInvalidTimestampTest extends TimestampExtractorTest {
@@ -42,7 +41,7 @@ public class UsePartitionTimeOnInvalidTimestampTest extends TimestampExtractorTe
                 partitionTime
         );
 
-        assertThat(timestamp, is(partitionTime));
+        assertEquals(partitionTime, timestamp);
     }
 
     @Test

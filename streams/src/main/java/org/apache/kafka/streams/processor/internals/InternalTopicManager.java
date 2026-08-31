@@ -159,12 +159,12 @@ public class InternalTopicManager {
         final Set<String> topicDescriptionsStillToValidate = new HashSet<>(topicConfigs.keySet());
         final Set<String> topicConfigsStillToValidate = new HashSet<>(topicConfigs.keySet());
         while (!topicDescriptionsStillToValidate.isEmpty() || !topicConfigsStillToValidate.isEmpty()) {
-            Map<String, KafkaFuture<TopicDescription>> descriptionsForTopic = Collections.emptyMap();
+            Map<String, KafkaFuture<TopicDescription>> descriptionsForTopic = Map.of();
             if (!topicDescriptionsStillToValidate.isEmpty()) {
                 final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topicDescriptionsStillToValidate);
                 descriptionsForTopic = describeTopicsResult.topicNameValues();
             }
-            Map<String, KafkaFuture<Config>> configsForTopic = Collections.emptyMap();
+            Map<String, KafkaFuture<Config>> configsForTopic = Map.of();
             if (!topicConfigsStillToValidate.isEmpty()) {
                 final DescribeConfigsResult describeConfigsResult = adminClient.describeConfigs(
                     topicConfigsStillToValidate.stream()
@@ -751,7 +751,7 @@ public class InternalTopicManager {
 
             processCreateTopicResults(createTopicsResult, topicStillToCreate, createdTopics, deadline);
 
-            maybeSleep(Collections.singletonList(topicStillToCreate), deadline, "created");
+            maybeSleep(List.of(topicStillToCreate), deadline, "created");
         }
 
         log.info("Completed setup of internal topics {}.", topicConfigs.keySet());
@@ -885,7 +885,7 @@ public class InternalTopicManager {
             }
 
             maybeSleep(
-                Collections.singletonList(topicsStillToCleanup),
+                List.of(topicsStillToCleanup),
                 deadline,
                 "validated"
             );

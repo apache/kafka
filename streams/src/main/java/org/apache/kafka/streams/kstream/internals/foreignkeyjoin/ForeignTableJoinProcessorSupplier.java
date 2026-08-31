@@ -40,7 +40,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Set;
 
 public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
@@ -59,7 +58,7 @@ public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
 
     @Override
     public Set<StoreBuilder<?>> stores() {
-        return Collections.singleton(new FactoryWrappingStoreBuilder<>(subscriptionStoreFactory));
+        return Set.of(new FactoryWrappingStoreBuilder<>(subscriptionStoreFactory));
     }
 
     @Override
