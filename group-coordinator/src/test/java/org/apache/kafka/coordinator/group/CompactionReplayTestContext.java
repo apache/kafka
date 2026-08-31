@@ -33,6 +33,7 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
@@ -61,8 +62,8 @@ import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoin
  * {@link GroupMetadataManagerTestContext} and appends whatever records it produced, so scenarios
  * read as a sequence of coordinator operations rather than of log bookkeeping.
  *
- * <p>The records a scenario wrote are kept grouped by the write that produced them. The records of
- * one write are appended as a single batch.
+ * Records are grouped into batches. The records from an atomic write are grouped into a single
+ * batch, and a non-atomic write gets one batch per record.
  */
 final class CompactionReplayTestContext {
 
@@ -90,6 +91,19 @@ final class CompactionReplayTestContext {
         this.consumerAssignor = consumerAssignor;
         this.streamsAssignor = streamsAssignor;
         this.metadataImage = metadataImage;
+    }
+
+    /**
+     * Appends a CoordinatorResult which may be atomic or non-atomic. A
+     * non-atomic result puts each record in a unique batch, while an
+     * atomic result puts all records in a single batch
+     */
+    private void append(CoordinatorResult<?, CoordinatorRecord> result) {
+        if (result.isAtomic()) {
+            append(result.records());
+        } else {
+            result.records().forEach(this::append);
+        }
     }
 
     private void append(List<CoordinatorRecord> batch) {
@@ -185,7 +199,7 @@ final class CompactionReplayTestContext {
      * Advances the clock, capturing whatever the timeouts that fired wrote.
      */
     private void sleepCapturing(long durationMs) {
-        context.sleep(durationMs).forEach(timeout -> append(timeout.result().records()));
+        context.sleep(durationMs).forEach(timeout -> append(timeout.result()));
     }
 
     /**
@@ -232,7 +246,7 @@ final class CompactionReplayTestContext {
             .setGroupId(groupId)
             .setMembers(List.of(new LeaveGroupRequestData.MemberIdentity().setMemberId(memberId))));
         result.records().forEach(context::replay);
-        append(result.records());
+        append(result);
     }
 
     void prepareConsumerAssignment(Map<String, Map<Uuid, Set<Integer>>> assignments) {
@@ -262,7 +276,7 @@ final class CompactionReplayTestContext {
                 .setSubscribedTopicNames(List.of(FOO_TOPIC_NAME, BAR_TOPIC_NAME))
                 .setTopicPartitions(List.of())
         );
-        append(result.records());
+        append(result);
         members.put(memberId, new ConsumerMemberState(result.response()));
     }
 
@@ -275,7 +289,7 @@ final class CompactionReplayTestContext {
                 .setMemberEpoch(state.memberEpoch)
                 .setTopicPartitions(state.ownedPartitions));
             state.update(result.response());
-            return result.records();
+            return result;
         });
     }
 
@@ -299,7 +313,7 @@ final class CompactionReplayTestContext {
                 .setTopology(new Topology().setSubtopologies(List.of(
                     new Subtopology().setSubtopologyId(SUBTOPOLOGY_ID).setSourceTopics(List.of(FOO_TOPIC_NAME)))))
         );
-        append(result.records());
+        append(result);
         members.put(memberId, new StreamsMemberState(result.response().data()));
     }
 
@@ -312,7 +326,7 @@ final class CompactionReplayTestContext {
         Map<String, StreamsMemberState> members
     ) {
         append(context.streamsGroupHeartbeat(
-            staticHeartbeat(groupId, memberId, null, LEAVE_GROUP_MEMBER_EPOCH)).records());
+            staticHeartbeat(groupId, memberId, null, LEAVE_GROUP_MEMBER_EPOCH)));
         members.remove(memberId);
     }
 
@@ -325,7 +339,7 @@ final class CompactionReplayTestContext {
                     .setStandbyTasks(state.ownedStandbyTasks)
                     .setWarmupTasks(state.ownedWarmupTasks));
             state.update(result.response().data());
-            return result.records();
+            return result;
         });
     }
 
@@ -336,16 +350,16 @@ final class CompactionReplayTestContext {
     private void heartbeatAndRebalance(
         String protocol,
         Set<String> memberIds,
-        Function<String, List<CoordinatorRecord>> heartbeat
+        Function<String, CoordinatorResult<?, CoordinatorRecord>> heartbeat
     ) {
         for (int round = 0; round < MAX_RECONCILIATION_ROUNDS; round++) {
             waitForAssignmentInterval();
             boolean progressed = false;
             for (String memberId : memberIds) {
-                List<CoordinatorRecord> records = heartbeat.apply(memberId);
-                if (!records.isEmpty()) {
+                CoordinatorResult<?, CoordinatorRecord> result = heartbeat.apply(memberId);
+                if (!result.records().isEmpty()) {
                     progressed = true;
-                    append(records);
+                    append(result);
                 }
             }
             if (!progressed) {
