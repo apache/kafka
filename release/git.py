@@ -122,7 +122,7 @@ def targz(rev, prefix, target, **kwargs):
 
 def commit(message, **kwargs):
     __defaults(kwargs)
-    cmd("Committing git changes", ["git", "commit", "-a", "-m", message], **kwargs)
+    cmd("Committing git changes", ["git", "commit", "-a", "--allow-empty", "-m", message], **kwargs)
 
 
 def create_tag(tag, **kwargs):
