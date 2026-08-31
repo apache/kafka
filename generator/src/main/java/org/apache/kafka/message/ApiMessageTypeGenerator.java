@@ -413,9 +413,29 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
     }
 
     private void validateHeaderVersions() {
-        for (ApiData apiData : apis.values()) {
+        for (Map.Entry<Short, ApiData> entry : apis.entrySet()) {
+            short apiKey = entry.getKey();
+            ApiData apiData = entry.getValue();
             checkHeaderVersionsInRange(apiData.requestSpec, requestHeaderSpec, "request");
             checkHeaderVersionsInRange(apiData.responseSpec, responseHeaderSpec, "response");
+            // KIP-511: ApiVersionsResponse must use a v0 header at every version so that
+            // older brokers can always parse the response header.
+            if (apiKey == 18) {
+                checkApiVersionsResponseHeaderIsV0(apiData.responseSpec);
+            }
+        }
+    }
+
+    private static void checkApiVersionsResponseHeaderIsV0(MessageSpec spec) {
+        if (spec == null || spec.headerVersions().isEmpty()) {
+            return;
+        }
+        for (HeaderVersions.Entry entry : spec.headerVersions().get().entries()) {
+            if (entry.headerVersion() != 0) {
+                throw new RuntimeException("Message " + spec.name() + " maps versions " + entry.range() +
+                    " to response header version " + entry.headerVersion() + ", but ApiVersionsResponse must " +
+                    "use a v0 response header at every version so that older brokers can parse it (KIP-511).");
+            }
         }
     }
 

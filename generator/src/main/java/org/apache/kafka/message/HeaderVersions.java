@@ -87,7 +87,9 @@ public final class HeaderVersions {
         Versions range;
         try {
             range = Versions.parse(key, null);
-        } catch (NumberFormatException e) {
+        } catch (RuntimeException e) {
+            // Versions.parse throws NumberFormatException for a non-numeric bound and a plain
+            // RuntimeException for a negative one; both mean the key is not a valid version range.
             range = null;
         }
         if (range == null || range.empty()) {
@@ -151,10 +153,5 @@ public final class HeaderVersions {
             map.put(entry.range.toString(), Short.toString(entry.headerVersion));
         }
         return map;
-    }
-
-    @Override
-    public String toString() {
-        return toMap().toString();
     }
 }

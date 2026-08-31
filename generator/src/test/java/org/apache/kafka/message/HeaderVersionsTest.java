@@ -148,6 +148,11 @@ public class HeaderVersionsTest {
     }
 
     @Test
+    public void testNegativeVersionRangeKey() {
+        assertMessageContains("invalid version range", () -> parse(requestSpec("0-5", "2+", "{'-5+': '1'}")));
+    }
+
+    @Test
     public void testNegativeValue() {
         assertMessageContains("negative header version", () -> parse(requestSpec("0-5", "2+", "{'0+': '-1'}")));
     }
