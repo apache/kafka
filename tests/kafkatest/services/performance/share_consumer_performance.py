@@ -126,18 +126,34 @@ class ShareConsumerPerformanceService(PerformanceService):
 
         cmd = self.start_cmd(node)
         self.logger.debug("Share consumer performance %d command: %s", idx, cmd)
-        last = None
-        for line in node.account.ssh_capture(cmd):
-            last = line
-
-        # Parse and save the last line's information
+        # Parse and save the line containing the results.
         # The script kafka-share-consumer-perf-test.sh first prints the header line in the following format:
         #   start.time, end.time, data.consumed.in.MB, MB.sec, nMsg.sec, data.consumed.in.nMsg, fetch.time.ms
-        # The corresponding results are then printed in the same order, so we can parse the last line for the results.
-        if last is not None:
-            parts = last.split(',')
-            self.results[idx-1] = {
-                'total_mb': float(parts[2]),
-                'mbps': float(parts[3]),
-                'records_per_sec': float(parts[4]),
-            }
+        # The corresponding results are then printed in the same order.
+        parsed_result = None
+        for line in node.account.ssh_capture(cmd):
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(',')
+            if len(parts) >= 5:
+                try:
+                    parsed_result = {
+                        'total_mb': float(parts[2]),
+                        'mbps': float(parts[3]),
+                        'records_per_sec': float(parts[4]),
+                    }
+                except (ValueError, IndexError):
+                    pass
+
+        if parsed_result is not None:
+            self.results[idx-1] = parsed_result
+        else:
+            stderr = ""
+            try:
+                stderr_lines = list(node.account.ssh_capture("cat %s" % ShareConsumerPerformanceService.STDERR_CAPTURE))
+                if stderr_lines:
+                    stderr = "\nStderr: %s" % "".join(stderr_lines).strip()
+            except Exception:
+                pass
+            raise Exception("Unable to parse share consumer performance statistics on node %d.%s" % (idx, stderr))
