@@ -210,7 +210,7 @@ public class PositionTest {
     @Test
     public void shouldNotMatchNull() {
         final Position position = Position.emptyPosition();
-        assertNotEquals(null, position);
+        assertNotEquals(position, null);
     }
 
     @Test
