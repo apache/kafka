@@ -65,8 +65,6 @@ class RemoteLeaderEndPoint(logPrefix: String,
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  override def isTruncationOnFetchSupported: Boolean = true
-
   override def initiateClose(): Unit = blockingSender.initiateClose()
 
   override def close(): Unit = blockingSender.close()
@@ -184,10 +182,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, fetchState, topicPartition)) {
         try {
           val logStartOffset = replicaManager.localLogOrException(topicPartition).logStartOffset
-          val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-            fetchState.lastFetchedEpoch()
-          else
-            Optional.empty[Integer]
+          val lastFetchedEpoch = fetchState.lastFetchedEpoch()
           builder.add(topicPartition, new FetchRequest.PartitionData(
             fetchState.topicId().orElse(Uuid.ZERO_UUID),
             fetchState.fetchOffset(),

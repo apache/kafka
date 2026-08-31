@@ -176,13 +176,7 @@ class ReplicaFetcherThread(name: String,
    */
   override def truncate(tp: TopicPartition, offsetTruncationState: OffsetTruncationState): Unit = {
     val partition = replicaMgr.getPartitionOrException(tp)
-
     partition.truncateTo(offsetTruncationState.offset, isFuture = false)
-
-    // mark the future replica for truncation only when we do last truncation
-    if (offsetTruncationState.truncationCompleted)
-      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp,
-        offsetTruncationState.offset)
   }
 
   override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {
