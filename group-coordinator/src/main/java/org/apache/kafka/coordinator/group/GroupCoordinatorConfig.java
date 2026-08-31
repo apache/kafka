@@ -804,7 +804,10 @@ public class GroupCoordinatorConfig {
         }
         @SuppressWarnings("unchecked")
         List<String> rawTags = (List<String>) ConfigDef.parseType(
-                STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rawValue, ConfigDef.Type.LIST);
+            STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+            rawValue,
+            ConfigDef.Type.LIST
+        );
         return rawTags;
     }
 
