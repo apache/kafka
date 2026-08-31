@@ -217,7 +217,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         trim();
         // flush() must run after trim() so the truncated file length is included in the fsync.
-        // A flush before trim only persists message data, not the smaller size set by truncate().
+        // A flush before trim only persists message data, not the smaller size set by trim().
         flush();
         channel.close();
     }

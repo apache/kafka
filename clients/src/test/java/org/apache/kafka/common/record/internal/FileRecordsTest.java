@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.File;
@@ -59,6 +60,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -403,8 +405,9 @@ public class FileRecordsTest {
         FileRecords records = new FileRecords(tempFile(), channelMock, 100);
         records.close();
 
-        verify(channelMock, times(1)).force(true);
-        verify(channelMock).truncate(100L);
+        InOrder inOrder = inOrder(channelMock);
+        inOrder.verify(channelMock).truncate(100L);
+        inOrder.verify(channelMock).force(true);
     }
 
     /**
