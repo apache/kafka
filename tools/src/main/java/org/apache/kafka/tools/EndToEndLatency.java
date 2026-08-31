@@ -136,7 +136,6 @@ public class EndToEndLatency {
             }
 
             printResults(numRecords, totalTime, latencies);
-            consumer.commitSync();
         }
     }
 
@@ -177,7 +176,6 @@ public class EndToEndLatency {
     }
 
     private static void commitAndThrow(KafkaConsumer<byte[], byte[]> consumer, String message) {
-        consumer.commitSync();
         throw new RuntimeException(message);
     }
 
