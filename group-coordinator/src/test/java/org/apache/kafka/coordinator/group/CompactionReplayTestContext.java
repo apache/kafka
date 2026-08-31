@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Subtopol
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Topology;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -138,15 +139,32 @@ final class CompactionReplayTestContext {
         return boundaries;
     }
 
+    /**
+     * The current type of {@code groupId}, used to assert that a scenario upgraded or downgraded the
+     * group as intended.
+     */
+    Group.GroupType groupType(String groupId) {
+        return context.groupMetadataManager.group(groupId).type();
+    }
+
     // Request helpers.
 
     /**
      * A classic join request using the consumer embedded protocol.
      */
     private JoinGroupRequestData classicJoinRequest(String groupId, String memberId) {
+        return classicJoinRequest(groupId, memberId, null);
+    }
+
+    /**
+     * A classic join request for a static member (non-null {@code instanceId}) using the consumer
+     * embedded protocol.
+     */
+    private JoinGroupRequestData classicJoinRequest(String groupId, String memberId, String instanceId) {
         return new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(memberId)
+            .withGroupInstanceId(instanceId)
             .withProtocolType("consumer")
             .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 List.of(FOO_TOPIC_NAME, BAR_TOPIC_NAME), List.of()))
@@ -193,6 +211,18 @@ final class CompactionReplayTestContext {
         var rejoin = context.sendClassicGroupJoin(classicJoinRequest(groupId, memberId), true);
         append(rejoin.records);
         return rejoin.joinFuture.get();
+    }
+
+    /**
+     * Replaces a consumer group's static member with a classic-protocol member carrying the same
+     * instance id. When that member is the last one on the consumer protocol, this downgrades the
+     * group back to a classic group.
+     */
+    void replaceStaticMemberWithClassicProtocol(String groupId, String instanceId) throws Exception {
+        var join = context.sendClassicGroupJoin(classicJoinRequest(groupId, UNKNOWN_MEMBER_ID, instanceId), true);
+        append(join.records);
+        join.appendFuture.complete(null);
+        join.joinFuture.get();
     }
 
     /**
@@ -259,17 +289,39 @@ final class CompactionReplayTestContext {
     }
 
     /**
-     * Joins a member with the consumer protocol.
+     * Joins a dynamic member with the consumer protocol.
      */
     void joinConsumerMember(
         String groupId,
         String memberId,
         Map<String, ConsumerMemberState> members
     ) {
+        joinConsumerMember(groupId, memberId, null, members);
+    }
+
+    /**
+     * Joins a static member (non-null {@code instanceId}) with the consumer protocol.
+     */
+    void joinStaticConsumerMember(
+        String groupId,
+        String memberId,
+        String instanceId,
+        Map<String, ConsumerMemberState> members
+    ) {
+        joinConsumerMember(groupId, memberId, instanceId, members);
+    }
+
+    private void joinConsumerMember(
+        String groupId,
+        String memberId,
+        String instanceId,
+        Map<String, ConsumerMemberState> members
+    ) {
         var result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
+                .setInstanceId(instanceId)
                 .setMemberEpoch(0)
                 .setServerAssignor("range")
                 .setRebalanceTimeoutMs(LONG_TIMEOUT_MS)
@@ -278,6 +330,21 @@ final class CompactionReplayTestContext {
         );
         append(result);
         members.put(memberId, new ConsumerMemberState(result.response()));
+    }
+
+    /**
+     * Removes a consumer member. The consumer counterpart of {@link #leaveStreamsMember}.
+     */
+    void leaveConsumerMember(
+        String groupId,
+        String memberId,
+        Map<String, ConsumerMemberState> members
+    ) {
+        append(context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH)));
+        members.remove(memberId);
     }
 
     void completeConsumerGroupRebalance(String groupId, Map<String, ConsumerMemberState> members) {

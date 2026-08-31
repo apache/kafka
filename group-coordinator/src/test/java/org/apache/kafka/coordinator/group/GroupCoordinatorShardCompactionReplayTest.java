@@ -44,6 +44,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.CompactionReplayTestContext.BAR_TOPIC_NAME;
 import static org.apache.kafka.coordinator.group.CompactionReplayTestContext.FOO_TOPIC_NAME;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Compaction replay tests for the group coordinator. Tests capture written records,
@@ -98,7 +99,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
         MockPartitionAssignor consumerAssignor = new MockPartitionAssignor("range");
         MockTaskAssignor streamsAssignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.BIDIRECTIONAL.toString())
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(consumerAssignor))
             .withStreamsGroupTaskAssignors(List.of(streamsAssignor))
             .withMetadataImage(metadataImage)
@@ -315,6 +316,129 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
+     * Consumer -> classic downgrade by leave. Related bugs: KAFKA-19862
+     *
+     * Scenario:
+     *  Classic group created and rebalanced
+     *  Member joins with consumer protocol, upgrading the group to a consumer group
+     *  The last consumer-protocol member leaves, downgrading the group back to classic
+     *  Classic group commits an offset
+     */
+    @Test
+    public void testConsumerGroupDowngradeByLeave() throws Exception {
+        String groupId = "consumer-downgrade-by-leave-group";
+
+        // A classic group is created when its first member joins and syncs
+        JoinGroupResponseData joinResponseA = replay.joinFirstClassicMember(groupId);
+        String classicMemberA = joinResponseA.memberId();
+        replay.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
+            classicMemberA, List.of(
+                new TopicPartition(FOO_TOPIC_NAME, 0),
+                new TopicPartition(FOO_TOPIC_NAME, 1),
+                new TopicPartition(FOO_TOPIC_NAME, 2),
+                new TopicPartition(FOO_TOPIC_NAME, 3),
+                new TopicPartition(FOO_TOPIC_NAME, 4),
+                new TopicPartition(FOO_TOPIC_NAME, 5),
+                new TopicPartition(BAR_TOPIC_NAME, 0),
+                new TopicPartition(BAR_TOPIC_NAME, 1),
+                new TopicPartition(BAR_TOPIC_NAME, 2))
+        ));
+
+        // Member B joins with classic protocol, triggering rebalance
+        String classicMemberB = replay.joinClassicMember(groupId);
+
+        // Member A rejoins
+        JoinGroupResponseData rejoinResponseA = replay.rejoinClassicMember(groupId, classicMemberA);
+        replay.syncClassicMember(groupId, classicMemberA, rejoinResponseA.generationId(), Map.of(
+            classicMemberA, List.of(
+                new TopicPartition(FOO_TOPIC_NAME, 0),
+                new TopicPartition(FOO_TOPIC_NAME, 1),
+                new TopicPartition(FOO_TOPIC_NAME, 2),
+                new TopicPartition(BAR_TOPIC_NAME, 0)),
+            classicMemberB, List.of(
+                new TopicPartition(FOO_TOPIC_NAME, 3),
+                new TopicPartition(FOO_TOPIC_NAME, 4),
+                new TopicPartition(FOO_TOPIC_NAME, 5),
+                new TopicPartition(BAR_TOPIC_NAME, 1),
+                new TopicPartition(BAR_TOPIC_NAME, 2))
+        ));
+        replay.syncClassicMember(groupId, classicMemberB, rejoinResponseA.generationId(), Map.of());
+
+        // Member C joins with the consumer protocol, upgrading the group online to a consumer group.
+        // Members A and B stay on the classic protocol.
+        String memberC = Uuid.randomUuid().toString();
+        replay.prepareConsumerAssignment(Map.of(
+            classicMemberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2), mkTopicAssignment(barTopicId, 0)),
+            classicMemberB, mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5), mkTopicAssignment(barTopicId, 1, 2))));
+        Map<String, ConsumerMemberState> members = new LinkedHashMap<>();
+        replay.joinConsumerMember(groupId, memberC, members);
+        assertEquals(Group.GroupType.CONSUMER, replay.groupType(groupId));
+
+        // Member C, the last consumer-protocol member, leaves; the group downgrades back to classic
+        // with members A and B.
+        replay.leaveConsumerMember(groupId, memberC, members);
+        assertEquals(Group.GroupType.CLASSIC, replay.groupType(groupId));
+
+        // The classic group keeps working and commits an offset.
+        replay.commitOffset(groupId, FOO_TOPIC_NAME, 0, 40L);
+
+        // Verify partitions can be reloaded cleanly from log.
+        assertCompactedVariantsLoadCleanly();
+    }
+
+    /**
+     * Consumer -> classic downgrade by static member replacement. Related bugs: KAFKA-19862
+     *
+     * Scenario:
+     *  Classic group created
+     *  Static member joins with consumer protocol, upgrading the group to a consumer group
+     *  A classic member replaces the static consumer member, downgrading the group back to classic
+     *  Classic group commits an offset
+     */
+    @Test
+    public void testConsumerGroupDowngradeByStaticMemberReplacement() throws Exception {
+        String groupId = "consumer-downgrade-by-replacement-group";
+
+        // A classic group is created when its first member joins and syncs
+        JoinGroupResponseData joinResponseA = replay.joinFirstClassicMember(groupId);
+        String classicMemberA = joinResponseA.memberId();
+        replay.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
+            classicMemberA, List.of(
+                new TopicPartition(FOO_TOPIC_NAME, 0),
+                new TopicPartition(FOO_TOPIC_NAME, 1),
+                new TopicPartition(FOO_TOPIC_NAME, 2),
+                new TopicPartition(FOO_TOPIC_NAME, 3),
+                new TopicPartition(FOO_TOPIC_NAME, 4),
+                new TopicPartition(FOO_TOPIC_NAME, 5),
+                new TopicPartition(BAR_TOPIC_NAME, 0),
+                new TopicPartition(BAR_TOPIC_NAME, 1),
+                new TopicPartition(BAR_TOPIC_NAME, 2))
+        ));
+
+        // A static member joins with the consumer protocol, upgrading the group online to a consumer
+        // group. Member A stays on the classic protocol.
+        String instanceId = "static-instance";
+        String staticMemberId = Uuid.randomUuid().toString();
+        replay.prepareConsumerAssignment(Map.of(
+            classicMemberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2), mkTopicAssignment(barTopicId, 0)),
+            staticMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5), mkTopicAssignment(barTopicId, 1, 2))));
+        Map<String, ConsumerMemberState> members = new LinkedHashMap<>();
+        replay.joinStaticConsumerMember(groupId, staticMemberId, instanceId, members);
+        assertEquals(Group.GroupType.CONSUMER, replay.groupType(groupId));
+
+        // A classic member with the same instance id replaces the static consumer member. As it is the
+        // last consumer-protocol member, the group downgrades back to classic.
+        replay.replaceStaticMemberWithClassicProtocol(groupId, instanceId);
+        assertEquals(Group.GroupType.CLASSIC, replay.groupType(groupId));
+
+        // The classic group keeps working and commits an offset.
+        replay.commitOffset(groupId, FOO_TOPIC_NAME, 0, 50L);
+
+        // Verify partitions can be reloaded cleanly from log.
+        assertCompactedVariantsLoadCleanly();
+    }
+
+    /**
      * Replays every compacted variant of the captured log through a fresh coordinator and asserts that
      * each one loads without throwing. Each variant cleans a single contiguous window of record batches,
      * modelling the three ways a load can observe compaction:
@@ -376,7 +500,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
 
         GroupMetadataManagerTestContext replayContext =
             new GroupMetadataManagerTestContext.Builder()
-                .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+                .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.BIDIRECTIONAL.toString())
                 .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new MockPartitionAssignor("range")))
                 .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
                 .withMetadataImage(metadataImage)
