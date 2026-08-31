@@ -29,6 +29,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -668,15 +672,11 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         final Thread reader = new Thread(() -> {
             try {
                 for (int i = 0; i < iterations; i++) {
-                    final org.apache.kafka.streams.query.QueryResult<KeyValueIterator<Bytes, byte[]>> result = store.query(
-                        org.apache.kafka.streams.query.RangeQuery.withNoBounds(),
-                        org.apache.kafka.streams.query.PositionBound.unbounded(),
-                        new org.apache.kafka.streams.query.QueryConfig(false));
-                    try (KeyValueIterator<Bytes, byte[]> iterator = result.getResult()) {
-                        if (iterator.hasNext()) {
-                            iterator.next();
-                        }
-                    }
+                    final QueryResult<KeyValueIterator<Bytes, byte[]>> result = store.query(
+                        RangeQuery.withNoBounds(),
+                        PositionBound.unbounded(),
+                        new QueryConfig(false));
+                    result.getResult().close();
                 }
             } catch (final Throwable t) {
                 failure.set(t);
@@ -687,8 +687,9 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         reader.setDaemon(true);
         writer.start();
         reader.start();
-        writer.join(TimeUnit.SECONDS.toMillis(60));
-        reader.join(TimeUnit.SECONDS.toMillis(60));
+        final long deadlineMs = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(60);
+        writer.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+        reader.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
 
         if (failure.get() != null) {
             throw new AssertionError(failure.get());

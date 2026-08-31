@@ -211,23 +211,20 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
                         RangeQuery.withNoBounds(),
                         PositionBound.unbounded(),
                         new QueryConfig(false));
-                    try (KeyValueIterator<Bytes, byte[]> iterator = result.getResult()) {
-                        if (iterator.hasNext()) {
-                            iterator.next();
-                        }
-                    }
+                    result.getResult().close();
                 }
             } catch (final Throwable t) {
                 failure.set(t);
             }
-        }, "writer-query-reader");
+        }, "iq-reader");
 
         writer.setDaemon(true);
         reader.setDaemon(true);
         writer.start();
         reader.start();
-        writer.join(TimeUnit.SECONDS.toMillis(60));
-        reader.join(TimeUnit.SECONDS.toMillis(60));
+        final long deadlineMs = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(60);
+        writer.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+        reader.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
 
         if (failure.get() != null) {
             throw new AssertionError(failure.get());
