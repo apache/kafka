@@ -53,17 +53,11 @@ public class ProducerRecordTest {
 
     @Test
     public void testInvalidRecords() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new ProducerRecord<>(null, 0, "key", 1),
-                "Expected IllegalArgumentException to be raised because topic is null");
+        assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>(null, 0, "key", 1));
 
-        assertThrows(IllegalArgumentException.class,
-                () -> new ProducerRecord<>("test", 0, -1L, "key", 1),
-                "Expected IllegalArgumentException to be raised because of negative timestamp");
+        assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>("test", 0, -1L, "key", 1));
 
-        assertThrows(IllegalArgumentException.class,
-                () -> new ProducerRecord<>("test", -1, "key", 1),
-                "Expected IllegalArgumentException to be raised because of negative partition");
+        assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>("test", -1, "key", 1));
     }
 
 }
