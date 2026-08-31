@@ -516,7 +516,10 @@ public final class GroupConfig extends AbstractConfig {
         }
         @SuppressWarnings("unchecked")
         List<String> rawTags = (List<String>) ConfigDef.parseType(
-                STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rawValue, ConfigDef.Type.LIST);
+            STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+            rawValue,
+            ConfigDef.Type.LIST
+        );
         if (Set.copyOf(rawTags).size() != rawTags.size()) {
             throw new InvalidConfigurationException(
                 STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG + " must not contain duplicate tag keys.");
