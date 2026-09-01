@@ -21,7 +21,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 
@@ -49,7 +48,7 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
         if (keyBytes == null) {
             return Optional.empty();
         } else {
-            return Optional.of(Collections.singleton(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
+            return Optional.of(Set.of(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
         }
     }
 }

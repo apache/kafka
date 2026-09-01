@@ -116,11 +116,13 @@ public class ProducerBatch {
     void maybeUpdateLeaderEpoch(OptionalInt latestLeaderEpoch) {
         if (latestLeaderEpoch.isPresent()
             && (currentLeaderEpoch.isEmpty() || currentLeaderEpoch.getAsInt() < latestLeaderEpoch.getAsInt())) {
-            log.trace("For {}, leader will be updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
-                this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
+            if (log.isTraceEnabled()) {
+                log.trace("For {}, leader will be updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
+                    this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
+            }
             attemptsWhenLeaderLastChanged = attempts();
             currentLeaderEpoch = latestLeaderEpoch;
-        } else {
+        } else if (log.isTraceEnabled()) {
             log.trace("For {}, leader wasn't updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
                 this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
         }

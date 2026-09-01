@@ -26,8 +26,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -62,7 +61,7 @@ public class TaskMetricsTest {
                     ratioDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -86,7 +85,7 @@ public class TaskMetricsTest {
                     countDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -111,7 +110,7 @@ public class TaskMetricsTest {
                     maxLatencyDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -134,7 +133,7 @@ public class TaskMetricsTest {
                             totalBytesDescription
                     )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -173,7 +172,7 @@ public class TaskMetricsTest {
                     maxLatencyDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -197,7 +196,7 @@ public class TaskMetricsTest {
                     totalDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -225,7 +224,7 @@ public class TaskMetricsTest {
                     maxDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -249,7 +248,7 @@ public class TaskMetricsTest {
                     totalDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 }

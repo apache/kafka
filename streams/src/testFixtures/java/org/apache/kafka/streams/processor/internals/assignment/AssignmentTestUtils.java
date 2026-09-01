@@ -37,10 +37,6 @@ import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 
-import org.hamcrest.BaseMatcher;
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -51,7 +47,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
@@ -70,10 +65,6 @@ import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasItems;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -373,9 +364,13 @@ public final class AssignmentTestUtils {
                 .collect(entriesToMap(TreeMap::new));
 
         if (!misassigned.isEmpty()) {
-            assertThat("Found some over- or under-assigned tasks in the final assignment with " + numStandbyReplicas +
+            assertEquals(
+                emptyMap(),
+                misassigned,
+                "Found some over- or under-assigned tasks in the final assignment with " + numStandbyReplicas +
                     " and max warmups " + maxWarmupReplicas + " standby replicas, stateful tasks:" + statefulTasks +
-                    ", and stateless tasks:" + statelessTasks + failureContext, misassigned, is(emptyMap()));
+                    ", and stateless tasks:" + statelessTasks + failureContext
+            );
         }
     }
 
@@ -508,36 +503,23 @@ public final class AssignmentTestUtils {
         return new TaskSkewReport(maxTaskSkew, skewedSubtopologies, subtopologyToClientsWithPartition);
     }
 
-    static Matcher<ClientState> hasAssignedTasks(final int taskCount) {
-        return hasProperty("assignedTasks", ClientState::assignedTaskCount, taskCount);
+    static void assertHasAssignedTasks(final ClientState clientState, final int taskCount) {
+        assertEquals(taskCount, clientState.assignedTaskCount());
     }
 
-    static Matcher<ClientState> hasActiveTasks(final int taskCount) {
-        return hasProperty("activeTasks", ClientState::activeTaskCount, taskCount);
+    static void assertHasActiveTasks(final ClientState clientState, final int taskCount) {
+        assertEquals(taskCount, clientState.activeTaskCount());
     }
 
-    static Matcher<ClientState> hasStandbyTasks(final int taskCount) {
-        return hasProperty("standbyTasks", ClientState::standbyTaskCount, taskCount);
+    static void assertHasStandbyTasks(final ClientState clientState, final int taskCount) {
+        assertEquals(taskCount, clientState.standbyTaskCount());
     }
 
-    static <V> Matcher<ClientState> hasProperty(final String propertyName,
-                                                final Function<ClientState, V> propertyExtractor,
-                                                final V propertyValue) {
-        return new BaseMatcher<>() {
-            @Override
-            public void describeTo(final Description description) {
-                description.appendText(propertyName).appendText(":").appendValue(propertyValue);
-            }
-
-            @Override
-            public boolean matches(final Object actual) {
-                if (actual instanceof ClientState) {
-                    return Objects.equals(propertyExtractor.apply((ClientState) actual), propertyValue);
-                } else {
-                    return false;
-                }
-            }
-        };
+    static <V> void assertHasProperty(final ClientState clientState,
+                                      final String propertyName,
+                                      final Function<ClientState, V> propertyExtractor,
+                                      final V propertyValue) {
+        assertEquals(propertyValue, propertyExtractor.apply(clientState), propertyName);
     }
 
     static void appendClientStates(final StringBuilder stringBuilder,
@@ -938,7 +920,10 @@ public final class AssignmentTestUtils {
 
                 if (!relaxRackCheck && clientState.hasAssignedTask(taskId)) {
                     final String rack = racksForProcess.get(processId);
-                    assertThat("Task " + taskId + " appears in both " + processId + " and " + racks.get(rack), racks.keySet(), not(hasItems(rack)));
+                    assertFalse(
+                        racks.containsKey(rack),
+                        "Task " + taskId + " appears in both " + processId + " and " + racks.get(rack)
+                    );
                     racks.put(rack, processId);
                 }
 
