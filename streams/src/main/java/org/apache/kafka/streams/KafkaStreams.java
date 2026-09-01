@@ -44,6 +44,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -497,12 +498,21 @@ public class KafkaStreams implements AutoCloseable {
                     " The streams client is going to shut down now. ", throwable);
             closeToError();
         }
+
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
+
         // Use DEFAULT so the consumer layer decides: classic protocol maps to REMAIN_IN_GROUP
         // (avoiding an unnecessary rebalance before the replacement thread joins), while Streams
         // protocol adapts to static vs dynamic membership.
-        deadThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
-        addStreamThread();
+        if (deadThread.shutdown(GroupMembershipOperation.DEFAULT)) {
+            addStreamThread();
+        } else {
+            // A concurrent removeStreamThread (or client close) already requested this thread's
+            // shutdown and owns its death. Spawning a replacement would silently undo that
+            // operation, so let the thread die without compensation.
+            log.debug("Not spawning a replacement for {} since its shutdown was already requested elsewhere", deadThread.getName());
+        }
+
         if (throwable instanceof RuntimeException) {
             throw (RuntimeException) throwable;
         } else if (throwable instanceof Error) {
@@ -1158,7 +1168,7 @@ public class KafkaStreams implements AutoCloseable {
                     return Optional.of(streamThread.getName());
                 } else {
                     log.warn("Terminating the new thread because the Kafka Streams client is in state {}", state);
-                    streamThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+                    streamThread.shutdown(GroupMembershipOperation.LEAVE_GROUP);
                     threads.remove(streamThread);
                     final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                     log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
@@ -1243,10 +1253,15 @@ public class KafkaStreams implements AutoCloseable {
             for (final StreamThread streamThread : new ArrayList<>(threads)) {
                 final boolean isNotCurrentThread = !streamThread.getName().equals(Thread.currentThread().getName());
                 if (streamThread.state().isAlive() && (isNotCurrentThread || numLiveStreamThreads() == 1)) {
-                    log.info("Removing StreamThread {}", streamThread.getName());
-                    streamThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
-                    candidate = streamThread;
-                    break;
+                    // shutdown() returns false if the thread moved to PENDING_SHUTDOWN between the
+                    // isAlive() check above and this call, which means its uncaught-exception
+                    // handler won the race and will spawn a replacement: that thread's death is
+                    // already compensated and must not count as this removal, so keep scanning.
+                    if (streamThread.shutdown(GroupMembershipOperation.LEAVE_GROUP)) {
+                        log.info("Removing StreamThread {}", streamThread.getName());
+                        candidate = streamThread;
+                        break;
+                    }
                 }
             }
             threadToRemove = candidate;

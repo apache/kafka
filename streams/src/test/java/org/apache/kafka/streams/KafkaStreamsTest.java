@@ -333,7 +333,7 @@ public class KafkaStreamsTest {
 
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.PENDING_SHUTDOWN, StreamThread.State.RUNNING);
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.DEAD, StreamThread.State.PENDING_SHUTDOWN);
-            return null;
+            return true;
         };
         doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.DEFAULT);
         doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
@@ -803,6 +803,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         when(streamThreadOne.groupInstanceID()).thenReturn(Optional.empty());
         when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        when(streamThreadOne.shutdown(any())).thenReturn(true);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
@@ -836,11 +837,11 @@ public class KafkaStreamsTest {
         // keeps the second removal from picking the same thread.
         doAnswer(invocation -> {
             state1.set(StreamThread.State.PENDING_SHUTDOWN);
-            return null;
+            return true;
         }).when(streamThreadOne).shutdown(any());
         doAnswer(invocation -> {
             state2.set(StreamThread.State.PENDING_SHUTDOWN);
-            return null;
+            return true;
         }).when(streamThreadTwo).shutdown(any());
 
         final CountDownLatch removalIsWaiting = new CountDownLatch(1);
@@ -879,6 +880,30 @@ public class KafkaStreamsTest {
                 allowShutdownToComplete.countDown();
                 executor.shutdownNow();
             }
+        }
+    }
+
+    @Test
+    public void shouldSkipThreadWhoseShutdownWasAlreadyRequestedWhenRemovingThread() throws Exception {
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        when(streamThreadTwo.groupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadTwo.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        when(streamThreadOne.shutdown(any())).thenReturn(false);
+        doAnswer(invocation -> {
+            state2.set(StreamThread.State.PENDING_SHUTDOWN);
+            return true;
+        }).when(streamThreadTwo).shutdown(any());
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+                "Kafka Streams client did not reach state RUNNING");
+            assertEquals(Optional.of("processId-StreamThread-2"), streams.removeStreamThread());
         }
     }
 
