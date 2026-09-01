@@ -4840,6 +4840,7 @@ org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreTest:
 - shouldDeleteFromStore
 - shouldDeleteIfSerializedValueIsNull
 - shouldMatchPositionAfterPut
+- shouldNotDeadlockOnConcurrentPutAndQuery
 - shouldNotIncludeDeletedFromRangeResult
 - shouldNotThrowConcurrentModificationException
 - shouldNotThrowInvalidRangeExceptionWithFromLargerThanTo
@@ -4882,6 +4883,7 @@ org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreTest:
 - prefixScanShouldNotThrowConcurrentModificationException
 - shouldDeleteFromStore
 - shouldDeleteIfSerializedValueIsNull
+- shouldNotDeadlockOnConcurrentPutAndQuery
 - shouldNotIncludeDeletedFromRangeResult
 - shouldNotThrowConcurrentModificationException
 - shouldNotThrowInvalidRangeExceptionWithFromLargerThanTo
@@ -5821,6 +5823,7 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeaders
 - shouldMigrateExistingPositionFromFile
 - shouldMigrateFromDefaultToHeadersAwareColumnFamily
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
+- shouldNotDeadlockOnConcurrentPutAndQuery
 - shouldNotIncludeDeletedFromRangeResult
 - shouldNotSetCacheInValueProvidersWhenUserProvidesPlainTableFormatConfig
 - shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics
@@ -5927,6 +5930,7 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingWindowStoreWithHeadersT
 - shouldMigrateExistingPositionFromFile
 - shouldMigrateFromDefaultColumnFamilyWhenLegacyDataExists
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
+- shouldNotDeadlockOnConcurrentPutAndQuery
 - shouldNotIncludeDeletedFromRangeResult
 - shouldNotSetCacheInValueProvidersWhenUserProvidesPlainTableFormatConfig
 - shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics
@@ -6112,6 +6116,7 @@ org.apache.kafka.streams.state.internals.RocksDBStoreTest:
 - shouldMatchPositionAfterPutAll
 - shouldMigrateExistingPositionFromFile
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
+- shouldNotDeadlockOnConcurrentPutAndQuery
 - shouldNotIncludeDeletedFromRangeResult
 - shouldNotSetCacheInValueProvidersWhenUserProvidesPlainTableFormatConfig
 - shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics
@@ -6651,6 +6656,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - shouldMigrateDataFromDefaultToTimestampColumnFamily
 - shouldMigrateExistingPositionFromFile
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
+- shouldNotDeadlockOnConcurrentPutAndQuery
 - shouldNotIncludeDeletedFromRangeResult
 - shouldNotSetCacheInValueProvidersWhenUserProvidesPlainTableFormatConfig
 - shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics
@@ -6763,6 +6769,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldMigrateFromTimestampedToHeadersAwareColumnFamily
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
 - shouldNotCollectExecutionInfoWhenNotRequested
+- shouldNotDeadlockOnConcurrentPutAndQuery
 - shouldNotIncludeDeletedFromRangeResult
 - shouldNotSetCacheInValueProvidersWhenUserProvidesPlainTableFormatConfig
 - shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics
