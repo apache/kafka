@@ -124,9 +124,6 @@ class ConsumerPerformanceService(PerformanceService):
         else:
             cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
-        for key, value in self.settings.items():
-            cmd += " %s=%s" % (str(key), str(value))
-
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s" % {'stdout': ConsumerPerformanceService.STDOUT_CAPTURE,
                                                         'stderr': ConsumerPerformanceService.STDERR_CAPTURE}
         return cmd
@@ -136,7 +133,9 @@ class ConsumerPerformanceService(PerformanceService):
 
         log_config = self.render(get_log4j_config_for_tools(node), log_file=ConsumerPerformanceService.LOG_FILE)
         node.account.create_file(get_log4j_config_for_tools(node), log_config)
-        node.account.create_file(ConsumerPerformanceService.CONFIG_FILE, str(self.security_config))
+        consumer_config = str(self.security_config)
+        consumer_config += "".join("%s=%s\n" % (str(key), str(value)) for key, value in self.settings.items())
+        node.account.create_file(ConsumerPerformanceService.CONFIG_FILE, consumer_config)
         self.security_config.setup_node(node)
 
         cmd = self.start_cmd(node)

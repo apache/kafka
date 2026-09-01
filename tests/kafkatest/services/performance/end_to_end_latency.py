@@ -44,12 +44,13 @@ class EndToEndLatencyService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, num_records, compression_type="none", version=DEV_BRANCH, acks=1):
+    def __init__(self, context, num_nodes, kafka, topic, num_records, compression_type="none", version=DEV_BRANCH, acks=1, settings=None):
         super(EndToEndLatencyService, self).__init__(context, num_nodes,
                                                      root=EndToEndLatencyService.PERSISTENT_ROOT)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
         self.version = ''
+        self.settings = settings if settings is not None else {}
 
         self.args = {
             'topic': topic,
@@ -90,7 +91,8 @@ class EndToEndLatencyService(PerformanceService):
 
         node.account.create_file(get_log4j_config_for_tools(node), log_config)
         client_config = str(self.security_config)
-        client_config += "compression_type=%(compression_type)s" % self.args
+        client_config += "compression.type=%(compression_type)s\n" % self.args
+        client_config += "".join("%s=%s\n" % (str(key), str(value)) for key, value in self.settings.items())
         node.account.create_file(EndToEndLatencyService.CONFIG_FILE, client_config)
 
         self.security_config.setup_node(node)
