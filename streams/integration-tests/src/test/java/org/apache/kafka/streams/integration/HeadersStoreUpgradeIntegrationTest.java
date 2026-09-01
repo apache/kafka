@@ -184,13 +184,15 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     private void closeAndLeaveGroupBeforeRestart() {
-        // Leave the group so the immediate restart with the same application id
-        // does not wait for the previous member's session timeout.
-        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
+        closeAndLeaveGroupBeforeRestart(null);
     }
 
     private void closeAndLeaveGroupBeforeRestart(final Duration timeout) {
-        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP).withTimeout(timeout));
+        // Leave the group so the immediate restart with the same application id
+        // does not wait for the previous member's session timeout.
+        kafkaStreams.close(
+            CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP)
+                .withTimeout(timeout));
     }
 
     @Test
@@ -1355,7 +1357,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             "Store was not populated with expected data"
         );
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
     }
 
     private long setupWindowStoreWithHeaders(final Properties props) throws Exception {
