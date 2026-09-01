@@ -232,9 +232,8 @@ def run_tests(image, mode, fixtures_dir, container_runtime="docker"):
     DockerSanityTest.MODE = mode
     DockerSanityTest.CONTAINER_RUNTIME = container_runtime
 
-    if report_path is None:
-        cur_directory = os.path.dirname(os.path.realpath(__file__))
-        report_path = f"{cur_directory}/report_{mode}.html"
+    cur_directory = os.path.dirname(os.path.realpath(__file__))
+    report_path = f"{cur_directory}/report_{mode}.html"
 
     class ReportTitlePlugin:
         @pytest.hookimpl(optionalhook=True)
