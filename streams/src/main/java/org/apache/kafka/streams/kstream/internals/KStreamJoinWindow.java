@@ -27,7 +27,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
-import java.util.Collections;
 import java.util.Set;
 
 class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V, K, V> {
@@ -40,7 +39,7 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V, K, V> {
 
     @Override
     public Set<StoreBuilder<?>> stores() {
-        return Collections.singleton(new FactoryWrappingStoreBuilder<>(thisWindowStoreFactory));
+        return Set.of(new FactoryWrappingStoreBuilder<>(thisWindowStoreFactory));
     }
 
     @Override

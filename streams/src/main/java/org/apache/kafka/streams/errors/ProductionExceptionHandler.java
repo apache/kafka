@@ -86,7 +86,7 @@ public interface ProductionExceptionHandler extends Configurable {
     default Response handleError(final ErrorHandlerContext context,
                                  final ProducerRecord<byte[], byte[]> record,
                                  final Exception exception) {
-        return new Response(Result.from(handle(context, record, exception)), Collections.emptyList());
+        return new Response(Result.from(handle(context, record, exception)), List.of());
     }
 
     /**
@@ -155,7 +155,7 @@ public interface ProductionExceptionHandler extends Configurable {
                                               final ProducerRecord record,
                                               final Exception exception,
                                               final SerializationExceptionOrigin origin) {
-        return new Response(Result.from(handleSerializationException(context, record, exception, origin)), Collections.emptyList());
+        return new Response(Result.from(handleSerializationException(context, record, exception, origin)), List.of());
     }
 
     @Deprecated
@@ -315,7 +315,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link ProductionExceptionHandler.Result#FAIL} status.
          */
         public static Response fail() {
-            return fail(Collections.emptyList());
+            return fail(List.of());
         }
 
         /**
@@ -334,7 +334,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link ProductionExceptionHandler.Result#RESUME} status.
          */
         public static Response resume() {
-            return resume(Collections.emptyList());
+            return resume(List.of());
         }
 
         /**
@@ -343,7 +343,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link ProductionExceptionHandler.Result#RETRY} status.
          */
         public static Response retry() {
-            return new Response(Result.RETRY, Collections.emptyList());
+            return new Response(Result.RETRY, List.of());
         }
 
         /**
@@ -366,7 +366,7 @@ public interface ProductionExceptionHandler extends Configurable {
          */
         public List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords() {
             if (deadLetterQueueRecords == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             return Collections.unmodifiableList(deadLetterQueueRecords);
         }

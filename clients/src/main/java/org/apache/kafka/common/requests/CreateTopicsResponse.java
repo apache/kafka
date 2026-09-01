@@ -77,8 +77,4 @@ public class CreateTopicsResponse extends AbstractResponse {
         return new CreateTopicsResponse(new CreateTopicsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 3;
-    }
 }

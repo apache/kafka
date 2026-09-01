@@ -327,7 +327,7 @@ public class InternalTopologyBuilder {
             // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
             // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
             if (subscribedTopics.isEmpty()) {
-                return Collections.singletonList(String.valueOf(pattern));
+                return List.of(String.valueOf(pattern));
             }
 
             final List<String> matchedTopics = new ArrayList<>();
@@ -791,7 +791,7 @@ public class InternalTopologyBuilder {
                         .map(sourceGroup -> sourceGroup
                                 .stream()
                                 .flatMap(sourceNodeName -> nodeToSourceTopics.getOrDefault(sourceNodeName,
-                                        Collections.emptyList()).stream())
+                                        List.of()).stream())
                                 .collect(Collectors.toSet())
                         ).collect(Collectors.toList());
         for (final Set<String> copartition : allCopartitionedSourceTopics) {
@@ -1281,10 +1281,10 @@ public class InternalTopologyBuilder {
                                                                final Optional<Integer> numberOfPartitions) {
         return numberOfPartitions
             .map(partitions -> new RepartitionTopicConfig(internalTopic,
-                                                          Collections.emptyMap(),
+                                                          Map.of(),
                                                           partitions,
                                                           true))
-            .orElse(new RepartitionTopicConfig(internalTopic, Collections.emptyMap()));
+            .orElse(new RepartitionTopicConfig(internalTopic, Map.of()));
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {
@@ -1440,7 +1440,7 @@ public class InternalTopologyBuilder {
 
     private List<String> maybeDecorateInternalSourceTopics(final Collection<String> sourceTopics) {
         if (sourceTopics == null) {
-            return Collections.emptyList();
+            return List.of();
         }
         final List<String> decoratedTopics = new ArrayList<>();
         for (final String topic : sourceTopics) {
@@ -1715,8 +1715,8 @@ public class InternalTopologyBuilder {
                            final String storeName,
                            final String topicName,
                            final int id) {
-            source = new Source(sourceName, Collections.singleton(topicName), null);
-            processor = new Processor(processorName, Collections.singleton(storeName));
+            source = new Source(sourceName, Set.of(topicName), null);
+            processor = new Processor(processorName, Set.of(storeName));
             source.successors.add(processor);
             processor.predecessors.add(source);
             this.id = id;

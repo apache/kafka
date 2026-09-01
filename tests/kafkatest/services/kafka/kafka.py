@@ -1832,6 +1832,27 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             cmd += " --type %s" % type
         return self.run_cli_tool(node, cmd)
 
+    def delete_streams_group(self, group_id, node=None, command_config=None):
+        """ Delete a streams group via kafka-streams-groups.sh --delete. The group must have
+        no active members (callers should stop/leave first) or the delete request fails.
+        """
+        if node is None:
+            node = self.nodes[0]
+        streams_group_script = self.path.script("kafka-streams-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --delete --group %s" % \
+              (streams_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config,
+               group_id)
+        return self.run_cli_tool(node, cmd)
+
     def list_share_groups(self, node=None, command_config=None, state=None):
         """ Get list of share groups.
         """

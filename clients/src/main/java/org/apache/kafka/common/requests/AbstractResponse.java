@@ -305,7 +305,11 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      * throttle time. Client-side throttling is needed when communicating with a newer version of broker which, on
      * quota violation, sends out responses before throttling.
      */
-    public boolean shouldClientThrottle(short version) {
+    public final boolean shouldClientThrottle(short version) {
+        Short firstPostKip219Version = Kip219ClientThrottleVersion.BOUNDARIES.get(apiKey);
+        if (firstPostKip219Version != null) {
+            return version >= firstPostKip219Version;
+        }
         return apiKey.messageType.responseSchemas()[version].get("throttle_time_ms") != null;
     }
 
