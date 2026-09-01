@@ -96,7 +96,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+    public void recordRestoration(final Time time, final long numRecords, final long numOffsets, final boolean initRemaining) {
         if (initRemaining) {
             throw new IllegalStateException("Standby task would not record remaining records to restore");
         }
@@ -198,7 +198,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 throw new IllegalStateException("Illegal state " + state() + " while preparing standby task " + id + " for committing ");
         }
 
-        return clean ? Collections.emptyMap() : null;
+        return clean ? Map.of() : null;
     }
 
     @Override
@@ -313,12 +313,12 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public Map<TopicPartition, Long> committedOffsets() {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     @Override
     public Map<TopicPartition, Long> highWaterMark() {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     @Override

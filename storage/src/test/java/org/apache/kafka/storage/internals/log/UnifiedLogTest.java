@@ -468,6 +468,56 @@ public class UnifiedLogTest {
     }
 
     @Test
+    public void onlyLocalLogSegmentsExcludeCopiedBoundarySegment() throws IOException {
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), mockTime.milliseconds());
+        LogConfig config = new LogTestUtils.LogConfigBuilder()
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, config, true);
+
+        // Build single-record segments: closed segments at base-offsets 0, 1 and 2 (each with
+        // end-offset == base-offset), plus an empty active segment at base-offset 3.
+        for (int i = 0; i < 3; i++) {
+            log.appendAsLeader(records.get(), 0);
+            log.roll();
+        }
+        assertEquals(3L, log.logEndOffset());
+        assertEquals(4, log.numberOfSegments());
+
+        // Nothing copied yet (highestOffsetInRemoteStorage == -1): every segment is local-only.
+        assertEquals(4L, log.onlyLocalLogSegmentsCount());
+
+        // Segments up to offset 1 copied. The closed single-record segment at base-offset 2 is
+        // genuinely uncopied, so it is counted alongside the active segment => lag 1.
+        log.updateHighestOffsetInRemoteStorage(1L);
+        assertEquals(2L, log.onlyLocalLogSegmentsCount());
+
+        // Every closed segment is now copied; highestOffsetInRemoteStorage == base-offset of the last
+        // (single-record) segment. Only the empty active segment remains local-only => lag must be 0.
+        // With the previous ">=" comparison the copied boundary segment was still counted, giving 1.
+        log.updateHighestOffsetInRemoteStorage(2L);
+        assertEquals(1L, log.onlyLocalLogSegmentsCount());
+        assertEquals(log.activeSegment().size(), log.onlyLocalLogSegmentsSize());
+
+        // Two closed segments of two records each plus an empty active segment
+        for (int seg = 0; seg < 2; seg++) {
+            log.appendAsLeader(records.get(), 0);
+            log.appendAsLeader(records.get(), 0);
+            log.roll();
+        }
+        assertEquals(7L, log.logEndOffset());
+        // segments 0 - 2 contain 1 record each and seg 3 - 4 contain 2 records each, and the active segment is empty.
+        assertEquals(6, log.numberOfSegments());
+
+        log.updateHighestOffsetInRemoteStorage(4L);
+        assertEquals(2L, log.onlyLocalLogSegmentsCount());
+
+        // Both closed segments copied: only the active segment is local-only => lag 0.
+        log.updateHighestOffsetInRemoteStorage(6L);
+        assertEquals(1L, log.onlyLocalLogSegmentsCount());
+    }
+
+    @Test
     public void shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithMsRetention() throws IOException {
         long oldTimestamp = mockTime.milliseconds() - 20000;
         Supplier<MemoryRecords> oldRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), oldTimestamp);
@@ -2980,6 +3030,62 @@ public class UnifiedLogTest {
         log = createLog(logDir, logConfig);
 
         assertThrows(RecordBatchTooLargeException.class, () -> log.appendAsLeader(messageSet, 0));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = AppendOrigin.class, names = "REPLICATION", mode = EnumSource.Mode.EXCLUDE)
+    public void testSegmentSizeCheckForNonReplicationOrigins(AppendOrigin origin) throws IOException {
+        MemoryRecords records = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(records.sizeInBytes() - 1)
+                .maxMessageBytes(records.sizeInBytes())
+                .build());
+
+        assertThrows(RecordBatchTooLargeException.class, () -> log.appendAsLeader(records, 0, origin));
+    }
+
+    @Test
+    public void testSegmentSizeCheckInAppendAsFollower() throws IOException {
+        MemoryRecords records = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(records.sizeInBytes() - 1)
+                .maxMessageBytes(records.sizeInBytes())
+                .build());
+
+        log.appendAsFollower(records, Integer.MAX_VALUE);
+
+        assertEquals(2L, log.logEndOffset());
+        assertEquals(1, log.numberOfSegments());
+        assertEquals(records.sizeInBytes(), log.activeSegment().size());
+    }
+
+    @Test
+    public void testSegmentSizeCheckInAppendAsFollowerWithNonEmptySegment() throws IOException {
+        MemoryRecords first = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("small".getBytes()));
+        MemoryRecords oversized = MemoryRecords.withRecords(1, Compression.NONE, 0,
+                new SimpleRecord("This record set is larger than the configured segment size.".getBytes()),
+                new SimpleRecord("More padding for the oversized record set.".getBytes()));
+        MemoryRecords last = MemoryRecords.withRecords(3, Compression.NONE, 0,
+                new SimpleRecord("small".getBytes()));
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(oversized.sizeInBytes() - 1)
+                .build());
+
+        log.appendAsFollower(first, Integer.MAX_VALUE);
+        log.appendAsFollower(oversized, Integer.MAX_VALUE);
+
+        assertEquals(3L, log.logEndOffset());
+        assertEquals(2, log.numberOfSegments());
+        assertEquals(oversized.sizeInBytes(), log.activeSegment().size());
+
+        log.appendAsFollower(last, Integer.MAX_VALUE);
+
+        assertEquals(4L, log.logEndOffset());
+        assertEquals(3, log.numberOfSegments());
+        assertEquals(last.sizeInBytes(), log.activeSegment().size());
     }
 
     @Test

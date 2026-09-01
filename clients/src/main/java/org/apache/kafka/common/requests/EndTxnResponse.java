@@ -77,8 +77,4 @@ public class EndTxnResponse extends AbstractResponse {
         return data.toString();
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
 }

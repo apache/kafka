@@ -155,9 +155,14 @@ public final class FollowerState implements EpochState {
     }
 
     private long updateVoterPeriodMs() {
-        // Allow for a few rounds of fetch request before attempting to update
-        // the voter state
-        return fetchTimeoutMs;
+        /* Allow for a few rounds of fetch requests before attempting to update the voter state.
+         *
+         * In the default configuration, both the request timeout and the fetch timeout are set to 2
+         * seconds. For this operation, they should not be the same, otherwise the leader can be
+         * prevented from accepting voter changes if the ApiVersions request times out for as long as
+         * the follower keeps retrying.
+         */
+        return 2 * fetchTimeoutMs;
     }
 
     public boolean hasUpdateVoterSetPeriodExpired(long currentTimeMs) {

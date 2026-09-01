@@ -52,7 +52,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -86,7 +85,6 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -106,6 +104,7 @@ import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOper
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.streamsProtocolEnabled;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.restoreConsumerClientId;
@@ -569,7 +568,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final Map<String, Object> consumerConfigs,
                                                        final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSum,
                                                        final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSum) {
-        if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
+        if (streamsProtocolEnabled(config)) {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
@@ -970,6 +969,12 @@ public class StreamThread extends Thread implements ProcessingThread {
      * @throws StreamsException      if the store's change log does not contain the partition
      */
     boolean runLoop() {
+        // Populate the task-offset-sum snapshot before subscribing: subscribing triggers the join heartbeat,
+        // which must already carry the offset sums of tasks discovered in the local state directory, so that
+        // the broker-side sticky assignor can assign those tasks back to this client on a cold start. The sums
+        // are available this early because StateDirectory#initializeStartupStores runs during KafkaStreams#start,
+        // before any stream thread is started.
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
@@ -1243,6 +1248,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
             handleStreamsRebalanceData();
 
+            // The group coordinator places tasks based on the offsets we report to it, so publish them on every
+            // iteration -- including the ones that return early below, where a task may well still be restoring.
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
             if (!streamsGroupReady) {
                 return;
             }
@@ -1268,7 +1277,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (isStartingRunningOrPartitionAssigned()) {
 
             taskManager.updateLags();
-            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
@@ -1398,6 +1406,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
             handleStreamsRebalanceData();
 
+            // The group coordinator places tasks based on the offsets we report to it, so publish them on every
+            // iteration -- including the ones that return early below, where a task may well still be restoring.
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
             if (!streamsGroupReady) {
                 return;
             }
@@ -1416,7 +1428,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (isRunning()) {
 
             taskManager.updateLags();
-            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             checkStateUpdater();
 
@@ -1769,7 +1780,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                 seekToTimestamps.get(partition),
                                 partition
                             );
-                            mainConsumer.seekToEnd(Collections.singleton(partitionAndOffset.getKey()));
+                            mainConsumer.seekToEnd(Set.of(partitionAndOffset.getKey()));
                         }
                     }
                 } catch (final TimeoutException timeoutException) {
@@ -2010,8 +2021,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             restoreConsumerClientId(getName()),
             taskManager.producerClientIds(),
             adminClientId,
-            Collections.emptySet(),
-            Collections.emptySet());
+            Set.of(),
+            Set.of());
 
         return this;
     }
@@ -2233,7 +2244,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (runOnceLatencyWindow > 0.0) {
             final double latencyWindow =
                 windowedSum.measure(metricsConfig, now);
-            ratioSensor.record(latencyWindow / runOnceLatencyWindow);
+            ratioSensor.record(latencyWindow / runOnceLatencyWindow, now);
         } else {
             ratioSensor.record(0.0, now);
         }

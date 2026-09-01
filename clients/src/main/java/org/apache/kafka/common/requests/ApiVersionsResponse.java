@@ -142,11 +142,6 @@ public class ApiVersionsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
-
     public boolean zkMigrationReady() {
         return data.zkMigrationReady();
     }

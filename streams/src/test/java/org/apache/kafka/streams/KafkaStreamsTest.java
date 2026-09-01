@@ -87,7 +87,6 @@ import org.mockito.stubbing.Answer;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -171,20 +170,13 @@ public class KafkaStreamsTest {
     private MockedConstruction<GlobalStreamThread> globalStreamThreadMockedConstruction;
     private MockedConstruction<Metrics> metricsMockedConstruction;
 
-    public static class StateListenerStub implements KafkaStreams.StateListener {
-        int numChanges = 0;
-        KafkaStreams.State oldState;
-        KafkaStreams.State newState;
-        public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
+    private static class StateListenerStub implements KafkaStreams.StateListener {
+        private int numChanges = 0;
 
         @Override
         public void onChange(final KafkaStreams.State newState,
                              final KafkaStreams.State oldState) {
-            final long prevCount = mapStates.containsKey(newState) ? mapStates.get(newState) : 0;
             numChanges++;
-            this.oldState = oldState;
-            this.newState = newState;
-            mapStates.put(newState, prevCount + 1);
         }
     }
 

@@ -21,7 +21,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 
@@ -33,7 +32,7 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
         this.keySerializer = keySerializer;
     }
 
-    @SuppressWarnings({"removal"})
+    @SuppressWarnings("removal")
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final int numPartitions) {
         throw new UnsupportedOperationException("This method is deprecated and should not be called.");
@@ -49,7 +48,7 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
         if (keyBytes == null) {
             return Optional.empty();
         } else {
-            return Optional.of(Collections.singleton(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
+            return Optional.of(Set.of(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
         }
     }
 }

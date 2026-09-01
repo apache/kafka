@@ -45,8 +45,12 @@ public final class BootstrapConfiguration {
                                                  final long bootstrapResolveTimeoutMs,
                                                  final long retryBackoffMs) {
         for (String url : bootstrapServers) {
-            if (Utils.getHost(url) == null || Utils.getPort(url) == null)
-                throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+            try {
+                if (Utils.getHost(url) == null || Utils.getPort(url) == null)
+                    throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+            } catch (IllegalArgumentException e) {
+                throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+            }
         }
         return new BootstrapConfiguration(bootstrapServers, clientDnsLookup, bootstrapResolveTimeoutMs, retryBackoffMs);
     }

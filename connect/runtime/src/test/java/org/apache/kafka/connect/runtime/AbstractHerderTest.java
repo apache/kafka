@@ -81,6 +81,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -92,8 +93,10 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -497,11 +500,9 @@ public class AbstractHerderTest {
 
     @Test
     public void testConfigValidationEmptyConfig() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
+        AbstractHerder herder = testHerder();
 
         assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Map.of(), s -> null, false));
-        verify(transformer).transform(Map.of());
-        assertEquals(worker.getPlugins(), plugins);
     }
 
     @Test
@@ -937,6 +938,7 @@ public class AbstractHerderTest {
     private void assertErrorForKey(ConfigInfos configInfos, String testKey) {
         final List<String> errorsForKey = configInfos.configs().stream()
                 .map(ConfigInfo::configValue)
+                .filter(Objects::nonNull)
                 .filter(configValue -> configValue.name().equals(testKey))
                 .map(ConfigValueInfo::errors)
                 .flatMap(Collection::stream)
@@ -1330,6 +1332,27 @@ public class AbstractHerderTest {
         assertTrue(AbstractHerder.taskConfigsChanged(snapshotWithDifferentAppliedConfig, CONN1, TASK_CONFIGS));
     }
 
+    @Test
+    public void testDifferenceInConfigDefAndValidation() {
+        AbstractHerder herder = createConfigValidationHerder(SamplePartiallyValidatingConnector.class, noneConnectorClientConfigOverridePolicy);
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SamplePartiallyValidatingConnector.class.getName());
+        config.put("name", "somename");
+        config.put("required", "value");
+        config.put("testKey", null);
+
+        final ConfigInfos configInfos = herder.validateConnectorConfig(config, s -> null, false);
+
+        herder.maybeAddConfigErrors(configInfos, (error, result) -> {
+            assertNotNull(error);
+            assertInstanceOf(BadRequestException.class, error);
+            assertTrue(error.getMessage().contains("Connector configuration is invalid"));
+        });
+
+        verifyValidationIsolation();
+    }
+
     protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {
         ConfigDef configDef = new ConfigDef().define(name, ConfigDef.Type.STRING, null, null,
                 ConfigDef.Importance.HIGH, "doc", group, 10,
@@ -1369,6 +1392,98 @@ public class AbstractHerderTest {
 
     private void testConfigProviderRegex(String rawConnConfig) {
         testConfigProviderRegex(rawConnConfig, true);
+    }
+
+    @Test
+    public void testRemoveCustomConfigProviders() {
+        Map<String, String> props = Map.of(
+            "name", "my-connector",
+            "connector.class", "MyConnector",
+            "config.providers", "file",
+            "config.providers.file.class", "org.apache.kafka.common.config.provider.FileConfigProvider",
+            "config.providers.file.param.allowed.paths", "/tmp");
+
+        Map<String, String> stripped = AbstractHerder.removeCustomConfigProviders(props);
+
+        assertEquals(2, stripped.size());
+        assertEquals("my-connector", stripped.get("name"));
+        assertEquals("MyConnector", stripped.get("connector.class"));
+        assertFalse(stripped.containsKey("config.providers"));
+        assertFalse(stripped.containsKey("config.providers.file.class"));
+        assertFalse(stripped.containsKey("config.providers.file.param.allowed.paths"));
+    }
+
+    @Test
+    public void testRemoveCustomConfigProvidersNoProviders() {
+        Map<String, String> props = Map.of("name", "my-connector", "connector.class", "MyConnector");
+        Map<String, String> stripped = AbstractHerder.removeCustomConfigProviders(props);
+        assertEquals(props, stripped);
+    }
+
+    @Test
+    public void testRedactResolvedValuesNoSubstitutions() {
+        Map<String, String> props = Map.of("name", "my-connector");
+        ConfigInfos infos = new ConfigInfos("MyConnector", 0, List.of(), List.of());
+        ConfigInfos result = AbstractHerder.redactResolvedValues(infos, props, props);
+        assertSame(infos, result);
+    }
+
+    @Test
+    public void testRedactResolvedValuesReplacesValueWithPlaceholder() {
+        Map<String, String> original = Map.of("name", TEST_REF);
+        Map<String, String> resolved = Map.of("name", "some-value");
+
+        ConfigValueInfo cv = new ConfigValueInfo("name", "some-value", List.of(), List.of(), true);
+        ConfigInfos infos = new ConfigInfos("MyConnector", 0, List.of(), List.of(new ConfigInfo(null, cv)));
+
+        ConfigInfos result = AbstractHerder.redactResolvedValues(infos, original, resolved);
+
+        assertEquals(1, result.configs().size());
+        ConfigValueInfo redacted = result.configs().get(0).configValue();
+        assertEquals(TEST_REF, redacted.value());
+        assertTrue(redacted.errors().isEmpty());
+        assertTrue(redacted.recommendedValues().isEmpty());
+    }
+
+    @Test
+    public void testRedactResolvedValuesReplacesErrorMessages() {
+        Map<String, String> original = Map.of("tasks.max", TEST_REF);
+        Map<String, String> resolved = Map.of("tasks.max", "some-value");
+
+        ConfigValueInfo cv = new ConfigValueInfo("tasks.max", null,
+                List.of(), List.of("Invalid value some-value for configuration tasks.max"), true);
+        ConfigInfos infos = new ConfigInfos("MyConnector", 1, List.of(), List.of(new ConfigInfo(null, cv)));
+
+        ConfigInfos result = AbstractHerder.redactResolvedValues(infos, original, resolved);
+
+        ConfigValueInfo redacted = result.configs().get(0).configValue();
+        assertEquals(TEST_REF, redacted.value());
+        assertEquals(1, redacted.errors().size());
+        assertFalse(redacted.errors().get(0).contains("some-value"));
+        assertEquals(1, result.errorCount());
+    }
+
+    @Test
+    public void testRedactResolvedValuesLeavesUnsubstitutedKeysUnchanged() {
+        Map<String, String> original = Map.of("name", "my-connector", "tasks.max", TEST_REF);
+        Map<String, String> resolved = Map.of("name", "my-connector", "tasks.max", "some-value");
+
+        ConfigValueInfo nameCv = new ConfigValueInfo("name", "my-connector", List.of(), List.of(), true);
+        ConfigValueInfo tasksCv = new ConfigValueInfo("tasks.max", "some-value",
+                List.of(), List.of("some error with some-value"), true);
+        ConfigInfos infos = new ConfigInfos("MyConnector", 1, List.of(),
+                List.of(new ConfigInfo(null, nameCv), new ConfigInfo(null, tasksCv)));
+
+        ConfigInfos result = AbstractHerder.redactResolvedValues(infos, original, resolved);
+
+        assertEquals(2, result.configs().size());
+        ConfigValueInfo nameResult = result.configs().get(0).configValue();
+        assertEquals("my-connector", nameResult.value());
+        assertTrue(nameResult.errors().isEmpty());
+
+        ConfigValueInfo tasksResult = result.configs().get(1).configValue();
+        assertEquals(TEST_REF, tasksResult.value());
+        assertFalse(tasksResult.errors().get(0).contains("some-value"));
     }
 
     private void testConfigProviderRegex(String rawConnConfig, boolean expected) {
