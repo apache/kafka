@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.internals.OperatingSystem;
 import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.test.TestUtils;
 
@@ -36,12 +37,16 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.spi.FileSystemProvider;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -55,6 +60,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -93,6 +99,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
@@ -806,6 +814,53 @@ public class UtilsTest {
         assertDoesNotThrow(() -> Utils.delete(spyRootFile));
         assertFalse(Files.exists(rootDir.toPath()));
         assertFalse(Files.exists(subDir.toPath()));
+    }
+
+    @Test
+    public void testAtomicMoveWithFallbackShouldNotMaskMoveFailureWithFlushFailure() throws IOException {
+        Path tempDir = TestUtils.tempDirectory().toPath();
+        Path source = tempDir.resolve("non-existent-source");
+        Path target = tempDir.resolve("non-existent-dir").resolve("target");
+
+        // The atomic move and the fallback move both fail because the source does not exist, and flushing
+        // the parent directory of the target fails as well because that directory does not exist either.
+        // The caller must still see the move failure, otherwise callers such as checkpoint files and
+        // segment renames log and handle the wrong root cause.
+        IOException thrown = assertThrows(IOException.class, () -> Utils.atomicMoveWithFallback(source, target, true));
+        assertTrue(
+            Stream.concat(Stream.of(thrown), Arrays.stream(thrown.getSuppressed()))
+                .anyMatch(t -> t instanceof NoSuchFileException && source.toString().equals(((NoSuchFileException) t).getFile())),
+            "Expected the failed move of " + source + " to be thrown or suppressed, but got " + thrown +
+                " with suppressed " + Arrays.toString(thrown.getSuppressed()));
+        assertTrue(
+            Arrays.stream(thrown.getSuppressed())
+                .anyMatch(t -> t instanceof NoSuchFileException && target.getParent().toString().equals(((NoSuchFileException) t).getFile())),
+            "Expected the flush failure of " + target.getParent() + " to be suppressed, but got " + thrown +
+                " with suppressed " + Arrays.toString(thrown.getSuppressed()));
+    }
+
+    @Test
+    public void testAtomicMoveWithFallbackShouldPropagateFlushFailureAfterSuccessfulMove() throws IOException {
+        // Flushing a directory is a no-op on Windows and z/OS, and removing the read permission below
+        // requires a file system with POSIX permissions.
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        assumeFalse(OperatingSystem.IS_ZOS);
+
+        Path targetDir = TestUtils.tempDirectory().toPath();
+        Path source = TestUtils.tempFile().toPath();
+        Path target = targetDir.resolve("target");
+
+        // Moving a file into the target directory only needs write and execute permissions on it, while
+        // flushing it requires read permission to open it. Dropping read makes the move succeed and the
+        // subsequent flush fail, and that flush failure must reach the caller.
+        Set<PosixFilePermission> originalPermissions = Files.getPosixFilePermissions(targetDir);
+        Files.setPosixFilePermissions(targetDir, EnumSet.of(PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE));
+        try {
+            assertThrows(AccessDeniedException.class, () -> Utils.atomicMoveWithFallback(source, target, true));
+        } finally {
+            Files.setPosixFilePermissions(targetDir, originalPermissions);
+        }
+        assertTrue(Files.exists(target), "The move should have succeeded before the flush failure");
     }
 
     @Test
