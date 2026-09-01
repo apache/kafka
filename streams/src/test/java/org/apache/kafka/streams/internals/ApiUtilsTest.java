@@ -35,7 +35,7 @@ public class ApiUtilsTest {
     private static final long MAX_ACCEPTABLE_DAYS_FOR_DURATION_TO_MILLIS = 106751991167L;
 
     @Test
-    public void shouldThrowNullPointerExceptionForNullDuration() {
+    public void shouldThrowIllegalArgumentExceptionForNullDuration() {
         final String nullDurationPrefix = prepareMillisCheckFailMsgPrefix(null, "nullDuration");
 
         final IllegalArgumentException e = assertThrows(
@@ -58,7 +58,7 @@ public class ApiUtilsTest {
     }
 
     @Test
-    public void shouldThrowNullPointerExceptionForNullInstant() {
+    public void shouldThrowIllegalArgumentExceptionForNullInstant() {
         final String nullInstantPrefix = prepareMillisCheckFailMsgPrefix(null, "nullInstant");
 
         final IllegalArgumentException e = assertThrows(
