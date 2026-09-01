@@ -2815,7 +2815,14 @@ public class KafkaConsumerTest {
         fetches1.put(t2p0, new FetchInfo(0, 10));
         client.respondFrom(fetchResponse(fetches1), node);
 
-        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+        // A background heartbeat can complete the fetch concurrently, so a single poll may return
+        // no records; poll until the buffered records are returned.
+        AtomicReference<ConsumerRecords<String, String>> polled = new AtomicReference<>(ConsumerRecords.empty());
+        TestUtils.waitForCondition(() -> {
+            polled.set(consumer.poll(Duration.ZERO));
+            return polled.get().count() == 11;
+        }, "Consumer did not return the fetched records in time");
+        ConsumerRecords<String, String> records = polled.get();
 
         // verify that the fetch occurred as expected
         assertEquals(11, records.count());
@@ -2844,7 +2851,11 @@ public class KafkaConsumerTest {
         AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, partitionOffsets1);
 
         // poll once which would not complete the rebalance
-        records = consumer.poll(Duration.ZERO);
+        TestUtils.waitForCondition(() -> {
+            polled.set(consumer.poll(Duration.ZERO));
+            return polled.get().count() == 1;
+        }, "Consumer did not return the fetched records in time");
+        records = polled.get();
 
         // clear out the prefetch so it doesn't interfere with the rest of the test
         fetches1.clear();
@@ -2867,7 +2878,11 @@ public class KafkaConsumerTest {
 
         // we need to poll 1) for getting the join response, and then send the sync request;
         //                 2) for getting the sync response
-        records = consumer.poll(Duration.ZERO);
+        TestUtils.waitForCondition(() -> {
+            polled.set(consumer.poll(Duration.ZERO));
+            return polled.get().count() == 1;
+        }, "Consumer did not return the fetched records in time");
+        records = polled.get();
 
         // should not finish the response yet
         assertEquals(Set.of(topic, topic3), consumer.subscription());
@@ -2885,11 +2900,15 @@ public class KafkaConsumerTest {
         client.respondFrom(syncGroupResponse(Arrays.asList(tp0, t3p0), Errors.NONE), coordinator);
 
         AtomicInteger count = new AtomicInteger(0);
-        AtomicReference<ConsumerRecords<String, String>> recs1 = new AtomicReference<>();
+        AtomicReference<ConsumerRecords<String, String>> recs1 = new AtomicReference<>(ConsumerRecords.empty());
         TestUtils.waitForCondition(() -> {
-            recs1.set(consumer.poll(Duration.ofMillis(100L)));
-            return consumer.assignment().equals(Set.of(tp0, t3p0)) && count.addAndGet(recs1.get().count()) == 1;
-
+            ConsumerRecords<String, String> p = consumer.poll(Duration.ofMillis(100L));
+            // The record can be returned before the rebalance assignment is reconciled, so count on
+            // every poll; gating the count on the assignment would drop an early record.
+            if (p.count() > 0)
+                recs1.set(p);
+            count.addAndGet(p.count());
+            return consumer.assignment().equals(Set.of(tp0, t3p0)) && count.get() == 1;
         }, "Does not complete rebalance in time");
 
         // should have t3 but not sent yet the t3 records
