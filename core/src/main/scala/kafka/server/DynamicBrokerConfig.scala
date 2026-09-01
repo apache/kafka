@@ -430,6 +430,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
+    // The 2-arg AbstractConfig ctor used for clamping enforces org.apache.kafka.automatic.config.providers.
+    // That allowlist is meant to gate providers supplied via dynamic config changes, not ones already
+    // declared in server.properties, which are trusted regardless of it. Without this exclusion, a
+    // statically-declared provider plus a restrictive allowlist would reject every dynamic config
+    // update below, not just provider-related ones.
     val propsForClamping = new java.util.HashMap[String, String](newProps.asJava)
     propsForClamping.keySet().removeIf(k => k.startsWith("config.providers"))
     KafkaConfig.clampDynamicConfigs(propsForClamping)
