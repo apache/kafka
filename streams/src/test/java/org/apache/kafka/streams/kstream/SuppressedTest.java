@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
@@ -46,20 +46,20 @@ public class SuppressedTest {
         );
 
         assertEquals(
-            new EagerBufferConfigImpl(2L, MAX_VALUE, Collections.emptyMap()),
+            new EagerBufferConfigImpl(2L, MAX_VALUE, Map.of()),
             maxRecords(2L),
             "keys alone should be set"
         );
 
         assertEquals(
-            new EagerBufferConfigImpl(MAX_VALUE, 2L, Collections.emptyMap()),
+            new EagerBufferConfigImpl(MAX_VALUE, 2L, Map.of()),
             maxBytes(2L),
             "size alone should be set"
         );
 
         assertEquals(
-            new EagerBufferConfigImpl(2L, 4L, Collections.singletonMap("myConfigKey", "myConfigValue")),
-            maxRecords(2L).withMaxBytes(4L).withLoggingEnabled(Collections.singletonMap("myConfigKey", "myConfigValue")),
+            new EagerBufferConfigImpl(2L, 4L, Map.of("myConfigKey", "myConfigValue")),
+            maxRecords(2L).withMaxBytes(4L).withLoggingEnabled(Map.of("myConfigKey", "myConfigValue")),
             "config should be set even after max records"
         );
     }
@@ -97,14 +97,14 @@ public class SuppressedTest {
         );
 
         assertEquals(
-            new SuppressedInternal<>(null, ofMillis(2), new EagerBufferConfigImpl(3L, 2L, Collections.emptyMap()), null, false),
+            new SuppressedInternal<>(null, ofMillis(2), new EagerBufferConfigImpl(3L, 2L, Map.of()), null, false),
             untilTimeLimit(ofMillis(2L), maxRecords(3L).withMaxBytes(2L)),
             "all constraints should be set"
         );
 
         assertEquals(
-            new SuppressedInternal<>(null, ofMillis(2), new EagerBufferConfigImpl(2L, MAX_VALUE, Collections.singletonMap("myConfigKey", "myConfigValue")), null, false),
-            untilTimeLimit(ofMillis(2), maxRecords(2L).withLoggingEnabled(Collections.singletonMap("myConfigKey", "myConfigValue")).emitEarlyWhenFull()),
+            new SuppressedInternal<>(null, ofMillis(2), new EagerBufferConfigImpl(2L, MAX_VALUE, Map.of("myConfigKey", "myConfigValue")), null, false),
+            untilTimeLimit(ofMillis(2), maxRecords(2L).withLoggingEnabled(Map.of("myConfigKey", "myConfigValue")).emitEarlyWhenFull()),
             "config is not lost early emit is set"
         );
     }
@@ -118,12 +118,12 @@ public class SuppressedTest {
         );
 
         assertEquals(
-            new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN, Collections.emptyMap())),
+            new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN, Map.of())),
             untilWindowCloses(maxRecords(2L).shutDownWhenFull())
         );
 
         assertEquals(
-            new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN, Collections.emptyMap())),
+            new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN, Map.of())),
             untilWindowCloses(maxBytes(2L).shutDownWhenFull())
         );
 
@@ -133,18 +133,18 @@ public class SuppressedTest {
         );
 
         assertEquals(
-            new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN, Collections.emptyMap())),
+            new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN, Map.of())),
             untilWindowCloses(maxRecords(2L).shutDownWhenFull()).withName("name")
         );
 
         assertEquals(
-            new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN, Collections.emptyMap())),
+            new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN, Map.of())),
             untilWindowCloses(maxBytes(2L).shutDownWhenFull()).withName("name")
         );
 
         assertEquals(
-            new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN, Collections.singletonMap("myConfigKey", "myConfigValue"))),
-            untilWindowCloses(maxBytes(2L).withLoggingEnabled(Collections.singletonMap("myConfigKey", "myConfigValue")).shutDownWhenFull()),
+            new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN, Map.of("myConfigKey", "myConfigValue"))),
+            untilWindowCloses(maxBytes(2L).withLoggingEnabled(Map.of("myConfigKey", "myConfigValue")).shutDownWhenFull()),
             "config is not lost when shutdown when full is set"
         );
     }
@@ -159,18 +159,18 @@ public class SuppressedTest {
             .withMaxBytes(6L);
 
         assertEquals(
-            new EagerBufferConfigImpl(5L, 6L, Collections.emptyMap()),
+            new EagerBufferConfigImpl(5L, 6L, Map.of()),
             bufferConfig,
             "long chain of eager buffer config sets attributes properly"
         );
         assertEquals(
-            new StrictBufferConfigImpl(5L, 6L, SHUT_DOWN, Collections.emptyMap()),
+            new StrictBufferConfigImpl(5L, 6L, SHUT_DOWN, Map.of()),
             bufferConfig.shutDownWhenFull(),
             "long chain of strict buffer config sets attributes properly"
         );
 
         final Suppressed.BufferConfig<Suppressed.EagerBufferConfig> bufferConfigWithLogging = unbounded()
-            .withLoggingEnabled(Collections.singletonMap("myConfigKey", "myConfigValue"))
+            .withLoggingEnabled(Map.of("myConfigKey", "myConfigValue"))
             .emitEarlyWhenFull()
             .withMaxRecords(3L)
             .withMaxBytes(4L)
@@ -178,12 +178,12 @@ public class SuppressedTest {
             .withMaxBytes(6L);
 
         assertEquals(
-            new EagerBufferConfigImpl(5L, 6L, Collections.singletonMap("myConfigKey", "myConfigValue")),
+            new EagerBufferConfigImpl(5L, 6L, Map.of("myConfigKey", "myConfigValue")),
             bufferConfigWithLogging,
             "long chain of eager buffer config sets attributes properly with logging enabled"
         );
         assertEquals(
-            new StrictBufferConfigImpl(5L, 6L, SHUT_DOWN, Collections.singletonMap("myConfigKey", "myConfigValue")),
+            new StrictBufferConfigImpl(5L, 6L, SHUT_DOWN, Map.of("myConfigKey", "myConfigValue")),
             bufferConfigWithLogging.shutDownWhenFull(),
             "long chain of strict buffer config sets attributes properly with logging enabled"
         );
@@ -194,15 +194,15 @@ public class SuppressedTest {
             .withMaxBytes(4L)
             .withMaxRecords(5L)
             .withMaxBytes(6L)
-            .withLoggingEnabled(Collections.singletonMap("myConfigKey", "myConfigValue"));
+            .withLoggingEnabled(Map.of("myConfigKey", "myConfigValue"));
 
         assertEquals(
-            new EagerBufferConfigImpl(5L, 6L, Collections.singletonMap("myConfigKey", "myConfigValue")),
+            new EagerBufferConfigImpl(5L, 6L, Map.of("myConfigKey", "myConfigValue")),
             bufferConfigWithLoggingCalledAtTheEnd,
             "long chain of eager buffer config sets logging even after other setters"
         );
         assertEquals(
-            new StrictBufferConfigImpl(5L, 6L, SHUT_DOWN, Collections.singletonMap("myConfigKey", "myConfigValue")),
+            new StrictBufferConfigImpl(5L, 6L, SHUT_DOWN, Map.of("myConfigKey", "myConfigValue")),
             bufferConfigWithLoggingCalledAtTheEnd.shutDownWhenFull(),
             "long chain of strict buffer config sets logging even after other setters"
         );
