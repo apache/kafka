@@ -814,17 +814,20 @@ public class GroupCoordinatorConfig {
      */
     public static void clampDynamicConfigs(Map<String, String> props) {
         // Parse configs but do not validate mins and maxes.
-        AbstractConfig resolved = new AbstractConfig(
+        AbstractConfig groupCoordinatorConfig = new AbstractConfig(
             GroupCoordinatorConfig.CONFIG_DEF,
             props
         );
 
-        clampDynamicIntConfig(props, resolved, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
-        clampDynamicIntConfig(props, resolved, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
-        clampDynamicIntConfig(props, resolved, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
+        clampDynamicIntConfig(props, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.getInt(CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
+            groupCoordinatorConfig.getInt(CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
+        clampDynamicIntConfig(props, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.getInt(SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
+            groupCoordinatorConfig.getInt(SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
+        clampDynamicIntConfig(props, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.getInt(STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
+            groupCoordinatorConfig.getInt(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
     }
 
     /**
@@ -832,28 +835,30 @@ public class GroupCoordinatorConfig {
      * No-op when the key is absent from props.
      *
      * @param props   The properties to modify in place.
-     * @param resolved The config-provider-resolved view of props.
      * @param key     The config key.
-     * @param minKey  The config key for the minimum allowed value (inclusive).
-     * @param maxKey  The config key for the maximum allowed value (inclusive).
+     * @param min     The minimum allowed value (inclusive).
+     * @param max     The maximum allowed value (inclusive).
      */
     private static void clampDynamicIntConfig(
         Map<String, String> props,
-        AbstractConfig resolved,
         String key,
-        String minKey,
-        String maxKey
+        int min,
+        int max
     ) {
-        if (!props.containsKey(key)) return;
+        Object rawValue = props.get(key);
+        if (rawValue == null) return;
 
-        int value = resolved.getInt(key);
-        int min = resolved.getInt(minKey);
-        int max = resolved.getInt(maxKey);
-        int clamped = Math.max(min, Math.min(max, value));
-        if (clamped != value) {
-            LOG.warn("The config '{}' has value {} outside the allowed range [{}, {}]. " +
-                    "The effective value will be capped to {}.", key, value, min, max, clamped);
-            props.put(key, String.valueOf(clamped));
+        int value = Integer.parseInt(rawValue.toString());
+        if (value < min) {
+            LOG.warn("The config '{}' has value {} which is below the " +
+                    "allowed minimum {}. The effective value will be capped to {}.",
+                key, value, min, min);
+            props.put(key, String.valueOf(min));
+        } else if (value > max) {
+            LOG.warn("The config '{}' has value {} which exceeds the " +
+                    "allowed maximum {}. The effective value will be capped to {}.",
+                key, value, max, max);
+            props.put(key, String.valueOf(max));
         }
     }
 
