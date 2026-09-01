@@ -732,7 +732,7 @@ public final class AssignmentTestUtils {
         for (int i = 1; i <= clientSize; i++) {
             final int capacity = rand.nextInt(maxCapacity) + 1;
             final ProcessId processId = processIdForInt(i);
-            final ClientState clientState = new ClientState(previousActives.get(i - 1), previousStandbys.get(i - 1), taskLags, EMPTY_CLIENT_TAGS, capacity, processId);
+            final ClientState clientState = clientState(previousActives.get(i - 1), previousStandbys.get(i - 1), taskLags, capacity, processId);
             clientStates.put(processId, clientState);
         }
 
@@ -1002,10 +1002,37 @@ public final class AssignmentTestUtils {
             .collect(
                 Collectors.toMap(
                     Entry::getKey,
-                    entry -> new ClientState(entry.getValue())
+                    entry -> copyClientState(entry.getValue())
                 )
             )
         );
+    }
+
+    static ClientState clientState(final Set<TaskId> previousActiveTasks,
+                                   final Set<TaskId> previousStandbyTasks,
+                                   final Map<TaskId, Long> taskLagTotals,
+                                   final int capacity) {
+        return clientState(previousActiveTasks, previousStandbyTasks, taskLagTotals, capacity, null);
+    }
+
+    static ClientState clientState(final Set<TaskId> previousActiveTasks,
+                                   final Set<TaskId> previousStandbyTasks,
+                                   final Map<TaskId, Long> taskLagTotals,
+                                   final int capacity,
+                                   final ProcessId processId) {
+        final ClientState clientState = new ClientState(processId, capacity);
+        clientState.addPreviousActiveTasks(previousActiveTasks);
+        clientState.addPreviousStandbyTasks(previousStandbyTasks);
+        clientState.taskLagTotals().putAll(taskLagTotals);
+        return clientState;
+    }
+
+    private static ClientState copyClientState(final ClientState clientState) {
+        final ClientState copy = new ClientState(clientState.processId(), clientState.capacity(), clientState.clientTags());
+        copy.addPreviousActiveTasks(clientState.previousActiveTasks());
+        copy.addPreviousStandbyTasks(clientState.previousStandbyTasks());
+        copy.taskLagTotals().putAll(clientState.taskLagTotals());
+        return copy;
     }
 
     static synchronized Random getRandom() {

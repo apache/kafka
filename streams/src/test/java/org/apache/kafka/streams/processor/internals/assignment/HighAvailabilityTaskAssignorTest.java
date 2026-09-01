@@ -44,7 +44,6 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
@@ -69,6 +68,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasAssignedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasStandbyTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.clientState;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.copyClientStateMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRackAwareTaskAssignor;
@@ -132,13 +132,13 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldBeStickyForActiveAndStandbyTasksWhileWarmingUp(final String rackAwareStrategy,
                                                                      final boolean enableRackAwareTaskAssignor) {
         final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
-        final ClientState clientState1 = new ClientState(allTaskIds, Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState1 = clientState(allTaskIds, Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), 1,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(Set.of(), allTaskIds, allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L)), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState2 = clientState(Set.of(), allTaskIds, allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L)), 1,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1,
             PID_3
         );
 
@@ -189,13 +189,13 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldSkipWarmupsWhenAcceptableLagIsMax(final String rackAwareStrategy,
                                                         final boolean enableRackAwareTaskAssignor) {
         final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
-        final ClientState clientState1 = new ClientState(allTaskIds, Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState1 = clientState(allTaskIds, Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), 1,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), 1,
             PID_3
         );
 
@@ -245,13 +245,13 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                                                    final int maxSkew) {
         final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), lags, 1,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), lags, 1,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), lags, 1,
             PID_3
         );
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
@@ -300,13 +300,13 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                                                    final int maxSkew) {
         final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 3,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), lags, 3,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 3,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), lags, 3,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 3,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), lags, 3,
             PID_3
         );
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
@@ -356,10 +356,10 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                                                       final int maxSkew) {
         final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), lags, 1,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), lags, 1,
             PID_2
         );
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2);
@@ -404,13 +404,13 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                           final boolean enableRackAwareTaskAssignor) {
         final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), lags, 1,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 2,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), lags, 2,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 3,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), lags, 3,
             PID_3
         );
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
@@ -462,13 +462,13 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                          final int maxSkew) {
         final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), lags, 1,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), lags, 1,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), lags, 1,
             PID_3
         );
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
@@ -512,13 +512,13 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                                                        final int maxSkew) {
         final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 9,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), lags, 9,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 9,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), lags, 9,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 9,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), lags, 9,
             PID_3
         );
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
@@ -569,13 +569,13 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<TaskId, Long> lagsForCaughtUpClient = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L));
         final Map<TaskId, Long> lagsForNotCaughtUpClient =
             allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE));
-        final ClientState caughtUpClientState = new ClientState(allTaskIds, Set.of(), lagsForCaughtUpClient, EMPTY_CLIENT_TAGS, 5,
+        final ClientState caughtUpClientState = clientState(allTaskIds, Set.of(), lagsForCaughtUpClient, 5,
             PID_1
         );
-        final ClientState notCaughtUpClientState1 = new ClientState(Set.of(), Set.of(), lagsForNotCaughtUpClient, EMPTY_CLIENT_TAGS, 5,
+        final ClientState notCaughtUpClientState1 = clientState(Set.of(), Set.of(), lagsForNotCaughtUpClient, 5,
             PID_2
         );
-        final ClientState notCaughtUpClientState2 = new ClientState(Set.of(), Set.of(), lagsForNotCaughtUpClient, EMPTY_CLIENT_TAGS, 5,
+        final ClientState notCaughtUpClientState2 = clientState(Set.of(), Set.of(), lagsForNotCaughtUpClient, 5,
             PID_3
         );
         final Map<ProcessId, ClientState> clientStates =
@@ -634,13 +634,13 @@ public class HighAvailabilityTaskAssignorTest {
             allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE));
         lagsForWarmedUpClient2.put(warmupTaskId2, 0L);
 
-        final ClientState caughtUpClientState = new ClientState(allTaskIds, Set.of(), lagsForCaughtUpClient, EMPTY_CLIENT_TAGS, 5,
+        final ClientState caughtUpClientState = clientState(allTaskIds, Set.of(), lagsForCaughtUpClient, 5,
             PID_1
         );
-        final ClientState warmedUpClientState1 = new ClientState(Set.of(), warmedUpTaskIds1, lagsForWarmedUpClient1, EMPTY_CLIENT_TAGS, 5,
+        final ClientState warmedUpClientState1 = clientState(Set.of(), warmedUpTaskIds1, lagsForWarmedUpClient1, 5,
             PID_2
         );
-        final ClientState warmedUpClientState2 = new ClientState(Set.of(), warmedUpTaskIds2, lagsForWarmedUpClient2, EMPTY_CLIENT_TAGS, 5,
+        final ClientState warmedUpClientState2 = clientState(Set.of(), warmedUpTaskIds2, lagsForWarmedUpClient2, 5,
             PID_3
         );
         final Map<ProcessId, ClientState> clientStates =
@@ -685,10 +685,10 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                                final boolean enableRackAwareTaskAssignor) {
         final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 6,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), lags, 6,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), lags, EMPTY_CLIENT_TAGS, 3,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), lags, 3,
             PID_2
         );
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2);
@@ -734,7 +734,7 @@ public class HighAvailabilityTaskAssignorTest {
                                                                           final boolean enableRackAwareTaskAssignor,
                                                                           final int maxSkew) {
         final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
-        final ClientState client1 = new ClientState(Set.of(TASK_0_0), Set.of(), Map.of(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
+        final ClientState client1 = clientState(singleton(TASK_0_0), Set.of(), singletonMap(TASK_0_0, 0L), 1,
             PID_1
         );
         final Map<ProcessId, ClientState> clientStates = Map.of(PID_1, client1);
@@ -768,10 +768,10 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldComputeNewAssignmentIfThereAreUnassignedStandbyTasks(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor, final int maxSkew) {
         final Set<TaskId> allTasks = Set.of(TASK_0_0);
         final Set<TaskId> statefulTasks = Set.of(TASK_0_0);
-        final ClientState client1 = new ClientState(Set.of(TASK_0_0), Set.of(), Map.of(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
+        final ClientState client1 = clientState(singleton(TASK_0_0), Set.of(), singletonMap(TASK_0_0, 0L), 1,
             PID_1
         );
-        final ClientState client2 = new ClientState(Set.of(), Set.of(), Map.of(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
+        final ClientState client2 = clientState(Set.of(), Set.of(), singletonMap(TASK_0_0, 0L), 1,
             PID_2
         );
         final Map<ProcessId, ClientState> clientStates = mkMap(mkEntry(PID_1, client1), mkEntry(PID_2, client2));
@@ -803,10 +803,10 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldComputeNewAssignmentIfActiveTasksWasNotOnCaughtUpClient(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor, final int maxSkew) {
         final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = Set.of(TASK_0_0);
-        final ClientState client1 = new ClientState(Set.of(TASK_0_0), Set.of(), Map.of(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1,
+        final ClientState client1 = clientState(singleton(TASK_0_0), Set.of(), singletonMap(TASK_0_0, 500L), 1,
             PID_1
         );
-        final ClientState client2 = new ClientState(Set.of(TASK_0_1), Set.of(), Map.of(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
+        final ClientState client2 = clientState(singleton(TASK_0_1), Set.of(), singletonMap(TASK_0_0, 0L), 1,
             PID_2
         );
         final Map<ProcessId, ClientState> clientStates = mkMap(
@@ -841,13 +841,13 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignToMostCaughtUpIfActiveTasksWasNotOnCaughtUpClient(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor, final int maxSkew) {
         final Set<TaskId> allTasks = Set.of(TASK_0_0);
         final Set<TaskId> statefulTasks = Set.of(TASK_0_0);
-        final ClientState client1 = new ClientState(Set.of(), Set.of(), Map.of(TASK_0_0, Long.MAX_VALUE), EMPTY_CLIENT_TAGS, 1,
+        final ClientState client1 = clientState(Set.of(), Set.of(), singletonMap(TASK_0_0, Long.MAX_VALUE), 1,
             PID_1
         );
-        final ClientState client2 = new ClientState(Set.of(), Set.of(), Map.of(TASK_0_0, 1000L), EMPTY_CLIENT_TAGS, 1,
+        final ClientState client2 = clientState(Set.of(), Set.of(), singletonMap(TASK_0_0, 1000L), 1,
             PID_2
         );
-        final ClientState client3 = new ClientState(Set.of(), Set.of(), Map.of(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1,
+        final ClientState client3 = clientState(Set.of(), Set.of(), singletonMap(TASK_0_0, 500L), 1,
             PID_3
         );
         final Map<ProcessId, ClientState> clientStates = mkMap(
@@ -1228,9 +1228,9 @@ public class HighAvailabilityTaskAssignorTest {
             Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3, TASK_2_0); // 9 total
         final Map<TaskId, Long> allTaskLags = allTasks.stream().collect(Collectors.toMap(t -> t, t -> 0L));
         final Set<TaskId> statefulTasks = new HashSet<>(allTasks);
-        final ClientState client1 = new ClientState(Set.of(), Set.of(), allTaskLags, EMPTY_CLIENT_TAGS, 100);
-        final ClientState client2 = new ClientState(Set.of(), Set.of(), allTaskLags, EMPTY_CLIENT_TAGS, 50);
-        final ClientState client3 = new ClientState(Set.of(), Set.of(), allTaskLags, EMPTY_CLIENT_TAGS, 1);
+        final ClientState client1 = clientState(Set.of(), Set.of(), allTaskLags, 100);
+        final ClientState client2 = clientState(Set.of(), Set.of(), allTaskLags, 50);
+        final ClientState client3 = clientState(Set.of(), Set.of(), allTaskLags, 1);
 
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
@@ -1351,9 +1351,9 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
 
         final Map<TaskId, Long> taskLags = new HashMap<>();
-        final ClientState client1 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 7);
-        final ClientState client2 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 7);
-        final ClientState client3 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 7);
+        final ClientState client1 = clientState(Set.of(), Set.of(), taskLags, 7);
+        final ClientState client2 = clientState(Set.of(), Set.of(), taskLags, 7);
+        final ClientState client3 = clientState(Set.of(), Set.of(), taskLags, 7);
 
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
@@ -1403,9 +1403,9 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
 
         final Map<TaskId, Long> taskLags = new HashMap<>();
-        final ClientState client1 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 2);
-        final ClientState client2 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 2);
-        final ClientState client3 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 2);
+        final ClientState client1 = clientState(Set.of(), Set.of(), taskLags, 2);
+        final ClientState client2 = clientState(Set.of(), Set.of(), taskLags, 2);
+        final ClientState client3 = clientState(Set.of(), Set.of(), taskLags, 2);
 
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
@@ -1455,9 +1455,9 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
 
         final Map<TaskId, Long> taskLags = new HashMap<>();
-        final ClientState client1 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 1);
-        final ClientState client2 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 2);
-        final ClientState client3 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 3);
+        final ClientState client1 = clientState(Set.of(), Set.of(), taskLags, 1);
+        final ClientState client2 = clientState(Set.of(), Set.of(), taskLags, 2);
+        final ClientState client3 = clientState(Set.of(), Set.of(), taskLags, 3);
 
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
@@ -1507,9 +1507,9 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
 
         final Map<TaskId, Long> taskLags = new HashMap<>();
-        final ClientState client1 = new ClientState(statelessTasks, Set.of(), taskLags, EMPTY_CLIENT_TAGS, 3);
-        final ClientState client2 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 3);
-        final ClientState client3 = new ClientState(Set.of(), Set.of(), taskLags, EMPTY_CLIENT_TAGS, 3);
+        final ClientState client1 = clientState(statelessTasks, Set.of(), taskLags, 3);
+        final ClientState client2 = clientState(Set.of(), Set.of(), taskLags, 3);
+        final ClientState client3 = clientState(Set.of(), Set.of(), taskLags, 3);
 
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
@@ -1737,7 +1737,7 @@ public class HighAvailabilityTaskAssignorTest {
                 taskLags.put(task, Long.MAX_VALUE);
             }
         }
-        return new ClientState(statefulActiveTasks, Set.of(), taskLags, EMPTY_CLIENT_TAGS, 1, processId);
+        return clientState(statefulActiveTasks, Set.of(), taskLags, 1, processId);
     }
 
 
