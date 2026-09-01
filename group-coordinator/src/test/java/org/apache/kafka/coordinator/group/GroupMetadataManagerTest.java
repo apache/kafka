@@ -19361,7 +19361,7 @@ public class GroupMetadataManagerTest {
         MockAssignmentRefiner refiner = new MockAssignmentRefiner();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
-            .withAssignmentRefiner(refiner)
+            .withStreamsGroupAssignmentRefiner(refiner)
             .withMetadataImage(topic.metadataImage())
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
                 .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
@@ -19452,7 +19452,7 @@ public class GroupMetadataManagerTest {
 
         return new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
-            .withAssignmentRefiner(refiner)
+            .withStreamsGroupAssignmentRefiner(refiner)
             .withMetadataImage(topic.metadataImage())
             .withStreamsGroup(groupBuilder)
             .build();

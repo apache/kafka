@@ -330,7 +330,7 @@ public class GroupMetadataManager {
         private GroupCoordinatorMetricsShard metrics;
         private Optional<Plugin<Authorizer>> authorizerPlugin = null;
         private List<TaskAssignor> streamsGroupAssignors = null;
-        private AssignmentRefiner assignmentRefiner = null;
+        private AssignmentRefiner streamsGroupAssignmentRefiner = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -372,8 +372,8 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withAssignmentRefiner(AssignmentRefiner assignmentRefiner) {
-            this.assignmentRefiner = assignmentRefiner;
+        Builder withStreamsGroupAssignmentRefiner(AssignmentRefiner streamsGroupAssignmentRefiner) {
+            this.streamsGroupAssignmentRefiner = streamsGroupAssignmentRefiner;
             return this;
         }
 
@@ -418,8 +418,8 @@ public class GroupMetadataManager {
                 throw new IllegalArgumentException("GroupConfigManager must be set.");
             if (streamsGroupAssignors == null)
                 streamsGroupAssignors = List.of(new StickyTaskAssignor());
-            if (assignmentRefiner == null)
-                assignmentRefiner = new NoOpAssignmentRefiner();
+            if (streamsGroupAssignmentRefiner == null)
+                streamsGroupAssignmentRefiner = new NoOpAssignmentRefiner();
 
             return new GroupMetadataManager(
                 snapshotRegistry,
@@ -434,7 +434,7 @@ public class GroupMetadataManager {
                 shareGroupAssignor,
                 authorizerPlugin,
                 streamsGroupAssignors,
-                assignmentRefiner
+                streamsGroupAssignmentRefiner
             );
         }
     }
@@ -530,7 +530,7 @@ public class GroupMetadataManager {
     /**
      * Derives the intermediate assignment that the members of a streams group are reconciled towards.
      */
-    private final AssignmentRefiner assignmentRefiner;
+    private final AssignmentRefiner streamsGroupAssignmentRefiner;
 
     /**
      * The metadata image.
@@ -582,7 +582,7 @@ public class GroupMetadataManager {
         ShareGroupPartitionAssignor shareGroupAssignor,
         Optional<Plugin<Authorizer>> authorizerPlugin,
         List<TaskAssignor> streamsGroupAssignors,
-        AssignmentRefiner assignmentRefiner
+        AssignmentRefiner streamsGroupAssignmentRefiner
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -605,7 +605,7 @@ public class GroupMetadataManager {
         this.shareGroupAssignor = shareGroupAssignor;
         this.defaultStreamsGroupAssignor = streamsGroupAssignors.get(0);
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
-        this.assignmentRefiner = assignmentRefiner;
+        this.streamsGroupAssignmentRefiner = streamsGroupAssignmentRefiner;
         this.topicRegexResolver = new TopicRegexResolver(() -> authorizerPlugin, this.time);
         this.topicHashCache = new HashMap<>();
     }
@@ -4564,7 +4564,7 @@ public class GroupMetadataManager {
             // target assignment, trading off availability.
             return targetAssignment;
         }
-        final Map<String, TasksTuple> refinedAssignment = assignmentRefiner.refine(
+        final Map<String, TasksTuple> refinedAssignment = streamsGroupAssignmentRefiner.refine(
             group.members(),
             targetAssignment,
             group.taskOffsets(),

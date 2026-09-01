@@ -435,13 +435,13 @@ public class GroupCoordinatorConfig {
     public static final Class<?> STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT = null;
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC = "The fully qualified class name of a StreamsGroupTopologyDescriptionPlugin implementation. When not set, the feature is disabled.";
 
-    public static final String STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG = "group.streams.assignment.refiner.class";
-    public static final Class<?> STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_DEFAULT = null;
-    public static final String STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_DOC = "The fully qualified class name of an AssignmentRefiner implementation, which derives the intermediate assignment (with warm-up tasks) that the members of a streams group are reconciled towards. When not set, no warm-up tasks are handed out and a task that has to move does so right away. This should be used for testing only.";
-
     public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG = "group.streams.acceptable.recovery.lag";
     public static final long STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT = 10000L;
     public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up enough to receive an active task assignment.";
+
+    public static final String STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG = "group.streams.assignment.refiner.class";
+    public static final Class<?> STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_DEFAULT = NoOpAssignmentRefiner.class;
+    public static final String STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_DOC = "The fully qualified class name of an AssignmentRefiner implementation, which derives the intermediate assignment (with warm-up tasks) that the members of a streams group are reconciled towards. When not set, no warm-up tasks are handed out and a task that has to move does so right away. This should be used for testing only.";
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
         CACHED_BUFFER_MAX_BYTES_CONFIG,
@@ -1073,21 +1073,6 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * The assignment refiner to derive the intermediate assignment of a streams group with, or {@code null} if none is
-     * configured, in which case the caller falls back to {@link NoOpAssignmentRefiner}.
-     * <p>
-     * Instantiated on demand rather than held in a field, because a {@code GroupCoordinatorConfig} is constructed
-     * whenever any dynamic broker config changes ({@code DynamicBrokerConfig.processReconfiguration} builds a whole
-     * {@code KafkaConfig}), and we do not want to construct a refiner for each of those. A shard asks for one when it
-     * is loaded, so every shard gets its own instance.
-     */
-    public AssignmentRefiner streamsGroupAssignmentRefiner() {
-        return config.getConfiguredInstance(
-            STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG,
-            AssignmentRefiner.class);
-    }
-
-    /**
      * The number of threads or event loops running.
      */
     public int numThreads() {
@@ -1576,6 +1561,16 @@ public class GroupCoordinatorConfig {
      */
     public long streamsGroupAcceptableRecoveryLag() {
         return streamsGroupAcceptableRecoveryLag;
+    }
+
+    /**
+     * A newly constructed {@link AssignmentRefiner}, defaulting to {@link NoOpAssignmentRefiner}. A fresh instance is
+     * returned on each call, as a refiner is not thread-safe.
+     */
+    public AssignmentRefiner streamsGroupAssignmentRefiner() {
+        return config.getConfiguredInstance(
+            STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG,
+            AssignmentRefiner.class);
     }
 
     /**

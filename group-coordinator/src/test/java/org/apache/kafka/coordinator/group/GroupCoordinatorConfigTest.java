@@ -36,6 +36,7 @@ import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
+import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
@@ -1241,9 +1242,9 @@ public class GroupCoordinatorConfigTest {
     }
 
     @Test
-    public void testStreamsGroupAssignmentRefinerDefaultIsNull() {
+    public void testStreamsGroupAssignmentRefinerDefaultsToNoOp() {
         GroupCoordinatorConfig config = createConfig(new HashMap<>());
-        assertNull(config.streamsGroupAssignmentRefiner());
+        assertInstanceOf(NoOpAssignmentRefiner.class, config.streamsGroupAssignmentRefiner());
     }
 
     @Test

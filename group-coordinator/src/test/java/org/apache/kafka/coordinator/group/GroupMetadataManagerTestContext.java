@@ -477,7 +477,7 @@ public class GroupMetadataManagerTestContext {
         private final Map<String, Object> config = new HashMap<>();
         private Optional<Plugin<Authorizer>> authorizerPlugin = Optional.empty();
         private List<TaskAssignor> streamsGroupAssignors = Collections.singletonList(new MockTaskAssignor("mock"));
-        private AssignmentRefiner assignmentRefiner = new NoOpAssignmentRefiner();
+        private AssignmentRefiner streamsGroupAssignmentRefiner = new NoOpAssignmentRefiner();
 
         public Builder withConfig(String key, Object value) {
             config.put(key, value);
@@ -519,8 +519,8 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withAssignmentRefiner(AssignmentRefiner assignmentRefiner) {
-            this.assignmentRefiner = assignmentRefiner;
+        public Builder withStreamsGroupAssignmentRefiner(AssignmentRefiner streamsGroupAssignmentRefiner) {
+            this.streamsGroupAssignmentRefiner = streamsGroupAssignmentRefiner;
             return this;
         }
 
@@ -560,7 +560,7 @@ public class GroupMetadataManagerTestContext {
                     .withGroupConfigManager(groupConfigManager)
                     .withAuthorizerPlugin(authorizerPlugin)
                     .withStreamsGroupAssignors(streamsGroupAssignors)
-                    .withAssignmentRefiner(assignmentRefiner)
+                    .withStreamsGroupAssignmentRefiner(streamsGroupAssignmentRefiner)
                     .build(),
                 groupConfigManager
             );

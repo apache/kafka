@@ -46,17 +46,14 @@ import java.util.SortedMap;
  *     towards it. See {@link StreamsGroup#refinedAssignment(int)}.</li>
  * </ul>
  * <p>
- * One instance is created per coordinator shard, and serves every streams group on that shard: the two configurations
- * a refinement depends on are per-group overridable and are therefore passed in on every call rather than held as
- * instance state. Since a shard is single-threaded, an implementation does not have to be thread-safe unless it shares
- * state across shards.
+ * An implementation need not be thread-safe, and holds no per-group state: the two per-group configurations a
+ * refinement depends on are passed on every call.
  * <p>
- * The default is {@link NoOpAssignmentRefiner}. Which implementation is used is not a public extension point; it is
- * selected by an internal broker configuration
- * ({@code GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG}) that exists so that tests can put a
- * warm-up assignment in front of a real client while the derivation itself is still being built. An implementation
- * that also implements {@link org.apache.kafka.common.Configurable} is handed the broker configuration, so a test
- * implementation can be steered through broker properties.
+ * An internal broker configuration ({@code GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG})
+ * selects the implementation, defaulting to {@link NoOpAssignmentRefiner}. It exists so that tests can put a warm-up
+ * assignment in front of a real client while the derivation itself is still being built, and is not a public extension
+ * point. An implementation that also implements {@link org.apache.kafka.common.Configurable} is handed the broker
+ * configuration, so a test implementation can be steered through broker properties.
  */
 public interface AssignmentRefiner {
 
