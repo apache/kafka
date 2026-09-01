@@ -1376,6 +1376,7 @@ kafka.server.DescribeUserScramCredentialsRequestTest:
 - testUnknownUser
 kafka.server.DynamicBrokerConfigTest:
 - testAdvertisedListenersIsNotDynamicallyReconfigurable
+- testAssignmentIntervalClampAppliesToEffectiveConfig
 - testAuthorizerConfig
 - testClientTelemetryExporter
 - testCombinedControllerAuthorizerConfig

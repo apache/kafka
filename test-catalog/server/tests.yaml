@@ -422,6 +422,7 @@ org.apache.kafka.server.config.DelegationTokenManagerConfigsTest:
 - testOverride
 org.apache.kafka.server.config.DynamicBrokerConfigTest:
 - testBrokerConfigSynonyms
+- testValidateConfigTypesResolvesConfigProviders
 org.apache.kafka.server.config.DynamicConfigTest:
 - testGroupIsRemovedWhenDynamicConfigsAreRemoved
 org.apache.kafka.server.config.MinInSyncReplicasConfigTest:
