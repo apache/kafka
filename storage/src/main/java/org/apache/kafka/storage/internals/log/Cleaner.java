@@ -286,7 +286,7 @@ public class Cleaner {
                     if (overflowOpt.isEmpty())
                         break;
 
-                    // Overflow detected - complete the current segment and continue with the filtered  chunk in a new cleaned segment
+                    // Overflow detected - complete the current segment and continue with the filtered chunk in a new cleaned segment
                     OverflowedChunk chunk = overflowOpt.get();
                     logger.info("Completing cleaned segment {} due to overflow, creating new segment", currentCleaned.baseOffset());
 
@@ -347,7 +347,7 @@ public class Cleaner {
      * A filtered chunk that could not be appended to the current cleaned segment without overflowing it.
      *
      * @param retained The filtered records to append to the next cleaned segment. They are backed by
-     *                 the cleaner's shared write buffer and must be appended before the next read.
+     *                 the cleaner's shared write buffer and must be appended before the next {@link #cleanInto} call, which overwrites the shared buffer.
      * @param maxOffset The max offset of the retained records
      * @param nextPosition The position in the source segment from which to resume cleaning
      */

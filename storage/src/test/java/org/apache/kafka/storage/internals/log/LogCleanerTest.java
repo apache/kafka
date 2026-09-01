@@ -1926,7 +1926,7 @@ public class LogCleanerTest {
         cleaner.cleanSegments(log, sourceSegments, offsetMap, 0L,
             new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
 
-        // The aborted data must stay removed and the abort marker retained.
+        // The aborted data must be removed and the abort marker retained.
         assertEquals(List.of(0L, 2L), LogTestUtils.keysInLog(log));
         assertAllAbortedTxns(List.of(expectedAbortedTxn), log);
 
