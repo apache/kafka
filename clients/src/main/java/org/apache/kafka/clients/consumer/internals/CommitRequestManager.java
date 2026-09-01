@@ -224,16 +224,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         if (autoCommitState.isEmpty()) {
             return Long.MAX_VALUE;
         }
-        AutoCommitState autocommit = autoCommitState.get();
+        AutoCommitState autoCommit = autoCommitState.get();
         // An auto-commit is only sent when the coordinator is known; poll() returns EMPTY otherwise.
         // If the coordinator is unavailable (e.g. bootstrap DNS resolution is still in progress),
         // falling through to the timer-based remainingMs() would return 0 once the auto-commit interval
         // elapses, since the auto-commit timer remains permanently expired. This would cause both the
         // application and network threads to busy-spin.
         if (coordinatorRequestManager.coordinator().isEmpty()) {
-            return autocommit.autoCommitIntervalMs();
+            return autoCommit.autoCommitIntervalMs();
         }
-        return autocommit.remainingMs(currentTimeMs);
+        return autoCommit.remainingMs(currentTimeMs);
     }
 
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
