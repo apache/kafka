@@ -67,7 +67,7 @@ Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires Ma
 
 ## Streams API changes in 4.5.0
 
-Upgraded RocksDB dependency to version 10.10.1(from 10.1.3). This upgrade removes an API: `Options#setMaxWriteBufferNumberToMaintain` and `Options#maxWriteBufferNumberToMaintain` have been removed, as `max_write_buffer_number_to_maintain` was deleted from RocksDB's `ColumnFamilyOptions` in version 10.5.0. This change is primarily relevant to users implementing custom RocksDB configurations via `rocksdb.config.setter`. Users relying on `max_write_buffer_number_to_maintain` will need to remove that configuration. Consult the [RocksDB changelog](https://github.com/facebook/rocksdb/blob/main/HISTORY.md) between 10.1.3 and 10.10.1 for other changes.
+Upgraded RocksDB dependency to version 10.10.1(from 10.1.3). RocksDB deleted `max_write_buffer_number_to_maintain` from its `ColumnFamilyOptions` in version 10.5.0. To preserve compatibility, Kafka Streams' `Options#setMaxWriteBufferNumberToMaintain` and `Options#maxWriteBufferNumberToMaintain` are now deprecated no-ops: the setter has no effect, and the getter always returns `0` regardless of what was previously configured. This change is primarily relevant to users implementing custom RocksDB configurations via `rocksdb.config.setter`. Users relying on `max_write_buffer_number_to_maintain` should remove that configuration, since it no longer has any effect. Consult the [RocksDB changelog](https://github.com/facebook/rocksdb/blob/main/HISTORY.md) between 10.1.3 and 10.10.1 for other changes.
 
 ## Streams API changes in 4.4.0
 
