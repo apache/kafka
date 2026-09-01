@@ -52,7 +52,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1210,7 +1209,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     if (floor != null &&
                         (floor < beginningOffsets.getOrDefault(partition, 0L) || endOffset == null || endOffset <= 0)) {
                         restoreConsumer.seek(partition, floor);
-                        restoreConsumer.pause(Collections.singleton(partition));
+                        restoreConsumer.pause(Set.of(partition));
                         demotedToFloor.add(partition);
                     }
                 }
@@ -1389,7 +1388,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
             }
             log.debug("Start restoring changelog partition {} from its fallback position.", partition);
-            addProbeFallback(Collections.singleton(partition), newPartitionsFloor, seekToBeginningPartitions, floorFallbackPartitions);
+            addProbeFallback(Set.of(partition), newPartitionsFloor, seekToBeginningPartitions, floorFallbackPartitions);
         }
 
         if (!seekTimestamps.isEmpty()) {
@@ -1405,7 +1404,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     // no benefit: offsetsForTimes could not resolve, or resolved at or below the
                     // stored-offset floor so the probe would skip nothing. Fall back to the floor (or the
                     // beginning) and arm the backoff so a re-registration does not re-pay for the probe.
-                    addProbeFallback(Collections.singleton(partition), newPartitionsFloor, seekToBeginningPartitions, floorFallbackPartitions);
+                    addProbeFallback(Set.of(partition), newPartitionsFloor, seekToBeginningPartitions, floorFallbackPartitions);
                 }
             });
         }
