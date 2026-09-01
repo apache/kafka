@@ -46,7 +46,7 @@ public class GroupListing {
         this.groupId = groupId;
         this.type = Objects.requireNonNull(type);
         this.protocol = protocol;
-        this.groupState = groupState;
+        this.groupState = Objects.requireNonNull(groupState);
     }
 
     /**

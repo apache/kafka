@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupListingTest {
@@ -45,5 +46,17 @@ public class GroupListingTest {
 
         gl = new GroupListing(GROUP_ID, Optional.empty(), "", Optional.empty());
         assertFalse(gl.isSimpleConsumerGroup());
+    }
+
+    @Test
+    public void testNullTypeConstructor() {
+        assertThrows(NullPointerException.class,
+                () -> new GroupListing(GROUP_ID, null, "", Optional.of(GroupState.EMPTY)));
+    }
+
+    @Test
+    public void testNullGroupStateConstructor() {
+        assertThrows(NullPointerException.class,
+                () -> new GroupListing(GROUP_ID, Optional.of(GroupType.CLASSIC), "", null));
     }
 }
