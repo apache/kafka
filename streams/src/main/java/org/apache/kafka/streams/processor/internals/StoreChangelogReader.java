@@ -250,6 +250,11 @@ public class StoreChangelogReader implements ChangelogReader {
     // task keeps counting down its retry deadline instead of resetting it every iteration. See KAFKA-20416.
     private final Map<TopicPartition, Long> committedOffsetMissingSinceMs = new HashMap<>();
 
+    // Changelog partitions that have begun restoring in this process. Outlives unregister so a corrupted-and-wiped
+    // task is still remembered as having had state. A missing committed offset is retried for these (it may be a
+    // transient -1 from a resigning coordinator) but taken as authoritative 0 for a fresh changelog. See KAFKA-20416.
+    private final Set<TopicPartition> everStartedRestoringChangelogs = new HashSet<>();
+
     private final Time time;
     private final Logger log;
     private final Duration pollTime;
@@ -868,15 +873,10 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    // Resolves the committed-offset operand of the restore ceiling (min(endOffset, committedOffset)) for one
-    // changelog. A dedicated changelog is not bounded by any committed offset, so it uses Long.MAX_VALUE. A
-    // source-topic changelog whose group has no committed offset (NO_COMMITTED_OFFSET) is ambiguous: it can be
-    // transient (the coordinator is momentarily unavailable/resigning during a broker restart and reports
-    // -1/NONE for a group whose offset is durable) or authoritative (a brand-new group that has never committed,
-    // for which 0 is correct). We cannot distinguish the two from a single response, so we retry (returning null
-    // to leave the changelog uninitialized this pass) for up to task.timeout.ms before falling back to 0, rather
-    // than truncating restore to 0 immediately, which silently empties the store (KAFKA-20416). The fallback is
-    // only attempted once the end offset is known, so a ceiling is never resolved from a half-fetched pair.
+    // The committed-offset operand of the restore ceiling min(endOffset, committedOffset). A dedicated changelog
+    // is unbounded (Long.MAX_VALUE); a source changelog gates a missing committed offset on whether it has
+    // restored before (see everStartedRestoringChangelogs). Fallback runs only once the end offset is known, so
+    // a ceiling is never resolved from a half-fetched pair.
     private Long resolveRestoreCeilingCommittedOffset(final TopicPartition partition,
                                                       final boolean changelogAsSource,
                                                       final Long endOffset,
@@ -886,16 +886,18 @@ public class StoreChangelogReader implements ChangelogReader {
         }
         final Long committedOffset = committedOffsets.get(partition);
         if (committedOffset != null && committedOffset == NO_COMMITTED_OFFSET) {
+            if (!everStartedRestoringChangelogs.contains(partition)) {
+                // fresh changelog: 0 is authoritative, restore starts now
+                return 0L;
+            }
+            // wiped changelog: a missing committed offset may be a transient coordinator answer, retry it
             return endOffset == null ? null : maybeFallBackToZeroCommittedOffset(partition);
         }
         return committedOffset;
     }
 
-    // Retry budget for a source-topic changelog whose committed offset came back missing. Returns 0L once the
-    // offset has been missing for at least task.timeout.ms — at that point the group most likely genuinely has
-    // no committed offset (e.g. a brand-new group) and 0 is the correct restore ceiling — or null while the
-    // budget remains, to keep retrying. Retrying (rather than defaulting to 0 immediately) is what prevents a
-    // transiently missing committed offset from silently truncating an active source-topic store. See KAFKA-20416.
+    // Bounded retry for a wiped source changelog's missing committed offset: return 0L once it has been missing
+    // for task.timeout.ms (the offset is probably genuinely absent), else null to keep retrying.
     private Long maybeFallBackToZeroCommittedOffset(final TopicPartition partition) {
         final long now = time.milliseconds();
         final long missingSince = committedOffsetMissingSinceMs.computeIfAbsent(partition, p -> now);
@@ -948,9 +950,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 metadata.stateManager.changelogAsSource(partition) &&
                 committedOffsets.containsKey(partition)) {
 
-                // A standby that reads a source topic as its changelog stops applying at the committed offset;
-                // if the group has no committed offset yet (NO_COMMITTED_OFFSET), the limit is 0 (apply nothing),
-                // which is the behavior before committedOffsetForChangelogs began surfacing the missing marker.
+                // no committed offset (NO_COMMITTED_OFFSET) means a standby limit of 0, i.e. apply nothing yet
                 final Long newLimit = Math.max(committedOffsets.get(partition), 0L);
                 final Long previousLimit = metadata.restoreEndOffset;
 
@@ -1041,7 +1041,13 @@ public class StoreChangelogReader implements ChangelogReader {
         addChangelogsToRestoreConsumer(newPartitionsToRestore.stream().map(metadata -> metadata.storeMetadata.changelogPartition())
             .collect(Collectors.toSet()));
 
-        newPartitionsToRestore.forEach(metadata -> metadata.transitTo(ChangelogState.RESTORING));
+        newPartitionsToRestore.forEach(metadata -> {
+            final TopicPartition partition = metadata.storeMetadata.changelogPartition();
+            metadata.transitTo(ChangelogState.RESTORING);
+            // remember that this changelog has begun restoring, so that if its task is later corrupted and its
+            // store wiped, a subsequently missing committed offset is retried rather than truncating restore to 0
+            everStartedRestoringChangelogs.add(partition);
+        });
 
         // if it is in the active restoring mode, we immediately pause those standby changelogs
         // here we just blindly pause all (including the existing and newly added)
