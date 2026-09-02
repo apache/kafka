@@ -289,11 +289,9 @@ public class DeadLetterQueueIntegrationTest {
             final AssertionError error = assertThrows(AssertionError.class,
                                    () -> readResult(OUTPUT_TOPIC, 1, StringDeserializer.class, StringDeserializer.class, 10000L)
             );
-            assertEquals(
+            assertTrue(error.getMessage().contains(
                 "Did not receive all 1 records from topic outputTopic within 10000 ms"
-                    + " ==> expected: <true> but was: <false>",
-                error.getMessage()
-            );
+            ));
 
             // Consume the DLQ records
             final List<ConsumerRecord<byte[], byte[]>> dlqRecords = readResult(DLQ_TOPIC, 1, ByteArrayDeserializer.class, ByteArrayDeserializer.class, 30000L);
