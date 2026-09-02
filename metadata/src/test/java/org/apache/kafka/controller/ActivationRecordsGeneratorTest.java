@@ -24,7 +24,10 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -173,6 +176,7 @@ public class ActivationRecordsGeneratorTest {
                 "record was found in the log. Treating the log as version 3.0-IV1.", logMsg),
             -1L,
             false,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.MINIMUM_KRAFT_VERSION, Optional.empty()),
             MetadataVersion.MINIMUM_KRAFT_VERSION
         );
@@ -183,6 +187,7 @@ public class ActivationRecordsGeneratorTest {
             logMsg -> assertEquals("Performing controller activation.", logMsg),
             -1L,
             false,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_3_IV0, Optional.empty()),
             MetadataVersion.IBP_3_3_IV0
         );
@@ -194,6 +199,7 @@ public class ActivationRecordsGeneratorTest {
                                    + "This is expected because this is a de-novo KRaft cluster.", logMsg),
             -1L,
             false,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.empty()),
             MetadataVersion.IBP_3_4_IV0
         );
@@ -206,6 +212,7 @@ public class ActivationRecordsGeneratorTest {
                                    "This is expected because this is a de-novo KRaft cluster.", logMsg),
             42L,
             false,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.empty()),
             MetadataVersion.IBP_3_6_IV1
         );
@@ -220,6 +227,7 @@ public class ActivationRecordsGeneratorTest {
                     logMsg -> fail(),
                     42L,
                     false,
+                    Collections.emptySet(),
                     buildFeatureControl(MetadataVersion.IBP_3_6_IV0, Optional.empty()),
                     MetadataVersion.IBP_3_6_IV0
                 )).getMessage()
@@ -237,6 +245,7 @@ public class ActivationRecordsGeneratorTest {
                     logMsg -> fail(),
                     -1L,
                     true,
+                    Collections.emptySet(),
                     buildFeatureControl(MetadataVersion.IBP_3_3_IV0, Optional.empty()),
                     MetadataVersion.IBP_3_3_IV0
                 )).getMessage()
@@ -249,6 +258,7 @@ public class ActivationRecordsGeneratorTest {
                     logMsg -> fail(),
                     -1L,
                     true,
+                    Collections.emptySet(),
                     buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.empty()),
                     MetadataVersion.IBP_3_4_IV0
                 )).getMessage()
@@ -261,6 +271,7 @@ public class ActivationRecordsGeneratorTest {
                     logMsg -> fail(),
                     -1L,
                     true,
+                    Collections.emptySet(),
                     buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.empty()),
                     MetadataVersion.IBP_3_6_IV1
                 )
@@ -272,6 +283,7 @@ public class ActivationRecordsGeneratorTest {
                 "PRE_MIGRATION.", logMsg),
             -1L,
             true,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.PRE_MIGRATION)),
             MetadataVersion.IBP_3_6_IV1
         );
@@ -283,6 +295,7 @@ public class ActivationRecordsGeneratorTest {
                 "Staying in ZK migration mode since 'zookeeper.metadata.migration.enable' is still 'true'.", logMsg),
             -1L,
             true,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.MIGRATION)),
             MetadataVersion.IBP_3_6_IV1
         );
@@ -295,6 +308,7 @@ public class ActivationRecordsGeneratorTest {
                 "'zookeeper.metadata.migration.enable' set to 'false'.", logMsg),
             -1L,
             false,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.MIGRATION)),
             MetadataVersion.IBP_3_4_IV0
         );
@@ -307,6 +321,7 @@ public class ActivationRecordsGeneratorTest {
                 "since this controller was configured with 'zookeeper.metadata.migration.enable' set to 'false'.", logMsg),
             42L,
             false,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.MIGRATION)),
             MetadataVersion.IBP_3_6_IV1
         );
@@ -318,6 +333,7 @@ public class ActivationRecordsGeneratorTest {
                 "POST_MIGRATION.", logMsg),
             -1L,
             false,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.POST_MIGRATION)),
             MetadataVersion.IBP_3_4_IV0
         );
@@ -329,6 +345,7 @@ public class ActivationRecordsGeneratorTest {
                 "transaction at offset 42. Loaded ZK migration state of POST_MIGRATION.", logMsg),
             42L,
             false,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.POST_MIGRATION)),
             MetadataVersion.IBP_3_6_IV1
         );
@@ -341,6 +358,7 @@ public class ActivationRecordsGeneratorTest {
                 "ZK migration has been completed.", logMsg),
             -1L,
             true,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.POST_MIGRATION)),
             MetadataVersion.IBP_3_4_IV0
         );
@@ -353,10 +371,31 @@ public class ActivationRecordsGeneratorTest {
                 "'zookeeper.metadata.migration.enable' value of 'true' since the ZK migration has been completed.", logMsg),
             42L,
             true,
+            Collections.emptySet(),
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.POST_MIGRATION)),
             MetadataVersion.IBP_3_6_IV1
         );
         assertTrue(result.isAtomic());
         assertEquals(1, result.records().size());
+    }
+
+    @Test
+    public void testMigrationNotFinalizedWhileBrokersStillRegisteredAsZk() {
+        Set<Integer> stillZkRegistered = new TreeSet<>();
+        stillZkRegistered.add(1);
+        stillZkRegistered.add(3);
+
+        ControllerResult<Void> result = ActivationRecordsGenerator.recordsForNonEmptyLog(
+            logMsg -> assertEquals("Performing controller activation. Loaded ZK migration state of MIGRATION. " +
+                "Cannot complete ZK migration because the following broker(s) are still registered as ZK brokers: [1, 3]" +
+                ". Restart these brokers in KRaft mode before finalizing the migration.", logMsg),
+            -1L,
+            false,
+            stillZkRegistered,
+            buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.MIGRATION)),
+            MetadataVersion.IBP_3_6_IV1
+        );
+        assertTrue(result.isAtomic());
+        assertEquals(0, result.records().size());
     }
 }
