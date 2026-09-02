@@ -288,9 +288,8 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     public void close() throws IOException {
-        flush(false); // Ensure the index content is flushed to disk as LogSegment.close may append an entry
         trimToValidSize();
-        flush(true); // Ensure the index metadata is durable
+        flush(true); // Ensure the index content and metadata are durable
         closeHandler();
     }
 
