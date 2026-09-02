@@ -208,7 +208,7 @@ allprojects {
       }
     }
   }
-  task printAllDependencies(type: DependencyReportTask) {}
+  tasks.register('printAllDependencies', DependencyReportTask) {}
 
   tasks.withType(Javadoc) {
     options.charSet = 'UTF-8'
@@ -314,10 +314,10 @@ subprojects {
 
   // enable running :dependencies task recursively on all subprojects
   // eg: ./gradlew allDeps
-  task allDeps(type: DependencyReportTask) {}
+  tasks.register('allDeps', DependencyReportTask) {}
   // enable running :dependencyInsight task recursively on all subprojects
   // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
-  task allDepInsight(type: DependencyInsightReportTask) {showingAllVariants = false} doLast {}
+  tasks.register('allDepInsight', DependencyInsightReportTask) {showingAllVariants = false}
 
   apply plugin: 'java-library'
 
@@ -633,7 +633,8 @@ subprojects {
     finalizedBy("copyTestXml")
   }
 
-  task integrationTest(type: Test, dependsOn: compileJava) {
+  tasks.register('integrationTest', Test) {
+    dependsOn compileJava
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
 
@@ -668,7 +669,8 @@ subprojects {
     }
   }
 
-  task unitTest(type: Test, dependsOn: compileJava) {
+  tasks.register('unitTest', Test) {
+    dependsOn compileJava
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
 
@@ -714,21 +716,22 @@ subprojects {
     from "$rootDir/NOTICE"
   }
 
-  task srcJar(type: Jar) {
+  tasks.register('srcJar', Jar) {
     archiveClassifier = 'sources'
     from "$rootDir/LICENSE"
     from "$rootDir/NOTICE"
     from sourceSets.main.allSource
   }
 
-  task javadocJar(type: Jar, dependsOn: javadoc) {
+  tasks.register('javadocJar', Jar) {
+    dependsOn javadoc
     archiveClassifier = 'javadoc'
     from "$rootDir/LICENSE"
     from "$rootDir/NOTICE"
     from javadoc.destinationDir
   }
 
-  task docsJar(dependsOn: javadocJar)
+  tasks.register('docsJar') { dependsOn javadocJar }
 
   // Consumed by root aggregatedJavadoc; mirrors compileClasspath.
   configurations {
@@ -766,10 +769,10 @@ kafkaPublicApiChecker {
     enabled = true
     failOnViolation = true
 }
-  task systemTestLibs(dependsOn: jar)
+  tasks.register('systemTestLibs') { dependsOn jar }
 
   if (!sourceSets.test.allSource.isEmpty()) {
-    task testJar(type: Jar) {
+    tasks.register('testJar', Jar) {
       archiveClassifier = 'test'
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
@@ -780,7 +783,8 @@ kafkaPublicApiChecker {
       exclude 'junit-platform.properties'
     }
 
-    task testSrcJar(type: Jar, dependsOn: testJar) {
+    tasks.register('testSrcJar', Jar) {
+      dependsOn testJar
       archiveClassifier = 'test-sources'
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
@@ -795,7 +799,8 @@ kafkaPublicApiChecker {
       zincVersion = versions.zinc
     }
 
-    task scaladocJar(type:Jar, dependsOn: scaladoc) {
+    tasks.register('scaladocJar', Jar) {
+      dependsOn scaladoc
       archiveClassifier = 'scaladoc'
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
@@ -1100,7 +1105,7 @@ project(':server') {
     testRuntimeOnly runtimeTestLibs
   }
 
-  task createVersionFile() {
+  tasks.register('createVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
@@ -1271,7 +1276,7 @@ project(':core') {
     }
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
@@ -1279,101 +1284,102 @@ project(':core') {
     duplicatesStrategy = 'exclude'
   }
 
-  task genProtocolErrorDocs(type: JavaExec) {
+  tasks.register('genProtocolErrorDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.common.protocol.Errors'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_errors.html").newOutputStream()
   }
 
-  task genProtocolTypesDocs(type: JavaExec) {
+  tasks.register('genProtocolTypesDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.common.protocol.types.Type'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_types.html").newOutputStream()
   }
 
-  task genProtocolApiKeyDocs(type: JavaExec) {
+  tasks.register('genProtocolApiKeyDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.common.protocol.ApiKeys'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_api_keys.html").newOutputStream()
   }
 
-  task genProtocolMessageDocs(type: JavaExec) {
+  tasks.register('genProtocolMessageDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.common.protocol.Protocol'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "protocol_messages.html").newOutputStream()
   }
 
-  task genAdminClientConfigDocs(type: JavaExec) {
+  tasks.register('genAdminClientConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.admin.AdminClientConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "admin_client_config.html").newOutputStream()
   }
 
-  task genProducerConfigDocs(type: JavaExec) {
+  tasks.register('genProducerConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.producer.ProducerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "producer_config.html").newOutputStream()
   }
 
-  task genConsumerConfigDocs(type: JavaExec) {
+  tasks.register('genConsumerConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.consumer.ConsumerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_config.html").newOutputStream()
   }
 
-  task genKafkaConfigDocs(type: JavaExec) {
+  tasks.register('genKafkaConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'kafka.server.KafkaConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "kafka_config.html").newOutputStream()
   }
 
-  task genTopicConfigDocs(type: JavaExec) {
+  tasks.register('genTopicConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.storage.internals.log.LogConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
   }
 
-  task genGroupConfigDocs(type: JavaExec) {
+  tasks.register('genGroupConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.coordinator.group.GroupConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "group_config.html").newOutputStream()
   }
 
-  task genConsumerMetricsDocs(type: JavaExec) {
+  tasks.register('genConsumerMetricsDocs', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.consumer.internals.FetchMetricsRegistry'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
   }
 
-  task genProducerMetricsDocs(type: JavaExec) {
+  tasks.register('genProducerMetricsDocs', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "producer_metrics.html").newOutputStream()
   }
 
-  task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolTypesDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
-                               'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
-                               'genKafkaConfigDocs', 'genTopicConfigDocs', 'genGroupConfigDocs',
-                               ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
-                               ':connect:runtime:genConnectPredicateDocs',
-                               ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
-                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
-                               ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
-                               ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
-                               ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs',
-                               ':storage:genRemoteLogManagerConfigDoc', ':storage:genRemoteLogMetadataManagerConfigDoc'], type: Tar) {
+  tasks.register('siteDocsTar', Tar) {
+    dependsOn = ['genProtocolErrorDocs', 'genProtocolTypesDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
+                'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
+                'genKafkaConfigDocs', 'genTopicConfigDocs', 'genGroupConfigDocs',
+                ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
+                ':connect:runtime:genConnectPredicateDocs',
+                ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
+                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
+                ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
+                ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
+                ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs',
+                ':storage:genRemoteLogManagerConfigDoc', ':storage:genRemoteLogMetadataManagerConfigDoc']
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -1383,7 +1389,8 @@ project(':core') {
     duplicatesStrategy = 'exclude'
   }
 
-  tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
+  tasks.register('releaseTarGz', Tar) {
+    dependsOn = configurations.archives.artifacts
     into "kafka_${versions.baseScala}-${archiveVersion.get()}"
     compression = Compression.GZIP
     from(project.file("$rootDir/bin")) { into "bin/" }
@@ -1444,7 +1451,7 @@ project(':core') {
     }
   }
 
-  tasks.create(name: "copyDependantTestLibs", type: Copy) {
+  tasks.register('copyDependantTestLibs', Copy) {
     from (configurations.testRuntimeClasspath) {
       include('*.jar')
     }
@@ -1519,7 +1526,7 @@ project(':metadata') {
     generator project(':generator')
   }
 
-  task processMessages(type:JavaExec) {
+  tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.metadata",
@@ -1569,7 +1576,7 @@ project(':group-coordinator:group-coordinator-api') {
     implementation project(':clients')
   }
 
-  task createVersionFile() {
+  tasks.register('createVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
@@ -1670,7 +1677,7 @@ project(':group-coordinator') {
     configProperties = checkstyleConfigProperties("import-control-group-coordinator.xml")
   }
 
-  task processMessages(type:JavaExec) {
+  tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.coordinator.group.generated",
@@ -1827,7 +1834,7 @@ project(':transaction-coordinator') {
     configProperties = checkstyleConfigProperties("import-control-transaction-coordinator.xml")
   }
 
-  task processMessages(type:JavaExec) {
+  tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.coordinator.transaction.generated",
@@ -1940,7 +1947,7 @@ project(':share-coordinator') {
     configProperties = checkstyleConfigProperties("import-control-share-coordinator.xml")
   }
 
-  task processMessages(type:JavaExec) {
+  tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.coordinator.share.generated",
@@ -2060,7 +2067,7 @@ project(':clients') {
     enabled = false
   }
 
-  task createVersionFile() {
+  tasks.register('createVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
@@ -2119,7 +2126,7 @@ project(':clients') {
     delete "${layout.buildDirectory.get().asFile.path}/kafka/"
   }
 
-  task processMessages(type:JavaExec) {
+  tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.message",
@@ -2135,7 +2142,7 @@ project(':clients') {
     outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/common/message")
   }
 
-  task processTestMessages(type:JavaExec) {
+  tasks.register('processTestMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.message",
@@ -2292,7 +2299,7 @@ project(':raft') {
     generator project(':generator')
   }
 
-  task createVersionFile() {
+  tasks.register('createVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
@@ -2311,7 +2318,7 @@ project(':raft') {
     }
   }
 
-  task processMessages(type:JavaExec) {
+  tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.raft.generated",
@@ -2393,7 +2400,7 @@ project(':server-common') {
     testRuntimeOnly runtimeTestLibs
   }
 
-  task createVersionFile() {
+  tasks.register('createVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
@@ -2456,7 +2463,7 @@ project(':storage:storage-api') {
     testRuntimeOnly runtimeTestLibs
   }
 
-  task createVersionFile() {
+  tasks.register('createVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
@@ -2547,7 +2554,7 @@ project(':storage') {
     generator project(':generator')
   }
 
-  task createVersionFile() {
+  tasks.register('createVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
@@ -2566,7 +2573,7 @@ project(':storage') {
     }
   }
 
-  task processMessages(type:JavaExec) {
+  tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.server.log.remote.metadata.storage.generated",
@@ -2581,14 +2588,14 @@ project(':storage') {
     outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
   }
 
-  task genRemoteLogManagerConfigDoc(type: JavaExec) {
+  tasks.register('genRemoteLogManagerConfigDoc', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "remote_log_manager_config.html").newOutputStream()
   }
 
-  task genRemoteLogMetadataManagerConfigDoc(type: JavaExec) {
+  tasks.register('genRemoteLogMetadataManagerConfigDoc', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
@@ -2643,7 +2650,7 @@ project(':tools:tools-api') {
     testRuntimeOnly runtimeTestLibs
   }
 
-  task createVersionFile() {
+  tasks.register('createVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
@@ -2743,7 +2750,7 @@ project(':tools') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
@@ -2801,7 +2808,7 @@ project(':trogdor') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
@@ -2845,7 +2852,7 @@ project(':shell') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       include('jline-*jar')
     }
@@ -2881,7 +2888,6 @@ project(':streams') {
     implementation libs.slf4jApi
 
     testFixturesImplementation testFixtures(project(':clients'))
-    testFixturesImplementation libs.hamcrest
     testFixturesImplementation libs.junitJupiter
     testFixturesImplementation libs.mockitoCore
     testFixturesImplementation libs.slf4jApi
@@ -2903,7 +2909,7 @@ project(':streams') {
     generator project(':generator')
   }
 
-  task processMessages(type:JavaExec) {
+  tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.streams.internals.generated",
@@ -2939,7 +2945,7 @@ project(':streams') {
     exclude "**/org/apache/kafka/streams/internals/**", "**/org/apache/kafka/streams/**/internals/**"
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
@@ -2947,7 +2953,7 @@ project(':streams') {
     duplicatesStrategy = 'exclude'
   }
 
-  task createStreamsVersionFile() {
+  tasks.register('createStreamsVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildStreamsVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
@@ -2978,15 +2984,15 @@ project(':streams') {
     dependsOn testFixturesJar
   }
 
-  task genStreamsConfigDocs(type: JavaExec) {
+  tasks.register('genStreamsConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.streams.StreamsConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
   }
 
-  task testAll(
-    dependsOn: [
+  tasks.register('testAll') {
+    dependsOn = [
             ':streams:test',
             ':streams:integration-tests:test',
             ':streams:test-utils:test',
@@ -3019,7 +3025,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-43:test',
             ':streams:examples:test'
     ]
-  )
+  }
 }
 
 project(':streams:streams-scala') {
@@ -3051,7 +3057,7 @@ project(':streams:streams-scala') {
     scalaDocOptions.additionalParameters = ["-no-link-warnings"]
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-streams*')
     }
@@ -3122,7 +3128,7 @@ project(':streams:test-utils') {
     testRuntimeOnly runtimeTestLibs
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-streams*')
     }
@@ -3159,7 +3165,7 @@ project(':streams:examples') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-streams*')
     }
@@ -3646,7 +3652,8 @@ project(':jmh-benchmarks') {
     configProperties = checkstyleConfigProperties("import-control-jmh-benchmarks.xml")
   }
 
-  task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
+  tasks.register('jmh', JavaExec) {
+    dependsOn = [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']
 
     mainClass = "-jar"
 
@@ -3684,7 +3691,7 @@ project(':connect:api') {
     include "**/org/apache/kafka/connect/**" // needed for the `aggregatedJavadoc` task
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3719,7 +3726,7 @@ project(':connect:transforms') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3757,7 +3764,7 @@ project(':connect:json') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3865,7 +3872,7 @@ project(':connect:runtime') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3878,56 +3885,57 @@ project(':connect:runtime') {
     dependsOn copyDependantLibs
   }
 
-  task genConnectConfigDocs(type: JavaExec) {
+  tasks.register('genConnectConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_config.html").newOutputStream()
   }
 
-  task genSinkConnectorConfigDocs(type: JavaExec) {
+  tasks.register('genSinkConnectorConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.SinkConnectorConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "sink_connector_config.html").newOutputStream()
   }
 
-  task genSourceConnectorConfigDocs(type: JavaExec) {
+  tasks.register('genSourceConnectorConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.SourceConnectorConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "source_connector_config.html").newOutputStream()
   }
 
-  task genConnectTransformationDocs(type: JavaExec) {
+  tasks.register('genConnectTransformationDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.tools.TransformationDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
   }
 
-  task genConnectPredicateDocs(type: JavaExec) {
+  tasks.register('genConnectPredicateDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.tools.PredicateDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_predicates.html").newOutputStream()
   }
 
-  task genConnectMetricsDocs(type: JavaExec) {
+  tasks.register('genConnectMetricsDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
   }
 
-  task setVersionInOpenAPISpec(type: Copy) {
+  tasks.register('setVersionInOpenAPISpec', Copy) {
     from "$rootDir/gradle/openapi.template"
     into "${layout.buildDirectory.get().asFile.path}/resources/docs"
     rename ('openapi.template', 'openapi.yaml')
     expand(kafkaVersion: "$rootProject.version")
   }
 
-  task genConnectOpenAPIDocs(type: io.swagger.v3.plugins.gradle.tasks.ResolveTask, dependsOn: setVersionInOpenAPISpec) {
+  tasks.register('genConnectOpenAPIDocs', io.swagger.v3.plugins.gradle.tasks.ResolveTask) {
+    dependsOn setVersionInOpenAPISpec
     classpath = sourceSets.main.runtimeClasspath
 
     buildClasspath = classpath + configurations.swagger
@@ -3974,7 +3982,7 @@ project(':connect:file') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -4013,7 +4021,7 @@ project(':connect:basic-auth-extension') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -4079,7 +4087,7 @@ project(':connect:mirror') {
     enabled = false
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -4088,28 +4096,28 @@ project(':connect:mirror') {
     duplicatesStrategy = 'exclude'
   }
 
-  task genMirrorConnectorConfigDocs(type: JavaExec) {
+  tasks.register('genMirrorConnectorConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorConnectorConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "mirror_connector_config.html").newOutputStream()
   }
 
-  task genMirrorSourceConfigDocs(type: JavaExec) {
+  tasks.register('genMirrorSourceConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorSourceConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "mirror_source_config.html").newOutputStream()
   }
 
-  task genMirrorCheckpointConfigDocs(type: JavaExec) {
+  tasks.register('genMirrorCheckpointConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorCheckpointConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "mirror_checkpoint_config.html").newOutputStream()
   }
 
-  task genMirrorHeartbeatConfigDocs(type: JavaExec) {
+  tasks.register('genMirrorHeartbeatConfigDocs', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorHeartbeatConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
@@ -4141,7 +4149,7 @@ project(':connect:mirror-client') {
     enabled = true
   }
 
-  tasks.create(name: "copyDependantLibs", type: Copy) {
+  tasks.register('copyDependantLibs', Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -4180,7 +4188,7 @@ configurations {
   }
 }
 
-task aggregatedJavadoc(type: Javadoc) {
+tasks.register('aggregatedJavadoc', Javadoc) {
   destinationDir = file("${layout.buildDirectory.get().asFile.path}/docs/javadoc")
 }
 

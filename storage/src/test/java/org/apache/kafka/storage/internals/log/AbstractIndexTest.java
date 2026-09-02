@@ -35,9 +35,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class AbstractIndexTest {
     private static class TestIndex extends AbstractIndex {
         private boolean unmapInvoked = false;
+        private boolean flushInvoked = false;
         private MappedByteBuffer unmappedBuffer = null;
         public TestIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
             super(file, baseOffset, maxIndexSize, writable);
+        }
+
+        @Override
+        public void flush() {
+            flushInvoked = true;
+            super.flush();
         }
 
         @Override
@@ -85,5 +92,15 @@ public class AbstractIndexTest {
         assertTrue(idx.unmapInvoked, "Unmap should have been invoked after resize");
         assertSame(oldMmap, idx.unmappedBuffer, "old mmap should be unmapped");
         assertNotSame(idx.unmappedBuffer, idx.mmap());
+    }
+
+    @Test
+    public void testCloseInvokeFlush() throws IOException {
+        File f = new File(TestUtils.tempDirectory(), "test-index");
+        TestIndex idx = new TestIndex(f, 0L, 100, true);
+        assertFalse(idx.flushInvoked, "Flush should not have been invoked yet");
+
+        idx.close();
+        assertTrue(idx.flushInvoked, "Flush should have been invoked during close");
     }
 }
