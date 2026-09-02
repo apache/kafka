@@ -142,7 +142,7 @@ public class DynamicBrokerConfig {
     }
 
     public static void validateConfigTypes(Properties props) {
-        validateConfigTypes(props, props);
+        validateConfigTypes(props, resolveVariableConfigs(props));
     }
 
     static void validateConfigTypes(Properties propsOriginal, Properties propsResolved) {
