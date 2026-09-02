@@ -188,8 +188,8 @@ class Benchmark(Test):
         self.perf = EndToEndLatencyService(
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE, num_records=10000,
-            compression_type=compression_type, version=client_version,
-            settings=consumer_group.maybe_set_group_protocol(group_protocol)
+            version=client_version,
+            settings=consumer_group.maybe_set_group_protocol(group_protocol, config={'compression.type': compression_type})
         )
         self.perf.run()
         return latency(self.perf.results[0]['latency_50th_ms'],  self.perf.results[0]['latency_99th_ms'], self.perf.results[0]['latency_999th_ms'])

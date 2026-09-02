@@ -44,7 +44,7 @@ class EndToEndLatencyService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, num_records, compression_type="none", version=DEV_BRANCH, acks=1, settings=None):
+    def __init__(self, context, num_nodes, kafka, topic, num_records, version=DEV_BRANCH, acks=1, settings=None):
         super(EndToEndLatencyService, self).__init__(context, num_nodes,
                                                      root=EndToEndLatencyService.PERSISTENT_ROOT)
         self.kafka = kafka
@@ -56,7 +56,6 @@ class EndToEndLatencyService(PerformanceService):
             'topic': topic,
             'num_records': num_records,
             'acks': acks,
-            'compression_type': compression_type,
             'kafka_opts': self.security_config.kafka_opts,
             'message_bytes': EndToEndLatencyService.MESSAGE_BYTES
         }
@@ -91,7 +90,6 @@ class EndToEndLatencyService(PerformanceService):
 
         node.account.create_file(get_log4j_config_for_tools(node), log_config)
         client_config = str(self.security_config)
-        client_config += "compression.type=%(compression_type)s\n" % self.args
         client_config += "".join("%s=%s\n" % (str(key), str(value)) for key, value in self.settings.items())
         node.account.create_file(EndToEndLatencyService.CONFIG_FILE, client_config)
 
