@@ -39,9 +39,8 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Map;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -118,7 +117,7 @@ public class WindowStoreFacadeTest {
     public void shouldReturnName() {
         when(mockedWindowTimestampStore.name()).thenReturn("name");
 
-        assertThat(windowStoreFacade.name(), is("name"));
+        assertEquals("name", windowStoreFacade.name());
         verify(mockedWindowTimestampStore).name();
     }
 
@@ -127,8 +126,8 @@ public class WindowStoreFacadeTest {
         when(mockedWindowTimestampStore.persistent())
             .thenReturn(true, false);
 
-        assertThat(windowStoreFacade.persistent(), is(true));
-        assertThat(windowStoreFacade.persistent(), is(false));
+        assertTrue(windowStoreFacade.persistent());
+        assertFalse(windowStoreFacade.persistent());
         verify(mockedWindowTimestampStore, times(2)).persistent();
     }
 
@@ -137,8 +136,8 @@ public class WindowStoreFacadeTest {
         when(mockedWindowTimestampStore.isOpen())
             .thenReturn(true, false);
 
-        assertThat(windowStoreFacade.isOpen(), is(true));
-        assertThat(windowStoreFacade.isOpen(), is(false));
+        assertTrue(windowStoreFacade.isOpen());
+        assertFalse(windowStoreFacade.isOpen());
         verify(mockedWindowTimestampStore, times(2)).isOpen();
     }
 
@@ -156,8 +155,8 @@ public class WindowStoreFacadeTest {
             .thenReturn(KeyValue.pair(150L, ValueAndTimestamp.make("value2", 20L)));
 
         try (final WindowStoreIterator<String> iterator = windowStoreFacade.fetch("key", from, to)) {
-            assertThat(iterator.next(), is(KeyValue.pair(100L, "value1")));
-            assertThat(iterator.next(), is(KeyValue.pair(150L, "value2")));
+            assertEquals(KeyValue.pair(100L, "value1"), iterator.next());
+            assertEquals(KeyValue.pair(150L, "value2"), iterator.next());
         }
     }
 
@@ -175,7 +174,7 @@ public class WindowStoreFacadeTest {
             .thenReturn(KeyValue.pair(windowedKey, ValueAndTimestamp.make("value", 10L)));
 
         try (final KeyValueIterator<Windowed<String>, String> iterator = windowStoreFacade.fetchAll(from, to)) {
-            assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
+            assertEquals(KeyValue.pair(windowedKey, "value"), iterator.next());
         }
     }
 
@@ -193,7 +192,7 @@ public class WindowStoreFacadeTest {
             .thenReturn(KeyValue.pair(windowedKey, ValueAndTimestamp.make("value", 10L)));
 
         try (final KeyValueIterator<Windowed<String>, String> iterator = windowStoreFacade.fetch("key", "key", from, to)) {
-            assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
+            assertEquals(KeyValue.pair(windowedKey, "value"), iterator.next());
         }
     }
 
@@ -202,7 +201,7 @@ public class WindowStoreFacadeTest {
         when(mockedWindowTimestampStore.getPosition())
             .thenReturn(Position.emptyPosition());
 
-        assertThat(windowStoreFacade.getPosition(), is(Position.emptyPosition()));
+        assertEquals(Position.emptyPosition(), windowStoreFacade.getPosition());
         verify(mockedWindowTimestampStore).getPosition();
     }
 
@@ -213,13 +212,13 @@ public class WindowStoreFacadeTest {
         final QueryResult<Integer> queryResult = QueryResult.forResult(42);
         when(mockedWindowTimestampStore.<Integer>query(any(), any(), any())).thenReturn(queryResult);
 
-        assertThat(
+        assertEquals(
+            queryResult,
             windowStoreFacade.query(
                 query,
                 PositionBound.unbounded(),
                 queryConfig
-            ),
-            is(queryResult));
+            ));
         verify(mockedWindowTimestampStore).query(query, PositionBound.unbounded(), queryConfig);
     }
 }

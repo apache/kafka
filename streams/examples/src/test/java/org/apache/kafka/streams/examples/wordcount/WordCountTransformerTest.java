@@ -31,8 +31,7 @@ import java.time.Duration;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -88,6 +87,6 @@ public class WordCountTransformerTest {
                 new MockProcessorContext.CapturedForward<>(new Record<>("beta", "1", 0L)),
                 new MockProcessorContext.CapturedForward<>(new Record<>("gamma", "1", 0L))
         );
-        assertThat(capturedForwards, is(expected));
+        assertEquals(expected, capturedForwards);
     }
 }

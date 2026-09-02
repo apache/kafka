@@ -94,6 +94,7 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -238,7 +239,8 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setQuorumFeatures(new QuorumFeatures(0,
                     QuorumFeatures.defaultSupportedFeatureMap(true),
-                    List.of(0))).
+                    () -> Set.of(0))).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
             this.featureControl.replay(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
@@ -263,6 +265,7 @@ public class ReplicationControlManagerTest {
                 setFeatureControl(featureControl).
                 setStaticConfig(staticConfig).
                 setKafkaConfigSchema(FakeKafkaConfigSchema.INSTANCE).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
             this.offsetControlManager = new OffsetControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
@@ -271,6 +274,7 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 setConfigurationControl(configurationControl).
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
@@ -543,6 +547,15 @@ public class ReplicationControlManagerTest {
                     .collect(Collectors.toSet());
         }
 
+        void cordonBroker(int brokerId) {
+            List<Uuid> dirs = clusterControl.brokerRegistrations().get(brokerId).directories();
+            BrokerRegistrationChangeRecord record = new BrokerRegistrationChangeRecord()
+                .setBrokerId(brokerId)
+                .setBrokerEpoch(defaultBrokerEpoch(brokerId))
+                .setCordonedLogDirs(dirs);
+            clusterControl.replay(record);
+        }
+
     }
 
     static CreateTopicsResponseData withoutConfigs(CreateTopicsResponseData data) {
@@ -599,7 +612,7 @@ public class ReplicationControlManagerTest {
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
                 () -> replicationControl.createTopics(requestContext, request, Set.of("foo", "bar", "baz"), false));
-        assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
+        assertEquals(error.getMessage(), "Too many partitions in request.");
     }
 
     @Test
@@ -616,9 +629,40 @@ public class ReplicationControlManagerTest {
                 .setAssignments(assignments));
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
-                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999)
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
         );
-        assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
+        assertEquals(error.getMessage(), "Too many partitions in request.");
+    }
+
+    @Test
+    public void testTotalNumberOfPartitionsValidationDoesNotOverflow() {
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+                setNumPartitions(Integer.MAX_VALUE).setReplicationFactor((short) 1));
+        request.topics().add(new CreatableTopic().setName("bar").
+                setNumPartitions(Integer.MAX_VALUE).setReplicationFactor((short) 1));
+
+        PolicyViolationException error = assertThrows(
+                PolicyViolationException.class,
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
+        );
+        assertEquals("Too many partitions in request.", error.getMessage());
+    }
+
+    @Test
+    public void testBuilderRequiresPositiveMaxRecordsPerBatch() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        for (int invalidMaxRecordsPerBatch : new int[] {0, -1, -100}) {
+            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new ReplicationControlManager.Builder().
+                    setSnapshotRegistry(ctx.snapshotRegistry).
+                    setLogContext(ctx.logContext).
+                    setConfigurationControl(ctx.configurationControl).
+                    setClusterControl(ctx.clusterControl).
+                    setMaxRecordsPerBatch(invalidMaxRecordsPerBatch).
+                    build());
+            assertEquals("Max records per batch must be greater than zero", exception.getMessage());
+        }
     }
 
     @Test
@@ -1803,7 +1847,8 @@ public class ReplicationControlManagerTest {
     @Test
     public void testValidateBadManualPartitionAssignments() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
-        ctx.registerBrokers(1, 2);
+        ctx.registerBrokers(0, 1, 2);
+        ctx.cordonBroker(0);
         assertEquals("The manual partition assignment includes an empty replica list.",
             assertThrows(InvalidReplicaAssignmentException.class, () ->
                 ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(List.of()),
@@ -1811,6 +1856,10 @@ public class ReplicationControlManagerTest {
         assertEquals("The manual partition assignment includes broker 3, but no such " +
             "broker is registered.", assertThrows(InvalidReplicaAssignmentException.class, () ->
                 ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(List.of(1, 2, 3)),
+                    OptionalInt.empty())).getMessage());
+        assertEquals("The manual partition assignment includes broker 0, but all its log " +
+            "directories are cordoned.", assertThrows(InvalidReplicaAssignmentException.class, () ->
+                ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(List.of(0, 1, 2)),
                     OptionalInt.empty())).getMessage());
         assertEquals("The manual partition assignment includes the broker 2 more than " +
             "once.", assertThrows(InvalidReplicaAssignmentException.class, () ->

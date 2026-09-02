@@ -1,6 +1,6 @@
 ---
 title: API
-description: 
+description: An overview of the core Kafka APIs for client applications, stream processing, Connect integrations, and cluster administration.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 

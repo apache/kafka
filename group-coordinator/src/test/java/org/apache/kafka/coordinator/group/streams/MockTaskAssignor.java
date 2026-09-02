@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupSpec;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
-import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 
 import java.util.Map;
 import java.util.Map.Entry;
@@ -31,7 +33,7 @@ public class MockTaskAssignor implements TaskAssignor {
 
     private final String name;
     private GroupAssignment preparedGroupAssignment = null;
-    private Map<String, String> assignmentConfigs = Map.of();
+    private AssignmentConfigs assignmentConfigs = AssignmentConfigsImpl.DEFAULT;
 
     public MockTaskAssignor(String name) {
         this.name = name;
@@ -49,11 +51,11 @@ public class MockTaskAssignor implements TaskAssignor {
                     entry -> {
                         TasksTuple tasksTuple = entry.getValue();
                         return new MemberAssignment(
-                            tasksTuple.activeTasks(), tasksTuple.standbyTasks(), tasksTuple.warmupTasks());
+                            tasksTuple.activeTasks(), tasksTuple.standbyTasks());
                     })));
     }
 
-    public Map<String, String> lastPassedAssignmentConfigs() {
+    public AssignmentConfigs lastPassedAssignmentConfigs() {
         return assignmentConfigs;
     }
 
@@ -70,7 +72,7 @@ public class MockTaskAssignor implements TaskAssignor {
     @Override
     public GroupAssignment assign(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber)
         throws TaskAssignorException {
-        assignmentConfigs = groupSpec.assignmentConfigs();
+        assignmentConfigs = groupSpec.configs();
         return preparedGroupAssignment;
     }
 }

@@ -20,385 +20,170 @@ package org.apache.kafka.coordinator.share;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
-import java.util.TreeSet;
+import java.util.TreeMap;
 
+/**
+ * Combines an existing list of {@link PersisterStateBatch} entries with a list of newly produced
+ * entries and returns the shortest non-overlapping, {@code (deliveryState, deliveryCount)}-distinct
+ * cover of the union, clipped at {@code startOffset} (SPSO).
+ *
+ * <p>The merge is performed by an event-driven sweep-line over the union of both inputs. Each
+ * input batch contributes one BEGIN event at {@code firstOffset} and one END event at
+ * {@code lastOffset + 1}. Events are processed in offset order (END before BEGIN at the same
+ * offset). A counted ordered map tracks the currently active priorities; the first key defines the
+ * {@code (state, count)} that wins on the current sub-range. Successive sub-ranges with identical
+ * {@code (state, count)} are coalesced on the fly.
+ *
+ * <p>Complexity: {@code O((n + k) log p)} where {@code n} is the total number of input batches,
+ * {@code k} is the number of overlap transitions encountered, and {@code p} is the number of
+ * distinct {@code (deliveryState, deliveryCount)} priorities.
+ */
 public class PersisterStateBatchCombiner {
-    private List<PersisterStateBatch> combinedBatchList;    // link between pruning and merging
+    private static final Comparator<BatchPriority> PRIORITY_DESC = (a, b) -> {
+        int cmpCount = Short.compare(b.deliveryCount(), a.deliveryCount());
+        if (cmpCount != 0) {
+            return cmpCount;
+        }
+        return Byte.compare(b.deliveryState(), a.deliveryState());
+    };
+
+    private final List<PersisterStateBatch> batchesSoFar;
+    private final List<PersisterStateBatch> newBatches;
     private final long startOffset;
-    private TreeSet<PersisterStateBatch> sortedBatches;
-    private List<PersisterStateBatch> finalBatchList;   // final list is built here
-    private final List<PersisterStateBatch> nonOverlappingBuffer = new ArrayList<>();   // reused per findMergeCandidatePair call
 
     public PersisterStateBatchCombiner(
         List<PersisterStateBatch> batchesSoFar,
         List<PersisterStateBatch> newBatches,
         long startOffset
     ) {
-        initializeCombinedList(batchesSoFar, newBatches);
-        int estimatedResultSize = (combinedBatchList.size() * 3) / 2;   // heuristic size - 50% overallocation
-        finalBatchList = new ArrayList<>(estimatedResultSize);
+        this.batchesSoFar = batchesSoFar == null ? List.of() : batchesSoFar;
+        this.newBatches = newBatches == null ? List.of() : newBatches;
         this.startOffset = startOffset;
     }
 
-    private void initializeCombinedList(List<PersisterStateBatch> batchesSoFar, List<PersisterStateBatch> newBatches) {
-        boolean soFarEmpty = batchesSoFar == null || batchesSoFar.isEmpty();
-        boolean newBatchesEmpty = newBatches == null || newBatches.isEmpty();
-
-        if (soFarEmpty && newBatchesEmpty) {
-            combinedBatchList = new ArrayList<>();
-        } else if (soFarEmpty) {
-            combinedBatchList = new ArrayList<>(newBatches);    // new list as the original one could be unmodifiable
-        } else if (newBatchesEmpty) {
-            combinedBatchList = new ArrayList<>(batchesSoFar);  // new list as the original one could be unmodifiable
-        } else {
-            combinedBatchList = new ArrayList<>(batchesSoFar.size() + newBatches.size());
-            combinedBatchList.addAll(batchesSoFar);
-            combinedBatchList.addAll(newBatches);
-        }
-    }
-
     /**
-     * Algorithm: Merge current state batches and new batches into a single non-overlapping batch list.
-     * Input: batchesSoFar, newBatches, startOffset
-     * Output: combined list with non-overlapping batches (finalBatchList)
-     * <p>
-     * - Add both currentBatches and newBatches into a single list combinedBatchList
-     * - if combinedBatchList.size() <= 1 return combinedBatchList
-     * <p>
-     * - Remove/prune any batches from the combinedBatchList:
-     * -    if batch.lastOffset < startOffset then remove batch from combinedBatchList
-     * -    else if batch.firstOffset > startOffset then we will keep the batch
-     * -    else if batch.firstOffset <= startOffset <= batch.lastOffset then keep [startOffset, batch.lastOffset] part only and discard rest.
-     * <p>
-     * - create a treeset sortedBatches using pruned combinedBatchList
-     * - find first 2 mergeable batches in sortedBatches set, say, prev and candidate.
-     * - remove any non-overlapping batches from sortedBatches encountered during the find operation and add them to a finalBatchList
-     * - do repeat until a mergeable pair is not found:
-     * -    based on various conditions of offset overlap and batch state differences combine the batches or
-     *      create new batches, if required, and add to the sortedBatches.
-     * -    find first 2 mergeable batches in sortedBatches set, say, prev and candidate.
-     * -    remove any non-mergeable batches from sortedBatches encountered during the find operation and add them to a finalBatchList
-     * - done
-     * - return the finalBatchList
-     *
-     * @return list of {@link PersisterStateBatch} representing non-overlapping combined batches
+     * Produces the merged, pruned, non-overlapping batch list.
      */
     public List<PersisterStateBatch> combineStateBatches() {
-        pruneBatches();
-        mergeBatches();
-        return finalBatchList;
+        List<PersisterStateBatch> pruned = prune();
+        if (pruned.isEmpty()) {
+            return pruned;
+        }
+        if (pruned.size() == 1) {
+            return pruned;
+        }
+        return sweepMerge(pruned);
     }
 
-    private void mergeBatches() {
-        if (combinedBatchList.size() < 2) {
-            finalBatchList = combinedBatchList;
-            return;
-        }
+    /**
+     * Drops or clips ranges below {@code startOffset}. Returns a new list; never modifies inputs.
+     */
+    private List<PersisterStateBatch> prune() {
+        int estimate = batchesSoFar.size() + newBatches.size();
+        List<PersisterStateBatch> out = new ArrayList<>(estimate);
+        addPruned(out, batchesSoFar);
+        addPruned(out, newBatches);
+        return out;
+    }
 
-        sortedBatches = new TreeSet<>(combinedBatchList);
-
-        MergeCandidatePair overlapState = getMergeCandidatePair();
-
-        while (overlapState != MergeCandidatePair.EMPTY) {
-            PersisterStateBatch prev = overlapState.prev();
-            PersisterStateBatch candidate = overlapState.candidate();
-
-            // remove both previous and candidate for easier
-            // assessment about adding batches to sortedBatches
-            sortedBatches.remove(prev);
-            sortedBatches.remove(candidate);
-
-            int cmp = compareBatchDeliveryInfo(candidate, prev);
-            if (cmp == 0) {  // same state and overlap or contiguous
-                // overlap and same state (prev.firstOffset <= candidate.firstOffset) due to sort
-                // covers:
-                // case:        1        2          3            4          5           6          7 (contiguous)
-                // prev:        ------   -------    -------      -------   -------   --------    -------
-                // candidate:   ------   ----       ----------     ---        ----       -------        -------
-                handleSameStateMerge(prev, candidate);  // pair can be contiguous or overlapping
+    private void addPruned(List<PersisterStateBatch> out, List<PersisterStateBatch> src) {
+        for (PersisterStateBatch b : src) {
+            if (startOffset != -1 && b.lastOffset() < startOffset) {
+                // batch fully expired
+                continue;
+            }
+            if (startOffset == -1 || b.firstOffset() >= startOffset) {
+                out.add(b);
             } else {
-                // If we reach here then it is guaranteed that the batch pair is overlapping and
-                // non-contiguous because getMergeCandidatePair only returns contiguous pair if
-                // the constituents have the same delivery count and state.
-                // covers:
-                // case:        1        2*          3            4          5           6             7*
-                // prev:        ------   -------    -------      -------    -------     --------      ------
-                // candidate:   ------   ----       ---------      ----        ----        -------   -------
-                // max batches: 1           2       2                3          2            2          2
-                // min batches: 1           1       1                1          1            2          1
-                // * not possible with treeset
-                handleDiffStateOverlap(prev, candidate);
+                // start offset intersects batch -> clip
+                out.add(new PersisterStateBatch(startOffset, b.lastOffset(), b.deliveryState(), b.deliveryCount()));
             }
-            overlapState = getMergeCandidatePair();
         }
-        finalBatchList.addAll(sortedBatches);   // some non overlapping batches might have remained
     }
 
     /**
-     * Compares the non-offset state of 2 batches i.e. the deliveryCount and deliverState.
-     * <p>
-     * Uses standard compareTo contract x < y => +int, x > y => -int, x == y => 0
-     *
-     * @param b1 - {@link PersisterStateBatch} to compare
-     * @param b2 - {@link PersisterStateBatch} to compare
-     * @return int representing comparison result.
+     * Event-driven sweep. Linear time after the initial event sort.
      */
-    private int compareBatchDeliveryInfo(PersisterStateBatch b1, PersisterStateBatch b2) {
-        int deltaCount = Short.compare(b1.deliveryCount(), b2.deliveryCount());
-
-        // Delivery state could be:
-        // 0 - AVAILABLE (non-terminal)
-        // 1 - ACQUIRED - should not be persisted yet
-        // 2 - ACKNOWLEDGED (terminal)
-        // 3 - ARCHIVING - not implemented in KIP-932 - non-terminal - leads only to ARCHIVED
-        // 4 - ARCHIVED (terminal)
-
-        if (deltaCount == 0) {   // same delivery count
-            return Byte.compare(b1.deliveryState(), b2.deliveryState());
+    private List<PersisterStateBatch> sweepMerge(List<PersisterStateBatch> batches) {
+        int n = batches.size();
+        Event[] events = new Event[n * 2];
+        for (int i = 0; i < n; i++) {
+            PersisterStateBatch b = batches.get(i);
+            BatchPriority priority = BatchPriority.from(b);
+            events[i * 2] = new Event(b.firstOffset(), true, priority);
+            events[i * 2 + 1] = new Event(b.lastOffset() + 1, false, priority);
         }
-        return deltaCount;
-    }
-
-    /**
-     * Accepts a sorted set of state batches and finds the first 2 batches which can be merged.
-     * Merged implies that they have some offsets in common or, they are contiguous with the same state.
-     * <p>
-     * Any non-mergeable batches prefixing a good mergeable pair are removed from the sortedBatches.
-     * For example:
-     * ----- ----  ----- -----      -----
-     *                      ------
-     * <---------------> <-------->
-     * non-overlapping   1st overlapping pair
-     *
-     * @return object representing the overlap state
-     */
-    private MergeCandidatePair getMergeCandidatePair() {
-        if (sortedBatches == null || sortedBatches.isEmpty()) {
-            return MergeCandidatePair.EMPTY;
-        }
-        Iterator<PersisterStateBatch> iter = sortedBatches.iterator();
-        PersisterStateBatch prev = iter.next();
-        nonOverlappingBuffer.clear();
-        while (iter.hasNext()) {
-            PersisterStateBatch candidate = iter.next();
-            if (candidate.firstOffset() <= prev.lastOffset() || // overlap
-                prev.lastOffset() + 1 == candidate.firstOffset() && compareBatchDeliveryInfo(prev, candidate) == 0) {  // contiguous
-                updateBatchContainers(nonOverlappingBuffer);
-                return new MergeCandidatePair(
-                    prev,
-                    candidate
-                );
+        // END (isBegin=false) sorts before BEGIN (isBegin=true) at the same offset so that
+        // contiguous same-state ranges meeting at offset X collapse to a single emit.
+        java.util.Arrays.sort(events, (e1, e2) -> {
+            int cmp = Long.compare(e1.offset, e2.offset);
+            if (cmp != 0) {
+                return cmp;
             }
-            nonOverlappingBuffer.add(prev);
-            prev = candidate;
-        }
+            return Boolean.compare(e1.isBegin, e2.isBegin);
+        });
 
-        updateBatchContainers(nonOverlappingBuffer);
-        return MergeCandidatePair.EMPTY;
+        TreeMap<BatchPriority, Integer> active = new TreeMap<>(PRIORITY_DESC);
+        List<PersisterStateBatch> out = new ArrayList<>();
+        long openFrom = -1;
+        BatchPriority openWinner = null;
+
+        int i = 0;
+        while (i < events.length) {
+            long offset = events[i].offset;
+
+            // Emit the sub-range that ended at `offset - 1` (if one was open).
+            if (openWinner != null && offset > openFrom) {
+                appendCoalesced(out, openFrom, offset - 1, openWinner);
+            }
+
+            // Apply every event at this offset (END before BEGIN by sort order).
+            while (i < events.length && events[i].offset == offset) {
+                Event e = events[i++];
+                if (e.isBegin) {
+                    active.merge(e.priority, 1, Integer::sum);
+                } else {
+                    decrement(active, e.priority);
+                }
+            }
+
+            openWinner = active.isEmpty() ? null : active.firstKey();
+            openFrom = offset;
+        }
+        return out;
     }
 
-    private void updateBatchContainers(List<PersisterStateBatch> nonOverlappingBatches) {
-        sortedBatches.removeAll(nonOverlappingBatches);
-        finalBatchList.addAll(nonOverlappingBatches);
+    private void decrement(TreeMap<BatchPriority, Integer> active, BatchPriority priority) {
+        int count = active.get(priority);
+        if (count == 1) {
+            active.remove(priority);
+        } else {
+            active.put(priority, count - 1);
+        }
     }
 
-    /**
-     * Accepts a list of {@link PersisterStateBatch} and checks:
-     * - last offset is < start offset => batch is removed
-     * - first offset > start offset => batch is preserved
-     * - start offset intersects the batch => part of batch before start offset is removed and
-     * the part after it is preserved.
-     */
-    private void pruneBatches() {
-        if (startOffset == -1 || combinedBatchList.isEmpty()) {
-            return;
-        }
-        List<PersisterStateBatch> retainedBatches = new ArrayList<>(combinedBatchList.size());
-        combinedBatchList.forEach(batch -> {
-            if (batch.lastOffset() < startOffset) {
-                // batch is expired, skip current iteration
-                // -------
-                //         | -> start offset
+    private void appendCoalesced(List<PersisterStateBatch> out, long from, long to, BatchPriority winner) {
+        if (!out.isEmpty()) {
+            PersisterStateBatch tail = out.get(out.size() - 1);
+            if (tail.lastOffset() + 1 == from
+                && tail.deliveryState() == winner.deliveryState()
+                && tail.deliveryCount() == winner.deliveryCount()) {
+                out.set(out.size() - 1, new PersisterStateBatch(
+                    tail.firstOffset(), to, winner.deliveryState(), winner.deliveryCount()));
                 return;
             }
-
-            if (batch.firstOffset() >= startOffset) {
-                // complete batch is valid
-                //    ---------
-                //  | -> start offset
-                retainedBatches.add(batch);
-            } else {
-                // start offset intersects batch
-                //   ---------
-                //       |     -> start offset
-                retainedBatches.add(new PersisterStateBatch(startOffset, batch.lastOffset(), batch.deliveryState(), batch.deliveryCount()));
-            }
-        });
-        // update the instance variable
-        combinedBatchList = retainedBatches;
+        }
+        out.add(new PersisterStateBatch(from, to, winner.deliveryState(), winner.deliveryCount()));
     }
 
-    private void handleSameStateMerge(PersisterStateBatch prev, PersisterStateBatch candidate) {
-        sortedBatches.add(new PersisterStateBatch(
-            prev.firstOffset(),
-            // cover cases
-            // prev:      ------   --------       ---------
-            // candidate:   ---       ----------           -----
-            Math.max(candidate.lastOffset(), prev.lastOffset()),
-            prev.deliveryState(),
-            prev.deliveryCount()
-        ));
-    }
-
-    private void handleDiffStateOverlap(PersisterStateBatch prev, PersisterStateBatch candidate) {
-        if (candidate.firstOffset() == prev.firstOffset()) {
-            handleDiffStateOverlapFirstOffsetAligned(prev, candidate);
-        } else {    // candidate.firstOffset() > prev.firstOffset()
-            handleDiffStateOverlapFirstOffsetNotAligned(prev, candidate);
+    private record BatchPriority(short deliveryCount, byte deliveryState) {
+        private static BatchPriority from(PersisterStateBatch batch) {
+            return new BatchPriority(batch.deliveryCount(), batch.deliveryState());
         }
     }
 
-    private void handleDiffStateOverlapFirstOffsetAligned(PersisterStateBatch prev, PersisterStateBatch candidate) {
-        if (candidate.lastOffset() == prev.lastOffset()) {  // case 1
-            // candidate can never have lower or equal priority
-            // since sortedBatches order takes that into account.
-            // -------
-            // -------
-            sortedBatches.add(candidate);
-        } else {
-            // case 2 is not possible with TreeSet. It is symmetric to case 3.
-            // case 3
-            // --------
-            // -----------
-            if (compareBatchDeliveryInfo(candidate, prev) < 0) {
-                sortedBatches.add(prev);
-                sortedBatches.add(new PersisterStateBatch(
-                    prev.lastOffset() + 1,
-                    candidate.lastOffset(),
-                    candidate.deliveryState(),
-                    candidate.deliveryCount()
-                ));
-            } else {
-                // candidate priority is >= prev
-                sortedBatches.add(candidate);
-            }
-        }
-    }
-
-    private void handleDiffStateOverlapFirstOffsetNotAligned(PersisterStateBatch prev, PersisterStateBatch candidate) {
-        if (candidate.lastOffset() < prev.lastOffset()) {    // case 4
-            handleDiffStateOverlapPrevSwallowsCandidate(prev, candidate);
-        } else if (candidate.lastOffset() == prev.lastOffset()) {    // case 5
-            handleDiffStateOverlapLastOffsetAligned(prev, candidate);
-        } else {    // case 6
-            handleDiffStateOverlapCandidateOffsetsLarger(prev, candidate);
-        }
-    }
-
-    private void handleDiffStateOverlapPrevSwallowsCandidate(PersisterStateBatch prev, PersisterStateBatch candidate) {
-        // --------
-        //   ----
-        if (compareBatchDeliveryInfo(candidate, prev) < 0) {
-            sortedBatches.add(prev);
-        } else {
-            sortedBatches.add(new PersisterStateBatch(
-                prev.firstOffset(),
-                candidate.firstOffset() - 1,
-                prev.deliveryState(),
-                prev.deliveryCount()
-            ));
-
-            sortedBatches.add(candidate);
-
-            sortedBatches.add(new PersisterStateBatch(
-                candidate.lastOffset() + 1,
-                prev.lastOffset(),
-                prev.deliveryState(),
-                prev.deliveryCount()
-            ));
-        }
-    }
-
-    private void handleDiffStateOverlapLastOffsetAligned(PersisterStateBatch prev, PersisterStateBatch candidate) {
-        // --------
-        //    -----
-        if (compareBatchDeliveryInfo(candidate, prev) < 0) {
-            sortedBatches.add(prev);
-        } else {
-            sortedBatches.add(new PersisterStateBatch(
-                prev.firstOffset(),
-                candidate.firstOffset() - 1,
-                prev.deliveryState(),
-                prev.deliveryCount()
-            ));
-
-            sortedBatches.add(candidate);
-        }
-    }
-
-    private void handleDiffStateOverlapCandidateOffsetsLarger(PersisterStateBatch prev, PersisterStateBatch candidate) {
-        //   -------
-        //      -------
-        if (compareBatchDeliveryInfo(candidate, prev) < 0) {
-            sortedBatches.add(prev);
-
-            sortedBatches.add(new PersisterStateBatch(
-                prev.lastOffset() + 1,
-                candidate.lastOffset(),
-                candidate.deliveryState(),
-                candidate.deliveryCount()
-            ));
-        } else {
-            // candidate has higher priority
-            sortedBatches.add(new PersisterStateBatch(
-                prev.firstOffset(),
-                candidate.firstOffset() - 1,
-                prev.deliveryState(),
-                prev.deliveryCount()
-            ));
-
-            sortedBatches.add(candidate);
-        }
-    }
-
-    /**
-     * Holder class for intermediate state
-     * used in the batch merge algorithm.
-     */
-    static class MergeCandidatePair {
-        private final PersisterStateBatch prev;
-        private final PersisterStateBatch candidate;
-        public static final MergeCandidatePair EMPTY = new MergeCandidatePair(null, null);
-
-        public MergeCandidatePair(
-            PersisterStateBatch prev,
-            PersisterStateBatch candidate
-        ) {
-            this.prev = prev;
-            this.candidate = candidate;
-        }
-
-        public PersisterStateBatch prev() {
-            return prev;
-        }
-
-        public PersisterStateBatch candidate() {
-            return candidate;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof MergeCandidatePair that)) return false;
-            return Objects.equals(prev, that.prev) && Objects.equals(candidate, that.candidate);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(prev, candidate);
-        }
+    private record Event(long offset, boolean isBegin, BatchPriority priority) {
     }
 }

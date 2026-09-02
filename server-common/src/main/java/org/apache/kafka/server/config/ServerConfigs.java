@@ -39,9 +39,13 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class ServerConfigs {
     /** ********* General Configuration ***********/
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final String BROKER_ID_CONFIG = "broker.id";
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final int BROKER_ID_DEFAULT = -1;
-    public static final String BROKER_ID_DOC = "The broker id for this server.";
+    @Deprecated(since = "4.4", forRemoval = true)
+    public static final String BROKER_ID_DOC = "The broker id for this server. " +
+            "This configuration is deprecated and will be removed in Apache Kafka 5.0. Please use <code>node.id</code> instead.";
 
     public static final String MESSAGE_MAX_BYTES_CONFIG = "message.max.bytes";
     public static final String MESSAGE_MAX_BYTES_DOC = TopicConfig.MAX_MESSAGE_BYTES_DOC +

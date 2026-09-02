@@ -130,8 +130,12 @@ public class Acknowledgements {
      * @param acknowledgeException the exception (will be null if successful)
      */
     public void complete(KafkaException acknowledgeException) {
-        this.acknowledgeException = acknowledgeException;
-        completed = true;
+        if (!completed) {
+            if (acknowledgeException != null) {
+                this.acknowledgeException = acknowledgeException;
+            }
+            completed = true;
+        }
     }
 
     /**
