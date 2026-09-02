@@ -26,7 +26,7 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, 
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.api.streams.assignor.{GroupAssignment, GroupSpec, MemberAssignment, TaskAssignor, TopologyDescriber}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
-import org.apache.kafka.server.common.Feature
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertThrows, assertTrue}
 
 import java.util
@@ -1046,6 +1046,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
   @ClusterTest(
     types = Array(Type.KRAFT),
+    metadataVersion = MetadataVersion.IBP_4_5_IV0,
     serverProperties = Array(
       // Registered on the broker only, not on the controller.
       // The class name has to be spelled out because annotation values must be compile-time constants.
@@ -1105,6 +1106,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
   @ClusterTest(
     types = Array(Type.KRAFT),
+    metadataVersion = MetadataVersion.IBP_4_5_IV0,
     serverProperties = Array(
       // Registered on the broker only, not on the controller.
       // The class name has to be spelled out because annotation values must be compile-time constants.
@@ -1157,16 +1159,12 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // A valid change is accepted.
       alterGroupConfig(controllerAdmin, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
 
-      // An assignor set through the broker does not block later changes sent directly to the controller,
-      // even though the controller does not know that assignor.
+      // Once the group selects an assignor registered on the brokers only, the controller rejects any change
+      // sent directly to it, since it validates the complete group config against its own assignors.
       alterGroupConfig(admin, GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME)
-      alterGroupConfig(controllerAdmin, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "55000")
-
-      TestUtils.waitUntilTrue(() => {
-        val groupConfig = admin.describeConfigs(List(groupConfigResource).asJava).all().get().get(groupConfigResource)
-        groupConfig.get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() == CustomStreamsTaskAssignor.NAME &&
-          groupConfig.get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value() == "55000"
-      }, "Group configs were not updated to the expected values within the timeout period.")
+      assertRejected(s"'${CustomStreamsTaskAssignor.NAME}' is not a registered task assignor") {
+        alterGroupConfig(controllerAdmin, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "55000")
+      }
     } finally {
       admin.close()
       controllerAdmin.close()

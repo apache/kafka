@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -479,58 +478,18 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
-     * Validate a GROUP config change on the forwarding broker, before it is sent to the
-     * controller. From metadata version 4.5-IV0 on, the whole group config is validated here.
-     *
-     * @param newGroupConfig         The new unparsed group config overrides.
-     * @param groupCoordinatorConfig The group coordinator config.
-     * @param shareGroupConfig       The share group config.
-     */
-    public static void validateOnBroker(
-        Map<String, String> newGroupConfig,
-        GroupCoordinatorConfig groupCoordinatorConfig,
-        ShareGroupConfig shareGroupConfig
-    ) {
-        validate(newGroupConfig, groupCoordinatorConfig, shareGroupConfig, true);
-    }
-
-    /**
-     * Validate a GROUP config change on the controller. Below metadata version 4.5-IV0, the whole
-     * group config is validated here. From 4.5-IV0 on, changes forwarded by a broker are no longer
-     * validated here. The streams assignor name is only validated when the change sets a new value.
-     *
-     * @param newGroupConfig         The new unparsed group config overrides.
-     * @param existingGroupConfig    The group config overrides before the change.
-     * @param groupCoordinatorConfig The group coordinator config.
-     * @param shareGroupConfig       The share group config.
-     */
-    public static void validateOnController(
-        Map<String, String> newGroupConfig,
-        Map<String, String> existingGroupConfig,
-        GroupCoordinatorConfig groupCoordinatorConfig,
-        ShareGroupConfig shareGroupConfig
-    ) {
-        boolean streamsAssignorNameChanged = !Objects.equals(
-            newGroupConfig.get(STREAMS_ASSIGNOR_NAME_CONFIG),
-            existingGroupConfig.get(STREAMS_ASSIGNOR_NAME_CONFIG)
-        );
-        validate(newGroupConfig, groupCoordinatorConfig, shareGroupConfig, streamsAssignorNameChanged);
-    }
-
-    /**
      * Check that the given properties contain only valid group config names and that
-     * all values can be parsed and are valid.
+     * all values can be parsed and are valid. Called on the forwarding broker from metadata
+     * version 4.5-IV0 on, and on the controller for requests that did not come through such a broker.
      *
-     * @param newGroupConfig              The new unparsed group config overrides.
-     * @param groupCoordinatorConfig      The group coordinator config.
-     * @param shareGroupConfig            The share group config.
-     * @param validateStreamsAssignorName Whether to check that the streams assignor is registered.
+     * @param newGroupConfig         The new unparsed group config overrides.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
      */
-    private static void validate(
+    public static void validate(
         Map<String, String> newGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
-        ShareGroupConfig shareGroupConfig,
-        boolean validateStreamsAssignorName
+        ShareGroupConfig shareGroupConfig
     ) {
         validateNames(newGroupConfig);
         // ConfigDef silently de-duplicates LIST values during parsing, so inspect the raw value to make
@@ -543,9 +502,6 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig,
             shareGroupConfig
         );
-        if (validateStreamsAssignorName) {
-            validateStreamsAssignorName(parsed, groupCoordinatorConfig);
-        }
     }
 
     /**
@@ -673,6 +629,16 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
 
+        // The selected streams assignor must be one of the assignors registered on the broker.
+        if (parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) {
+            String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
+            List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
+            if (!registeredAssignors.contains(assignorName)) {
+                throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
+                    "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
+            }
+        }
+
         // Cross-field validations: session timeout must be greater than heartbeat interval.
         validateSessionExceedsHeartbeat(
             parsed,
@@ -702,26 +668,6 @@ public final class GroupConfig extends AbstractConfig {
         if (dlqTopicName != null && !dlqTopicName.isEmpty() && dlqTopicName.startsWith("__")) {
             throw new InvalidConfigurationException(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG +
                 ": DLQ topic name must not start with '__'");
-        }
-    }
-
-    /**
-     * Validates that the selected streams assignor is one of the registered assignors.
-     * No-op when the key is absent from the parsed map.
-     *
-     * @param parsed                 The parsed group config overrides.
-     * @param groupCoordinatorConfig The group coordinator config.
-     */
-    private static void validateStreamsAssignorName(
-        Map<String, Object> parsed,
-        GroupCoordinatorConfig groupCoordinatorConfig
-    ) {
-        if (!parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) return;
-        String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
-        List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
-        if (!registeredAssignors.contains(assignorName)) {
-            throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
-                "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
         }
     }
 

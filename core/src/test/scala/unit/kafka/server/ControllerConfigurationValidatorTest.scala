@@ -182,7 +182,7 @@ class ControllerConfigurationValidatorTest {
     val config = new util.TreeMap[String, String]()
     config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
     config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000")
-    validator.validate(new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION, true)
+    validator.validate(new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION, false)
   }
 
   @Test
@@ -200,7 +200,7 @@ class ControllerConfigurationValidatorTest {
     config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, null)
     assertEquals("Null value not supported for group configs: consumer.heartbeat.interval.ms",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION, true)).getMessage)
+        new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.LATEST_PRODUCTION, false)).getMessage)
   }
 
   @Test
@@ -214,7 +214,18 @@ class ControllerConfigurationValidatorTest {
   }
 
   @Test
-  def testGroupConfigNotValidatedWhenForwardedAtMetadataVersion4_5(): Unit = {
+  def testInvalidGroupConfig(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put("foobar", "abc")
+    // Not forwarded by a broker, so the controller validates the change even on IBP_4_5_IV0.
+    assertEquals("Unknown group config name: foobar",
+      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
+        new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.IBP_4_5_IV0, false)).getMessage)
+  }
+
+  @Test
+  def testInvalidGroupConfigForwarded(): Unit = {
     // A broker on IBP_4_5_IV0 or later has already validated the change (see
     // ConfigAdminManager#validateGroupConfigChange), so the controller lets it through.
     val config = new util.TreeMap[String, String]()
@@ -223,35 +234,12 @@ class ControllerConfigurationValidatorTest {
   }
 
   @Test
-  def testGroupConfigValidatedWhenNotForwarded(): Unit = {
-    val config = new util.TreeMap[String, String]()
-    config.put("foobar", "abc")
-    assertEquals("Unknown group config name: foobar",
-      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.IBP_4_5_IV0, false)).getMessage)
-  }
-
-  @Test
-  def testGroupConfigValidatedWhenForwardedBelowMetadataVersion4_5(): Unit = {
+  def testInvalidGroupConfigForwardedBelow4_5(): Unit = {
+    // Below IBP_4_5_IV0 the forwarding broker does not validate group configs, so the controller still does.
     val config = new util.TreeMap[String, String]()
     config.put("foobar", "abc")
     assertEquals("Unknown group config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(GROUP, "group"), config, emptyMap(), MetadataVersion.IBP_4_4_IV2, true)).getMessage)
-  }
-
-  @Test
-  def testStreamsAssignorNameValidatedOnlyWhenChanged(): Unit = {
-    val existing = util.Map.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "custom")
-    val config = new util.TreeMap[String, String]()
-    // Changing the assignor is validated against the assignors registered on the controller...
-    config.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist")
-    assertEquals("streams.assignor.name 'does-not-exist' is not a registered task assignor. " +
-      "Registered assignors are: [sticky].",
-      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config, existing, MetadataVersion.IBP_4_5_IV0, false)).getMessage)
-    // ...but an assignor the group already selects is not, since it may be registered on the brokers only.
-    config.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "custom")
-    validator.validate(new ConfigResource(GROUP, "group"), config, existing, MetadataVersion.IBP_4_5_IV0, false)
   }
 }

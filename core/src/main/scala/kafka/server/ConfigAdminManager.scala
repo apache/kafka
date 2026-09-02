@@ -24,7 +24,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidConfigurationException, InvalidRequestException}
+import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, GroupAuthorizationException, InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.message.{AlterConfigsRequestData, AlterConfigsResponseData, IncrementalAlterConfigsRequestData, IncrementalAlterConfigsResponseData}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
@@ -64,18 +64,17 @@ import scala.jdk.CollectionConverters._
  * However, we have to handle it here now in order to maintain compatibility.
  *
  * Configuration processing is split into two parts.
- * - The first step, called "preprocessing," handles setting KIP-412 log levels, and validating
- * BROKER and GROUP configurations. We also filter out some other things here like UNKNOWN
- * resource types, etc.
+ * - The first step, called "preprocessing," handles setting KIP-412 log levels, validating
+ * BROKER and GROUP configurations. We also filter out some other things here like UNKNOWN resource
+ * types, etc.
  * - The second step is "persistence," and handles storing the configurations durably to our
  * metadata store.
  *
  * The active controller performs its own configuration validation step in
  * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
- * TOPIC resources, since we already validated changes to BROKER and GROUP resources on the
- * forwarding broker. GROUP resources are validated on the forwarding broker from metadata version
- * 4.5-IV0 on; the controller validates them too when the request did not come through such a
- * broker. The controller is also responsible for enforcing the configured
+ * TOPIC resources, since we already validated changes to BROKER resources (and, from
+ * metadata version 4.5-IV0 on, GROUP resources) on the forwarding broker. The controller
+ * is also responsible for enforcing the configured
  * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
 class ConfigAdminManager(nodeId: Int,
@@ -149,6 +148,9 @@ class ConfigAdminManager(nodeId: Int,
               }
               validateBrokerConfigChange(resource, configResource)
             case GROUP =>
+              if (!authorize(ResourceType.GROUP, resource.resourceName())) {
+                throw new GroupAuthorizationException(Errors.GROUP_AUTHORIZATION_FAILED.message())
+              }
               validateGroupConfigChange(resource, configResource)
             case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
@@ -175,14 +177,7 @@ class ConfigAdminManager(nodeId: Int,
     val perBrokerConfig = configResource.name().nonEmpty
     val persistentProps = configRepository.config(configResource)
     val configProps = conf.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
-    val alterConfigOps = resource.configs().asScala.map {
-      config =>
-        val opType = AlterConfigOp.OpType.forId(config.configOperation())
-        if (opType == null) {
-          throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
-        }
-        new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
-    }.toSeq
+    val alterConfigOps = toAlterConfigOps(resource)
     prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
     try {
       validateBrokerConfigChange(configProps, configResource)
@@ -208,14 +203,8 @@ class ConfigAdminManager(nodeId: Int,
     }
  }
 
-  private def validateGroupConfigChange(
-    resource: IAlterConfigsResource,
-    configResource: ConfigResource
-  ): Unit = {
-    validateGroupResourceName(resource.resourceName())
-    val configProps = new Properties()
-    configProps.putAll(configRepository.config(configResource))
-    val alterConfigOps = resource.configs().asScala.map {
+  private def toAlterConfigOps(resource: IAlterConfigsResource): Seq[AlterConfigOp] = {
+    resource.configs().asScala.map {
       config =>
         val opType = AlterConfigOp.OpType.forId(config.configOperation())
         if (opType == null) {
@@ -223,8 +212,18 @@ class ConfigAdminManager(nodeId: Int,
         }
         new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
     }.toSeq
+  }
+
+  private def validateGroupConfigChange(
+    resource: IAlterConfigsResource,
+    configResource: ConfigResource
+  ): Unit = {
+    validateGroupResourceName(resource.resourceName())
+    val configProps = new Properties()
+    configProps.putAll(configRepository.config(configResource))
+    val alterConfigOps = toAlterConfigOps(resource)
     prepareIncrementalConfigs(alterConfigOps, configProps, GroupConfig.CONFIG_DEF.configKeys.asScala)
-    GroupConfig.validateOnBroker(configProps.asScala.asJava, conf.groupCoordinatorConfig, conf.shareGroupConfig)
+    GroupConfig.validate(configProps.asScala.asJava, conf.groupCoordinatorConfig, conf.shareGroupConfig)
   }
 
   /**
@@ -277,6 +276,9 @@ class ConfigAdminManager(nodeId: Int,
               }
               validateBrokerConfigChange(resource, configResource)
             case GROUP =>
+              if (!authorize(ResourceType.GROUP, resource.resourceName())) {
+                throw new GroupAuthorizationException(Errors.GROUP_AUTHORIZATION_FAILED.message())
+              }
               validateGroupConfigChange(resource)
             case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
@@ -317,7 +319,7 @@ class ConfigAdminManager(nodeId: Int,
     resource.configs().forEach {
       config => configProps.setProperty(config.name(), config.value())
     }
-    GroupConfig.validateOnBroker(configProps.asScala.asJava, conf.groupCoordinatorConfig, conf.shareGroupConfig)
+    GroupConfig.validate(configProps.asScala.asJava, conf.groupCoordinatorConfig, conf.shareGroupConfig)
   }
 
   def validateResourceNameIsCurrentNodeId(name: String): Unit = {

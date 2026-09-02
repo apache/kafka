@@ -430,7 +430,7 @@ class ConfigAdminManagerTest {
   @Test
   def testPreprocessIncrementalWithGroupConfig(): Unit = {
     val manager = newConfigAdminManager(1)
-    // A valid GROUP config change is not preprocessed; it is forwarded to the controller.
+    // A valid GROUP config change passes broker validation and is left in the request to be forwarded.
     val valid = groupIncremental(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000", OpType.SET)
     assertEquals(Collections.emptyMap(),
       manager.preprocess(new IncrementalAlterConfigsRequestData().
@@ -438,7 +438,7 @@ class ConfigAdminManagerTest {
           valid))),
         (_, _) => true))
 
-    // An invalid GROUP config change is rejected on the broker instead of being forwarded.
+    // An invalid GROUP config change is rejected by the broker instead of being forwarded.
     val invalid = groupIncremental(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10", OpType.SET)
     assertEquals(Collections.singletonMap(invalid,
       new ApiError(Errors.INVALID_CONFIG,
@@ -447,6 +447,19 @@ class ConfigAdminManagerTest {
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
           invalid))),
         (_, _) => true))
+  }
+
+  @Test
+  def testPreprocessIncrementalWithUnauthorizedGroupConfig(): Unit = {
+    val manager = newConfigAdminManager(1)
+    // Authorization is checked before validation, so the caller learns nothing about the change.
+    val invalid = groupIncremental(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10", OpType.SET)
+    assertEquals(Collections.singletonMap(invalid,
+      new ApiError(Errors.GROUP_AUTHORIZATION_FAILED, null)),
+      manager.preprocess(new IncrementalAlterConfigsRequestData().
+        setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
+          invalid))),
+        (_, _) => false))
   }
 
   def groupLegacy(configName: String, value: String): LAlterConfigsResource =
@@ -460,7 +473,7 @@ class ConfigAdminManagerTest {
   @Test
   def testPreprocessLegacyWithGroupConfig(): Unit = {
     val manager = newConfigAdminManager(1)
-    // A valid GROUP config change is not preprocessed; it is forwarded to the controller.
+    // A valid GROUP config change passes broker validation and is left in the request to be forwarded.
     val valid = groupLegacy(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
     assertEquals(Collections.emptyMap(),
       manager.preprocess(new AlterConfigsRequestData().
@@ -468,7 +481,7 @@ class ConfigAdminManagerTest {
           valid))),
         (_, _) => true))
 
-    // An invalid GROUP config change is rejected on the broker instead of being forwarded.
+    // An invalid GROUP config change is rejected by the broker instead of being forwarded.
     val invalid = groupLegacy(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10")
     assertEquals(Collections.singletonMap(invalid,
       new ApiError(Errors.INVALID_CONFIG,
@@ -477,6 +490,19 @@ class ConfigAdminManagerTest {
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
           invalid))),
         (_, _) => true))
+  }
+
+  @Test
+  def testPreprocessLegacyWithUnauthorizedGroupConfig(): Unit = {
+    val manager = newConfigAdminManager(1)
+    // Authorization is checked before validation, so the caller learns nothing about the change.
+    val invalid = groupLegacy(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10")
+    assertEquals(Collections.singletonMap(invalid,
+      new ApiError(Errors.GROUP_AUTHORIZATION_FAILED, null)),
+      manager.preprocess(new AlterConfigsRequestData().
+        setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
+          invalid))),
+        (_, _) => false))
   }
 
   @Test

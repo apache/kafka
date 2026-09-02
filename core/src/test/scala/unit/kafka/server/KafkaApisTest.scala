@@ -604,6 +604,9 @@ class KafkaApisTest extends Logging {
 
     val localResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "localResource")
     val forwardedResource = new ConfigResource(ConfigResource.Type.GROUP, "forwardedResource")
+    // The GROUP change is validated on the broker, which authorizes it first.
+    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.GROUP,
+      forwardedResource.name, AuthorizationResult.ALLOWED)
 
     val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
 
@@ -619,7 +622,7 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
 
-    verify(authorizer, times(1)).authorize(any(), any())
+    verify(authorizer, times(2)).authorize(any(), any())
     verify(forwardingManager, times(1)).forwardRequest(
       any(),
       any(),
