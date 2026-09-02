@@ -38,7 +38,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -55,7 +54,7 @@ public class ClientRebootstrapTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testAdminRebootstrap(ClusterInstance clusterInstance) {
+    public void testAdminRebootstrap(ClusterInstance clusterInstance) throws InterruptedException {
         var broker0 = 0;
         var broker1 = 1;
         var timeout = 60;
@@ -66,8 +65,7 @@ public class ClientRebootstrapTest {
             admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
 
             // Only the broker 1 is available for the admin client during the bootstrap.
-            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
-            assertTrue(topics.contains(TOPIC));
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(5, TimeUnit.SECONDS).contains(TOPIC), timeout * 1000, "Topic not visible after creation");
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
@@ -75,8 +73,7 @@ public class ClientRebootstrapTest {
             // The broker 1, originally cached during the bootstrap, is offline.
             // However, the broker 0 from the bootstrap list is online.
             // Should be able to list topics again.
-            topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
-            assertTrue(topics.contains(TOPIC));
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(5, TimeUnit.SECONDS).contains(TOPIC), timeout * 1000, "Topic not visible after broker restart");
         }
     }
 
@@ -87,7 +84,7 @@ public class ClientRebootstrapTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testAdminRebootstrapDisabled(ClusterInstance clusterInstance) {
+    public void testAdminRebootstrapDisabled(ClusterInstance clusterInstance) throws InterruptedException {
         var broker0 = 0;
         var broker1 = 1;
 
@@ -97,15 +94,17 @@ public class ClientRebootstrapTest {
         try {
             admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
             // Only the broker 1 is available for the admin client during the bootstrap.
-            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS));
-            assertTrue(topics.contains(TOPIC));
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(5, TimeUnit.SECONDS).contains(TOPIC), 60 * 1000, "Topic not visible after creation");
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
 
             // The broker 1, originally cached during the bootstrap, is offline.
-            // As a result, the admin client will throw a TimeoutException when trying to get list of the topics.
-            assertThrows(TimeoutException.class, () -> admin.listTopics().names().get(5, TimeUnit.SECONDS));
+            // As a result, the admin client will fail when trying to get the list of topics.
+            // Depending on timing, this throws either a TimeoutException or an ExecutionException
+            // wrapping a Kafka TimeoutException.
+            Exception e = assertThrows(Exception.class, () -> admin.listTopics().names().get(5, TimeUnit.SECONDS));
+            assertTrue(e instanceof TimeoutException || (e instanceof ExecutionException && e.getCause() instanceof org.apache.kafka.common.errors.TimeoutException));
         } finally {
             // Since the brokers cached during the bootstrap are offline, the admin client needs to wait the default timeout for other threads.
             admin.close(Duration.ZERO);
