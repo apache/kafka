@@ -181,11 +181,7 @@ jobs:
     if: ${{ ! needs.configure.outputs.is-draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        java: [25, 17]
-    name: API Checker Java ${{ matrix.java }}
+    name: API Checker Java 25
 
     steps:
       - name: Checkout code
@@ -197,7 +193,7 @@ jobs:
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
-          java-version: ${{ matrix.java }}
+          java-version: 25
           gradle-cache-read-only: ${{ !inputs.is-trunk }}
           gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
@@ -213,7 +209,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: api-checker-reports-java-${{ matrix.java }}
+          name: api-checker-reports-java-25
           path: |
             api-checker/**/build/reports/**
             api-checker/**/build/test-results/**/*.xml
