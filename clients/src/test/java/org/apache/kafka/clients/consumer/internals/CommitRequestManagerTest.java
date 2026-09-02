@@ -804,15 +804,15 @@ public class CommitRequestManagerTest {
                 // the coordinator never becomes known since there is no real broker to respond.
                 networkClientDelegate.poll(50, time.milliseconds());
 
+                long waitMs = realCommitRequestManager.maximumTimeToWait(time.milliseconds());
+                assertTrue(waitMs > 0, "maximumTimeToWait must be > 0 while real bootstrap DNS resolution is pending; got " + waitMs);
+
                 Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
                 if (metadataError.isPresent()) {
                     assertInstanceOf(BootstrapResolutionException.class, metadataError.get());
                     sawBootstrapException = true;
                     break;
                 }
-
-                long waitMs = realCommitRequestManager.maximumTimeToWait(time.milliseconds());
-                assertTrue(waitMs > 0, "maximumTimeToWait must be > 0 while real bootstrap DNS resolution is pending; got " + waitMs);
             }
             assertTrue(sawBootstrapException, "Expected a real BootstrapResolutionException within " + (bootstrapResolveTimeoutMs + 3000) + "ms");
         }
