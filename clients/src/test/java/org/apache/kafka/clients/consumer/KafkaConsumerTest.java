@@ -2815,8 +2815,10 @@ public class KafkaConsumerTest {
         fetches1.put(t2p0, new FetchInfo(0, 10));
         client.respondFrom(fetchResponse(fetches1), node);
 
-        // A background heartbeat can complete the fetch concurrently, so a single poll may return
-        // no records; poll until the buffered records are returned.
+        // A background heartbeat poll can retrieve a completed fetch, then trigger its completion
+        // logic in a separate step to put the data in the buffer. If the app thread poll runs in
+        // between, it finds no completed request or buffered data, so it may return empty on a
+        // first poll attempt.
         AtomicReference<ConsumerRecords<String, String>> polled = new AtomicReference<>(ConsumerRecords.empty());
         TestUtils.waitForCondition(() -> {
             polled.set(consumer.poll(Duration.ZERO));
