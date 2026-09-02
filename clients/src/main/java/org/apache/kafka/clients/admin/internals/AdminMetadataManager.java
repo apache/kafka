@@ -319,12 +319,13 @@ public class AdminMetadataManager {
         this.state = State.QUIESCENT;
 
         if (RequestUtils.isFatalException(exception)) {
-            log.warn("Fatal error during metadata update", exception);
             // avoid unchecked/unconfirmed cast to ApiException
             if (exception instanceof  ApiException) {
                 this.fatalException = (ApiException) exception;
             }
 
+            // Log the fatal error once. For UnsupportedVersionException, use the more specific message
+            // that explains which api the remote node does not support instead of the generic one.
             if (exception instanceof UnsupportedVersionException) {
                 if (usingBootstrapControllers) {
                     log.warn("The remote node is not a CONTROLLER that supports the KIP-919 " +
@@ -332,6 +333,8 @@ public class AdminMetadataManager {
                 } else {
                     log.warn("The remote node is not a BROKER that supports the METADATA api.", exception);
                 }
+            } else {
+                log.warn("Fatal error during metadata update", exception);
             }
         } else {
             log.debug("Metadata update failed", exception);
