@@ -276,7 +276,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     private void maybeAutoCommitAsync() {
         if (autoCommitEnabled() && autoCommitState.get().shouldAutoCommit()) {
-            doAutoCommitAsync();
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = requestAutoCommit();
+            // Reset timer to the interval (even if no request was generated), but ensure that if
+            // the request completes with a retriable error, the timer is reset to send the next
+            // auto-commit after the backoff expires.
+            resetAutoCommitTimer();
+            maybeResetTimerWithBackoff(result);
         }
     }
 
@@ -285,15 +290,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             subscriptions.allConsumed(),
             Long.MAX_VALUE);
         return requestAutoCommit(requestState);
-    }
-
-    private void doAutoCommitAsync() {
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = requestAutoCommit();
-        // Reset timer to the interval (even if no request was generated), but ensure that if
-        // the request completes with a retriable error, the timer is reset to send the next
-        // auto-commit after the backoff expires.
-        resetAutoCommitTimer();
-        maybeResetTimerWithBackoff(result);
     }
 
     /**
