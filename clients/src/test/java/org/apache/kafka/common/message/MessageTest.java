@@ -455,92 +455,46 @@ public final class MessageTest {
         testMessageRoundTrip(version, response, response);
     }
 
-    @Test
-    public void testTxnOffsetCommitRequestVersions() throws Exception {
-        String groupId = "groupId";
-        String topicName = "topic";
-        String metadata = "metadata";
-        String txnId = "transactionalId";
-        int producerId = 25;
-        short producerEpoch = 10;
-        String instanceId = "instance";
-        String memberId = "member";
-        int generationId = 1;
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+    public void testTxnOffsetCommitRequestVersions(short version) throws Exception {
+        TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData()
+            .setGroupId("groupId")
+            .setTransactionalId("transactionalId")
+            .setProducerId(25)
+            .setProducerEpoch((short) 10)
+            .setMemberId(version >= 3 ? "member" : "")
+            .setGenerationIdOrMemberEpoch(version >= 3 ? 1 : -1)
+            .setGroupInstanceId(version >= 3 ? "instance" : null)
+            .setTopics(singletonList(
+                new TxnOffsetCommitRequestTopic()
+                    .setTopicId(version >= 6 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
+                    .setName(version < 6 ? "topic" : "")
+                    .setPartitions(singletonList(
+                        new TxnOffsetCommitRequestPartition()
+                            .setPartitionIndex(2)
+                            .setCommittedLeaderEpoch(version >= 2 ? 10 : -1)
+                            .setCommittedMetadata("metadata")
+                            .setCommittedOffset(100)))));
 
-        int partition = 2;
-        int offset = 100;
-
-        testAllMessageRoundTrips(new TxnOffsetCommitRequestData()
-                                     .setGroupId(groupId)
-                                     .setTransactionalId(txnId)
-                                     .setProducerId(producerId)
-                                     .setProducerEpoch(producerEpoch)
-                                     .setTopics(Collections.singletonList(
-                                         new TxnOffsetCommitRequestTopic()
-                                             .setName(topicName)
-                                             .setPartitions(Collections.singletonList(
-                                                 new TxnOffsetCommitRequestPartition()
-                                                     .setPartitionIndex(partition)
-                                                     .setCommittedMetadata(metadata)
-                                                     .setCommittedOffset(offset)
-                                             )))));
-
-        Supplier<TxnOffsetCommitRequestData> request =
-            () -> new TxnOffsetCommitRequestData()
-                      .setGroupId(groupId)
-                      .setTransactionalId(txnId)
-                      .setProducerId(producerId)
-                      .setProducerEpoch(producerEpoch)
-                      .setGroupInstanceId(instanceId)
-                      .setMemberId(memberId)
-                      .setGenerationId(generationId)
-                      .setTopics(Collections.singletonList(
-                          new TxnOffsetCommitRequestTopic()
-                              .setName(topicName)
-                              .setPartitions(Collections.singletonList(
-                                  new TxnOffsetCommitRequestPartition()
-                                      .setPartitionIndex(partition)
-                                      .setCommittedLeaderEpoch(10)
-                                      .setCommittedMetadata(metadata)
-                                      .setCommittedOffset(offset)
-                              ))));
-
-        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
-            TxnOffsetCommitRequestData requestData = request.get();
-            if (version < 2) {
-                requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
-            }
-
-            if (version < 3) {
-                final short finalVersion = version;
-                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
-                requestData.setGroupInstanceId(null);
-                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
-                requestData.setMemberId("");
-                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
-                requestData.setGenerationId(-1);
-            }
-
-            testAllMessageRoundTripsFromVersion(version, requestData);
-        }
+        testMessageRoundTrip(version, request, request);
     }
 
-    @Test
-    public void testTxnOffsetCommitResponseVersions() throws Exception {
-        testAllMessageRoundTrips(
-            new TxnOffsetCommitResponseData()
-                .setTopics(
-                   singletonList(
-                       new TxnOffsetCommitResponseTopic()
-                           .setName("topic")
-                           .setPartitions(singletonList(
-                               new TxnOffsetCommitResponsePartition()
-                                   .setPartitionIndex(1)
-                                   .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                           ))
-                   )
-               )
-               .setThrottleTimeMs(20));
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+    public void testTxnOffsetCommitResponseVersions(short version) throws Exception {
+        TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData()
+            .setThrottleTimeMs(20)
+            .setTopics(singletonList(
+                new TxnOffsetCommitResponseTopic()
+                    .setTopicId(version >= 6 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
+                    .setName(version < 6 ? "topic" : "")
+                    .setPartitions(singletonList(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(1)
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())))));
+
+        testMessageRoundTrip(version, response, response);
     }
 
     @ParameterizedTest

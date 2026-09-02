@@ -20,7 +20,10 @@
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   //
   // Version 2 is the first flexible version.
-  "validVersions": "0-2",
+  //
+  // Version 3 adds the per-group ErrorMessage field so the broker can surface a cause
+  // string when GROUP_DELETION_FAILED (or any other non-NONE error) is returned for a group.
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
@@ -30,7 +33,9 @@
       { "name": "GroupId", "type": "string", "versions": "0+", "mapKey": true, "entityType": "groupId",
         "about": "The group id." },
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
-        "about": "The deletion error, or 0 if the deletion succeeded." }
+        "about": "The deletion error, or 0 if the deletion succeeded." },
+      { "name": "ErrorMessage", "type": "string", "versions": "3+", "nullableVersions": "3+", "ignorable": true, "default": "null",
+        "about": "The error message, or null if there was no error." }
     ]}
   ]
 }

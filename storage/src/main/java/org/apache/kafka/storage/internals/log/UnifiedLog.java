@@ -42,10 +42,10 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -957,7 +957,7 @@ public class UnifiedLog implements AutoCloseable {
             localLog.checkIfMemoryMappedBufferClosed();
             producerExpireCheck.cancel(true);
             maybeHandleIOException(
-                    () -> "Error while renaming dir for " + topicPartition() + " in dir " + dir().getParent(),
+                    () -> "Error while taking producer state snapshot for " + topicPartition() + " in dir " + dir().getParent(),
                     () -> {
                         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
                         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
@@ -1180,7 +1180,7 @@ public class UnifiedLog implements AutoCloseable {
                                             // to be consistent with pre-compression bytesRejectedRate recording
                                             brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
                                             brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
-                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to" +
+                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to " +
                                                     "partition " + topicPartition() + " which exceeds the maximum configured size of " + config().maxMessageSize() + ".");
                                         }
                                     });
@@ -1224,8 +1224,8 @@ public class UnifiedLog implements AutoCloseable {
                                 }
                             });
 
-                            // check messages size does not exceed config.segmentSize
-                            if (validRecords.sizeInBytes() > config().segmentSize()) {
+                            // Like KAFKA-9617 for max.message.bytes, KAFKA-17375 lets followers replicate data accepted before segment.bytes was lowered.
+                            if (origin != AppendOrigin.REPLICATION && validRecords.sizeInBytes() > config().segmentSize()) {
                                 throw new RecordBatchTooLargeException("Message batch size is " + validRecords.sizeInBytes() + " bytes in append " +
                                         "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize() + ".");
                             }
@@ -2104,16 +2104,27 @@ public class UnifiedLog implements AutoCloseable {
 
     /**
      * The log size in bytes for all segments that are only in local log but not yet in remote log.
+     *
+     * <p>A segment is considered "only local" (not yet in remote) when its base-offset is strictly
+     * greater than {@link #highestOffsetInRemoteStorage()}. The strict {@code >} (rather than
+     * {@code >=}) matters: {@code highestOffsetInRemoteStorage} holds the end-offset of the last
+     * segment already copied to remote, so the segment whose base-offset equals that value has
+     * itself been copied. This arises for single-record segments (base-offset == end-offset), which
+     * are common on low-throughput partitions; counting such a segment as local would double-count a
+     * segment that is already in remote storage.
      */
     public long onlyLocalLogSegmentsSize() {
-        return LogSegments.sizeInBytes(logSegments().stream().filter(s -> s.baseOffset() >= highestOffsetInRemoteStorage()).collect(Collectors.toList()));
+        return LogSegments.sizeInBytes(logSegments().stream().filter(s -> s.baseOffset() > highestOffsetInRemoteStorage()).collect(Collectors.toList()));
     }
 
     /**
      * The number of segments that are only in local log but not yet in remote log.
+     *
+     * <p>See {@link #onlyLocalLogSegmentsSize()} for why the base-offset comparison is a strict
+     * {@code >} against {@link #highestOffsetInRemoteStorage()} rather than {@code >=}.
      */
     public long onlyLocalLogSegmentsCount() {
-        return logSegments().stream().filter(s -> s.baseOffset() >= highestOffsetInRemoteStorage()).count();
+        return logSegments().stream().filter(s -> s.baseOffset() > highestOffsetInRemoteStorage()).count();
     }
 
     /**
@@ -2151,7 +2162,7 @@ public class UnifiedLog implements AutoCloseable {
             long maxOffsetInMessages = appendInfo.lastOffset();
 
             if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize(), appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
-                logger.debug("Rolling new log segment (log_size = {}/{}}, " +
+                logger.debug("Rolling new log segment (log_size = {}/{}, " +
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",
@@ -2321,7 +2332,7 @@ public class UnifiedLog implements AutoCloseable {
     // visible for testing
     public void flushProducerStateSnapshot(Path snapshot) {
         maybeHandleIOException(
-                () -> "Error while deleting producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
+                () -> "Error while flushing producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
                 () -> {
                     Utils.flushFileIfExists(snapshot);
                     return null;

@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
+import org.apache.kafka.server.quota.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
@@ -31,13 +31,15 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.internal.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.util.ServerTestUtils
 
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogConfig, LogManager, RecordValidationStats, UnifiedLog}
@@ -82,7 +84,7 @@ class ReplicaFetcherThreadTest {
 
   @AfterEach
   def cleanup(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   private def createReplicaFetcherThread(

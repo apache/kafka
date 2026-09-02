@@ -19,8 +19,8 @@ package org.apache.kafka.common.record.internal;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AbstractIterator;
 
 import java.io.Closeable;
 import java.io.File;
@@ -487,8 +487,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
                         StandardOpenOption.WRITE);
             } else {
                 RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
+                try {
+                    randomAccessFile.setLength(initFileSize);
+                    return randomAccessFile.getChannel();
+                } catch (IOException e) {
+                    randomAccessFile.close();
+                    throw e;
+                }
             }
         } else {
             return FileChannel.open(file.toPath());

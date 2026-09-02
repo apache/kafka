@@ -49,7 +49,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
-object KafkaConfig {
+object KafkaConfig extends Logging {
 
   def main(args: Array[String]): Unit = {
     val combined = new ConfigDef(configDef)
@@ -73,8 +73,15 @@ object KafkaConfig {
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
 
-  def fromProps(props: Properties, doLog: Boolean): KafkaConfig =
+  def fromProps(props: Properties, doLog: Boolean): KafkaConfig = {
+    // Checked on the raw properties because populateSynonyms copies node.id into broker.id.
+    // Do not add a doLog guard: the broker startup path calls this with doLog = false.
+    if (props.containsKey(ServerConfigs.BROKER_ID_CONFIG)) {
+      warn(s"The '${ServerConfigs.BROKER_ID_CONFIG}' configuration is deprecated and will be removed in " +
+        s"Apache Kafka 5.0. Please use '${KRaftConfigs.NODE_ID_CONFIG}' instead.")
+    }
     new KafkaConfig(props, doLog)
+  }
 
   def fromProps(defaults: Properties, overrides: Properties): KafkaConfig =
     fromProps(defaults, overrides, true)
@@ -87,6 +94,9 @@ object KafkaConfig {
   }
 
   def apply(props: java.util.Map[_, _], doLog: Boolean = true): KafkaConfig = new KafkaConfig(props, doLog)
+
+  def apply(props: java.util.Map[_, _], doLog: Boolean, enforceProviderAllowlist: Boolean): KafkaConfig =
+    new KafkaConfig(doLog, AbstractKafkaConfig.populateSynonyms(props), enforceProviderAllowlist)
 
   def configType(configName: String): Option[ConfigDef.Type] =
     AbstractKafkaConfig.configType(configName).toScala
@@ -102,11 +112,16 @@ object KafkaConfig {
  * Any code depends on kafka.server.KafkaConfig will keep for using kafka.server.KafkaConfig for the time being until we move it out of core
  * For more details check KAFKA-15853
  */
-class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
-  extends AbstractKafkaConfig(KafkaConfig.configDef, props, Utils.castToStringObjectMap(props), doLog) with Logging {
+class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProviderAllowlist: Boolean)
+  extends AbstractKafkaConfig(
+    KafkaConfig.configDef,
+    props,
+    if (enforceProviderAllowlist) util.Map.of() else Utils.castToStringObjectMap(props),
+    doLog
+  ) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(true, AbstractKafkaConfig.populateSynonyms(props))
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, AbstractKafkaConfig.populateSynonyms(props))
+  def this(props: java.util.Map[_, _]) = this(true, AbstractKafkaConfig.populateSynonyms(props), false)
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, AbstractKafkaConfig.populateSynonyms(props), false)
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
@@ -159,13 +174,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   private val _shareCoordinatorConfig = new ShareCoordinatorConfig(this)
   def shareCoordinatorConfig: ShareCoordinatorConfig = _shareCoordinatorConfig
 
-  private val _quotaConfig = new QuotaConfig(this)
-  def quotaConfig: QuotaConfig = _quotaConfig
-
   /** ********* General Configuration ***********/
   val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
   val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)
   val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
+  val controllerMaxRecordsPerBatch: Int = getInt(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG)
 
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KRaftConfigs.PROCESS_ROLES_CONFIG).asScala.map {
@@ -236,8 +249,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val replicaSelectorClassName = Option(getString(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG))
 
   /** ********* Replication configuration ***********/
-  val controllerSocketTimeoutMs: Int = getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG)
-  val defaultReplicationFactor: Int = getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG)
   val replicaLagTimeMaxMs = getLong(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG)
   val replicaSocketTimeoutMs = getInt(ReplicationConfigs.REPLICA_SOCKET_TIMEOUT_MS_CONFIG)
   val replicaSocketReceiveBufferBytes = getInt(ReplicationConfigs.REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_CONFIG)
@@ -362,22 +373,47 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
     val controllerListenersValue = controllerListeners
 
-    controllerListenerNames.asScala.flatMap { name =>
+    def nameToEndpoint(name: String, isDefault: Boolean): Option[Endpoint] = {
       controllerAdvertisedListeners
         .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
-        .orElse(
-          // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
-          // which match listener names in controller.listener.names.
-          // Removing "0.0.0.0" host to avoid validation errors. This is to be compatible with the old behavior before 3.9.
-          // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+        .orElse {
           controllerListenersValue
             .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
-            .map(endpoint => if (endpoint.host == "0.0.0.0") {
-              new Endpoint(endpoint.listener, endpoint.securityProtocol, null, endpoint.port)
-            } else {
-              endpoint
-            })
-        )
+            .map { endpoint =>
+              val voterListenerOverride = {
+                // the user did not provide an advertised listener for the default controller listener;
+                // if controller.quorum.voters defines an endpoint for this node, use that as the advertised listener
+                if (isDefault && (endpoint.host == null || endpoint.host == "0.0.0.0")) {
+                  val votersAddress = QuorumConfig.parseVoterConnections(quorumConfig.voters).asScala.get(nodeId())
+                  votersAddress.map { socketAddress =>
+                    new Endpoint(
+                      endpoint.listener,
+                      endpoint.securityProtocol,
+                      socketAddress.getHostString,
+                      socketAddress.getPort
+                    )
+                  }
+                } else {
+                  None
+                }
+              }
+              voterListenerOverride.getOrElse {
+                // Removing "0.0.0.0" host to avoid validation errors.
+                // This is to be compatible with the old behavior before 3.9.
+                // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+                if (endpoint.host == "0.0.0.0") {
+                  new Endpoint(endpoint.listener, endpoint.securityProtocol, null, endpoint.port)
+                } else {
+                  endpoint
+                }
+              }
+            }
+        }
+    }
+
+    controllerListenerNames.asScala.toList match {
+      case Nil => Nil
+      case head :: tail => nameToEndpoint(head, true).toList ++ tail.flatMap(nameToEndpoint(_, false))
     }
   }
 
@@ -399,7 +435,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       require(cordonedLogDirs.size == 1, s"When ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} is set to ${ServerLogConfigs.CORDONED_LOG_DIRS_ALL}, it must not contain other values")
     } else {
       val unknownLogDirs = cordonedLogDirs.asScala.filter(!logDirs().contains(_))
-      require(unknownLogDirs.isEmpty, s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be present in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}. Missing entries : ${unknownLogDirs.mkString(", ")}")
+      require(unknownLogDirs.isEmpty, s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be present in ${ServerLogConfigs.LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}. Missing entries : ${unknownLogDirs.mkString(", ")}")
     }
   }
 
@@ -407,7 +443,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
-      throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
+      throw new ConfigException(s"`${KRaftConfigs.NODE_ID_CONFIG}` and `${ServerConfigs.BROKER_ID_CONFIG}` must be set to the same value. " +
+        s"`${ServerConfigs.BROKER_ID_CONFIG}` is deprecated, please use `${KRaftConfigs.NODE_ID_CONFIG}` instead.")
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
@@ -605,6 +642,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig.logLocalRetentionMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig.logLocalRetentionBytes: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, remoteLogManagerConfig.logRemoteCopyLagMs: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, remoteLogManagerConfig.logRemoteCopyLagBytes: java.lang.Long)
     logProps
   }
 }

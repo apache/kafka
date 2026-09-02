@@ -21,9 +21,9 @@ import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.state.DslWindowParams;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -71,12 +71,20 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
             ))
             : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<TimestampedWindowStoreWithHeaders<K, V>> builder = Stores
-            .timestampedWindowStoreWithHeadersBuilder(
+        final StoreBuilder<?> builder;
+        if (supplier instanceof HeadersBytesStoreSupplier) {
+            builder = Stores.timestampedWindowStoreWithHeadersBuilder(
                 supplier,
                 materialized.keySerde(),
                 materialized.valueSerde()
             );
+        } else {
+            builder = Stores.timestampedWindowStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
+        }
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

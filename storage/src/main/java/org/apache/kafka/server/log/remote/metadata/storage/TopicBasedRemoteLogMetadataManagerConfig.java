@@ -21,8 +21,12 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,12 +38,14 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
-import static org.apache.kafka.common.utils.ConfigUtils.configMapToRedactedString;
+import static org.apache.kafka.common.utils.internals.ConfigUtils.configMapToRedactedString;
 
 /**
  * This class defines the configuration of topic based {@link org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager} implementation.
  */
 public final class TopicBasedRemoteLogMetadataManagerConfig {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManagerConfig.class);
 
     public static final String REMOTE_LOG_METADATA_TOPIC_NAME = "__remote_log_metadata";
 
@@ -81,7 +87,12 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String REMOTE_LOG_METADATA_PRODUCER_PREFIX = "remote.log.metadata.producer.";
     public static final String REMOTE_LOG_METADATA_CONSUMER_PREFIX = "remote.log.metadata.consumer.";
     public static final String REMOTE_LOG_METADATA_ADMIN_PREFIX = "remote.log.metadata.admin.";
+    /**
+     * @deprecated Use {@link #NODE_ID} instead. This key is no longer passed to plugins from Kafka 5.0 (KIP-1232).
+     */
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final String BROKER_ID = "broker.id";
+    public static final String NODE_ID = "node.id";
     public static final String LOG_DIR = "log.dir";
 
     private static final String REMOTE_LOG_METADATA_CLIENT_PREFIX = "__remote_log_metadata_client";
@@ -138,8 +149,22 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         consumeWaitMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP);
         initializationRetryIntervalMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP);
         initializationRetryMaxTimeoutMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_PROP);
-        clientIdPrefix = REMOTE_LOG_METADATA_CLIENT_PREFIX + "_" + props.get(BROKER_ID);
+        clientIdPrefix = REMOTE_LOG_METADATA_CLIENT_PREFIX + "_" + nodeId(props);
         initializeClientProperties(props);
+    }
+
+    private static Object nodeId(Map<String, ?> props) {
+        Object nodeId = props.get(NODE_ID);
+        if (nodeId != null) {
+            return nodeId;
+        }
+        Object brokerId = props.get(BROKER_ID);
+        if (brokerId == null) {
+            throw new ConfigException("Both " + NODE_ID + " and " + BROKER_ID + " configs are missing. Please configure " + NODE_ID + ".");
+        }
+        LOG.warn("The '{}' config is deprecated and will no longer be read in Apache Kafka 5.0. Please use '{}' instead.",
+                 BROKER_ID, NODE_ID);
+        return brokerId;
     }
 
     private void initializeClientProperties(Map<String, ?> configs) {

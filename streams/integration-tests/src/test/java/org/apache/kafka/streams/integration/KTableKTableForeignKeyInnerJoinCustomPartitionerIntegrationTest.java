@@ -19,6 +19,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -42,6 +43,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -49,9 +51,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -62,6 +65,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 
 import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
@@ -94,8 +98,14 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
     static class MultiPartitioner implements StreamPartitioner<String, Void> {
 
+        @SuppressWarnings("removal")
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final String key, final Void value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Void value, final Headers headers, final int numPartitions) {
             return Optional.of(Set.of(0, 1, 2));
         }
     }
@@ -173,21 +183,27 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
     }
 
-    @Test
-    public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldInnerJoinMultiPartitionQueryable(final boolean withHeaders) throws Exception {
         final Set<KeyValue<String, String>> expectedOne = new HashSet<>();
         expectedOne.add(new KeyValue<>("ID123-1", "value1=ID123-A1,value2=BBB"));
         expectedOne.add(new KeyValue<>("ID123-2", "value1=ID123-A2,value2=BBB"));
         expectedOne.add(new KeyValue<>("ID123-3", "value1=ID123-A3,value2=BBB"));
         expectedOne.add(new KeyValue<>("ID123-4", "value1=ID123-A4,value2=BBB"));
 
-        verifyKTableKTableJoin(expectedOne);
+        verifyKTableKTableJoin(expectedOne, withHeaders);
     }
 
-    @Test
-    public void shouldThrowIllegalArgumentExceptionWhenCustomPartitionerReturnsMultiplePartitions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowIllegalArgumentExceptionWhenCustomPartitionerReturnsMultiplePartitions(final boolean withHeaders) throws Exception {
         final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
 
         streams = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfig);
         streamsTwo = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfigTwo);
@@ -210,9 +226,13 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         waitForApplicationState(Arrays.asList(streams, streamsTwo, streamsThree), KafkaStreams.State.ERROR, ofSeconds(240));
     }
 
-    private void verifyKTableKTableJoin(final Set<KeyValue<String, String>> expectedResult) throws Exception {
+    private void verifyKTableKTableJoin(final Set<KeyValue<String, String>> expectedResult, final boolean withHeaders) throws Exception {
         final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
 
         streams = prepareTopology(queryableName, streamsConfig);
         streamsTwo = prepareTopology(queryableName, streamsConfigTwo);
@@ -269,8 +289,8 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
 
         final TableJoined<String, String> tableJoined = TableJoined.with(
-            (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(getKeyB(key).hashCode()) % numPartitions)),
-            (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions))
+            new KeyHashStreamPartitioner<>(KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB),
+            new KeyHashStreamPartitioner<>()
         );
 
         table1.join(table2, KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB, joiner, tableJoined, materialized)
@@ -312,7 +332,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
         final TableJoined<String, String> tableJoined = TableJoined.with(
                 new MultiPartitioner(),
-                (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions))
+                new KeyHashStreamPartitioner<>()
         );
 
         table1.join(table2, KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB, joiner, tableJoined, materialized)
@@ -327,14 +347,14 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     private static Repartitioned<String, String> repartitionA() {
         final Repartitioned<String, String> repartitioned = Repartitioned.as("a");
         return repartitioned.withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
-            .withStreamPartitioner((topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(getKeyB(key).hashCode()) % numPartitions)))
+            .withStreamPartitioner(new KeyHashStreamPartitioner<>(KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB))
             .withNumberOfPartitions(4);
     }
 
     private static Repartitioned<String, String> repartitionB() {
         final Repartitioned<String, String> repartitioned = Repartitioned.as("b");
         return repartitioned.withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
-            .withStreamPartitioner((topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions)))
+            .withStreamPartitioner(new KeyHashStreamPartitioner<>())
             .withNumberOfPartitions(4);
     }
 
@@ -342,4 +362,27 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         return value.substring(0, value.indexOf("-"));
     }
 
+    private static class KeyHashStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
+        private final Function<K, Object> keyExtractor;
+
+        KeyHashStreamPartitioner() {
+            this(key -> key);
+        }
+
+        KeyHashStreamPartitioner(final Function<K, Object> keyExtractor) {
+            this.keyExtractor = keyExtractor;
+        }
+
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final Headers headers, final int numPartitions) {
+            final Object extractedKey = keyExtractor.apply(key);
+            return Optional.of(Collections.singleton(Math.abs(extractedKey.hashCode()) % numPartitions));
+        }
+    }
 }

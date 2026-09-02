@@ -17,9 +17,10 @@
 package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.ChunkedBytesStream;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ChunkedBytesStream;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import net.jpountz.xxhash.XXHashFactory;
 
@@ -62,7 +63,7 @@ public class Lz4CompressionTest {
         ByteBuffer buffer = ByteBuffer.allocate(256);
         Lz4Compression compression = new Lz4Compression.Builder().build();
         Lz4BlockOutputStream out = (Lz4BlockOutputStream) compression.wrapForOutput(
-                new ByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V0);
+                new SingleByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V0);
         assertTrue(out.useBrokenFlagDescriptorChecksum());
 
         buffer.rewind();
@@ -76,7 +77,7 @@ public class Lz4CompressionTest {
         ByteBuffer buffer = ByteBuffer.allocate(256);
         Lz4Compression compression = new Lz4Compression.Builder().build();
         Lz4BlockOutputStream out = (Lz4BlockOutputStream) compression.wrapForOutput(
-                new ByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V1);
+                new SingleByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V1);
         assertFalse(out.useBrokenFlagDescriptorChecksum());
 
         buffer.rewind();
@@ -93,7 +94,7 @@ public class Lz4CompressionTest {
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
             for (int level : Arrays.asList(LZ4.minLevel(), LZ4.defaultLevel(), LZ4.maxLevel())) {
                 Lz4Compression compression = builder.level(level).build();
-                ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
+                ByteBufferOutputStream bufferStream = new SingleByteBufferOutputStream(4);
                 try (OutputStream out = compression.wrapForOutput(bufferStream, magic)) {
                     out.write(data);
                     out.flush();

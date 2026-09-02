@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -41,9 +43,9 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -62,14 +64,17 @@ import java.util.regex.Pattern;
  * @see KTable
  * @see GlobalKTable
  */
+@InterfaceAudience.Public
 public class StreamsBuilder {
 
     /** The actual topology that is constructed by this StreamsBuilder. */
     protected final Topology topology;
 
     /** The topology's internal builder. */
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal InternalTopologyBuilder for subclass access — pending KIP review to promote the type or refactor")
     protected final InternalTopologyBuilder internalTopologyBuilder;
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal InternalStreamsBuilder for subclass access — pending KIP review to promote the type or refactor")
     protected final InternalStreamsBuilder internalStreamsBuilder;
 
     public StreamsBuilder() {
@@ -116,7 +121,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic) {
-        return stream(Collections.singleton(topic));
+        return stream(Set.of(topic));
     }
 
     /**
@@ -134,7 +139,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic,
                                                     final Consumed<K, V> consumed) {
-        return stream(Collections.singleton(topic), consumed);
+        return stream(Set.of(topic), consumed);
     }
 
     /**

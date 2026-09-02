@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 
 /**
  * A Mix-in style interface for classes that are instantiated by reflection and need to take configuration parameters
  */
+@InterfaceAudience.Public
 public interface Configurable {
 
     /**

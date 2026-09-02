@@ -32,22 +32,18 @@ import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
 import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -338,7 +334,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private void process(final TopicSubscriptionChangeEvent event) {
         if (requestManagers.consumerHeartbeatRequestManager.isPresent()) {
             try {
-                if (subscriptions.subscribe(event.topics(), event.listener())) {
+                if (subscriptions.subscribe(event.topics())) {
                     this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
                 }
                 // Join the group if not already part of it, or just send the new subscription to the broker on the next poll.
@@ -349,7 +345,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             }
         } else if (requestManagers.streamsGroupHeartbeatRequestManager.isPresent()) {
             try {
-                if (subscriptions.subscribe(event.topics(), event.listener())) {
+                if (subscriptions.subscribe(event.topics())) {
                     this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
                 }
                 requestManagers.streamsGroupHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
@@ -373,7 +369,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      */
     private void process(final TopicPatternSubscriptionChangeEvent event) {
         try {
-            subscriptions.subscribe(event.pattern(), event.listener());
+            subscriptions.subscribe(event.pattern());
             metadata.requestUpdateForNewTopics();
             requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
                 ConsumerMembershipManager membershipManager = hrm.membershipManager();
@@ -399,7 +395,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
         try {
-            subscriptions.subscribe(event.pattern(), event.listener());
+            subscriptions.subscribe(event.pattern());
             requestManagers.consumerMembershipManager.get().onSubscriptionUpdated();
             event.future().complete(null);
         } catch (Exception e) {
@@ -495,7 +491,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             future.whenComplete(complete(event.future()));
         } else if (requestManagers.streamsMembershipManager.isPresent()) {
             log.debug("Signal the StreamsMembershipManager to leave the streams group since the member is closing");
-            CompletableFuture<Void> future = requestManagers.streamsMembershipManager.get().leaveGroupOnClose();
+            CompletableFuture<Void> future = requestManagers.streamsMembershipManager.get().leaveGroupOnClose(event.membershipOperation());
             future.whenComplete(complete(event.future()));
         }
     }
@@ -662,35 +658,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private void process(final CurrentLagEvent event) {
         try {
-            final TopicPartition topicPartition = event.partition();
-            final IsolationLevel isolationLevel = event.isolationLevel();
-            final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
-
-            final OptionalLong lagOpt;
-            if (lag == null) {
-                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null &&
-                    !subscriptions.partitionEndOffsetRequested(topicPartition)) {
-                    // If the log end offset is unknown and there isn't already an in-flight list offset
-                    // request, issue one with the goal that the lag will be available the next time the
-                    // user calls currentLag().
-                    log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
-                    subscriptions.requestPartitionEndOffset(topicPartition);
-
-                    // Emulates the Consumer.endOffsets() logic...
-                    Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(
-                        topicPartition,
-                        ListOffsetsRequest.LATEST_TIMESTAMP
-                    );
-
-                    requestManagers.offsetsRequestManager.fetchOffsets(timestampToSearch, false);
-                }
-
-                lagOpt = OptionalLong.empty();
-            } else {
-                lagOpt = OptionalLong.of(lag);
-            }
-
-            event.future().complete(lagOpt);
+            event.future().complete(requestManagers.offsetsRequestManager.currentLag(
+                event.partition(),
+                event.isolationLevel()
+            ));
         } catch (Exception e) {
             event.future().completeExceptionally(e);
         }
@@ -755,6 +726,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         // as we're processing before any new fetching starts
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
+
+        // We completed checking pending reconciliations (commits triggered, revoked partitions marked to prevent fetching)
+        // so the application thread poll loop can safely continue progress now (fetching)
+        event.markReconciliationCheckComplete();
 
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();

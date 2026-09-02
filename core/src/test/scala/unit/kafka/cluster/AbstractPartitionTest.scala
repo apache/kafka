@@ -17,7 +17,6 @@
 package kafka.cluster
 
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.MockAlterPartitionManager
 import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.utils.Utils
@@ -25,7 +24,9 @@ import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, MockConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.partition.AlterPartitionListener
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.util.MockAlterPartitionManager
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -65,7 +66,7 @@ class AbstractPartitionTest {
 
   @BeforeEach
   def setup(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
 
     val logProps = createLogProperties(Map.empty)
     logConfig = new LogConfig(logProps)
@@ -78,7 +79,7 @@ class AbstractPartitionTest {
       new CleanerConfig(false), time, transactionVerificationEnabled = true)
     logManager.startup(util.Set.of)
 
-    alterPartitionManager = TestUtils.createAlterIsrManager()
+    alterPartitionManager = new MockAlterPartitionManager()
     alterPartitionListener = createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
@@ -111,7 +112,7 @@ class AbstractPartitionTest {
     if (tmpDir.exists()) {
       logManager.shutdown()
       Utils.delete(tmpDir)
-      TestUtils.clearYammerMetrics()
+      ServerTestUtils.clearYammerMetrics()
     }
   }
 

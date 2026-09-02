@@ -19,8 +19,8 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
@@ -53,8 +53,15 @@ public final class AssignorConfiguration {
         streamsConfig = new ClientUtils.QuietStreamsConfig(configs);
         internalConfigs = configs;
 
+        final String appServerPrefix;
+        final String applicationServerEndpoint = streamsConfig.getString(StreamsConfig.APPLICATION_SERVER_CONFIG);
+        if (applicationServerEndpoint != null && !applicationServerEndpoint.isEmpty()) {
+            appServerPrefix = String.format("app-server [%s] ", applicationServerEndpoint);
+        } else {
+            appServerPrefix = "";
+        }
         // Setting the logger with the passed in client thread name
-        logPrefix = String.format("stream-thread [%s] ", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
+        logPrefix = String.format("stream-thread [%s] %s", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG), appServerPrefix);
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 

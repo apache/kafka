@@ -77,10 +77,10 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatState;
 import org.apache.kafka.controller.ReplicationControlManager.KRaftClusterDescriber;
 import org.apache.kafka.metadata.AssignmentsHelper;
@@ -94,6 +94,7 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -238,7 +239,8 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setQuorumFeatures(new QuorumFeatures(0,
                     QuorumFeatures.defaultSupportedFeatureMap(true),
-                    List.of(0))).
+                    () -> Set.of(0))).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
             this.featureControl.replay(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
@@ -263,6 +265,7 @@ public class ReplicationControlManagerTest {
                 setFeatureControl(featureControl).
                 setStaticConfig(staticConfig).
                 setKafkaConfigSchema(FakeKafkaConfigSchema.INSTANCE).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
             this.offsetControlManager = new OffsetControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
@@ -271,6 +274,7 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 setConfigurationControl(configurationControl).
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
@@ -293,7 +297,7 @@ public class ReplicationControlManagerTest {
             request.topics().add(topic);
             ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
             ControllerResult<CreateTopicsResponseData> result =
-                replicationControl.createTopics(requestContext, request, Set.of(name));
+                replicationControl.createTopics(requestContext, request, Set.of(name), false);
             CreatableTopicResult topicResult = result.response().topics().find(name);
             assertNotNull(topicResult);
             assertEquals(expectedErrorCode, topicResult.errorCode());
@@ -332,7 +336,7 @@ public class ReplicationControlManagerTest {
             request.topics().add(topic);
             ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
             ControllerResult<CreateTopicsResponseData> result =
-                replicationControl.createTopics(requestContext, request, Set.of(name));
+                replicationControl.createTopics(requestContext, request, Set.of(name), false);
             CreatableTopicResult topicResult = result.response().topics().find(name);
             assertNotNull(topicResult);
             assertEquals(expectedErrorCode, topicResult.errorCode());
@@ -543,6 +547,15 @@ public class ReplicationControlManagerTest {
                     .collect(Collectors.toSet());
         }
 
+        void cordonBroker(int brokerId) {
+            List<Uuid> dirs = clusterControl.brokerRegistrations().get(brokerId).directories();
+            BrokerRegistrationChangeRecord record = new BrokerRegistrationChangeRecord()
+                .setBrokerId(brokerId)
+                .setBrokerEpoch(defaultBrokerEpoch(brokerId))
+                .setCordonedLogDirs(dirs);
+            clusterControl.replay(record);
+        }
+
     }
 
     static CreateTopicsResponseData withoutConfigs(CreateTopicsResponseData data) {
@@ -598,8 +611,8 @@ public class ReplicationControlManagerTest {
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
-                () -> replicationControl.createTopics(requestContext, request, Set.of("foo", "bar", "baz")));
-        assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
+                () -> replicationControl.createTopics(requestContext, request, Set.of("foo", "bar", "baz"), false));
+        assertEquals(error.getMessage(), "Too many partitions in request.");
     }
 
     @Test
@@ -616,9 +629,40 @@ public class ReplicationControlManagerTest {
                 .setAssignments(assignments));
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
-                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999)
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
         );
-        assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
+        assertEquals(error.getMessage(), "Too many partitions in request.");
+    }
+
+    @Test
+    public void testTotalNumberOfPartitionsValidationDoesNotOverflow() {
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+                setNumPartitions(Integer.MAX_VALUE).setReplicationFactor((short) 1));
+        request.topics().add(new CreatableTopic().setName("bar").
+                setNumPartitions(Integer.MAX_VALUE).setReplicationFactor((short) 1));
+
+        PolicyViolationException error = assertThrows(
+                PolicyViolationException.class,
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
+        );
+        assertEquals("Too many partitions in request.", error.getMessage());
+    }
+
+    @Test
+    public void testBuilderRequiresPositiveMaxRecordsPerBatch() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        for (int invalidMaxRecordsPerBatch : new int[] {0, -1, -100}) {
+            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new ReplicationControlManager.Builder().
+                    setSnapshotRegistry(ctx.snapshotRegistry).
+                    setLogContext(ctx.logContext).
+                    setConfigurationControl(ctx.configurationControl).
+                    setClusterControl(ctx.clusterControl).
+                    setMaxRecordsPerBatch(invalidMaxRecordsPerBatch).
+                    build());
+            assertEquals("Max records per batch must be greater than zero", exception.getMessage());
+        }
     }
 
     @Test
@@ -631,7 +675,7 @@ public class ReplicationControlManagerTest {
 
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(requestContext, request, Set.of("foo"));
+            replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(INVALID_REPLICATION_FACTOR.code()).
@@ -644,7 +688,7 @@ public class ReplicationControlManagerTest {
         ctx.inControlledShutdownBrokers(0);
 
         ControllerResult<CreateTopicsResponseData> result2 =
-            replicationControl.createTopics(requestContext, request, Set.of("foo"));
+            replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
         CreateTopicsResponseData expectedResponse2 = new CreateTopicsResponseData();
         expectedResponse2.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(INVALID_REPLICATION_FACTOR.code()).
@@ -656,7 +700,7 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1, 2);
 
         ControllerResult<CreateTopicsResponseData> result3 =
-            replicationControl.createTopics(requestContext, request, Set.of("foo"));
+            replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
         CreateTopicsResponseData expectedResponse3 = new CreateTopicsResponseData();
         expectedResponse3.topics().add(new CreatableTopicResult().setName("foo").
             setNumPartitions(1).setReplicationFactor((short) 3).
@@ -674,7 +718,7 @@ public class ReplicationControlManagerTest {
             replicationControl.getPartition(
                 ((TopicRecord) result3.records().get(0).message()).topicId(), 0));
         ControllerResult<CreateTopicsResponseData> result4 =
-                replicationControl.createTopics(requestContext, request, Set.of("foo"));
+                replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
         CreateTopicsResponseData expectedResponse4 = new CreateTopicsResponseData();
         expectedResponse4.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
@@ -694,7 +738,7 @@ public class ReplicationControlManagerTest {
         ControllerRequestContext requestContext =
             anonymousContextWithMutationQuotaExceededFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(requestContext, request, Set.of("foo"));
+            replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
@@ -717,7 +761,7 @@ public class ReplicationControlManagerTest {
 
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(requestContext, request, Set.of("foo"));
+            replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
 
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
@@ -770,7 +814,7 @@ public class ReplicationControlManagerTest {
 
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result1 =
-            replicationControl.createTopics(requestContext, request1, Set.of("foo"));
+            replicationControl.createTopics(requestContext, request1, Set.of("foo"), false);
         assertEquals((short) 0, result1.response().topics().find("foo").errorCode());
 
         List<ApiMessageAndVersion> records1 = result1.records();
@@ -803,7 +847,7 @@ public class ReplicationControlManagerTest {
             .setConfigs(invalidConfigs));
 
         ControllerResult<CreateTopicsResponseData> result2 =
-            replicationControl.createTopics(requestContext, request2, Set.of("bar"));
+            replicationControl.createTopics(requestContext, request2, Set.of("bar"), false);
         assertEquals(Errors.INVALID_CONFIG.code(), result2.response().topics().find("bar").errorCode());
         assertEquals(
             "Null value not supported for topic configs: foo",
@@ -816,7 +860,7 @@ public class ReplicationControlManagerTest {
             .setConfigs(validConfigs));
 
         ControllerResult<CreateTopicsResponseData> result3 =
-            replicationControl.createTopics(requestContext, request3, Set.of("baz"));
+            replicationControl.createTopics(requestContext, request3, Set.of("baz"), false);
         assertEquals(INVALID_REPLICATION_FACTOR.code(), result3.response().topics().find("baz").errorCode());
         assertEquals(List.of(), result3.records());
 
@@ -835,7 +879,7 @@ public class ReplicationControlManagerTest {
         request4Topics.add(batchedTopic1);
         request4Topics.add(batchedTopic2);
         ControllerResult<CreateTopicsResponseData> result4 =
-            replicationControl.createTopics(requestContext, request4, request4Topics);
+            replicationControl.createTopics(requestContext, request4, request4Topics, false);
 
         assertEquals(Errors.NONE.code(), result4.response().topics().find(batchedTopic1).errorCode());
         assertEquals(INVALID_REPLICATION_FACTOR.code(), result4.response().topics().find(batchedTopic2).errorCode());
@@ -867,7 +911,7 @@ public class ReplicationControlManagerTest {
             anonymousContextWithMutationQuotaExceededFor(ApiKeys.CREATE_TOPICS) :
             anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            ctx.replicationControl.createTopics(requestContext, request, Set.of("foo"));
+            ctx.replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
         assertEquals(0, result.records().size());
         CreatableTopicResult topicResult = result.response().topics().find("foo");
         if (mutationQuotaExceeded) {
@@ -887,7 +931,7 @@ public class ReplicationControlManagerTest {
             setNumPartitions(1).setReplicationFactor((short) 4));
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            ctx.replicationControl.createTopics(requestContext, request, Set.of("foo"));
+            ctx.replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
         assertEquals(0, result.records().size());
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
@@ -1493,7 +1537,7 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1);
         ControllerRequestContext createTopicsRequestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createResult =
-            replicationControl.createTopics(createTopicsRequestContext, request, Set.of("foo"));
+            replicationControl.createTopics(createTopicsRequestContext, request, Set.of("foo"), false);
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         Uuid topicId = createResult.response().topics().find("foo").topicId();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
@@ -1562,7 +1606,7 @@ public class ReplicationControlManagerTest {
         ControllerRequestContext createTopicsRequestContext =
             anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createResult =
-            replicationControl.createTopics(createTopicsRequestContext, request, Set.of("foo"));
+            replicationControl.createTopics(createTopicsRequestContext, request, Set.of("foo"), false);
         CreatableTopicResult createdTopic = createResult.response().topics().find("foo");
         assertEquals(NONE.code(), createdTopic.errorCode());
         ctx.replay(createResult.records());
@@ -1596,7 +1640,7 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1, 3);
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
-            createTopics(requestContext, request, Set.of("foo", "bar", "quux", "foo2"));
+            createTopics(requestContext, request, Set.of("foo", "bar", "quux", "foo2"), false);
         ctx.replay(createTopicResult.records());
         List<CreatePartitionsTopic> topics = new ArrayList<>();
         topics.add(new CreatePartitionsTopic().
@@ -1680,7 +1724,7 @@ public class ReplicationControlManagerTest {
         ControllerRequestContext createTopicsRequestContext =
             anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createResult =
-            replicationControl.createTopics(createTopicsRequestContext, request, Set.of("foo"));
+            replicationControl.createTopics(createTopicsRequestContext, request, Set.of("foo"), false);
         CreatableTopicResult createdTopic = createResult.response().topics().find("foo");
         assertEquals(NONE.code(), createdTopic.errorCode());
         ctx.replay(createResult.records());
@@ -1720,7 +1764,7 @@ public class ReplicationControlManagerTest {
         ControllerRequestContext requestContext =
                 anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
-            createTopics(requestContext, request, Set.of("foo"));
+            createTopics(requestContext, request, Set.of("foo"), false);
         ctx.replay(createTopicResult.records());
 
         ctx.registerBrokers(0, 1);
@@ -1757,7 +1801,7 @@ public class ReplicationControlManagerTest {
 
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(requestContext, request, Set.of("foo"));
+            replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
         ctx.replay(result.records());
 
         List<CreatePartitionsTopic> topics = List.of(new CreatePartitionsTopic().
@@ -1803,7 +1847,8 @@ public class ReplicationControlManagerTest {
     @Test
     public void testValidateBadManualPartitionAssignments() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
-        ctx.registerBrokers(1, 2);
+        ctx.registerBrokers(0, 1, 2);
+        ctx.cordonBroker(0);
         assertEquals("The manual partition assignment includes an empty replica list.",
             assertThrows(InvalidReplicaAssignmentException.class, () ->
                 ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(List.of()),
@@ -1811,6 +1856,10 @@ public class ReplicationControlManagerTest {
         assertEquals("The manual partition assignment includes broker 3, but no such " +
             "broker is registered.", assertThrows(InvalidReplicaAssignmentException.class, () ->
                 ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(List.of(1, 2, 3)),
+                    OptionalInt.empty())).getMessage());
+        assertEquals("The manual partition assignment includes broker 0, but all its log " +
+            "directories are cordoned.", assertThrows(InvalidReplicaAssignmentException.class, () ->
+                ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(List.of(0, 1, 2)),
                     OptionalInt.empty())).getMessage());
         assertEquals("The manual partition assignment includes the broker 2 more than " +
             "once.", assertThrows(InvalidReplicaAssignmentException.class, () ->
@@ -2890,19 +2939,19 @@ public class ReplicationControlManagerTest {
                 Map.of(new ConfigResource(ConfigResource.Type.BROKER, ""),
                     Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
-                true).records());
+                true, false).records());
         } else if (uncleanConfig.equals("dynamic_node")) {
             ctx.replay(ctx.configurationControl.incrementalAlterConfigs(
                 Map.of(new ConfigResource(ConfigResource.Type.BROKER, "0"),
                     Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
-                true).records());
+                true, false).records());
         } else if (uncleanConfig.equals("dynamic_topic")) {
             ctx.replay(ctx.configurationControl.incrementalAlterConfigs(
                 Map.of(new ConfigResource(ConfigResource.Type.TOPIC, "foo"),
                     Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
-                true).records());
+                true, false).records());
         }
         ControllerResult<Boolean> balanceResult = replication.maybeElectUncleanLeaders();
         assertFalse(balanceResult.response());
@@ -3419,8 +3468,15 @@ public class ReplicationControlManagerTest {
         Uuid dir2b1 = Uuid.fromString("yh3acnzGSeurSTj8aIhOjw");
         ctx.registerBrokersWithDirs(b1, List.of(dir1b1, dir2b1));
         ctx.unfenceBrokers(b1);
-        assertEquals(List.of(), ctx.clusterControl.registration(b1).cordonedDirectories());
+        assertNull(ctx.clusterControl.registration(b1).cordonedDirectories());
+
+        // If cordonedDirs is null, it's a no-op
         List<ApiMessageAndVersion> records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), null, records);
+        assertTrue(records.isEmpty());
+
+        // Cordon dir1b1, this will emit a BrokerRegistrationChangeRecord
+        records = new ArrayList<>();
         ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(dir1b1), records);
         assertEquals(
                 List.of(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
@@ -3430,6 +3486,35 @@ public class ReplicationControlManagerTest {
         );
         ctx.replay(records);
         assertEquals(List.of(dir1b1), ctx.clusterControl.registration(b1).cordonedDirectories());
+
+        // Cordon dir1b1 again, this time no records are emitted
+        records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(dir1b1), records);
+        assertTrue(records.isEmpty());
+
+        // Cordon dir2b1, this will emit a BrokerRegistrationChangeRecord
+        records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(dir2b1, dir1b1), records);
+        assertEquals(
+                List.of(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
+                        .setBrokerId(b1).setBrokerEpoch(defaultBrokerEpoch(b1))
+                        .setCordonedLogDirs(List.of(dir2b1, dir1b1)), (short) 3)),
+                filter(records, BrokerRegistrationChangeRecord.class)
+        );
+        ctx.replay(records);
+        assertEquals(List.of(dir2b1, dir1b1), ctx.clusterControl.registration(b1).cordonedDirectories());
+
+        // Uncordon all directories, this will emit a BrokerRegistrationChangeRecord
+        records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(), records);
+        assertEquals(
+                List.of(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
+                        .setBrokerId(b1).setBrokerEpoch(defaultBrokerEpoch(b1))
+                        .setCordonedLogDirs(List.of()), (short) 3)),
+                filter(records, BrokerRegistrationChangeRecord.class)
+        );
+        ctx.replay(records);
+        assertEquals(List.of(), ctx.clusterControl.registration(b1).cordonedDirectories());
     }
 
     @ParameterizedTest
@@ -3459,13 +3544,13 @@ public class ReplicationControlManagerTest {
             ctx.replay(ctx.configurationControl.legacyAlterConfigs(
                 Map.of(configResource,
                     Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "1")),
-                false).records());
+                false, false).records());
         } else {
             ctx.replay(ctx.configurationControl.incrementalAlterConfigs(
                 Map.of(configResource,
                     Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "1"))),
-                false).records());
+                false, false).records());
         }
         assertArrayEquals(new int[]{}, ctx.replicationControl.getPartition(fooId, 0).elr);
         if (clusterLevel) {

@@ -17,13 +17,16 @@
 
 package org.apache.kafka.common.quota;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
  * Describes a client quota entity filter.
  */
+@InterfaceAudience.Public
 public class ClientQuotaFilter {
 
     private final Collection<ClientQuotaFilterComponent> components;
@@ -64,7 +67,7 @@ public class ClientQuotaFilter {
      * Constructs and returns a quota filter that matches all configured entities.
      */
     public static ClientQuotaFilter all() {
-        return new ClientQuotaFilter(Collections.emptyList(), false);
+        return new ClientQuotaFilter(List.of(), false);
     }
 
     /**

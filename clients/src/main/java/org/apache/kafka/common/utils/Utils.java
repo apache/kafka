@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
+import org.apache.kafka.common.utils.internals.OperatingSystem;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -593,6 +594,9 @@ public final class Utils {
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
             return String.valueOf(bytes);
+        }
+        if (bytes == 0) {
+            return "0 " + BYTE_SCALE_SUFFIXES[0];
         }
         double asDouble = (double) bytes;
         int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));

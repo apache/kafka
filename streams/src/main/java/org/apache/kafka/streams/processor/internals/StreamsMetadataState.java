@@ -18,8 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.StreamsMetadata;
@@ -59,7 +60,7 @@ public class StreamsMetadataState {
     private final TopologyMetadata topologyMetadata;
     private final Set<String> globalStores;
     private final HostInfo thisHost;
-    private List<StreamsMetadata> allMetadata = Collections.emptyList();
+    private List<StreamsMetadata> allMetadata = List.of();
     private Map<String, List<PartitionInfo>> partitionsByTopic;
     private final AtomicReference<StreamsMetadata> localMetadata = new AtomicReference<>(null);
 
@@ -118,7 +119,7 @@ public class StreamsMetadataState {
         }
 
         if (!isInitialized()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         if (globalStores.contains(storeName)) {
@@ -127,7 +128,7 @@ public class StreamsMetadataState {
 
         final Collection<String> sourceTopics = topologyMetadata.sourceTopicsForStore(storeName, null);
         if (sourceTopics.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
@@ -151,12 +152,12 @@ public class StreamsMetadataState {
         Objects.requireNonNull(topologyName, "topologyName cannot be null");
 
         if (!isInitialized()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final Collection<String> sourceTopics = topologyMetadata.sourceTopicsForStore(storeName, topologyName);
         if (sourceTopics.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
@@ -174,7 +175,7 @@ public class StreamsMetadataState {
         Objects.requireNonNull(topologyName, "topologyName cannot be null");
 
         if (!isInitialized()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
@@ -190,7 +191,7 @@ public class StreamsMetadataState {
     /**
      * Find the {@link KeyQueryMetadata}s for a given storeName and key. This method will use the
      * {@link DefaultStreamPartitioner} to locate the store. If a custom partitioner has been used
-     * please use {@link StreamsMetadataState#keyQueryMetadataForKey(String, Object, StreamPartitioner)} instead.
+     * please use {@link StreamsMetadataState#keyQueryMetadataForKey(String, Object, Headers, StreamPartitioner)} instead.
      *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which {@link KeyQueryMetadata} it would exist on.
@@ -205,6 +206,7 @@ public class StreamsMetadataState {
      */
     public synchronized <K> KeyQueryMetadata keyQueryMetadataForKey(final String storeName,
                                                                     final K key,
+                                                                    final Headers headers,
                                                                     final Serializer<K> keySerializer) {
         Objects.requireNonNull(keySerializer, "keySerializer can't be null");
         if (topologyMetadata.hasNamedTopologies()) {
@@ -214,19 +216,22 @@ public class StreamsMetadataState {
         }
         return keyQueryMetadataForKey(storeName,
                                       key,
+                                      headers,
                                       new DefaultStreamPartitioner<>(keySerializer));
     }
 
     /**
-     * See {@link StreamsMetadataState#keyQueryMetadataForKey(String, Object, Serializer)}
+     * See {@link StreamsMetadataState#keyQueryMetadataForKey(String, Object, Headers, Serializer)}
      */
     public synchronized <K> KeyQueryMetadata keyQueryMetadataForKey(final String storeName,
                                                                     final K key,
+                                                                    final Headers headers,
                                                                     final Serializer<K> keySerializer,
                                                                     final String topologyName) {
         Objects.requireNonNull(keySerializer, "keySerializer can't be null");
         return keyQueryMetadataForKey(storeName,
                                       key,
+                                      headers,
                                       new DefaultStreamPartitioner<>(keySerializer),
                                       topologyName);
     }
@@ -239,6 +244,7 @@ public class StreamsMetadataState {
      *
      * @param storeName   Name of the store
      * @param key         Key to use
+     * @param headers     the record headers
      * @param partitioner partitioner to use to find correct partition for key
      * @param <K>         key type
      * @return The {@link KeyQueryMetadata} for the storeName and key or {@link KeyQueryMetadata#NOT_AVAILABLE}
@@ -246,9 +252,11 @@ public class StreamsMetadataState {
      */
     public synchronized <K> KeyQueryMetadata keyQueryMetadataForKey(final String storeName,
                                                                     final K key,
+                                                                    final Headers headers,
                                                                     final StreamPartitioner<? super K, ?> partitioner) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
+        Objects.requireNonNull(headers, "headers can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
         if (topologyMetadata.hasNamedTopologies()) {
             throw new IllegalArgumentException("Cannot invoke the keyQueryMetadataForKey(storeName, key, partitioner)"
@@ -264,30 +272,31 @@ public class StreamsMetadataState {
             // global stores are on every node. if we don't have the host info
             // for this host then just pick the first metadata
             if (thisHost.equals(UNKNOWN_HOST)) {
-                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), Collections.emptySet(), UNKNOWN_PARTITION);
+                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), Set.of(), UNKNOWN_PARTITION);
             }
-            return new KeyQueryMetadata(localMetadata.get().hostInfo(), Collections.emptySet(), UNKNOWN_PARTITION);
+            return new KeyQueryMetadata(localMetadata.get().hostInfo(), Set.of(), UNKNOWN_PARTITION);
         }
 
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
         if (sourceTopicsInfo == null) {
             return null;
         }
-        return keyQueryMetadataForKey(storeName, key, partitioner, sourceTopicsInfo);
+        return keyQueryMetadataForKey(storeName, key, headers, partitioner, sourceTopicsInfo);
     }
 
     /**
-     * See {@link StreamsMetadataState#keyQueryMetadataForKey(String, Object, StreamPartitioner)}
+     * See {@link StreamsMetadataState#keyQueryMetadataForKey(String, Object, Headers, StreamPartitioner)}
      */
     public synchronized <K> KeyQueryMetadata keyQueryMetadataForKey(final String storeName,
                                                                     final K key,
+                                                                    final Headers headers,
                                                                     final StreamPartitioner<? super K, ?> partitioner,
                                                                     final String topologyName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
+        Objects.requireNonNull(headers, "headers can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
         Objects.requireNonNull(topologyName, "topologyName can't be null");
-
 
         if (!isInitialized()) {
             return KeyQueryMetadata.NOT_AVAILABLE;
@@ -297,7 +306,7 @@ public class StreamsMetadataState {
         if (sourceTopicsInfo == null) {
             return null;
         }
-        return keyQueryMetadataForKey(storeName, key, partitioner, sourceTopicsInfo, topologyName);
+        return keyQueryMetadataForKey(storeName, key, headers, partitioner, sourceTopicsInfo, topologyName);
     }
 
     /**
@@ -343,13 +352,13 @@ public class StreamsMetadataState {
     private void rebuildMetadata(final Map<HostInfo, Set<TopicPartition>> activePartitionHostMap,
                                  final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap) {
         if (activePartitionHostMap.isEmpty() && standbyPartitionHostMap.isEmpty()) {
-            allMetadata = Collections.emptyList();
+            allMetadata = List.of();
             localMetadata.set(new StreamsMetadataImpl(
                 thisHost,
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet()
+                Set.of(),
+                Set.of(),
+                Set.of(),
+                Set.of()
             ));
             return;
         }
@@ -474,10 +483,11 @@ public class StreamsMetadataState {
 
     private <K> KeyQueryMetadata keyQueryMetadataForKey(final String storeName,
                                                         final K key,
+                                                        final Headers headers,
                                                         final StreamPartitioner<? super K, ?> partitioner,
                                                         final SourceTopicsInfo sourceTopicsInfo) {
 
-        final Integer partition = getPartition.apply(partitioner.partitions(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions));
+        final Integer partition = getPartition.apply(partitioner.partitions(sourceTopicsInfo.topicWithMostPartitions, key, null, headers, sourceTopicsInfo.maxPartitions));
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
         for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
             matchingPartitions.add(new TopicPartition(sourceTopic, partition));
@@ -507,11 +517,12 @@ public class StreamsMetadataState {
 
     private <K> KeyQueryMetadata keyQueryMetadataForKey(final String storeName,
                                                         final K key,
+                                                        final Headers headers,
                                                         final StreamPartitioner<? super K, ?> partitioner,
                                                         final SourceTopicsInfo sourceTopicsInfo,
                                                         final String topologyName) {
         Objects.requireNonNull(topologyName, "topology name must not be null");
-        final Integer partition = getPartition.apply(partitioner.partitions(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions));
+        final Integer partition = getPartition.apply(partitioner.partitions(sourceTopicsInfo.topicWithMostPartitions, key, null, headers, sourceTopicsInfo.maxPartitions));
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
         for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
             matchingPartitions.add(new TopicPartition(sourceTopic, partition));
@@ -572,7 +583,7 @@ public class StreamsMetadataState {
         private SourceTopicsInfo(final List<String> sourceTopics) {
             this.sourceTopics = sourceTopics;
             for (final String topic : sourceTopics) {
-                final List<PartitionInfo> partitions = partitionsByTopic.getOrDefault(topic, Collections.emptyList());
+                final List<PartitionInfo> partitions = partitionsByTopic.getOrDefault(topic, List.of());
                 if (partitions.size() > maxPartitions) {
                     maxPartitions = partitions.size();
                     topicWithMostPartitions = topic;

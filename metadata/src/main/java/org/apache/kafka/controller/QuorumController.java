@@ -82,15 +82,16 @@ import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.controller.errors.ControllerExceptions;
 import org.apache.kafka.controller.errors.EventHandlerExceptionInfo;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
@@ -128,6 +129,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -174,18 +176,6 @@ import static org.apache.kafka.controller.QuorumController.ControllerOperationFl
  */
 public final class QuorumController implements Controller {
     /**
-     * The default maximum records that the controller will write in a single batch.
-     */
-    private static final int DEFAULT_MAX_RECORDS_PER_BATCH = 10000;
-
-    /**
-     * The maximum records any user-initiated operation is allowed to generate.
-     *
-     * For now, this is set to the maximum records in a single batch.
-     */
-    static final int MAX_RECORDS_PER_USER_OP = DEFAULT_MAX_RECORDS_PER_BATCH;
-
-    /**
      * A builder class which creates the QuorumController.
      */
     public static class Builder {
@@ -213,7 +203,7 @@ public final class QuorumController implements Controller {
         private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
         private Map<String, Object> staticConfig = Map.of();
         private BootstrapMetadata bootstrapMetadata = null;
-        private int maxRecordsPerBatch = DEFAULT_MAX_RECORDS_PER_BATCH;
+        private int maxRecordsPerBatch;
         private long controllerPerformanceSamplePeriodMs = 60000L;
         private long controllerPerformanceAlwaysLogThresholdMs = 2000L;
         private DelegationTokenCache tokenCache;
@@ -317,7 +307,7 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+        public Builder setControllerMaxRecordsPerBatch(int maxRecordsPerBatch) {
             this.maxRecordsPerBatch = maxRecordsPerBatch;
             return this;
         }
@@ -399,6 +389,8 @@ public final class QuorumController implements Controller {
                 throw new IllegalStateException("You must specify a non-fatal fault handler.");
             } else if (fatalFaultHandler == null) {
                 throw new IllegalStateException("You must specify a fatal fault handler.");
+            } else if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
             }
 
             if (threadNamePrefix == null) {
@@ -487,7 +479,7 @@ public final class QuorumController implements Controller {
                         throw new InvalidRequestException("Invalid broker name " +
                             configResource.name());
                     }
-                    if (!isNodeIdRegistered(nodeId)) {
+                    if (!isNodeIdKnown(nodeId)) {
                         throw new BrokerIdNotRegisteredException("No node with id " + nodeId + " found.");
                     }
                     break;
@@ -503,13 +495,13 @@ public final class QuorumController implements Controller {
         }
 
         /**
-         * Checks if a node id is registered as a broker, controller in static/dynamic quorum.
+         * Checks if a node id is known to the controller, from registrations or the voter set.
          */
-        private boolean isNodeIdRegistered(int nodeId) {
+        private boolean isNodeIdKnown(int nodeId) {
             if (clusterControl.brokerRegistrations().containsKey(nodeId)) {
                 return true;
             }
-            if (featureControl.isControllerId(nodeId)) {
+            if (featureControl.isVoterId(nodeId)) {
                 return true;
             }
             return clusterControl.controllerRegistrations().containsKey(nodeId);
@@ -1075,7 +1067,31 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
-            reader.close();
+            appendRaftEvent(String.format("handleLoadBootstrap[snapshotId=%s]", reader.snapshotId()), () -> {
+                try {
+                    String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
+                    if (isActiveController()) {
+                        throw fatalFaultHandler.handleFault("Asked to load bootstrap snapshot " + snapshotName +
+                                ", but we are the active controller at epoch " + curClaimEpoch);
+                    }
+                    List<ApiMessageAndVersion> records = new ArrayList<>();
+                    while (reader.hasNext()) {
+                        Batch<ApiMessageAndVersion> batch = reader.next();
+                        records.addAll(batch.records());
+                    }
+                    if (!records.isEmpty()) {
+                        log.debug("Loaded {} bootstrap records from {}", records.size(), snapshotName);
+                        bootstrapMetadata = BootstrapMetadata.fromRecords(records, "bootstrap");
+                    }
+                } catch (FaultHandlerException e) {
+                    throw e;
+                } catch (Throwable e) {
+                    throw fatalFaultHandler.handleFault("Error while loading bootstrap snapshot " +
+                            reader.snapshotId(), e);
+                } finally {
+                    reader.close();
+                }
+            });
         }
 
         @Override
@@ -1300,6 +1316,9 @@ public final class QuorumController implements Controller {
             case REGISTER_CONTROLLER_RECORD:
                 clusterControl.replay((RegisterControllerRecord) message);
                 break;
+            case UNREGISTER_CONTROLLER_RECORD:
+                clusterControl.replay((UnregisterControllerRecord) message);
+                break;
             case CLEAR_ELR_RECORD:
                 replicationControl.replay((ClearElrRecord) message);
                 break;
@@ -1460,7 +1479,7 @@ public final class QuorumController implements Controller {
     /**
      * The bootstrap metadata to use for initialization if needed.
      */
-    private final BootstrapMetadata bootstrapMetadata;
+    private BootstrapMetadata bootstrapMetadata;
 
     /**
      * The maximum number of records per batch to allow.
@@ -1526,6 +1545,7 @@ public final class QuorumController implements Controller {
         this.clientQuotaControlManager = new ClientQuotaControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.clusterSupportDescriber = new QuorumClusterFeatureSupportDescriber();
         this.queueAccessor = new PeriodicTaskControlManagerQueueAccessor();
@@ -1540,6 +1560,7 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
             setKRaftVersionAccessor(new RaftClientKRaftVersionAccessor(raftClient)).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -1563,6 +1584,7 @@ public final class QuorumController implements Controller {
             setNodeId(nodeId).
             setFeatureControl(featureControl).
             setSupportedConfigChecker(supportedConfigChecker).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
@@ -1575,6 +1597,7 @@ public final class QuorumController implements Controller {
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
             setCreateTopicPolicy(createTopicPolicy).
@@ -1583,6 +1606,7 @@ public final class QuorumController implements Controller {
         this.scramControlManager = new ScramControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.delegationTokenControlManager = new DelegationTokenControlManager.Builder().
             setLogContext(logContext).
@@ -1594,6 +1618,7 @@ public final class QuorumController implements Controller {
         this.aclControlManager = new AclControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.raftClient = raftClient;
         this.bootstrapMetadata = bootstrapMetadata;
@@ -1788,13 +1813,14 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<CreateTopicsResponseData> createTopics(
         ControllerRequestContext context,
-        CreateTopicsRequestData request, Set<String> describable
+        CreateTopicsRequestData request, Set<String> describable,
+        boolean forwarded
     ) {
         if (request.topics().isEmpty()) {
             return CompletableFuture.completedFuture(new CreateTopicsResponseData());
         }
         return appendWriteEvent("createTopics", context.deadlineNs(),
-            () -> replicationControl.createTopics(context, request, describable));
+            () -> replicationControl.createTopics(context, request, describable, forwarded));
     }
 
     @Override
@@ -1884,14 +1910,15 @@ public final class QuorumController implements Controller {
     public CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
         ControllerRequestContext context,
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
-        boolean validateOnly
+        boolean validateOnly,
+        boolean forwarded
     ) {
         if (configChanges.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.incrementalAlterConfigs(configChanges, false);
+                configurationControl.incrementalAlterConfigs(configChanges, false, forwarded);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -1929,14 +1956,16 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         ControllerRequestContext context,
-        Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly
+        Map<ConfigResource, Map<String, String>> newConfigs,
+        boolean validateOnly,
+        boolean forwarded
     ) {
         if (newConfigs.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.legacyAlterConfigs(newConfigs, false);
+                configurationControl.legacyAlterConfigs(newConfigs, false, forwarded);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -2125,12 +2154,28 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<Void> unregisterController(
+        ControllerRequestContext context,
+        int controllerId
+    ) {
+        return appendWriteEvent("unregisterController", context.deadlineNs(),
+            () -> {
+                if (featureControl.isVoterId(controllerId)) {
+                    throw new InvalidRequestException("Cannot unregister controller " + controllerId +
+                        " because it is part of the voter set.");
+                }
+                return clusterControl.unregisterController(controllerId);
+            },
+            EnumSet.noneOf(ControllerOperationFlag.class));
+    }
+
+    @Override
     public CompletableFuture<List<AclCreateResult>> createAcls(
         ControllerRequestContext context,
         List<AclBinding> aclBindings
     ) {
         return appendWriteEvent("createAcls", context.deadlineNs(),
-            () -> aclControlManager.createAcls(aclBindings));
+            () -> aclControlManager.createAcls(aclBindings, featureControl.metadataVersionOrThrow()));
     }
 
     @Override

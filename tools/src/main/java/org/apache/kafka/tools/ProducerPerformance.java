@@ -22,8 +22,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.ThroughputThrottler;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
@@ -40,6 +40,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Scanner;
@@ -52,6 +53,14 @@ public class ProducerPerformance {
 
     public static final String DEFAULT_TRANSACTION_ID_PREFIX = "performance-producer-";
     public static final long DEFAULT_TRANSACTION_DURATION_MS = 3000L;
+
+    public enum KeyDistribution {
+        NONE, RANGE, RANDOM;
+
+        public static KeyDistribution fromString(String value) {
+            return KeyDistribution.valueOf(value.toUpperCase(Locale.ROOT));
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         ProducerPerformance perf = new ProducerPerformance();
@@ -74,7 +83,7 @@ public class ProducerPerformance {
                 payload = new byte[config.recordSize];
             }
             // not thread-safe, do not share with other threads
-            SplittableRandom random = new SplittableRandom(0);
+            SplittableRandom random = new SplittableRandom(config.randomSeed);
             ProducerRecord<byte[], byte[]> record;
 
             if (config.warmupRecords > 0) {
@@ -97,7 +106,8 @@ public class ProducerPerformance {
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-                record = new ProducerRecord<>(config.topicName, payload);
+                byte[] key = generateKey(config.keyDistribution, config.recordKeyRange, i, random);
+                record = new ProducerRecord<>(config.topicName, null, key, payload);
 
                 long sendStartMs = System.currentTimeMillis();
                 if ((isSteadyState = config.warmupRecords > 0) && i == config.warmupRecords) {
@@ -166,6 +176,19 @@ public class ProducerPerformance {
     Callback cb;
     Stats stats;
     Stats steadyStateStats;
+
+    static byte[] generateKey(
+        KeyDistribution keyDistribution,
+        Integer recordKeyRange,
+        long recordIndex,
+        SplittableRandom random
+    ) {
+        return switch (keyDistribution) {
+            case RANGE -> Integer.toString((int) (recordIndex % recordKeyRange)).getBytes(StandardCharsets.UTF_8);
+            case RANDOM -> Integer.toString(random.nextInt(recordKeyRange)).getBytes(StandardCharsets.UTF_8);
+            default -> null;
+        };
+    }
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
             SplittableRandom random, boolean payloadMonotonic, long recordValue) {
@@ -395,6 +418,37 @@ public class ProducerPerformance {
                 .setDefault(5_000L)
                 .help("Interval in milliseconds at which to print progress info.");
 
+        parser.addArgument("--record-key-range")
+                .action(store())
+                .required(false)
+                .type(Integer.class)
+                .metavar("KEY-RANGE")
+                .dest("recordKeyRange")
+                .help("The range of keys to use when --key-distribution is 'range' or 'random'. " +
+                        "Keys will be integers in [0, KEY-RANGE). Required for range and random distributions.");
+
+        parser.addArgument("--key-distribution")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("KEY-DISTRIBUTION")
+                .dest("keyDistribution")
+                .choices("none", "range", "random")
+                .setDefault("none")
+                .help("The key distribution to use: 'none' for null keys, 'range' for round-robin keys in " +
+                        "[0, KEY-RANGE), or 'random' for random keys in [0, KEY-RANGE). " +
+                        "Requires --record-key-range when set to 'range' or 'random'.");
+
+        parser.addArgument("--random-seed")
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("RANDOM-SEED")
+                .dest("randomSeed")
+                .setDefault(0L)
+                .help("Seed for the pseudo-random number generator used by --key-distribution random and " +
+                        "random payload generation. The default value of 0 ensures deterministic, reproducible " +
+                        "benchmark runs. Set to a different value when non-repeating sequences are required.");
         return parser;
     }
 
@@ -579,6 +633,9 @@ public class ProducerPerformance {
         final boolean transactionsEnabled;
         final List<byte[]> payloadByteList;
         final long reportingInterval;
+        final Integer recordKeyRange;
+        final KeyDistribution keyDistribution;
+        final long randomSeed;
 
         public ConfigPostProcessor(ArgumentParser parser, String[] args) throws IOException, ArgumentParserException {
             Namespace namespace = parser.parseArgs(args);
@@ -623,6 +680,20 @@ public class ProducerPerformance {
             if (reportingInterval <= 0) {
                 throw new ArgumentParserException("--reporting-interval should be greater than zero.", parser);
             }
+            this.recordKeyRange = namespace.getInt("recordKeyRange");
+            if (recordKeyRange != null && recordKeyRange <= 0) {
+                throw new ArgumentParserException("--record-key-range should be greater than zero.", parser);
+            }
+            this.keyDistribution = KeyDistribution.fromString(namespace.getString("keyDistribution"));
+            if (this.keyDistribution != KeyDistribution.NONE && recordKeyRange == null) {
+                throw new ArgumentParserException(
+                        "--record-key-range is required when --key-distribution is 'range' or 'random'.", parser);
+            }
+            if (this.keyDistribution == KeyDistribution.NONE && recordKeyRange != null) {
+                throw new ArgumentParserException(
+                        "--key-distribution must be 'range' or 'random' when --record-key-range is specified.", parser);
+            }
+            this.randomSeed = namespace.getLong("randomSeed");
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = namespace.getString("payloadDelimiter").equals("\\n")

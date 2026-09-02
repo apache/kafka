@@ -32,14 +32,21 @@ public class TestKitNodeTest {
     @ParameterizedTest
     @EnumSource(SecurityProtocol.class)
     public void testSecurityProtocol(SecurityProtocol securityProtocol) {
-        if (securityProtocol != SecurityProtocol.PLAINTEXT && securityProtocol != SecurityProtocol.SASL_PLAINTEXT) {
-            assertEquals("Currently only support PLAINTEXT / SASL_PLAINTEXT security protocol",
-                assertThrows(IllegalArgumentException.class,
-                    () -> new TestKitNodes.Builder().setBrokerSecurityProtocol(securityProtocol).build()).getMessage());
-            assertEquals("Currently only support PLAINTEXT / SASL_PLAINTEXT security protocol",
-                assertThrows(IllegalArgumentException.class,
-                    () -> new TestKitNodes.Builder().setControllerSecurityProtocol(securityProtocol).build()).getMessage());
-        }
+        // All security protocols are supported when broker and controller configurations are consistent
+        new TestKitNodes.Builder()
+            .setBrokerSecurityProtocol(securityProtocol)
+            .setControllerSecurityProtocol(securityProtocol)
+            .build();
+    }
+
+    @Test
+    public void testMixedSslSecurityProtocolIsNotSupported() {
+        assertEquals("Mixed broker and controller SSL security protocol configurations are not yet supported",
+            assertThrows(IllegalArgumentException.class,
+                () -> new TestKitNodes.Builder().setBrokerSecurityProtocol(SecurityProtocol.SSL).build()).getMessage());
+        assertEquals("Mixed broker and controller SSL security protocol configurations are not yet supported",
+            assertThrows(IllegalArgumentException.class,
+                () -> new TestKitNodes.Builder().setControllerSecurityProtocol(SecurityProtocol.SSL).build()).getMessage());
     }
 
     @Test

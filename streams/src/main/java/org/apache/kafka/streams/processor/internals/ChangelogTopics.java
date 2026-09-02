@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
@@ -121,7 +121,7 @@ public class ChangelogTopics {
         if (preExistingChangelogPartitionsForTask.containsKey(taskId)) {
             return Collections.unmodifiableSet(preExistingChangelogPartitionsForTask.get(taskId));
         }
-        return Collections.emptySet();
+        return Set.of();
     }
 
     public Set<TopicPartition> preExistingSourceTopicBasedPartitions() {

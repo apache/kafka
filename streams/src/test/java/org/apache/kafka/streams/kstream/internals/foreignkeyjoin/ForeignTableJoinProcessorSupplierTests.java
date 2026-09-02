@@ -46,10 +46,8 @@ import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplierTest.getDroppedRecordsRateMetric;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplierTest.getDroppedRecordsTotalMetric;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ForeignTableJoinProcessorSupplierTests {
 
@@ -106,14 +104,14 @@ public class ForeignTableJoinProcessorSupplierTests {
 
         processor.process(record);
 
-        assertThat(context.forwarded().size(), is(2));
-        assertThat(
-            context.forwarded().get(0).record(),
-            is(new Record<>(pk1, new SubscriptionResponseWrapper<>(hash, "new_value", null), 0))
+        assertEquals(2, context.forwarded().size());
+        assertEquals(
+            new Record<>(pk1, new SubscriptionResponseWrapper<>(hash, "new_value", null), 0),
+            context.forwarded().get(0).record()
         );
-        assertThat(
-            context.forwarded().get(1).record(),
-            is(new Record<>(pk2, new SubscriptionResponseWrapper<>(hash, "new_value", null), 0))
+        assertEquals(
+            new Record<>(pk2, new SubscriptionResponseWrapper<>(hash, "new_value", null), 0),
+            context.forwarded().get(1).record()
         );
 
         // test dropped-records sensors
@@ -129,7 +127,7 @@ public class ForeignTableJoinProcessorSupplierTests {
 
         processor.process(record);
 
-        assertThat(context.forwarded(), empty());
+        assertTrue(context.forwarded().isEmpty());
 
         // test dropped-records sensors
         assertEquals(0.0, getDroppedRecordsTotalMetric(context));
@@ -144,14 +142,14 @@ public class ForeignTableJoinProcessorSupplierTests {
 
         processor.process(record);
 
-        assertThat(context.forwarded().size(), is(2));
-        assertThat(
-            context.forwarded().get(0).record(),
-            is(new Record<>(pk1, new SubscriptionResponseWrapper<>(hash, null, null), 0))
+        assertEquals(2, context.forwarded().size());
+        assertEquals(
+            new Record<>(pk1, new SubscriptionResponseWrapper<>(hash, null, null), 0),
+            context.forwarded().get(0).record()
         );
-        assertThat(
-            context.forwarded().get(1).record(),
-            is(new Record<>(pk2, new SubscriptionResponseWrapper<>(hash, null, null), 0))
+        assertEquals(
+            new Record<>(pk2, new SubscriptionResponseWrapper<>(hash, null, null), 0),
+            context.forwarded().get(1).record()
         );
 
         // test dropped-records sensors
@@ -168,10 +166,10 @@ public class ForeignTableJoinProcessorSupplierTests {
 
         processor.process(record);
 
-        assertThat(context.forwarded().size(), is(1));
-        assertThat(
-            context.forwarded().get(0).record(),
-            is(new Record<>(pk2, new SubscriptionResponseWrapper<>(hash, "new_value", null), 0))
+        assertEquals(1, context.forwarded().size());
+        assertEquals(
+            new Record<>(pk2, new SubscriptionResponseWrapper<>(hash, "new_value", null), 0),
+            context.forwarded().get(0).record()
         );
 
         // test dropped-records sensors
@@ -186,7 +184,7 @@ public class ForeignTableJoinProcessorSupplierTests {
 
         processor.process(record);
 
-        assertThat(context.forwarded(), empty());
+        assertTrue(context.forwarded().isEmpty());
 
         // test dropped-records sensors
         assertEquals(1.0, getDroppedRecordsTotalMetric(context));
@@ -210,7 +208,7 @@ public class ForeignTableJoinProcessorSupplierTests {
     private StoreBuilder<TimestampedKeyValueStoreWithHeaders<Bytes, SubscriptionWrapper<String>>> storeBuilder() {
         final Serde<SubscriptionWrapper<String>> subscriptionWrapperSerde = new SubscriptionWrapperSerde<>(
             PK_SERDE_TOPIC_SUPPLIER, Serdes.String());
-        return Stores.timestampedKeyValueStoreBuilderWithHeaders(
+        return Stores.timestampedKeyValueStoreWithHeadersBuilder(
             Stores.persistentTimestampedKeyValueStore(
                 "Store"
             ),

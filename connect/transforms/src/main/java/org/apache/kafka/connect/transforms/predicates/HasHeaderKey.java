@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.transforms.predicates;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;

@@ -39,14 +39,12 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockScheduler;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
@@ -67,7 +65,6 @@ import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
-import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.AfterEach;
@@ -137,6 +134,8 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
+import static org.apache.kafka.server.util.ServerTestUtils.clearYammerMetrics;
+import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -216,7 +215,6 @@ public class RemoteLogManagerTest {
     private UnifiedLog mockLog = mock(UnifiedLog.class);
 
     private final MockScheduler scheduler = new MockScheduler(time);
-    private final Properties brokerConfig = kafka.utils.TestUtils.createDummyBrokerConfig();
 
     private final String host = "localhost";
     private final int port = 1234;
@@ -228,9 +226,7 @@ public class RemoteLogManagerTest {
         checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
         topicIds.put(leaderTopicIdPartition.topicPartition().topic(), leaderTopicIdPartition.topicId());
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
-        Properties props = brokerConfig;
-        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
-        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
+        Properties props = new Properties();
         appendRLMConfig(props);
         config = configs(props);
         brokerTopicStats = new BrokerTopicStats(config.isRemoteStorageSystemEnabled());
@@ -261,6 +257,7 @@ public class RemoteLogManagerTest {
             }
         };
         doReturn(true).when(remoteLogMetadataManager).isReady(any(TopicIdPartition.class));
+        when(mockLog.config()).thenReturn(new LogConfig(new Properties()));
     }
 
     private RemoteLogManagerConfig configs(Properties props) {
@@ -273,7 +270,7 @@ public class RemoteLogManagerTest {
             remoteLogManager.close();
             remoteLogManager = null;
         }
-        kafka.utils.TestUtils.clearYammerMetrics();
+        clearYammerMetrics();
     }
 
     @Test
@@ -352,7 +349,6 @@ public class RemoteLogManagerTest {
         String key = "key";
         String configPrefix = "config.prefix";
         Properties props = new Properties();
-        props.putAll(brokerConfig);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, configPrefix);
         props.put(configPrefix + key, "world");
         props.put("remote.log.metadata.y", "z");
@@ -369,7 +365,6 @@ public class RemoteLogManagerTest {
         String key = "key";
         String configPrefix = "config.prefix";
         Properties props = new Properties();
-        props.putAll(brokerConfig);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, configPrefix);
         props.put(configPrefix + key, "world");
         props.put("remote.storage.manager.y", "z");
@@ -389,14 +384,14 @@ public class RemoteLogManagerTest {
         assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
         assertEquals(securityProtocol, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
         assertEquals(clusterId, capture.getValue().get("cluster.id"));
-        assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
+        assertEquals(brokerId, capture.getValue().get("broker.id"));
+        assertEquals(brokerId, capture.getValue().get("node.id"));
     }
 
     @SuppressWarnings("unchecked")
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
         Properties props = new Properties();
-        props.putAll(brokerConfig);
         // override common security.protocol by adding "RLMM prefix" and "remote log metadata common client prefix"
         props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", "SSL");
         appendRLMConfig(props);
@@ -428,7 +423,8 @@ public class RemoteLogManagerTest {
             // should be overridden as SSL
             assertEquals("SSL", capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
             assertEquals(clusterId, capture.getValue().get("cluster.id"));
-            assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
+            assertEquals(brokerId, capture.getValue().get("broker.id"));
+            assertEquals(brokerId, capture.getValue().get("node.id"));
         }
     }
 
@@ -438,10 +434,12 @@ public class RemoteLogManagerTest {
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
         verify(remoteStorageManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
+        assertEquals(brokerId, capture.getValue().get("node.id"));
         assertEquals(remoteLogStorageTestVal, capture.getValue().get(remoteLogStorageTestProp));
 
         verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
+        assertEquals(brokerId, capture.getValue().get("node.id"));
         assertEquals(logDir, capture.getValue().get("log.dir"));
 
         // verify the configs starting with "remote.log.metadata", "remote.log.metadata.common.client."
@@ -1240,18 +1238,9 @@ public class RemoteLogManagerTest {
                         safeLongYammerMetricValue("RemoteCopyLagSegments")));
     }
 
-    private Object yammerMetricValue(String name) {
-        Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                .filter(e -> e.getKey().getMBeanName().endsWith(name))
-                .findFirst()
-                .get()
-                .getValue();
-        return gauge.value();
-    }
-
     private long safeLongYammerMetricValue(String name) {
         try {
-            return (long) yammerMetricValue(name);
+            return yammerMetricValue(name).longValue();
         } catch (NoSuchElementException ex) {
             return 0L;
         }
@@ -2115,6 +2104,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testCandidateLogSegmentsSkipsActiveSegment() {
         UnifiedLog log = mock(UnifiedLog.class);
+        when(log.config()).thenReturn(new LogConfig(new Properties()));
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
         LogSegment activeSegment = mock(LogSegment.class);
@@ -2138,6 +2128,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset() {
         UnifiedLog log = mock(UnifiedLog.class);
+        when(log.config()).thenReturn(new LogConfig(new Properties()));
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
         LogSegment segment3 = mock(LogSegment.class);
@@ -2811,6 +2802,65 @@ public class RemoteLogManagerTest {
             assertEquals(0L, currentLogStartOffset.get());
             verify(remoteStorageManager, never()).deleteLogSegmentData(any());
         }
+    }
+
+    @Test
+    public void testSizeRetentionDoesNotOverDeleteOnFreshLeaderUntilHighestRemoteOffsetSeeded()
+            throws RemoteStorageException, ExecutionException, InterruptedException {
+        // Regression test: on a freshly-elected leader, highestOffsetInRemoteStorage is unseeded (-1) until
+        // RLMCopyTask/RLMFollowerTask seed it. While it is -1, the real UnifiedLog.onlyLocalLogSegmentsSize()
+        // (filter baseOffset >= highestOffsetInRemoteStorage()) returns the whole local log -- including
+        // segments already copied to remote -- so buildRetentionSizeData double-counts that overlap against the
+        // remote size and over-deletes both tiers. Here onlyLocalLogSegmentsSize() is wired to the real, mutable
+        // highestOffsetInRemoteStorage (the field the fix seeds) with that exact behaviour:
+        //   unseeded (-1) -> whole local log (2048, the copied-but-not-yet-evicted overlap)
+        //   seeded        -> only the uncopied tail (0)
+        // RED without the seeding fix: highest stays -1 -> onlyLocalLogSegmentsSize()=2048 ->
+        //   total = 2048 (remote) + 2048 = 4096 > 2048 -> both segments deleted, logStartOffset -> 200.
+        // GREEN with it: RLMExpirationTask seeds highest=199 -> onlyLocalLogSegmentsSize()=0 ->
+        //   total = 2048 == cap -> nothing deleted.
+        long segmentSize = 1024L;
+        long retentionSize = 2 * segmentSize;
+        AtomicLong highestRemote = new AtomicLong(-1L);     // fresh leader: unseeded
+        when(mockLog.highestOffsetInRemoteStorage()).thenAnswer(inv -> highestRemote.get());
+        doAnswer(inv -> {
+            long offset = inv.getArgument(0);
+            if (offset > highestRemote.get()) {
+                highestRemote.set(offset);
+            }
+            return null;
+        }).when(mockLog).updateHighestOffsetInRemoteStorage(anyLong());
+        when(mockLog.onlyLocalLogSegmentsSize()).thenAnswer(inv -> highestRemote.get() < 0 ? 2 * segmentSize : 0L);
+
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put("retention.bytes", retentionSize);
+        logProps.put("retention.ms", -1L);
+        when(mockLog.config()).thenReturn(new LogConfig(logProps));
+
+        List<EpochEntry> epochEntries = List.of(epochEntry0);
+        checkpoint.write(epochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
+        when(mockLog.leaderEpochCache()).thenReturn(cache);
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+        when(mockLog.logEndOffset()).thenReturn(200L);
+        when(mockLog.size()).thenReturn(2 * segmentSize);
+
+        // 2 copied remote segments [0..99],[100..199], 1024 each; the seeding fix derives highest from these.
+        List<RemoteLogSegmentMetadata> metadataList = listRemoteLogSegmentMetadata(
+                leaderTopicIdPartition, 2, 100, (int) segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
+                .thenAnswer(ans -> metadataList.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
+                .thenAnswer(ans -> metadataList.iterator());
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
+                .thenReturn(CompletableFuture.runAsync(() -> { }));
+        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt()))
+                .thenReturn(Optional.of(199L));
+
+        remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition).cleanupExpiredRemoteLogSegments();
+
+        verify(remoteStorageManager, never()).deleteLogSegmentData(any());
+        assertEquals(0L, currentLogStartOffset.get());
     }
 
     @ParameterizedTest(name = "testDeletionOnOverlappingRetentionBreachedSegments retentionSize={0} retentionMs={1}")
@@ -3736,7 +3786,6 @@ public class RemoteLogManagerTest {
     @Test
     public void testCopyQuotaManagerConfig() {
         Properties defaultProps = new Properties();
-        defaultProps.putAll(brokerConfig);
         appendRLMConfig(defaultProps);
         RemoteLogManagerConfig defaultRlmConfig = configs(defaultProps);
         RLMQuotaManagerConfig defaultConfig = RemoteLogManager.copyQuotaManagerConfig(defaultRlmConfig);
@@ -3745,7 +3794,6 @@ public class RemoteLogManagerTest {
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
-        customProps.putAll(brokerConfig);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP, 100);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
@@ -3761,7 +3809,6 @@ public class RemoteLogManagerTest {
     @Test
     public void testFetchQuotaManagerConfig() {
         Properties defaultProps = new Properties();
-        defaultProps.putAll(brokerConfig);
         appendRLMConfig(defaultProps);
         RemoteLogManagerConfig defaultRlmConfig = configs(defaultProps);
 
@@ -3771,7 +3818,6 @@ public class RemoteLogManagerTest {
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
-        customProps.putAll(brokerConfig);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP, 100);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
@@ -4154,7 +4200,7 @@ public class RemoteLogManagerTest {
         // 100ms, the test will fail.
         remoteLogManager.close();
         clearInvocations(remoteLogMetadataManager, remoteStorageManager);
-        Properties props = brokerConfig;
+        Properties props = new Properties();
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "30000");
         appendRLMConfig(props);
@@ -4228,7 +4274,6 @@ public class RemoteLogManagerTest {
     @Test
     public void testMonitorableRemoteLogStorageManager() throws IOException {
         Properties props = new Properties();
-        props.putAll(brokerConfig);
         appendRLMConfig(props);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteStorageManager.class.getName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteLogMetadataManager.class.getName());
@@ -4302,16 +4347,17 @@ public class RemoteLogManagerTest {
     }
 
     private void appendRLMConfig(Properties props) {
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
-        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, NoOpRemoteStorageManager.class.getName());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, NoOpRemoteLogMetadataManager.class.getName());
-        props.put(DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + remoteLogStorageTestProp, remoteLogStorageTestVal);
+        props.putIfAbsent(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
+        props.putIfAbsent(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, NoOpRemoteStorageManager.class.getName());
+        props.putIfAbsent(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, NoOpRemoteLogMetadataManager.class.getName());
+        props.putIfAbsent(DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + remoteLogStorageTestProp, remoteLogStorageTestVal);
         // adding configs with "remote log metadata manager config prefix"
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, remoteLogMetadataTopicPartitionsNum);
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataTestProp, remoteLogMetadataTestVal);
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataCommonClientTestProp, remoteLogMetadataCommonClientTestVal);
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataConsumerTestProp, remoteLogMetadataConsumerTestVal);
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataProducerTestProp, remoteLogMetadataProducerTestVal);
+        props.putIfAbsent(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, remoteLogMetadataTopicPartitionsNum);
+        props.putIfAbsent(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataTestProp, remoteLogMetadataTestVal);
+        props.putIfAbsent(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataCommonClientTestProp, remoteLogMetadataCommonClientTestVal);
+        props.putIfAbsent(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataConsumerTestProp, remoteLogMetadataConsumerTestVal);
+        props.putIfAbsent(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataProducerTestProp, remoteLogMetadataProducerTestVal);
+        props.putIfAbsent(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
     }
 
     public static class MonitorableNoOpRemoteStorageManager extends NoOpRemoteStorageManager implements Monitorable {

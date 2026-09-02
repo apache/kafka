@@ -519,7 +519,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
     private StoreBuilder<TimestampedKeyValueStoreWithHeaders<Bytes, SubscriptionWrapper<String>>> storeBuilder() {
         final Serde<SubscriptionWrapper<String>> subscriptionWrapperSerde = new SubscriptionWrapperSerde<>(
             PK_SERDE_TOPIC_SUPPLIER, Serdes.String());
-        return Stores.timestampedKeyValueStoreBuilderWithHeaders(
+        return Stores.timestampedKeyValueStoreWithHeadersBuilder(
             Stores.persistentTimestampedKeyValueStoreWithHeaders(
                 "Store"
             ),

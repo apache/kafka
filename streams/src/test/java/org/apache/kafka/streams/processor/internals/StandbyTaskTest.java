@@ -27,9 +27,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
@@ -75,7 +75,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -391,6 +390,29 @@ public class StandbyTaskTest {
     }
 
     @Test
+    public void shouldNotWipeStateDirOnDirtyCloseWithEosAndTransactionalStateStores() {
+        doNothing().when(stateManager).close();
+        when(stateManager.hasCorruptedStores()).thenReturn(false);
+
+        config = new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
+            mkEntry(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true")
+        )));
+
+        task = createStandbyTask();
+
+        task.suspend();
+        task.closeDirty();
+
+        assertEquals(Task.State.CLOSED, task.state());
+        // With transactional state stores, the state dir should NOT be wiped on dirty close
+        // unless stores are specifically marked as corrupted.
+        verify(stateManager, never()).baseDir();
+    }
+
+    @Test
     public void shouldPrepareRecycleSuspendedTask() {
         task = createStandbyTask();
         assertThrows(IllegalStateException.class, () -> task.prepareRecycle()); // CREATED
@@ -461,15 +483,30 @@ public class StandbyTaskTest {
         assertThat(totalMetric.metricValue(), equalTo(0.0));
         assertThat(rateMetric.metricValue(), equalTo(0.0));
 
-        task.recordRestoration(time, 25L, false);
+        // standby tasks have no remaining-records metric, so the offset-slot argument is ignored
+        task.recordRestoration(time, 25L, 30L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(25.0));
-        assertThat(rateMetric.metricValue(), not(0.0));
+        // the rate measures updated records per second, not update batches per second; with no time
+        // elapsed the rate window is (metrics.num.samples - 1) * metrics.sample.window.ms == 30s
+        assertEquals(
+            25.0 / 30.0,
+            ((Number) rateMetric.metricValue()).doubleValue(),
+            0.0001d,
+            "update-rate must measure updated records per second, not update batches per second; "
+                + "counting batches would give 1/30 == 0.03333 (KAFKA-20877)"
+        );
 
-        task.recordRestoration(time, 50L, false);
+        task.recordRestoration(time, 50L, 55L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(75.0));
-        assertThat(rateMetric.metricValue(), not(0.0));
+        assertEquals(
+            75.0 / 30.0,
+            ((Number) rateMetric.metricValue()).doubleValue(),
+            0.0001d,
+            "update-rate must measure updated records per second, not update batches per second; "
+                + "counting batches would give 2/30 == 0.06666 (KAFKA-20877)"
+        );
     }
 
     private KafkaMetric getMetric(final String operation,

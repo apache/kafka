@@ -28,6 +28,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
@@ -88,11 +90,23 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         baseTimestamp = time.milliseconds();
     }
 
-    private static Properties getStreamsProperties(final String optimization) {
-        return mkProperties(mkMap(
+    private static Properties getStreamsProperties(final String optimization, final boolean withHeaders) {
+        return getStreamsProperties(optimization, withHeaders, false);
+    }
+
+    private static Properties getStreamsProperties(final String optimization, final boolean withHeaders, final boolean transactional) {
+        final Properties props = mkProperties(mkMap(
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
                 mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization)
         ));
+        // Transactional state stores (KIP-892) are only supported under exactly-once-v2, so whenever the
+        // transactional dimension is enabled we also switch the processing guarantee to exactly-once-v2.
+        if (transactional) {
+            props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+            props.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        return props;
     }
 
     // versioning is disabled for these tests, even though the code supports building a
@@ -105,7 +119,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         final List<Boolean> rejoin = Arrays.asList(true, false);
         final List<Boolean> leftVersioned = Collections.singletonList(false);
         final List<Boolean> rightVersioned = Collections.singletonList(false);
-        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned);
+        final List<Boolean> withHeaders = Arrays.asList(true, false);
+        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned, withHeaders);
     }
 
     // optimizations and rejoin are disabled for these tests, as these tests focus on versioning.
@@ -117,7 +132,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         final List<Boolean> rejoin = Collections.singletonList(false);
         final List<Boolean> leftVersioned = Arrays.asList(true, false);
         final List<Boolean> rightVersioned = Arrays.asList(true, false);
-        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned);
+        final List<Boolean> withHeaders = Arrays.asList(true, false);
+        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned, withHeaders);
     }
 
     // deduplicate test cases in data and versionedData
@@ -138,6 +154,51 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
     private static Stream<Arguments> versionedDataTestCases() {
         return versionedData().stream().map(Arguments::of);
+    }
+
+    // Extends the standard testCases() with a transactional dimension (last argument). All existing cases keep
+    // transactional=false (preserving current coverage), and we add a small, representative set of
+    // transactional=true cases (KIP-892 transactional state stores, which imply exactly-once-v2). To avoid
+    // doubling the whole matrix, transactional=true is only added for a single materialization/config
+    // combination: materialized (so the queryable store is exercised), non-optimized, non-rejoin, non-versioned,
+    // and without DSL store-format headers, for both inner and left joins.
+    private static Stream<Arguments> transactionalTestCases() {
+        final Stream<Arguments> nonTransactional = testCases()
+                .map(arguments -> extend(arguments.get(), false));
+        final Stream<Arguments> transactional = Stream.of(true, false)
+                .map(leftJoin -> Arguments.of(
+                        leftJoin,                       // leftJoin
+                        StreamsConfig.NO_OPTIMIZATION,  // optimization
+                        true,                           // materialized
+                        false,                          // rejoin
+                        false,                          // leftVersioned
+                        false,                          // rightVersioned
+                        false,                          // withHeaders
+                        true                            // transactional
+                ));
+        return Stream.concat(nonTransactional, transactional);
+    }
+
+    // Same as transactionalTestCases() but without the leftJoin argument (mirrors testCasesWithoutLeftJoinArg()).
+    private static Stream<Arguments> transactionalTestCasesWithoutLeftJoinArg() {
+        final Stream<Arguments> nonTransactional = testCasesWithoutLeftJoinArg()
+                .map(arguments -> extend(arguments.get(), false));
+        final Stream<Arguments> transactional = Stream.of(Arguments.of(
+                StreamsConfig.NO_OPTIMIZATION,  // optimization
+                true,                           // materialized
+                false,                          // rejoin
+                false,                          // leftVersioned
+                false,                          // rightVersioned
+                false,                          // withHeaders
+                true                            // transactional
+        ));
+        return Stream.concat(nonTransactional, transactional);
+    }
+
+    private static Arguments extend(final Object[] args, final Object extra) {
+        final Object[] extended = Arrays.copyOf(args, args.length + 1);
+        extended[args.length] = extra;
+        return Arguments.of(extended);
     }
 
     protected static Collection<Object[]> buildParameters(final List<?>... argOptions) {
@@ -165,16 +226,18 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testCases")
+    @MethodSource("transactionalTestCases")
     public void doJoinFromLeftThenDeleteLeftEntity(final boolean leftJoin,
                                                    final String optimization,
                                                    final boolean materialized,
                                                    final boolean rejoin,
                                                    final boolean leftVersioned,
-                                                   final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                   final boolean rightVersioned,
+                                                   final boolean withHeaders,
+                                                   final boolean transactional) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders, transactional);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
@@ -296,10 +359,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                          final boolean materialized,
                                                          final boolean rejoin,
                                                          final boolean leftVersioned,
-                                                         final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                         final boolean rightVersioned,
+                                                         final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
@@ -363,16 +427,18 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testCases")
+    @MethodSource("transactionalTestCases")
     public void doJoinFromRightThenDeleteRightEntity(final boolean leftJoin,
                                                      final String optimization,
                                                      final boolean materialized,
                                                      final boolean rejoin,
                                                      final boolean leftVersioned,
-                                                     final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                     final boolean rightVersioned,
+                                                     final boolean withHeaders,
+                                                     final boolean transactional) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders, transactional);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
@@ -489,10 +555,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                                  final boolean materialized,
                                                                  final boolean rejoin,
                                                                  final boolean leftVersioned,
-                                                                 final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                                 final boolean rightVersioned,
+                                                                 final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
@@ -555,10 +622,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                                       final boolean materialized,
                                                                       final boolean rejoin,
                                                                       final boolean leftVersioned,
-                                                                      final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                                      final boolean rightVersioned,
+                                                                      final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
@@ -587,10 +655,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                                         final boolean materialized,
                                                                         final boolean rejoin,
                                                                         final boolean leftVersioned,
-                                                                        final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                                        final boolean rightVersioned,
+                                                                        final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
@@ -694,10 +763,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                                   final boolean materialized,
                                                                   final boolean rejoin,
                                                                   final boolean leftVersioned,
-                                                                  final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                                  final boolean rightVersioned,
+                                                                  final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
@@ -779,10 +849,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                              final boolean materialized,
                                                              final boolean rejoin,
                                                              final boolean leftVersioned,
-                                                             final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                             final boolean rightVersioned,
+                                                             final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, true, rejoin, leftVersioned, rightVersioned, value -> null);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
@@ -801,12 +872,14 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testCasesWithoutLeftJoinArg")
+    @MethodSource("transactionalTestCasesWithoutLeftJoinArg")
     public void shouldEmitRecordWhenOldAndNewFkDiffer(final String optimization,
                                                       final boolean materialized,
                                                       final boolean rejoin,
                                                       final boolean leftVersioned,
-                                                      final boolean rightVersioned) {
+                                                      final boolean rightVersioned,
+                                                      final boolean withHeaders,
+                                                      final boolean transactional) {
         final Function<String, String> foreignKeyExtractor = value -> {
             final String split = value.split("\\|")[1];
             if (split.equals("returnNull")) {
@@ -817,9 +890,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 return split;
             }
         };
-        final Properties streamsConfig = getStreamsProperties(optimization);
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders, transactional);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, true, rejoin, leftVersioned, rightVersioned, foreignKeyExtractor);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
@@ -1003,10 +1076,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                           final boolean materialized,
                                                           final boolean rejoin,
                                                           final boolean leftVersioned,
-                                                          final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                          final boolean rightVersioned,
+                                                          final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());

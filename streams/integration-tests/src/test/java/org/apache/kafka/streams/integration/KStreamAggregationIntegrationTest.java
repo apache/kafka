@@ -61,6 +61,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.consumer.ConsoleConsumer;
 import org.apache.kafka.tools.consumer.ConsoleConsumerOptions;
@@ -70,10 +71,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayOutputStream;
@@ -92,6 +94,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofMinutes;
@@ -170,13 +173,45 @@ public class KStreamAggregationIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-    @Test
-    public void shouldReduce(final TestInfo testInfo) throws Exception {
+    /**
+     * Provides (withHeaders, transactionalStateStores) pairs so representative aggregation tests keep their
+     * existing withHeaders={false,true} coverage (with non-transactional stores) and additionally run once
+     * with transactional state stores enabled. Transactional state stores (KIP-892) are an exactly-once-only
+     * feature, so the transactional=true case always runs under EXACTLY_ONCE_V2 (see
+     * {@link #maybeEnableTransactionalStateStores(boolean)}).
+     */
+    private static Stream<Arguments> headersAndTransactional() {
+        return Stream.of(
+            Arguments.of(false, false),
+            Arguments.of(true, false),
+            Arguments.of(false, true)
+        );
+    }
+
+    /**
+     * When {@code transactionalStateStores} is true, enable transactional state stores under EXACTLY_ONCE_V2,
+     * since transactional state stores (KIP-892) are only supported with exactly-once processing.
+     */
+    private void maybeEnableTransactionalStateStores(final boolean transactionalStateStores) {
+        if (transactionalStateStores) {
+            streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+            streamsConfiguration.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("headersAndTransactional")
+    public void shouldReduce(final boolean withHeaders,
+                             final boolean transactionalStateStores,
+                             final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream
             .reduce(reducer, Materialized.as("reduce-by-key"))
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
+        maybeEnableTransactionalStateStores(transactionalStateStores);
 
         startStreams();
 
@@ -220,8 +255,11 @@ public class KStreamAggregationIntegrationTest {
         return keyComparison;
     }
 
-    @Test
-    public void shouldReduceWindowed(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @MethodSource("headersAndTransactional")
+    public void shouldReduceWindowed(final boolean withHeaders,
+                                     final boolean transactionalStateStores,
+                                     final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         mockTime.sleep(1000);
         produceMessages(firstBatchTimestamp);
@@ -235,6 +273,9 @@ public class KStreamAggregationIntegrationTest {
             .reduce(reducer)
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.String()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
+        maybeEnableTransactionalStateStores(transactionalStateStores);
 
         startStreams();
 
@@ -297,8 +338,9 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldAggregate(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAggregate(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream.aggregate(
             initializer,
@@ -306,6 +348,8 @@ public class KStreamAggregationIntegrationTest {
             Materialized.as("aggregate-by-selected-key"))
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Integer()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -337,8 +381,9 @@ public class KStreamAggregationIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldAggregateWindowed(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAggregateWindowed(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         final long firstTimestamp = mockTime.milliseconds();
         mockTime.sleep(1000);
         produceMessages(firstTimestamp);
@@ -355,6 +400,8 @@ public class KStreamAggregationIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.Integer()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -445,30 +492,37 @@ public class KStreamAggregationIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldCount(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCount(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count(Materialized.as("count-by-key"))
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
+
         shouldCountHelper(testInfo);
     }
 
-    @Test
-    public void shouldCountWithInternalStore(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCountWithInternalStore(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count()
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
+
         shouldCountHelper(testInfo);
     }
 
-    @Test
-    public void shouldGroupByKey(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldGroupByKey(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         final long timestamp = mockTime.milliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
@@ -477,6 +531,8 @@ public class KStreamAggregationIntegrationTest {
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)))
             .count()
             .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start()).to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -506,8 +562,9 @@ public class KStreamAggregationIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldReduceSlidingWindows(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldReduceSlidingWindows(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         final long timeDifference = 500L;
         produceMessages(firstBatchTimestamp);
@@ -522,6 +579,8 @@ public class KStreamAggregationIntegrationTest {
             .reduce(reducer)
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.String()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -613,8 +672,9 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldAggregateSlidingWindows(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAggregateSlidingWindows(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         final long timeDifference = 500L;
         produceMessages(firstBatchTimestamp);
@@ -632,6 +692,8 @@ public class KStreamAggregationIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.Integer()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -804,9 +866,7 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, KeyValue<Long, Long>> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(13);
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -831,8 +891,9 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldReduceSessionWindows(final boolean withHeaders) throws Exception {
+    @MethodSource("headersAndTransactional")
+    public void shouldReduceSessionWindows(final boolean withHeaders,
+                                           final boolean transactionalStateStores) throws Exception {
         final long sessionGap = 1000L; // something to do with time
 
         final Properties producerConfig = TestUtils.producerConfig(
@@ -853,9 +914,7 @@ public class KStreamAggregationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(13);
         final String userSessionsStore = "UserSessionsStore";
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -866,6 +925,8 @@ public class KStreamAggregationIntegrationTest {
                 results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));
                 latch.countDown();
             });
+
+        maybeEnableTransactionalStateStores(transactionalStateStores);
 
         startStreams();
         latch.await(30, TimeUnit.SECONDS);
@@ -941,8 +1002,9 @@ public class KStreamAggregationIntegrationTest {
         }
     }
     
-    @Test
-    public void shouldCountUnlimitedWindows() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCountUnlimitedWindows(final boolean withHeaders) throws Exception {
         final long startTime = mockTime.milliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS) + 1;
         final long incrementTime = Duration.ofDays(1).toMillis();
 
@@ -1011,6 +1073,9 @@ public class KStreamAggregationIntegrationTest {
                 results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));
                 latch.countDown();
             });
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
+
         startStreams();
         assertTrue(latch.await(30, TimeUnit.SECONDS));
 

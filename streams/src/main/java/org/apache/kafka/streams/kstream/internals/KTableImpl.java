@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -82,7 +83,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -450,7 +450,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             // only materialize if materialized is specified and it has queryable name
             if (queryableStoreName != null) {
                 final StoreFactory storeFactory = new KeyValueStoreMaterializer<>(materializedInternal);
-                storeBuilder = Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
+                storeBuilder = Set.of(new FactoryWrappingStoreBuilder<>(storeFactory));
             } else {
                 storeBuilder = null;
             }
@@ -600,7 +600,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             name,
             keySerde,
             valueSerde,
-            Collections.singleton(this.name),
+            Set.of(this.name),
             null,
             suppressionSupplier,
             node,
@@ -737,7 +737,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final NamedInternal renamed = new NamedInternal(joinName);
         final String joinMergeName = renamed.orElseGenerateWithPrefix(builder, MERGE_NAME);
-        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) other));
+        final Set<String> allSourceNodes = ensureCopartitionWith(Set.of((AbstractStream<K, VO>) other));
 
         if (leftOuter) {
             enableSendingOldValues(true);
@@ -1279,7 +1279,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamPartitioner<KO, SubscriptionWrapper<K>> subscriptionSinkPartitioner =
                 tableJoinedInternal.otherPartitioner() == null
                         ? null
-                        : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.otherPartitioner().partitions(topic, key, null, numPartitions));
+                        : new SubscriptionSinkPartitioner<>(tableJoinedInternal.otherPartitioner(), getPartition);
 
         final StreamSinkNode<KO, SubscriptionWrapper<K>> subscriptionSink = new StreamSinkNode<>(
             renamed.suffixWithOrElseGet("-subscription-registration-sink", builder, SINK_NAME),
@@ -1290,7 +1290,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final StreamSourceNode<KO, SubscriptionWrapper<K>> subscriptionSource = new StreamSourceNode<>(
             renamed.suffixWithOrElseGet("-subscription-registration-source", builder, SOURCE_NAME),
-            Collections.singleton(subscriptionTopicName),
+            Set.of(subscriptionTopicName),
             new ConsumedInternal<>(Consumed.with(foreignKeySerde, subscriptionWrapperSerde))
         );
         builder.addGraphNode(subscriptionSink, subscriptionSource);
@@ -1327,7 +1327,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                     ),
                     renamed.suffixWithOrElseGet("-subscription-join-foreign", builder, SUBSCRIPTION_PROCESSOR)
                 ),
-                Collections.singleton(foreignKeyValueGetter)
+                Set.of(foreignKeyValueGetter)
             );
         builder.addGraphNode(subscriptionReceiveNode, subscriptionJoinNode);
 
@@ -1345,16 +1345,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String finalRepartitionTopicName = renamed.suffixWithOrElseGet("-subscription-response", builder, SUBSCRIPTION_RESPONSE) + TOPIC_SUFFIX;
         builder.internalTopologyBuilder.addInternalTopic(finalRepartitionTopicName, InternalTopicProperties.empty());
 
-        final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> defaultForeignResponseSinkPartitioner =
-                (topic, key, subscriptionResponseWrapper, numPartitions) -> {
-                    final Integer partition = subscriptionResponseWrapper.primaryPartition();
-                    return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
-                };
+        final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> defaultForeignResponseSinkPartitioner = new DefaultForeignResponseSinkPartitioner<>();
 
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> foreignResponseSinkPartitioner =
                 tableJoinedInternal.partitioner() == null
                         ? defaultForeignResponseSinkPartitioner
-                        : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.partitioner().partitions(topic, key, null, numPartitions));
+                        : new ForeignResponseSinkPartitioner<>(tableJoinedInternal.partitioner(), getPartition);
 
         final StreamSinkNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSink =
             new StreamSinkNode<>(
@@ -1367,7 +1363,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final StreamSourceNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSource = new StreamSourceNode<>(
             renamed.suffixWithOrElseGet("-subscription-response-source", builder, SOURCE_NAME),
-            Collections.singleton(finalRepartitionTopicName),
+            Set.of(finalRepartitionTopicName),
             new ConsumedInternal<>(Consumed.with(keySerde, responseWrapperSerde))
         );
         builder.addGraphNode(foreignResponseSink, foreignResponseSource);
@@ -1389,7 +1385,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 ),
                 renamed.suffixWithOrElseGet("-subscription-response-resolver", builder, SUBSCRIPTION_RESPONSE_RESOLVER_PROCESSOR)
             ),
-            Collections.singleton(primaryKeyValueGetter)
+            Set.of(primaryKeyValueGetter)
         );
         builder.addGraphNode(foreignResponseSource, responseJoinNode);
 
@@ -1436,6 +1432,80 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                                 final MaterializedInternal<?, ?, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         if (materializedInternal != null) {
             tableNode.setOutputVersioned(materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
+        }
+    }
+
+    private static class SubscriptionSinkPartitioner<K, KO> implements StreamPartitioner<KO, SubscriptionWrapper<K>> {
+        private final StreamPartitioner<KO, Void> otherPartitioner;
+        private final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition;
+
+        private SubscriptionSinkPartitioner(
+            final StreamPartitioner<KO, Void> otherPartitioner,
+            final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition
+        ) {
+            this.otherPartitioner = otherPartitioner;
+            this.getPartition = getPartition;
+        }
+
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final KO key, final SubscriptionWrapper<K> value, final int numPartitions) {
+            throw new UnsupportedOperationException("This method is deprecated and should not be called.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic,
+                                                 final KO key,
+                                                 final SubscriptionWrapper<K> value,
+                                                 final Headers headers,
+                                                 final int numPartitions) {
+            return getPartition.apply(otherPartitioner.partitions(topic, key, null, headers, numPartitions));
+        }
+    }
+
+    private static class ForeignResponseSinkPartitioner<K, VO> implements StreamPartitioner<K, SubscriptionResponseWrapper<VO>> {
+        private final StreamPartitioner<K, Void> partitioner;
+        private final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition;
+
+        private ForeignResponseSinkPartitioner(
+            final StreamPartitioner<K, Void> partitioner,
+            final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition
+        ) {
+            this.partitioner = partitioner;
+            this.getPartition = getPartition;
+        }
+
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final K key, final SubscriptionResponseWrapper<VO> value, final int numPartitions) {
+            throw new UnsupportedOperationException("This method is deprecated and should not be called.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic,
+                                                 final K key,
+                                                 final SubscriptionResponseWrapper<VO> value,
+                                                 final Headers headers,
+                                                 final int numPartitions) {
+            return getPartition.apply(partitioner.partitions(topic, key, null, headers, numPartitions));
+        }
+    }
+
+    private static class DefaultForeignResponseSinkPartitioner<K, VO> implements StreamPartitioner<K, SubscriptionResponseWrapper<VO>> {
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final K key, final SubscriptionResponseWrapper<VO> value, final int numPartitions) {
+            throw new UnsupportedOperationException("This method is deprecated and should not be called.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic,
+                                                 final K key,
+                                                 final SubscriptionResponseWrapper<VO> value,
+                                                 final Headers headers,
+                                                 final int numPartitions) {
+            final Integer partition = value.primaryPartition();
+            return partition == null ? Optional.empty() : Optional.of(Set.of(partition));
         }
     }
 }

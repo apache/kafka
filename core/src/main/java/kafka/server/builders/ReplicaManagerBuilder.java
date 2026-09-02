@@ -17,9 +17,7 @@
 
 package kafka.server.builders;
 
-import kafka.server.AlterPartitionManager;
 import kafka.server.KafkaConfig;
-import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.metrics.Metrics;
@@ -27,6 +25,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.DelayedActionQueue;
 import org.apache.kafka.server.common.DirectoryEventHandler;
+import org.apache.kafka.server.partition.AlterPartitionManager;
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogManager;

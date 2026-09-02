@@ -20,6 +20,7 @@ TOPIC="test-topic"
 KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=storage.jsa" opt/kafka/bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c opt/kafka/config/server.properties
 
 KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=kafka.jsa" opt/kafka/bin/kafka-server-start.sh opt/kafka/config/server.properties &
+KAFKA_PID=$!
 
 check_timeout() {
     if [ $TIMEOUT -eq 0 ]; then
@@ -39,7 +40,8 @@ echo "test" | opt/kafka/bin/kafka-console-producer.sh --topic $TOPIC --bootstrap
 opt/kafka/bin/kafka-console-consumer.sh --topic $TOPIC --from-beginning --bootstrap-server localhost:9092 --max-messages 1 --timeout-ms 20000
 [ $? -eq 0 ] || exit 1
 
-opt/kafka/bin/kafka-server-stop.sh
+kill -TERM $KAFKA_PID
+wait $KAFKA_PID
 
 # Wait until jsa file is generated
 TIMEOUT=20

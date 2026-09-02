@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
@@ -24,6 +25,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.FailureReason;
@@ -31,27 +34,31 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.TimestampedWindowRangeWithHeadersQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 
 import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
-import static org.apache.kafka.streams.state.internals.Utils.keyBytes;
 
 public class MeteredSessionStoreWithHeaders<K, AGG>
     extends MeteredSessionStore<K, AggregationWithHeaders<AGG>>
     implements SessionStoreWithHeaders<K, AGG> {
 
-    MeteredSessionStoreWithHeaders(final SessionStore<Bytes, byte[]> inner,
-                                   final String metricsScope,
-                                   final Serde<K> keySerde,
-                                   final Serde<AggregationWithHeaders<AGG>> aggSerde,
-                                   final Time time) {
+    MeteredSessionStoreWithHeaders(
+        final SessionStore<Bytes, byte[]> inner,
+        final String metricsScope,
+        final Serde<K> keySerde,
+        final Serde<AggregationWithHeaders<AGG>> aggSerde,
+        final Time time
+    ) {
         super(inner, metricsScope, keySerde, aggSerde, time);
     }
 
@@ -59,11 +66,20 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     @Override
     protected Serde<AggregationWithHeaders<AGG>> prepareValueSerdeForStore(
             final Serde<AggregationWithHeaders<AGG>> valueSerde,
-            final SerdeGetter getter) {
+            final SerdeGetter getter
+    ) {
         if (valueSerde == null) {
             return new AggregationWithHeadersSerde<>((Serde<AGG>) getter.valueSerde());
         }
         return super.prepareValueSerdeForStore(valueSerde, getter);
+    }
+
+    private Bytes serializeKey(final K key, final Headers headers) {
+        return Bytes.wrap(serdes.rawKey(key, headers));
+    }
+
+    private K deserializeKey(final byte[] rawKey, final Headers headers) {
+        return serdes.keyFrom(rawKey, headers);
     }
 
     @Override
@@ -89,16 +105,27 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
 
                         try {
                             internalContext.setRecordContext(temporaryContext);
-                            final Bytes key = keyBytes(sessionKey, deleteHeaders, serdes);
-                            wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(null, deleteHeaders));
+                            wrapped().put(
+                                new Windowed<>(
+                                    serializeKey(sessionKey.key(), deleteHeaders),
+                                    sessionKey.window()
+                                ),
+                                null
+                            );
                         } finally {
                             // Restore original context
                             internalContext.setRecordContext(currentContext);
                         }
                     } else {
-                        final Headers headers = aggregate.headers();
-                        final Bytes key = keyBytes(sessionKey, headers, serdes);
-                        wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate, headers));
+                        // it's ok to only pass headers into `serializeKey`, because for the value case passed-in headers are
+                        // getting ignored anyway, because the value (of type `AggregationWithHeaders`) itself carries the headers
+                        wrapped().put(
+                            new Windowed<>(
+                                serializeKey(sessionKey.key(), aggregate.headers()),
+                                sessionKey.window()
+                            ),
+                            serializeValue(aggregate)
+                        );
                     }
                 },
                 time,
@@ -137,8 +164,9 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
 
                     try {
                         internalContext.setRecordContext(temporaryContext);
-                        final Bytes key = keyBytes(sessionKey, deleteHeaders, serdes);
-                        wrapped().remove(new Windowed<>(key, sessionKey.window()));
+                        wrapped().remove(
+                            new Windowed<>(serializeKey(sessionKey.key(), deleteHeaders), sessionKey.window())
+                        );
                     } finally {
                         // Restore original context
                         internalContext.setRecordContext(currentContext);
@@ -154,37 +182,33 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
 
     @SuppressWarnings("unchecked")
     @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
         final long start = time.nanoseconds();
         final QueryResult<R> result;
+        // Queries this store handles itself go through its serdes; anything delegated to the wrapped
+        // store does not, so the two cases report execution info differently.
+        final boolean handledLocally;
 
         if (query instanceof WindowRangeQuery) {
-            final WindowRangeQuery<K, AGG> windowRangeQuery = (WindowRangeQuery<K, AGG>) query;
-            if (windowRangeQuery.getKey().isPresent()) {
-                result = runRangeQuery(query, positionBound, config);
-            } else {
-                result = QueryResult.forFailure(
-                    FailureReason.UNKNOWN_QUERY_TYPE,
-                    "This store (" + getClass() + ") doesn't know how to"
-                        + " execute the given query (" + query + ") because"
-                        + " SessionStores only support WindowRangeQuery.withKey."
-                        + " Contact the store maintainer if you need support"
-                        + " for a new query type."
-                );
-            }
-            if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + getClass() + " with serdes "
-                        + serdes + " in " + (time.nanoseconds() - start) + "ns");
-            }
+            result = runRangeQuery((WindowRangeQuery<K, AGG>) query, positionBound, config);
+            handledLocally = true;
+        } else if (query instanceof TimestampedWindowRangeWithHeadersQuery) {
+            result = runTimestampedWindowRangeWithHeadersQuery((TimestampedWindowRangeWithHeadersQuery<K, AGG>) query, positionBound, config);
+            handledLocally = true;
         } else {
             result = wrapped().query(query, positionBound, config);
-            if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
-            }
+            handledLocally = false;
+        }
+
+        if (config.isCollectExecutionInfo()) {
+            result.addExecutionInfo(
+                "Handled in " + getClass()
+                    + (handledLocally ? " with serdes " + serdes : "")
+                    + " in " + (time.nanoseconds() - start) + "ns");
         }
         return result;
     }
@@ -193,7 +217,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
         return new MeteredSessionStoreWithHeadersIterator(
-            wrapped().fetch(keyBytes(key, new RecordHeaders(), serdes))
+            wrapped().fetch(serializeKey(key, internalContext.headers()))
         );
     }
 
@@ -201,144 +225,298 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
         return new MeteredSessionStoreWithHeadersIterator(
-            wrapped().backwardFetch(keyBytes(key, new RecordHeaders(), serdes))
+            wrapped().backwardFetch(serializeKey(key, internalContext.headers()))
         );
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K keyFrom,
-                                                                            final K keyTo) {
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(
+        final K keyFrom,
+        final K keyTo
+    ) {
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().fetch(
-                keyBytes(keyFrom, new RecordHeaders(), serdes),
-                keyBytes(keyTo, new RecordHeaders(), serdes))
+                serializeKey(keyFrom, internalContext.headers()),
+                serializeKey(keyTo, internalContext.headers())
+            )
         );
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K keyFrom,
-                                                                                    final K keyTo) {
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(
+        final K keyFrom,
+        final K keyTo
+    ) {
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().backwardFetch(
-                keyBytes(keyFrom, new RecordHeaders(), serdes),
-                keyBytes(keyTo, new RecordHeaders(), serdes))
+                serializeKey(keyFrom, internalContext.headers()),
+                serializeKey(keyTo, internalContext.headers())
+            )
         );
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
-                                                                                   final long earliestSessionEndTime,
-                                                                                   final long latestSessionStartTime) {
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(
+        final K key,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime
+    ) {
         Objects.requireNonNull(key, "key cannot be null");
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().findSessions(
-                keyBytes(key, new RecordHeaders(), serdes),
+                serializeKey(key, internalContext.headers()),
                 earliestSessionEndTime,
-                latestSessionStartTime)
+                latestSessionStartTime
+            )
         );
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K key,
-                                                                                           final long earliestSessionEndTime,
-                                                                                           final long latestSessionStartTime) {
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(
+        final K key,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime
+    ) {
         Objects.requireNonNull(key, "key cannot be null");
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().backwardFindSessions(
-                keyBytes(key, new RecordHeaders(), serdes),
+                serializeKey(key, internalContext.headers()),
                 earliestSessionEndTime,
-                latestSessionStartTime)
+                latestSessionStartTime
+            )
         );
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K keyFrom,
-                                                                                   final K keyTo,
-                                                                                   final long earliestSessionEndTime,
-                                                                                   final long latestSessionStartTime) {
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(
+        final K keyFrom,
+        final K keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime
+    ) {
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().findSessions(
-                keyBytes(keyFrom, new RecordHeaders(), serdes),
-                keyBytes(keyTo, new RecordHeaders(), serdes),
+                serializeKey(keyFrom, internalContext.headers()),
+                serializeKey(keyTo, internalContext.headers()),
                 earliestSessionEndTime,
-                latestSessionStartTime)
+                latestSessionStartTime
+            )
         );
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
-                                                                                           final K keyTo,
-                                                                                           final long earliestSessionEndTime,
-                                                                                           final long latestSessionStartTime) {
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(
+        final K keyFrom,
+        final K keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime
+    ) {
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().backwardFindSessions(
-                keyBytes(keyFrom, new RecordHeaders(), serdes),
-                keyBytes(keyTo, new RecordHeaders(), serdes),
+                serializeKey(keyFrom, internalContext.headers()),
+                serializeKey(keyTo, internalContext.headers()),
                 earliestSessionEndTime,
-                latestSessionStartTime)
+                latestSessionStartTime
+            )
         );
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final long earliestSessionEndTime,
-                                                                                   final long latestSessionEndTime) {
-        return new MeteredSessionStoreWithHeadersIterator(
-            wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime)
-        );
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(
+        final long earliestSessionEndTime,
+        final long latestSessionEndTime
+    ) {
+        return new MeteredSessionStoreWithHeadersIterator(wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime));
     }
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                             final PositionBound positionBound,
-                                             final QueryConfig config) {
-        final WindowRangeQuery<K, AGG> typedQuery = (WindowRangeQuery<K, AGG>) query;
-        final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
-            WindowRangeQuery.withKey(
-                Bytes.wrap(serdes.rawKey(typedQuery.getKey().get(), new RecordHeaders()))
-            );
-        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
-            wrapped().query(rawKeyQuery, positionBound, config);
-        if (rawResult.isSuccess()) {
-            final MeteredWindowedKeyValueIterator<K, AGG> typedResult =
-                new MeteredWindowedKeyValueIterator<>(
-                    rawResult.getResult(),
-                    fetchSensor,
-                    iteratorDurationSensor,
-                    bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
-                    byteArray -> {
-                        final AggregationWithHeaders<AGG> awh =
-                            serdes.valueDeserializer().deserialize(serdes.topic(), byteArray);
-                        return awh == null ? null : awh.aggregation();
-                    },
-                    time,
-                    numOpenIterators,
-                    openIterators
-                );
-            return (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+    private <R> QueryResult<R> runRangeQuery(
+        final WindowRangeQuery<K, AGG> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
+        final QueryResult<R> queryResult;
+
+        if (query.getKey().isPresent()) {
+            final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
+                WindowRangeQuery.withKey(serializeKey(query.getKey().get(), internalContext.headers()));
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
+                final MeteredWindowedKeyValueIterator<K, AGG> typedResult =
+                    new MeteredWindowedKeyValueWithHeadersIterator<>(
+                        rawResult.getResult(),
+                        fetchSensor,
+                        iteratorDurationSensor,
+                        this::deserializeValue,
+                        this::deserializeKey,
+                        AggregationWithHeaders::headers,
+                        aggregationWithHeaders -> aggregationWithHeaders == null ? null : aggregationWithHeaders.aggregation(),
+                        time,
+                        numOpenIterators,
+                        openIterators
+                    );
+                queryResult = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+            } else {
+                queryResult = (QueryResult<R>) rawResult;
+            }
         } else {
-            return (QueryResult<R>) rawResult;
+            queryResult = QueryResult.forFailure(
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                "This store (" + getClass() + ") doesn't know how to"
+                    + " execute the given query (" + query + ") because"
+                    + " SessionStores only support WindowRangeQuery.withKey."
+                    + " Contact the store maintainer if you need support"
+                    + " for a new query type."
+            );
+        }
+        return queryResult;
+    }
+
+    /**
+     * Handles the {@code withKey} form of {@link TimestampedWindowRangeWithHeadersQuery} by
+     * forwarding a raw byte-level {@link WindowRangeQuery#withKey(Object)} to the wrapped store and
+     * surfacing each session as a {@link ReadOnlyRecord} (via {@link Record}) whose key is a
+     * {@link Windowed} of the deserialized key and the session's window, carrying the aggregation,
+     * headers, and a timestamp sourced from the session window's end. The {@code withWindowStartRange}
+     * form is rejected: it is handled by window stores, not session stores.
+     */
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runTimestampedWindowRangeWithHeadersQuery(
+            final TimestampedWindowRangeWithHeadersQuery<K, AGG> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+    ) {
+        final QueryResult<R> queryResult;
+
+        if (query.key().isPresent()) {
+            final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
+                    WindowRangeQuery.withKey(serializeKey(query.key().get(), internalContext.headers()));
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                    wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
+                final ReadOnlyRecordIterator<Windowed<K>, AGG> resultIterator =
+                    new MeteredSessionWithHeadersReadOnlyRecordIterator(rawResult.getResult());
+                queryResult = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, resultIterator);
+            } else {
+                queryResult = (QueryResult<R>) rawResult;
+            }
+        } else {
+            queryResult = QueryResult.forFailure(
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                "This store (" + getClass() + ") doesn't know how to"
+                    + " execute the given query (" + query + ") because"
+                    + " SessionStores only support TimestampedWindowRangeWithHeadersQuery.withKey."
+                    + " Contact the store maintainer if you need support"
+                    + " for a new query type."
+            );
+        }
+        return queryResult;
+    }
+
+    @Override
+    public ReadOnlySessionStore<K, AggregationWithHeaders<AGG>> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new ReadOnlyHeadersView(wrapped().readOnly(isolationLevel));
+    }
+
+    private final class ReadOnlyHeadersView implements ReadOnlySessionStore<K, AggregationWithHeaders<AGG>> {
+
+        private final ReadOnlySessionStore<Bytes, byte[]> underlying;
+
+        ReadOnlyHeadersView(final ReadOnlySessionStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public AggregationWithHeaders<AGG> fetchSession(
+            final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return maybeMeasureLatency(
+                () -> deserializeValue(underlying.fetchSession(
+                    serializeKey(key, internalContext.headers()), earliestSessionEndTime, latestSessionStartTime)),
+                time,
+                fetchSensor
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return new MeteredSessionStoreWithHeadersIterator(underlying.fetch(serializeKey(key, internalContext.headers())));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return new MeteredSessionStoreWithHeadersIterator(underlying.backwardFetch(serializeKey(key, internalContext.headers())));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K keyFrom, final K keyTo) {
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.fetch(serializeKey(keyFrom, internalContext.headers()), serializeKey(keyTo, internalContext.headers()))
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K keyFrom, final K keyTo) {
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.backwardFetch(serializeKey(keyFrom, internalContext.headers()), serializeKey(keyTo, internalContext.headers()))
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(
+            final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.findSessions(serializeKey(key, internalContext.headers()), earliestSessionEndTime, latestSessionStartTime)
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(
+            final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.backwardFindSessions(serializeKey(key, internalContext.headers()), earliestSessionEndTime, latestSessionStartTime)
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(
+            final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.findSessions(
+                    serializeKey(keyFrom, internalContext.headers()),
+                    serializeKey(keyTo, internalContext.headers()),
+                    earliestSessionEndTime,
+                    latestSessionStartTime)
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(
+            final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.backwardFindSessions(
+                    serializeKey(keyFrom, internalContext.headers()),
+                    serializeKey(keyTo, internalContext.headers()),
+                    earliestSessionEndTime,
+                    latestSessionStartTime)
+            );
         }
     }
 
     private class MeteredSessionStoreWithHeadersIterator
-        implements KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>>, MeteredIterator {
+        extends AbstractMeteredIterator<Windowed<Bytes>>
+        implements KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> {
 
-        private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
-        private final long startNs;
-        private final long startTimestampMs;
         private KeyValue<Windowed<K>, AggregationWithHeaders<AGG>> cachedNext;
 
         private MeteredSessionStoreWithHeadersIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter) {
-            this.iter = iter;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
+            super(iter, fetchSensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
         }
 
         @Override
@@ -356,24 +534,11 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
 
             final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
 
-            final AggregationWithHeaders<AGG> value = serdes.valueFrom(next.value, new RecordHeaders());
+            final AggregationWithHeaders<AGG> value = deserializeValue(next.value);
             final Headers headers = value != null ? value.headers() : new RecordHeaders();
-            final K key = serdes.keyFrom(next.key.key().get(), headers);
+            final K key = deserializeKey(next.key.key().get(), headers);
             final Windowed<K> windowedKey = new Windowed<>(key, next.key.window());
             return KeyValue.pair(windowedKey, value);
-        }
-
-        @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                fetchSensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
         }
 
         @Override
@@ -382,6 +547,43 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
                 cachedNext = next();
             }
             return cachedNext.key;
+        }
+    }
+
+    /**
+     * Iterator backing the {@code withKey} form of {@link TimestampedWindowRangeWithHeadersQuery}:
+     * yields each session as a {@link ReadOnlyRecord} (implemented by {@link Record}) whose key is a
+     * {@link Windowed} of the deserialized key and the session's window, carrying the aggregation and
+     * stored headers, with the headers frozen so a caller cannot mutate the read-only result.
+     *
+     * <p>Unlike the window-store range query's iterator, there is no negative-timestamp check here:
+     * {@link ReadOnlyRecord#timestamp()} is sourced from the session window's end, which is validated
+     * non-negative when the window is constructed, so this iterator's {@code next()} can never throw.
+     */
+    private class MeteredSessionWithHeadersReadOnlyRecordIterator
+        extends AbstractMeteredIterator<Windowed<Bytes>>
+        implements ReadOnlyRecordIterator<Windowed<K>, AGG> {
+
+        private MeteredSessionWithHeadersReadOnlyRecordIterator(
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iter
+        ) {
+            super(iter, fetchSensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
+        }
+
+        @Override
+        public ReadOnlyRecord<Windowed<K>, AGG> next() {
+            final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
+            final AggregationWithHeaders<AGG> aggregationWithHeaders = deserializeValue(next.value);
+            final Headers headers = aggregationWithHeaders != null ? aggregationWithHeaders.headers() : new RecordHeaders();
+            final K key = deserializeKey(next.key.key().get(), headers);
+            final Windowed<K> windowedKey = new Windowed<>(key, next.key.window());
+            final Record<Windowed<K>, AGG> record = new Record<>(
+                windowedKey,
+                aggregationWithHeaders != null ? aggregationWithHeaders.aggregation() : null,
+                windowedKey.window().end(),
+                headers);
+            ((RecordHeaders) record.headers()).setReadOnly();
+            return record;
         }
     }
 }

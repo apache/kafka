@@ -20,22 +20,25 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
-import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,6 +54,7 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
+import static org.apache.kafka.common.config.ConfigDef.Type.CLASS;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
@@ -219,6 +223,7 @@ public class GroupCoordinatorConfig {
     public static final String CONSUMER_GROUP_ASSIGNORS_CONFIG = "group.consumer.assignors";
     public static final String CONSUMER_GROUP_ASSIGNORS_DOC = "The server side assignors as a list of either names for builtin assignors or full class names for customer assignors. " +
         "The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor. " +
+        "Changing the default assignor does not trigger a rebalance for existing groups; the new default takes effect on the next rebalance. " +
         "The supported builtin assignors are: " + CONSUMER_GROUP_BUILTIN_ASSIGNORS.stream().map(ConsumerGroupPartitionAssignor::name).collect(Collectors.joining(", ")) + ".";
     public static final List<String> CONSUMER_GROUP_ASSIGNORS_DEFAULT = CONSUMER_GROUP_BUILTIN_ASSIGNORS
         .stream()
@@ -233,7 +238,10 @@ public class GroupCoordinatorConfig {
         ConsumerGroupMigrationPolicy.BIDIRECTIONAL + ": both upgrade from classic group to consumer group and downgrade from consumer group to classic group are enabled, " +
         ConsumerGroupMigrationPolicy.UPGRADE + ": only upgrade from classic group to consumer group is enabled, " +
         ConsumerGroupMigrationPolicy.DOWNGRADE + ": only downgrade from consumer group to classic group is enabled, " +
-        ConsumerGroupMigrationPolicy.DISABLED + ": neither upgrade nor downgrade is enabled.";
+        ConsumerGroupMigrationPolicy.DISABLED + ": neither upgrade nor downgrade is enabled. " +
+        "In this mode a member using the classic protocol is not allowed to join or rejoin a non-empty consumer group; " +
+        "if a group is already mixed (for example because this policy was changed), its classic-protocol members are " +
+        "rejected when they next attempt to rejoin.";
 
     public static final String CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG = "group.consumer.assignment.interval.ms";
     public static final String CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DOC = "The interval between assignment updates for a consumer group.";
@@ -317,6 +325,17 @@ public class GroupCoordinatorConfig {
         "If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
 
     ///
+    /// DLQ configs (KIP-1191)
+    ///
+    public static final String ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG = "errors.deadletterqueue.auto.create.topics.enable";
+    public static final boolean ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT = false;
+    public static final String ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DOC = "Whether automatic creation of DLQ topics is enabled (KIP-1191). When a share group has a DLQ topic configured, this setting controls whether the broker will automatically create the topic if it does not exist.";
+
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG = "errors.deadletterqueue.topic.name.prefix";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT = "dlq.";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC = "The required prefix of topic names used by dead-letter queue topics for share groups. When set to \"\", there is no restriction on the names used for dead-letter queue topics.";
+
+    ///
     /// Streams group configs
     ///
     public static final String STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG = "group.streams.session.timeout.ms";
@@ -371,6 +390,25 @@ public class GroupCoordinatorConfig {
     public static final String STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC = "The maximum interval between assignment updates for a streams group.";
     public static final int STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT = 15000;
 
+    // The first entry is the default assignor for groups that do not select one. New built-in
+    // assignors must be appended so that the default does not change for existing groups.
+    private static final List<TaskAssignor> STREAMS_GROUP_BUILTIN_ASSIGNORS = List.of(
+        new StickyTaskAssignor()
+    );
+    public static final String STREAMS_GROUP_ASSIGNORS_CONFIG = "group.streams.assignors";
+    public static final String STREAMS_GROUP_ASSIGNORS_DOC = "The server side task assignors for streams groups as a list of either names for built-in assignors or fully qualified class names for custom assignors. " +
+        "The first one in the list is considered as the default assignor to be used in the case where the streams group does not specify an assignor. " +
+        "Changing the default assignor does not trigger a rebalance for existing groups; the new default takes effect on the next rebalance. " +
+        "The supported built-in assignors are: " + STREAMS_GROUP_BUILTIN_ASSIGNORS.stream().map(TaskAssignor::name).collect(Collectors.joining(", ")) + ".";
+    public static final List<String> STREAMS_GROUP_ASSIGNORS_DEFAULT = STREAMS_GROUP_BUILTIN_ASSIGNORS
+        .stream()
+        .map(TaskAssignor::name)
+        .toList();
+
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "group.streams.rack.aware.assignment.tags";
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT = "";
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC = "List of client tag keys used to distribute standby replicas across Kafka Streams instances. When configured, and the used broker-side assignor supports it, it will make a best-effort to distribute standby tasks over each client tag dimension.";
+
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "group.streams.assignor.offload.enable";
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC = "Whether to offload streams group assignment to a group coordinator background thread.";
     public static final boolean STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT = true;
@@ -383,12 +421,30 @@ public class GroupCoordinatorConfig {
     public static final int STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT = 15000;
     public static final String STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC = "The minimum allowed value for the group-level configuration of " + GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG;
 
+    public static final String STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG = "group.streams.num.warmup.replicas";
+    public static final int STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT = 2;
+    public static final String STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC = "The maximum number of warmup task replicas.";
+
+    public static final String STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG = "group.streams.max.warmup.replicas";
+    public static final int STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT = 20;
+    public static final String STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC = "The maximum allowed value for the group-level configuration of " + GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG;
+
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG = "group.streams.topology.description.plugin.class";
+    public static final Class<?> STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT = null;
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC = "The fully qualified class name of a StreamsGroupTopologyDescriptionPlugin implementation. When not set, the feature is disabled.";
+
+    public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG = "group.streams.acceptable.recovery.lag";
+    public static final long STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT = 10000L;
+    public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up enough to receive an active task assignment.";
+
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
         CACHED_BUFFER_MAX_BYTES_CONFIG,
         CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
         CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
         SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
         SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+        ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG,
+        ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG,
         STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
         STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG
     );
@@ -453,6 +509,10 @@ public class GroupCoordinatorConfig {
         .define(SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, MEDIUM, SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .defineInternal(SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT, atLeast(1), LOW, SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC)
 
+        // DLQ configs (KIP-1191)
+        .define(ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, BOOLEAN, ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT, MEDIUM, ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DOC)
+        .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, STRING, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT, MEDIUM, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC)
+
         // Streams group configs
         .define(STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, INT, STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_SESSION_TIMEOUT_MS_DOC)
         .define(STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, INT, STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DOC)
@@ -467,9 +527,15 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC)
+        .define(STREAMS_GROUP_ASSIGNORS_CONFIG, LIST, STREAMS_GROUP_ASSIGNORS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), MEDIUM, STREAMS_GROUP_ASSIGNORS_DOC)
         .define(STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, MEDIUM, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
-        .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC);
+        .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
+        .define(STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
+        .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC)
+        .define(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, LIST, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
+        .define(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, CLASS, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT, MEDIUM, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC)
+        .define(STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG, LONG, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT, atLeast(0L), MEDIUM, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC);
 
 
     /**
@@ -532,6 +598,12 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMaxAssignmentIntervalMs;
     private final int streamsGroupTaskOffsetIntervalMs;
     private final int streamsGroupMinTaskOffsetIntervalMs;
+    private final int streamsGroupNumWarmupReplicas;
+    private final int streamsGroupMaxWarmupReplicas;
+    private final List<String> streamsGroupRackAwareAssignmentTags;
+    private final long streamsGroupAcceptableRecoveryLag;
+    private final List<TaskAssignor> streamsGroupAssignors;
+    private final List<String> streamsGroupAssignorNames;
 
     private final AbstractConfig config;
 
@@ -554,10 +626,10 @@ public class GroupCoordinatorConfig {
         this.offsetsRetentionMs = config.getInt(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG) * 60L * 1000L;
         this.offsetCommitTimeoutMs = config.getInt(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
         this.consumerGroupMigrationPolicy = ConsumerGroupMigrationPolicy.parse(
-                config.getString(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG));
+            config.getString(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG));
         this.offsetTopicCompressionType = Optional.ofNullable(config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG))
-                .map(CompressionType::forId)
-                .orElse(null);
+            .map(CompressionType::forId)
+            .orElse(null);
         this.offsetsLoadBufferSize = config.getInt(GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG);
         this.offsetsTopicPartitions = config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG);
         this.offsetsTopicReplicationFactor = config.getShort(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG);
@@ -591,14 +663,29 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMaxSize = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG);
         this.streamsGroupNumStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsGroupMaxStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
+        this.streamsGroupRackAwareAssignmentTags = config.getList(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         this.streamsGroupInitialRebalanceDelayMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.streamsGroupMinAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.streamsGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.streamsGroupTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.streamsGroupMinTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
+        this.streamsGroupNumWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG);
+        this.streamsGroupMaxWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG);
+        this.streamsGroupAcceptableRecoveryLag = config.getLong(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG);
+        this.streamsGroupAssignors = streamsGroupAssignors(config);
+        this.streamsGroupAssignorNames = this.streamsGroupAssignors.stream().map(TaskAssignor::name).toList();
         this.config = config;
 
-        // New group coordinator configs validation.
+        checkConstraints();
+    }
+
+    private void checkConstraints() {
+        verifyConsumerGroupConfigs();
+        verifyShareGroupConfigs();
+        verifyStreamsGroupConfigs();
+    }
+
+    private void verifyConsumerGroupConfigs() {
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
                 String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
         require(consumerGroupHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
@@ -621,9 +708,9 @@ public class GroupCoordinatorConfig {
                 String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG));
         require(consumerGroupAssignmentIntervalMs() <= consumerGroupMaxAssignmentIntervalMs,
                 String.format("%s must be less than or equal to %s", CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
+    }
 
-
-        // Share group configs validation.
+    private void verifyShareGroupConfigs() {
         require(shareGroupMaxHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
             String.format("%s must be greater than or equal to %s",
                 SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
@@ -659,9 +746,9 @@ public class GroupCoordinatorConfig {
         require(shareGroupAssignmentIntervalMs() <= shareGroupMaxAssignmentIntervalMs,
             String.format("%s must be less than or equal to %s",
                 SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
+    }
 
-
-        // Streams group configs validation.
+    private void verifyStreamsGroupConfigs() {
         require(streamsGroupMaxHeartbeatIntervalMs >= streamsGroupMinHeartbeatIntervalMs,
             String.format("%s must be greater than or equal to %s",
                 STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
@@ -695,10 +782,28 @@ public class GroupCoordinatorConfig {
 
         require(streamsGroupNumStandbyReplicas <= streamsGroupMaxStandbyReplicas,
             String.format("%s must be less than or equal to %s", STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG));
-
         require(streamsGroupTaskOffsetIntervalMs >= streamsGroupMinTaskOffsetIntervalMs,
             String.format("%s must be greater than or equal to %s", STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG));
+        require(streamsGroupNumWarmupReplicas <= streamsGroupMaxWarmupReplicas,
+            String.format("%s must be less than or equal to %s", STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG));
 
+        // ConfigDef silently de-duplicates LIST values during parsing, so inspect the raw value to make
+        // sure a broker configured with duplicate rack-aware assignment tags refuses to start.
+        List<String> rawRackAwareAssignmentTags = rawRackAwareAssignmentTags();
+        require(Set.copyOf(rawRackAwareAssignmentTags).size() == rawRackAwareAssignmentTags.size(),
+            String.format("%s must not contain duplicate tag keys.", STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
+    }
+
+    /**
+     * Returns the rack-aware assignment tags exactly as configured, before {@link ConfigDef} removes duplicates.
+     */
+    private List<String> rawRackAwareAssignmentTags() {
+        String rawValue = (String) config.originals().get(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        if (rawValue == null) {
+            return List.of();
+        }
+        String trimmed = rawValue.trim();
+        return trimmed.isEmpty() ? List.of() : List.of(trimmed.split("\\s*,\\s*", -1));
     }
 
     /**
@@ -771,38 +876,53 @@ public class GroupCoordinatorConfig {
     protected List<ConsumerGroupPartitionAssignor> consumerGroupAssignors(
         AbstractConfig config
     ) {
-        Map<String, ConsumerGroupPartitionAssignor> defaultAssignors = CONSUMER_GROUP_BUILTIN_ASSIGNORS
+        Map<String, ConsumerGroupPartitionAssignor> builtInAssignors = CONSUMER_GROUP_BUILTIN_ASSIGNORS
             .stream()
             .collect(Collectors.toMap(ConsumerGroupPartitionAssignor::name, Function.identity()));
+        // A built-in may be configured either by its name or by its class name, so it is recognised
+        // by class rather than by how it was resolved below.
+        Set<Class<? extends ConsumerGroupPartitionAssignor>> builtInAssignorClasses = CONSUMER_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .map(ConsumerGroupPartitionAssignor::getClass)
+            .collect(Collectors.toSet());
 
         List<ConsumerGroupPartitionAssignor> assignors = new ArrayList<>();
+        Set<String> assignorNames = new HashSet<>();
 
         try {
-            for (Object object : config.getList(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG)) {
-                ConsumerGroupPartitionAssignor assignor;
-
-                if (object instanceof String klass) {
-                    assignor = defaultAssignors.get(klass);
-                    if (assignor == null) {
-                        try {
-                            assignor = Utils.newInstance(klass, ConsumerGroupPartitionAssignor.class);
-                        } catch (ClassNotFoundException e) {
-                            throw new KafkaException("Class " + klass + " cannot be found", e);
-                        } catch (ClassCastException e) {
-                            throw new KafkaException(klass + " is not an instance of " + ConsumerGroupPartitionAssignor.class.getName());
-                        }
+            // `configuredAssignor` is either the name of a built-in assignor,
+            // or a fully qualified class name of a custom assignor
+            for (String configuredAssignor : config.getList(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG)) {
+                ConsumerGroupPartitionAssignor assignor = builtInAssignors.get(configuredAssignor);
+                if (assignor == null) {
+                    try {
+                        assignor = Utils.newInstance(configuredAssignor, ConsumerGroupPartitionAssignor.class);
+                    } catch (ClassNotFoundException e) {
+                        throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class cannot be found");
+                    } catch (ClassCastException e) {
+                        throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class is not an instance of " + ConsumerGroupPartitionAssignor.class.getName());
+                    } catch (KafkaException e) {
+                        // Utils#newInstance reports instantiation failures, for example a missing
+                        // public no-argument constructor, without naming the config that caused them.
+                        throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor, e.getMessage());
                     }
-                } else if (object instanceof Class<?> klass) {
-                    Object o = Utils.newInstance((Class<?>) klass);
-                    if (!(o instanceof ConsumerGroupPartitionAssignor)) {
-                        throw new KafkaException(klass + " is not an instance of " + ConsumerGroupPartitionAssignor.class.getName());
-                    }
-                    assignor = (ConsumerGroupPartitionAssignor) o;
-                } else {
-                    throw new KafkaException("Unexpected element of type " + object.getClass().getName() + ", expected String or Class");
                 }
 
                 assignors.add(assignor);
+
+                if (!builtInAssignorClasses.contains(assignor.getClass()) && builtInAssignors.containsKey(assignor.name())) {
+                    throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is reserved by a built-in assignor. " +
+                            "A custom assignor must not reuse the name of a built-in assignor");
+                }
+
+                if (!assignorNames.add(assignor.name())) {
+                    throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is already registered by another configured assignor. " +
+                            "Assignor names, whether built-in or custom, must be unique");
+                }
 
                 if (assignor instanceof Configurable configurable) {
                     configurable.configure(config.originals());
@@ -818,22 +938,95 @@ public class GroupCoordinatorConfig {
         return assignors;
     }
 
+    protected List<TaskAssignor> streamsGroupAssignors(
+        AbstractConfig config
+    ) {
+        Map<String, TaskAssignor> builtInAssignors = STREAMS_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+        // A built-in may be configured either by its name or by its class name, so it is recognised
+        // by class rather than by how it was resolved below.
+        Set<Class<? extends TaskAssignor>> builtInAssignorClasses = STREAMS_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .map(TaskAssignor::getClass)
+            .collect(Collectors.toSet());
+
+        List<TaskAssignor> assignors = new ArrayList<>();
+        Set<String> assignorNames = new HashSet<>();
+
+        try {
+            // `configuredAssignor` is either the name of a built-in assignor,
+            // or a fully qualified class name of a custom assignor
+            for (String configuredAssignor : config.getList(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
+                TaskAssignor assignor = builtInAssignors.get(configuredAssignor);
+                if (assignor == null) {
+                    try {
+                        assignor = Utils.newInstance(configuredAssignor, TaskAssignor.class);
+                    } catch (ClassNotFoundException e) {
+                        throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class cannot be found");
+                    } catch (ClassCastException e) {
+                        throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class is not an instance of " + TaskAssignor.class.getName());
+                    } catch (KafkaException e) {
+                        // Utils#newInstance reports instantiation failures, for example a missing
+                        // public no-argument constructor, without naming the config that caused them.
+                        throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor, e.getMessage());
+                    }
+                }
+
+                assignors.add(assignor);
+
+                if (!builtInAssignorClasses.contains(assignor.getClass()) && builtInAssignors.containsKey(assignor.name())) {
+                    throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is reserved by a built-in assignor. " +
+                            "A custom assignor must not reuse the name of a built-in assignor");
+                }
+
+                if (!assignorNames.add(assignor.name())) {
+                    throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is already registered by another configured assignor. " +
+                            "Assignor names, whether built-in or custom, must be unique");
+                }
+
+                if (assignor instanceof Configurable configurable) {
+                    configurable.configure(config.originals());
+                }
+            }
+        } catch (Exception e) {
+            for (TaskAssignor assignor : assignors) {
+                maybeCloseQuietly(assignor, "AutoCloseable object constructed and configured during failed call to streamsGroupAssignors");
+            }
+            throw e;
+        }
+
+        return assignors;
+    }
+
     protected List<ShareGroupPartitionAssignor> shareGroupAssignors(
         AbstractConfig config
     ) {
         List<ShareGroupPartitionAssignor> assignors = new ArrayList<>();
 
         try {
-            for (String kclass : config.getList(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG)) {
+            // `configuredAssignor` is either the name of a built-in assignor,
+            // or a fully qualified class name of a custom assignor
+            for (String configuredAssignor : config.getList(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG)) {
                 ShareGroupPartitionAssignor assignor = SHARE_GROUP_BUILTIN_ASSIGNOR;
 
-                if (!Objects.equals(kclass, SHARE_GROUP_ASSIGNORS_DEFAULT)) {
+                if (!Objects.equals(configuredAssignor, SHARE_GROUP_ASSIGNORS_DEFAULT)) {
                     try {
-                        assignor = Utils.newInstance(kclass, ShareGroupPartitionAssignor.class);
+                        assignor = Utils.newInstance(configuredAssignor, ShareGroupPartitionAssignor.class);
                     } catch (ClassNotFoundException e) {
-                        throw new KafkaException("Class " + kclass + " cannot be found", e);
+                        throw new ConfigException(SHARE_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class cannot be found");
                     } catch (ClassCastException e) {
-                        throw new KafkaException(kclass + " is not an instance of " + ShareGroupPartitionAssignor.class.getName());
+                        throw new ConfigException(SHARE_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class is not an instance of " + ShareGroupPartitionAssignor.class.getName());
+                    } catch (KafkaException e) {
+                        // Utils#newInstance reports instantiation failures, for example a missing
+                        // public no-argument constructor, without naming the config that caused them.
+                        throw new ConfigException(SHARE_GROUP_ASSIGNORS_CONFIG, configuredAssignor, e.getMessage());
                     }
                 }
 
@@ -853,52 +1046,23 @@ public class GroupCoordinatorConfig {
         return assignors;
     }
 
-    /**
-     * Copy the subset of properties that are relevant to consumer group, share group and streams group.
-     */
-    public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
-        Map<String, Integer> defaultConfigs = new HashMap<>();
-        defaultConfigs.putAll(extractConsumerGroupConfigMap());
-        defaultConfigs.putAll(extractShareGroupConfigMap(shareGroupConfig));
-        defaultConfigs.putAll(extractStreamsGroupConfigMap());
-        return Collections.unmodifiableMap(defaultConfigs);
+    public StreamsGroupTopologyDescriptionPlugin streamsGroupTopologyDescriptionPlugin(
+        Map<String, ?> additionalConfigs
+    ) {
+        Map<String, Object> overrides = new HashMap<>(additionalConfigs);
+        return config.getConfiguredInstance(
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            StreamsGroupTopologyDescriptionPlugin.class,
+            overrides);
     }
 
     /**
-     * Copy the subset of properties that are relevant to consumer group.
+     * Whether a topology-description plugin class is set on this broker. Checked from per-shard
+     * paths (the {@code cleanupGroupMetadata} gate) that cannot reach the broker-level manager
+     * holding the plugin reference. Does not instantiate the plugin; just inspects the config.
      */
-    public Map<String, Integer> extractConsumerGroupConfigMap() {
-        return Map.of(
-            GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs(),
-            GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
-    }
-
-    /**
-     * Copy the subset of properties that are relevant to share group. These configs include those which can be set
-     * statically (for all groups) or dynamically (for a specific group). In those cases, the default value for the
-     * group specific dynamic config (Ex. share.session.timeout.ms) should be the value set for the static config
-     * (Ex. group.share.session.timeout.ms).
-     */
-    public Map<String, Integer> extractShareGroupConfigMap(ShareGroupConfig shareGroupConfig) {
-        return Map.of(
-            GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, this.shareGroupSessionTimeoutMs(),
-            GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, this.shareGroupHeartbeatIntervalMs(),
-            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupConfig.shareGroupRecordLockDurationMs(),
-            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupConfig.shareGroupDeliveryCountLimit(),
-            GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupConfig.shareGroupPartitionMaxRecordLocks()
-        );
-    }
-
-    /**
-     * Copy the subset of properties that are relevant to streams group.
-     */
-    public Map<String, Integer> extractStreamsGroupConfigMap() {
-        return Map.of(
-            GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, streamsGroupSessionTimeoutMs(),
-            GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, streamsGroupHeartbeatIntervalMs(),
-            GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, streamsGroupNumStandbyReplicas(),
-            GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, streamsGroupInitialRebalanceDelayMs(),
-            GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, streamsGroupTaskOffsetIntervalMs());
+    public boolean isStreamsGroupTopologyDescriptionPluginConfigured() {
+        return config.getClass(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG) != null;
     }
 
     /**
@@ -1239,6 +1403,20 @@ public class GroupCoordinatorConfig {
     }
 
     /**
+     * Whether automatic creation of DLQ topics is enabled.
+     */
+    public boolean errorsDLQAutoCreateTopicsEnable() {
+        return config.getBoolean(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
+    }
+
+    /**
+     * The required prefix for DLQ topic names.
+     */
+    public String errorsDLQTopicNamePrefix() {
+        return config.getString(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
+    }
+
+    /**
      * The streams group session timeout in milliseconds.
      */
     public int streamsGroupSessionTimeoutMs() {
@@ -1302,6 +1480,13 @@ public class GroupCoordinatorConfig {
     }
 
     /**
+     * The list of client tag keys used for rack-aware standby task assignment.
+     */
+    public List<String> streamsGroupRackAwareAssignmentTags() {
+        return streamsGroupRackAwareAssignmentTags;
+    }
+
+    /**
      * The initial rebalance delay for streams groups.
      */
     public int streamsGroupInitialRebalanceDelayMs() {
@@ -1348,5 +1533,40 @@ public class GroupCoordinatorConfig {
      */
     public int streamsGroupMinTaskOffsetIntervalMs() {
         return streamsGroupMinTaskOffsetIntervalMs;
+    }
+
+    /**
+     * The maximum number of warmup replicas for streams groups.
+     */
+    public int streamsGroupNumWarmupReplicas() {
+        return streamsGroupNumWarmupReplicas;
+    }
+
+    /**
+     * The maximum allowed number of warmup replicas to be configured for streams groups
+     */
+    public int streamsGroupMaxWarmupReplicas() {
+        return streamsGroupMaxWarmupReplicas;
+    }
+
+    /**
+     * The acceptable recovery lag for streams groups.
+     */
+    public long streamsGroupAcceptableRecoveryLag() {
+        return streamsGroupAcceptableRecoveryLag;
+    }
+
+    /**
+     * The streams group task assignors.
+     */
+    public List<TaskAssignor> streamsGroupAssignors() {
+        return streamsGroupAssignors;
+    }
+
+    /**
+     * The names of the registered streams group task assignors, in configured order.
+     */
+    public List<String> streamsGroupAssignorNames() {
+        return streamsGroupAssignorNames;
     }
 }

@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -37,7 +37,7 @@ class StandbyTaskAssignorFactory {
             final Map<ProcessId, String> racksForProcess = rackAwareTaskAssignor.racksForProcess();
             return new ClientTagAwareStandbyTaskAssignor(
                 (processId, clientState) -> mkMap(mkEntry("rack", racksForProcess.get(processId))),
-                assignmentConfigs -> Collections.singletonList("rack")
+                assignmentConfigs -> List.of("rack")
             );
         } else {
             return new DefaultStandbyTaskAssignor();

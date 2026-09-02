@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -335,8 +336,14 @@ public class KStreamRepartitionIntegrationTest {
         final List<KeyValue<Integer, String>> expectedRecords = expectedRecordsOnRepartition.subList(3, 5);
 
         class BroadcastingPartitioner implements StreamPartitioner<Integer, String> {
+            @SuppressWarnings("removal")
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final Headers headers, final int numPartitions) {
                 partitionerInvocation.incrementAndGet();
                 return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
             }
@@ -398,9 +405,18 @@ public class KStreamRepartitionIntegrationTest {
 
         final Repartitioned<Integer, String> repartitioned = Repartitioned
             .<Integer, String>as(repartitionName)
-            .withStreamPartitioner((topic, key, value, numPartitions) -> {
-                partitionerInvocation.incrementAndGet();
-                return Optional.of(Collections.singleton(partition));
+            .withStreamPartitioner(new StreamPartitioner<>() {
+                @SuppressWarnings("removal")
+                @Override
+                public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
+                    throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+                }
+
+                @Override
+                public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final Headers headers, final int numPartitions) {
+                    partitionerInvocation.incrementAndGet();
+                    return Optional.of(Collections.singleton(partition));
+                }
             });
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))

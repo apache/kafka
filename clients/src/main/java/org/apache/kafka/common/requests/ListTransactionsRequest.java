@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.ListTransactionsRequestData;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -35,12 +35,10 @@ public class ListTransactionsRequest extends AbstractRequest {
         @Override
         public ListTransactionsRequest build(short version) {
             if (data.durationFilter() >= 0 && version < 1) {
-                throw new UnsupportedVersionException("Duration filter can be set only when using API version 1 or higher." +
-                        " If client is connected to an older broker, do not specify duration filter or set duration filter to -1.");
+                throw new UnsupportedProtocolFieldException("DurationFilter", apiKey().name(), version, 1);
             }
             if (data.transactionalIdPattern() != null && version < 2) {
-                throw new UnsupportedVersionException("Transactional ID pattern filter can be set only when using API version 2 or higher." +
-                    " If client is connected to an older broker, do not specify the pattern filter.");
+                throw new UnsupportedProtocolFieldException("TransactionalIdPattern", apiKey().name(), version, 2);
             }
             return new ListTransactionsRequest(data, version);
         }

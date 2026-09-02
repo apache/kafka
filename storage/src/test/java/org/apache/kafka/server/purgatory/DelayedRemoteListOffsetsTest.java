@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.server.purgatory;
 
-import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
@@ -65,7 +66,7 @@ public class DelayedRemoteListOffsetsTest {
     @AfterEach
     public void afterEach() throws Exception {
         purgatory.shutdown();
-        TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
     }
 
     @Test
@@ -277,7 +278,7 @@ public class DelayedRemoteListOffsetsTest {
         DelayedRemoteListOffsets.PARTITION_EXPIRATION_METERS.computeIfAbsent(partition, tp ->
                 DelayedRemoteListOffsets.METRICS_GROUP.newMeter("ExpiresPerSec",
                         "requests", TimeUnit.SECONDS,
-                        Map.of("topic", tp.topic(), "partition", String.valueOf(tp.partition()))));
+                        MetricsUtils.getTags("topic", tp.topic(), "partition", String.valueOf(tp.partition()))));
 
         // Verify the partition metric exists in the map
         assertTrue(DelayedRemoteListOffsets.PARTITION_EXPIRATION_METERS.containsKey(partition),

@@ -41,6 +41,9 @@ import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
@@ -125,29 +128,35 @@ public final class StoreQueryUtils {
         final QueryResult<R> result;
 
         final QueryHandler<?> handler = QUERY_HANDLER_MAP.get(query.getClass());
-        synchronized (position) {
-            if (handler == null) {
-                result = QueryResult.forUnknownQueryType(query, store);
-            } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
-                result = QueryResult.notUpToBound(
-                    position,
-                    positionBound,
-                    context == null ? null : context.taskId().partition()
-                );
-            } else {
-                result = ((QueryHandler<R>) handler).apply(
-                    query,
-                    positionBound,
-                    config,
-                    store
-                );
+        // Take the store monitor before the position lock, matching the write paths, so a
+        // concurrent put/query cannot deadlock (KAFKA-19629). Callers must not hold the
+        // position lock when calling in, unless nothing else locks their store monitor
+        // (the in-memory window/session stores, whose writers take only the position lock).
+        synchronized (store) {
+            synchronized (position) {
+                if (handler == null) {
+                    result = QueryResult.forUnknownQueryType(query, store);
+                } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
+                    result = QueryResult.notUpToBound(
+                        position,
+                        positionBound,
+                        context == null ? null : context.taskId().partition()
+                    );
+                } else {
+                    result = ((QueryHandler<R>) handler).apply(
+                        query,
+                        positionBound,
+                        config,
+                        store
+                    );
+                }
+                if (config.isCollectExecutionInfo()) {
+                    result.addExecutionInfo(
+                        "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
+                    );
+                }
+                result.setPosition(position.copy());
             }
-            if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
-                );
-            }
-            result.setPosition(position.copy());
         }
         return result;
     }
@@ -203,7 +212,8 @@ public final class StoreQueryUtils {
         if (!(store instanceof KeyValueStore)) {
             return QueryResult.forUnknownQueryType(query, store);
         }
-        final KeyValueStore<Bytes, byte[]> kvStore = (KeyValueStore<Bytes, byte[]>) store;
+        final ReadOnlyKeyValueStore<Bytes, byte[]> kvStore =
+            ((KeyValueStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
         final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
         final Optional<Bytes> lowerRange = rangeQuery.getLowerBound();
         final Optional<Bytes> upperRange = rangeQuery.getUpperBound();
@@ -238,8 +248,8 @@ public final class StoreQueryUtils {
 
         if (store instanceof KeyValueStore) {
             final KeyQuery<Bytes, byte[]> rawKeyQuery = (KeyQuery<Bytes, byte[]>) query;
-            final KeyValueStore<Bytes, byte[]> keyValueStore =
-                (KeyValueStore<Bytes, byte[]>) store;
+            final ReadOnlyKeyValueStore<Bytes, byte[]> keyValueStore =
+                ((KeyValueStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             try {
                 final byte[] bytes = keyValueStore.get(rawKeyQuery.getKey());
                 return (QueryResult<R>) QueryResult.forResult(bytes);
@@ -263,7 +273,8 @@ public final class StoreQueryUtils {
         if (store instanceof WindowStore) {
             final WindowKeyQuery<Bytes, byte[]> windowKeyQuery =
                 (WindowKeyQuery<Bytes, byte[]>) query;
-            final WindowStore<Bytes, byte[]> windowStore = (WindowStore<Bytes, byte[]>) store;
+            final ReadOnlyWindowStore<Bytes, byte[]> windowStore =
+                ((WindowStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             try {
                 if (windowKeyQuery.getTimeFrom().isPresent() && windowKeyQuery.getTimeTo().isPresent()) {
                     final WindowStoreIterator<byte[]> iterator = windowStore.fetch(
@@ -299,7 +310,8 @@ public final class StoreQueryUtils {
         if (store instanceof WindowStore) {
             final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
                 (WindowRangeQuery<Bytes, byte[]>) query;
-            final WindowStore<Bytes, byte[]> windowStore = (WindowStore<Bytes, byte[]>) store;
+            final ReadOnlyWindowStore<Bytes, byte[]> windowStore =
+                ((WindowStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             try {
                 // There's no store API for open time ranges
                 if (windowRangeQuery.getTimeFrom().isPresent() && windowRangeQuery.getTimeTo().isPresent()) {
@@ -329,7 +341,8 @@ public final class StoreQueryUtils {
         } else if (store instanceof SessionStore) {
             final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
                 (WindowRangeQuery<Bytes, byte[]>) query;
-            final SessionStore<Bytes, byte[]> sessionStore = (SessionStore<Bytes, byte[]>) store;
+            final ReadOnlySessionStore<Bytes, byte[]> sessionStore =
+                ((SessionStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             try {
                 if (windowRangeQuery.getKey().isPresent()) {
                     final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = sessionStore.fetch(
@@ -366,7 +379,7 @@ public final class StoreQueryUtils {
     ) {
         if (store instanceof VersionedKeyValueStore) {
             final VersionedKeyValueStore<Bytes, byte[]> versionedKeyValueStore =
-                (VersionedKeyValueStore<Bytes, byte[]>) store;
+                ((VersionedKeyValueStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             final VersionedKeyQuery<Bytes, byte[]> rawKeyQuery =
                 (VersionedKeyQuery<Bytes, byte[]>) query;
             try {
@@ -406,7 +419,8 @@ public final class StoreQueryUtils {
                             rawKeyQuery.key(),
                             rawKeyQuery.fromTime().get().toEpochMilli(),
                             rawKeyQuery.toTime().get().toEpochMilli(),
-                            rawKeyQuery.resultOrder()
+                            rawKeyQuery.resultOrder(),
+                            config.getIsolationLevel()
                         );
                 return (QueryResult<R>) QueryResult.forResult(segmentIterator);
             } catch (final Exception e) {

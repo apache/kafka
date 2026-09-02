@@ -24,8 +24,8 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
-import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -176,6 +176,8 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
     @Override
     public void close() {
+        // JaasOptionsUtils.createSSLSocketFactory() closes the SslFactory after obtaining an SSLSocketFactory,
+        // relying on close() not invalidating already returned SSLContext/SSLSocketFactory objects.
         this.sslContext = null;
     }
 
@@ -460,7 +462,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
         private KeyStore createKeyStoreFromPem(String privateKeyPem, String certChainPem, char[] keyPassword) {
             try {
-                KeyStore ks = KeyStore.getInstance("PKCS12");
+                KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
                 ks.load(null, null);
                 Key key = privateKey(privateKeyPem, keyPassword);
                 Certificate[] certChain = certs(certChainPem);
@@ -473,7 +475,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
         private KeyStore createTrustStoreFromPem(String trustedCertsPem) {
             try {
-                KeyStore ts = KeyStore.getInstance("PKCS12");
+                KeyStore ts = KeyStore.getInstance(KeyStore.getDefaultType());
                 ts.load(null, null);
                 Certificate[] certs = certs(trustedCertsPem);
                 for (int i = 0; i < certs.length; i++) {

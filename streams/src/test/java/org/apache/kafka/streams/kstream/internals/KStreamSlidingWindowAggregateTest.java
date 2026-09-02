@@ -29,6 +29,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
@@ -90,16 +91,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamSlidingWindowAggregateTest {
     
-    public static Stream<Arguments> data() {
+    public static Stream<Arguments> testParameters() {
         return Stream.of(
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true),
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false),
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, true),
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, true), 
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, false),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, true),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false)
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true, true),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false, true),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, true, true),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, true, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, false, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, true, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false, true)
         );
     }
     public StrategyType type;
@@ -112,18 +121,19 @@ public class KStreamSlidingWindowAggregateTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final String threadId = Thread.currentThread().getName();
     
-    public void setup(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+    public void setup(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         type = inputType;
         inOrderIterator = inputInOrderIterator;
         withCache = inputWithCache;
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testAggregateSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testAggregateSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -138,7 +148,7 @@ public class KStreamSlidingWindowAggregateTest {
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, materialized);
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("A", "1", 10L);
@@ -219,9 +229,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testReduceSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testReduceSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
@@ -238,7 +248,7 @@ public class KStreamSlidingWindowAggregateTest {
             );
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("A", "1", 10L);
@@ -286,9 +296,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testAggregateLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testAggregateLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final long grace = emitFinal ? 10L : 50L;
@@ -310,7 +320,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             inputTopic1.pipeInput("A", "1", 10L);
@@ -507,9 +517,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testJoin(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testJoin(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
@@ -538,7 +548,7 @@ public class KStreamSlidingWindowAggregateTest {
 
         table1.join(table2, (p1, p2) -> p1 + "%" + p2).toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> inputTopic2 =
@@ -657,9 +667,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testEarlyRecordsSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testEarlyRecordsSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -678,7 +688,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -781,9 +791,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testEarlyRecordsRepeatedInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testEarlyRecordsRepeatedInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -803,7 +813,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -865,9 +875,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testEarlyRecordsLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testEarlyRecordsLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
@@ -888,7 +898,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1020,9 +1030,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testEarlyNoGracePeriodSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testEarlyNoGracePeriodSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -1043,7 +1053,7 @@ public class KStreamSlidingWindowAggregateTest {
         table2.toStream().process(supplier);
 
         // all events are considered as early events since record timestamp is less than time difference of the window
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1120,9 +1130,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testNoGracePeriodSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testNoGracePeriodSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -1142,7 +1152,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1212,9 +1222,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testEarlyNoGracePeriodLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testEarlyNoGracePeriodLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         final WindowBytesStoreSupplier storeSupplier =
@@ -1238,7 +1248,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1333,9 +1343,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testNoGracePeriodLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testNoGracePeriodLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         final WindowBytesStoreSupplier storeSupplier =
@@ -1359,7 +1369,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1458,9 +1468,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void shouldLogAndMeterWhenSkippingNullKey(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void shouldLogAndMeterWhenSkippingNullKey(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
@@ -1476,7 +1486,7 @@ public class KStreamSlidingWindowAggregateTest {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamSlidingWindowAggregate.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "1");
@@ -1491,9 +1501,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
@@ -1515,7 +1525,7 @@ public class KStreamSlidingWindowAggregateTest {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamSlidingWindowAggregate.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
 
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
@@ -1570,9 +1580,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void testAggregateRandomInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
-        setup(inputType, inputInOrderIterator, inputWithCache);
+    @MethodSource("testParameters")
+    public void testAggregateRandomInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final WindowBytesStoreSupplier storeSupplier =
@@ -1632,7 +1642,7 @@ public class KStreamSlidingWindowAggregateTest {
                 );
 
             Collections.shuffle(input, shuffle);
-            try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
                 final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
                 for (final ValueAndTimestamp<String> i : input) {
