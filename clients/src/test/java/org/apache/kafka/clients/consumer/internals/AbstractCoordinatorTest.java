@@ -63,6 +63,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
@@ -713,7 +714,7 @@ public class AbstractCoordinatorTest {
             if (!(body instanceof SyncGroupRequest)) {
                 return false;
             }
-            coordinator.resetStateAndRejoin("clear generation before the sync response is handled", true);
+            coordinator.resetStateOnResponseError(ApiKeys.HEARTBEAT, Errors.UNKNOWN_MEMBER_ID, true);
 
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
             return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
@@ -1143,8 +1144,9 @@ public class AbstractCoordinatorTest {
         );
     }
 
-    @Test
-    public void testStaticMemberKeepsMemberIdWhenLeaveGroupIsSuppressed() {
+    @ParameterizedTest
+    @EnumSource(value = CloseOptions.GroupMembershipOperation.class, names = {"DEFAULT", "REMAIN_IN_GROUP"})
+    public void testStaticMemberKeepsMemberIdWhenLeaveGroupIsSuppressed(CloseOptions.GroupMembershipOperation operation) {
         setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE,
             Optional.of("groupInstanceId"), Optional.empty());
 
@@ -1155,9 +1157,9 @@ public class AbstractCoordinatorTest {
         assertEquals(memberId, coordinator.generation().memberId);
 
         RequestFuture<Void> future = coordinator.maybeLeaveGroup(
-            CloseOptions.GroupMembershipOperation.DEFAULT, "test static member leaving");
+            operation, "test static member leaving");
 
-        // A static member must not send LeaveGroup on the DEFAULT membership operation...
+        // A static member must not send LeaveGroup for this membership operation...
         assertNull(future);
         assertFalse(mockClient.hasInFlightRequests());
 

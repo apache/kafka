@@ -1069,7 +1069,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    synchronized void resetStateAndRejoin(final String reason, final boolean shouldResetMemberId) {
+    private synchronized void resetStateAndRejoin(final String reason, final boolean shouldResetMemberId) {
         resetStateAndGeneration(reason, shouldResetMemberId);
         requestRejoin(reason);
         needsJoinPrepare = true;
@@ -1177,13 +1177,10 @@ public abstract class AbstractCoordinator implements Closeable {
             client.pollNoWakeup();
         }
 
-        // A static member whose LeaveGroup is suppressed stays registered with the group
-        // coordinator under its current member id, so keep the id locally as well: resetting
-        // it would make the next rejoin carry UNKNOWN_MEMBER_ID, which the coordinator must
-        // treat as a new instance claiming this group.instance.id, fencing any still-pending
-        // join attempt of this same consumer (KAFKA-20985). State and generation are reset
-        // and a rejoin is requested exactly as before.
-        resetStateAndRejoin("consumer pro-actively leaving the group", shouldSendLeaveGroup || isDynamicMember());
+        // A static member whose LeaveGroup was suppressed is still registered under this member id,
+        // so keep it to avoid being treated as a new instance on the next rejoin (KAFKA-20985).
+        boolean shouldResetMemberId = shouldSendLeaveGroup || isDynamicMember();
+        resetStateAndRejoin("consumer pro-actively leaving the group", shouldResetMemberId);
 
         return future;
     }
