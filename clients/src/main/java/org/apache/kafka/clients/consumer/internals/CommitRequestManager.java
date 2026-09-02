@@ -253,7 +253,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         if (requestState.offsets.isEmpty()) {
             result = CompletableFuture.completedFuture(Collections.emptyMap());
         } else {
-            autocommit.setInflightCommitStatus(true);
+            autocommit.incrementInflightCommitCount();
             OffsetCommitRequestState request = pendingRequests.addOffsetCommitRequest(requestState);
             result = request.future;
             result.whenComplete(autoCommitCallback(request.offsets));
@@ -280,11 +280,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
     }
 
-    private void doAutoCommitAsync() {
+    private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> requestAutoCommit() {
         OffsetCommitRequestState requestState = createOffsetCommitRequest(
             subscriptions.allConsumed(),
             Long.MAX_VALUE);
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = requestAutoCommit(requestState);
+        return requestAutoCommit(requestState);
+    }
+
+    private void doAutoCommitAsync() {
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = requestAutoCommit();
         // Reset timer to the interval (even if no request was generated), but ensure that if
         // the request completes with a retriable error, the timer is reset to send the next
         // auto-commit after the backoff expires.
@@ -295,10 +299,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     /**
      * Trigger a best-effort async auto-commit when assign() is called with new partitions.
      * Fires once without blocking; the caller does not wait for the result.
+     * This intentionally generates a commit even if another auto-commit is in-flight, so the
+     * offsets for the previous assignment are not lost.
      */
     public void maybeAutoCommitOnAssignment() {
         if (autoCommitEnabled()) {
-            doAutoCommitAsync();
+            // Unlike an interval-triggered commit, this leaves the periodic auto-commit timer
+            // unchanged regardless of the result.
+            requestAutoCommit();
         }
     }
 
@@ -389,7 +397,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     private BiConsumer<? super Map<TopicPartition, OffsetAndMetadata>, ? super Throwable> autoCommitCallback(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
         return (response, throwable) -> {
-            autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
+            autoCommitState.ifPresent(AutoCommitState::decrementInflightCommitCount);
             if (throwable == null) {
                 offsetCommitCallbackInvoker.enqueueInterceptorInvocation(allConsumedOffsets);
                 log.debug("Completed auto-commit of offsets {}", allConsumedOffsets);
@@ -1511,7 +1519,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private static class AutoCommitState {
         private final Timer timer;
         private final long autoCommitInterval;
-        private boolean hasInflightCommit;
+        private int inflightCommitCount;
 
         private final Logger log;
 
@@ -1521,7 +1529,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 final LogContext logContext) {
             this.autoCommitInterval = autoCommitInterval;
             this.timer = time.timer(autoCommitInterval);
-            this.hasInflightCommit = false;
+            this.inflightCommitCount = 0;
             this.log = logContext.logger(getClass());
         }
 
@@ -1529,7 +1537,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (!this.timer.isExpired()) {
                 return false;
             }
-            if (this.hasInflightCommit) {
+            if (this.inflightCommitCount > 0) {
                 log.trace("Skipping auto-commit on the interval because a previous one is still in-flight.");
                 return false;
             }
@@ -1553,8 +1561,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             this.timer.update(currentTimeMs);
         }
 
-        public void setInflightCommitStatus(final boolean inflightCommitStatus) {
-            this.hasInflightCommit = inflightCommitStatus;
+        public void incrementInflightCommitCount() {
+            this.inflightCommitCount++;
+        }
+
+        public void decrementInflightCommitCount() {
+            if (this.inflightCommitCount <= 0) {
+                log.error("Attempted to decrement auto-commit in-flight count when it was already zero");
+                return;
+            }
+            this.inflightCommitCount--;
         }
     }
 

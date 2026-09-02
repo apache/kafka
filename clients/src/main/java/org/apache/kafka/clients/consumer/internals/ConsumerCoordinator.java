@@ -1182,7 +1182,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return false;
     }
 
-    public void maybeAutoCommitOffsetsSync(Timer timer) {
+    private void maybeAutoCommitOffsetsSync(Timer timer) {
         if (autoCommitEnabled) {
             Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
             try {
