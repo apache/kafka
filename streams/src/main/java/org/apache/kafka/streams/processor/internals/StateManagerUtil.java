@@ -31,6 +31,7 @@ import org.apache.kafka.streams.state.internals.KeyValueToTimestampedKeyValueByt
 import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+import org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.WindowToTimestampedWindowByteStoreAdapter;
@@ -79,6 +80,7 @@ final class StateManagerUtil {
                 return rawValueToTimestampedValue();
             } else if (current instanceof PlainToHeadersStoreAdapter
                 || current instanceof PlainToHeadersWindowStoreAdapter
+                || current instanceof SessionToHeadersStoreAdapter
                 || current instanceof KeyValueToTimestampedKeyValueByteStoreAdapter
                 || current instanceof WindowToTimestampedWindowByteStoreAdapter) {
                 // Adapter wraps a plain store, so restore in plain format

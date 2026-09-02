@@ -61,7 +61,7 @@ public class CachingKeyValueStoreAdapterTest {
     @BeforeEach
     public void setUp() {
         store = new CachingKeyValueStore(
-            new KeyValueToTimestampedKeyValueByteStoreAdapter(new RocksDBStore("store", "rocksdb-state")));
+            new KeyValueToTimestampedKeyValueByteStoreAdapter(new RocksDBStore("store", "test-scope")));
         final ThreadCache cache = new ThreadCache(new LogContext("test "), 1_000_000, new MockStreamsMetrics(new Metrics()));
         final InternalMockProcessorContext<?, ?> context =
             new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);

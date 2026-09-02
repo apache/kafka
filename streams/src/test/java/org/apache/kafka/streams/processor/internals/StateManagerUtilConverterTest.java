@@ -91,7 +91,7 @@ public class StateManagerUtilConverterTest {
     @ParameterizedTest
     @MethodSource("keyValueConverterCases")
     public void shouldReturnConverterForTimestampedKeyValueStore(final KeyValueBytesStoreSupplier supplier,
-                                                                  final RecordConverter expectedConverter) {
+                                                                 final RecordConverter expectedConverter) {
         final TimestampedKeyValueStore<String, String> store = timestampedKeyValueStore(supplier);
 
         assertEquals(expectedConverter, StateManagerUtil.converterForStore(store));
@@ -100,7 +100,7 @@ public class StateManagerUtilConverterTest {
     @ParameterizedTest
     @MethodSource("windowConverterCases")
     public void shouldReturnConverterForTimestampedWindowStore(final WindowBytesStoreSupplier supplier,
-                                                                final RecordConverter expectedConverter) {
+                                                               final RecordConverter expectedConverter) {
         final StateStore store = timestampedWindowStore(supplier);
 
         assertEquals(expectedConverter, StateManagerUtil.converterForStore(store));
@@ -127,7 +127,7 @@ public class StateManagerUtilConverterTest {
     @ParameterizedTest
     @MethodSource("keyValueRestoreCases")
     public void shouldRestoreTimestampedKeyValueStore(final KeyValueBytesStoreSupplier supplier,
-                                                       final long expectedTimestamp) {
+                                                      final long expectedTimestamp) {
         final TimestampedKeyValueStore<String, String> store = timestampedKeyValueStore(supplier);
 
         final ValueAndTimestamp<String> restored = restoreAndGet(store);
@@ -139,7 +139,7 @@ public class StateManagerUtilConverterTest {
     @ParameterizedTest
     @MethodSource("windowRestoreCases")
     public void shouldRestoreTimestampedWindowStore(final WindowBytesStoreSupplier supplier,
-                                                     final long expectedTimestamp) {
+                                                    final long expectedTimestamp) {
         final TimestampedWindowStore<String, String> store = timestampedWindowStore(supplier);
 
         final ValueAndTimestamp<String> restored = restoreAndGet(store);
@@ -277,7 +277,7 @@ public class StateManagerUtilConverterTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldReturnIdentityConverterForPlainToHeadersInMemorySessionStore() {
+    public void shouldReturnSessionHeadersConverterForPlainToHeadersInMemorySessionStore() {
         // in memory session -> headers session (using InMemorySessionStoreWithHeadersMarker)
         final StateStore mockInnerStore = mock(InMemorySessionStore.class, withSettings().extraInterfaces(HeadersBytesStore.class));
         final WrappedStateStore<?, ?, ?> mockMarker = mock(MeteredSessionStoreWithHeaders.class);
