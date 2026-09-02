@@ -324,8 +324,6 @@ public class AdminMetadataManager {
                 this.fatalException = (ApiException) exception;
             }
 
-            // Log the fatal error once. For UnsupportedVersionException, use the more specific message
-            // that explains which api the remote node does not support instead of the generic one.
             if (exception instanceof UnsupportedVersionException) {
                 if (usingBootstrapControllers) {
                     log.warn("The remote node is not a CONTROLLER that supports the KIP-919 " +
