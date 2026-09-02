@@ -26,7 +26,8 @@ import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
-import org.apache.kafka.common.config.{ConfigException, SslConfigs}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SslConfigs}
+import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
@@ -652,6 +653,24 @@ class DynamicBrokerConfigTest {
     assertEquals(SocketServerConfigs.MAX_CONNECTIONS_DEFAULT, config.maxConnections)
     // Even if One property is invalid, the below should get correctly updated.
     assertEquals(1111, config.messageMaxBytes)
+  }
+
+  @Test
+  def testConfigProviderResolvedBeforeTypeValidation(): Unit = {
+    val props = TestUtils.createBrokerConfig(0)
+    val config = KafkaConfig(props)
+    config.dynamicConfig.initialize(None)
+
+    val providerFile = TestUtils.tempPropertiesFile(Map("token" -> "42"))
+    val newProps = new Properties()
+    newProps.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+    newProps.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+    newProps.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, s"$${file:${providerFile.getAbsolutePath}:token}")
+
+    config.dynamicConfig.updateDefaultConfig(newProps)
+    // The provider-indirected value resolves to a valid message.max.bytes (42), so it must not be
+    // dropped by type validation checking the unresolved "${file:...}" placeholder string instead.
+    assertEquals(42, config.messageMaxBytes)
   }
 
   @Test

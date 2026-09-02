@@ -169,7 +169,7 @@ object DynamicBrokerConfig {
   }
 
   private def validateConfigTypes(props: Properties): Unit = {
-    validateConfigTypes(props, props)
+    validateConfigTypes(props, resolveVariableConfigs(props))
   }
 
   private def validateConfigTypes(propsOriginal: Properties, propsResolved: Properties): Unit = {
