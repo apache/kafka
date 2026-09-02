@@ -98,6 +98,7 @@ import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
@@ -145,11 +146,13 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -1240,11 +1243,16 @@ public final class QuorumController implements Controller {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
             try {
+                Set<Integer> stillZkRegisteredBrokerIds = clusterControl.brokerRegistrations().values().stream()
+                    .filter(BrokerRegistration::isMigratingZkBroker)
+                    .map(BrokerRegistration::id)
+                    .collect(Collectors.toCollection(TreeSet::new));
                 return ActivationRecordsGenerator.generate(
                     log::warn,
                     logReplayTracker.empty(),
                     offsetControl.transactionStartOffset(),
                     zkMigrationEnabled,
+                    stillZkRegisteredBrokerIds,
                     bootstrapMetadata,
                     featureControl);
             } catch (Throwable t) {
