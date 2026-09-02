@@ -73,8 +73,8 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.PatternType.MATCH;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
+import static org.apache.kafka.raft.KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -83,6 +83,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class AclControlManagerTest {
+    @Test
+    public void testBuilderRequiresPositiveMaxRecordsPerBatch() {
+        for (int invalidMaxRecordsPerBatch : new int[] {0, -1, -100}) {
+            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new AclControlManager.Builder().
+                    setMaxRecordsPerBatch(invalidMaxRecordsPerBatch).
+                    build());
+            assertEquals("Max records per batch must be greater than zero", exception.getMessage());
+        }
+    }
+
     /**
      * Verify that validateNewAcl catches invalid ACLs.
      */
@@ -237,6 +248,7 @@ public class AclControlManagerTest {
         snapshotRegistry.idempotentCreateSnapshot(0);
         AclControlManager manager = new AclControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
 
         // Load TEST_ACLS into the AclControlManager.
@@ -270,7 +282,7 @@ public class AclControlManagerTest {
 
     @Test
     public void testAddAndDelete() {
-        AclControlManager manager = new AclControlManager.Builder().build();
+        AclControlManager manager = new AclControlManager.Builder().setMaxRecordsPerBatch(CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.loadSnapshot(manager.idToAcl());
         manager.replay(StandardAclWithIdTest.TEST_ACLS.get(0).toRecord());
@@ -281,7 +293,7 @@ public class AclControlManagerTest {
 
     @Test
     public void testCreateAclDeleteAcl() {
-        AclControlManager manager = new AclControlManager.Builder().build();
+        AclControlManager manager = new AclControlManager.Builder().setMaxRecordsPerBatch(CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.loadSnapshot(manager.idToAcl());
 
@@ -343,7 +355,7 @@ public class AclControlManagerTest {
 
     @Test
     public void testCreateDedupe() {
-        AclControlManager manager = new AclControlManager.Builder().build();
+        AclControlManager manager = new AclControlManager.Builder().setMaxRecordsPerBatch(CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
 
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
@@ -360,7 +372,7 @@ public class AclControlManagerTest {
 
     @Test
     public void testDeleteDedupe() {
-        AclControlManager manager = new AclControlManager.Builder().build();
+        AclControlManager manager = new AclControlManager.Builder().setMaxRecordsPerBatch(CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
 
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
@@ -389,15 +401,15 @@ public class AclControlManagerTest {
     @Flaky("KAFKA-19513")
     @Test
     public void testDeleteExceedsMaxRecords() {
-        AclControlManager manager = new AclControlManager.Builder().build();
+        AclControlManager manager = new AclControlManager.Builder().setMaxRecordsPerBatch(CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.loadSnapshot(manager.idToAcl());
 
         List<AclBinding> firstCreate = new ArrayList<>();
         List<AclBinding> secondCreate = new ArrayList<>();
 
-        // create MAX_RECORDS_PER_USER_OP + 2 ACLs
-        for (int i = 0; i < MAX_RECORDS_PER_USER_OP + 2; i++) {
+        // create CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT + 2 ACLs
+        for (int i = 0; i < CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT + 2; i++) {
             StandardAclWithId acl = new StandardAclWithId(Uuid.randomUuid(),
                 new StandardAcl(
                     ResourceType.TOPIC,
@@ -416,13 +428,13 @@ public class AclControlManagerTest {
             }
         }
         ControllerResult<List<AclCreateResult>> firstCreateResult = manager.createAcls(firstCreate, MetadataVersion.IBP_4_0_IV0);
-        assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, firstCreateResult.response().size());
+        assertEquals((CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT / 2) + 1, firstCreateResult.response().size());
         for (AclCreateResult result : firstCreateResult.response()) {
             assertTrue(result.exception().isEmpty());
         }
 
         ControllerResult<List<AclCreateResult>> secondCreateResult = manager.createAcls(secondCreate, MetadataVersion.IBP_4_0_IV0);
-        assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, secondCreateResult.response().size());
+        assertEquals((CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT / 2) + 1, secondCreateResult.response().size());
         for (AclCreateResult result : secondCreateResult.response()) {
             assertTrue(result.exception().isEmpty());
         }
@@ -432,7 +444,7 @@ public class AclControlManagerTest {
         assertFalse(manager.idToAcl().isEmpty());
 
         ArrayList<AclBindingFilter> filters = new ArrayList<>();
-        for (int i = 0; i < MAX_RECORDS_PER_USER_OP + 2; i++) {
+        for (int i = 0; i < CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT + 2; i++) {
             filters.add(new AclBindingFilter(
                 new ResourcePatternFilter(ResourceType.TOPIC, "mytopic_" + i, PatternType.LITERAL),
                 AccessControlEntryFilter.ANY));
@@ -440,7 +452,7 @@ public class AclControlManagerTest {
 
         Exception exception = assertThrows(InvalidRequestException.class, () -> manager.deleteAcls(filters));
         assertEquals(BoundedListTooLongException.class, exception.getCause().getClass());
-        assertEquals("Cannot remove more than " + MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.", exception.getCause().getMessage());
+        assertEquals("Cannot remove more than " + CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT + " acls in a single delete operation.", exception.getCause().getMessage());
     }
 
     @Test
@@ -495,7 +507,7 @@ public class AclControlManagerTest {
 
     @Test
     public void testCreateAclWithCidrHosts() {
-        AclControlManager manager = new AclControlManager.Builder().build();
+        AclControlManager manager = new AclControlManager.Builder().setMaxRecordsPerBatch(CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
 
         // Valid CIDR with supported version
         assertAclCreateSucceeds(manager, "192.168.0.0/24", MetadataVersion.IBP_4_4_IV1);

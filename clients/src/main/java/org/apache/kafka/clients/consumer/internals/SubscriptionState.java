@@ -518,6 +518,17 @@ public class SubscriptionState {
         return result;
     }
 
+    public synchronized boolean hasFetchablePartitions(Predicate<TopicPartition> isAvailable) {
+        for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.partitionStateMap().entrySet()) {
+            TopicPartition topicPartition = entry.getKey();
+            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || isFetchableAndSubscribed(topicPartition, entry.getValue()))
+                    && isAvailable.test(topicPartition)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Check if the partition is fetchable.
      * If the consumer has explicitly subscribed to a list of topic names,

@@ -41,6 +41,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -3041,11 +3042,8 @@ public class KafkaConsumerTest {
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
     }
 
-    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
-    //       in the CONSUMER group protocol (see KAFKA-20187).
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testCurrentLagPreventsMultipleInFlightRequests(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -3064,6 +3062,11 @@ public class KafkaConsumerTest {
             consumer.poll(Duration.ofMillis(0));
         }
 
+        TestUtils.waitForCondition(
+            () -> requestGenerated(client, ApiKeys.LIST_OFFSETS),
+            "No LIST_OFFSETS request sent within allotted timeout"
+        );
+
         long count = client.requests().stream()
             .filter(request -> request.requestBuilder().apiKey().equals(ApiKeys.LIST_OFFSETS))
             .count();
@@ -3074,11 +3077,8 @@ public class KafkaConsumerTest {
         );
     }
 
-    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
-    //       in the CONSUMER group protocol (see KAFKA-20187).
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testCurrentLagClearsFlagOnFatalPartitionError(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -3132,11 +3132,8 @@ public class KafkaConsumerTest {
         );
     }
 
-    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
-    //       in the CONSUMER group protocol (see KAFKA-20187).
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testCurrentLagClearsFlagOnRetriablePartitionError(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -4400,6 +4397,25 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
             // accidentally clearing the bootstrap error from the metadata layer.
             assertThrows(BootstrapResolutionException.class, () -> consumer.poll(Duration.ofMillis(100)));
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testConsumerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero(GroupProtocol protocol) {
+        // Default bootstrap.resolve.timeout.ms=0 resolves DNS synchronously in the constructor;
+        // any failure surfaces as ConfigException (wrapped in KafkaException by the constructor's
+        // outer try/catch), so no consumer instance is created.
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol.name(),
+            ConsumerConfig.GROUP_ID_CONFIG, "test-group"
+        );
+
+        KafkaException e = assertThrows(KafkaException.class, () -> new KafkaConsumer<>(configs));
+        assertInstanceOf(ConfigException.class, e.getCause());
     }
 
     private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {

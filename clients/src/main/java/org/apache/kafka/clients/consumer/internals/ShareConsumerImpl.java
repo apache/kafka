@@ -272,6 +272,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metrics.reporters(),
                     Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = new ShareConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
+            ClientUtils.maybeBootstrapMetadataSynchronously(config,
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG), this.metadata);
 
             this.shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();

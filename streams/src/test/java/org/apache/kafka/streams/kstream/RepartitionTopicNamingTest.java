@@ -36,8 +36,7 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -63,15 +62,15 @@ public class RepartitionTopicNamingTest {
         final String optimizedTopology = buildTopology(StreamsConfig.OPTIMIZE).describe().toString();
         final String unOptimizedTopology = buildTopology(StreamsConfig.NO_OPTIMIZATION).describe().toString();
 
-        assertThat(optimizedTopology, is(EXPECTED_OPTIMIZED_TOPOLOGY));
+        assertEquals(EXPECTED_OPTIMIZED_TOPOLOGY, optimizedTopology);
         // only one repartition topic
-        assertThat(1, is(getCountOfRepartitionTopicsFound(optimizedTopology, repartitionTopicPattern)));
+        assertEquals(1, getCountOfRepartitionTopicsFound(optimizedTopology, repartitionTopicPattern));
         // the first named repartition topic
         assertTrue(optimizedTopology.contains(firstRepartitionTopicName + "-repartition"));
 
-        assertThat(unOptimizedTopology, is(EXPECTED_UNOPTIMIZED_TOPOLOGY));
+        assertEquals(EXPECTED_UNOPTIMIZED_TOPOLOGY, unOptimizedTopology);
         // now 4 repartition topic
-        assertThat(4, is(getCountOfRepartitionTopicsFound(unOptimizedTopology, repartitionTopicPattern)));
+        assertEquals(4, getCountOfRepartitionTopicsFound(unOptimizedTopology, repartitionTopicPattern));
         // all 4 named repartition topics present
         assertTrue(unOptimizedTopology.contains(firstRepartitionTopicName + "-repartition"));
         assertTrue(unOptimizedTopology.contains(secondRepartitionTopicName + "-repartition"));
@@ -106,7 +105,7 @@ public class RepartitionTopicNamingTest {
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(30L))).count().toStream().to("output-two");
 
         final String topologyString = builder.build().describe().toString();
-        assertThat(1, is(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern)));
+        assertEquals(1, getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern));
         assertTrue(topologyString.contains("grouping-repartition"));
     }
 
@@ -124,7 +123,7 @@ public class RepartitionTopicNamingTest {
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(30L))).count().toStream().to("output-two");
 
         final String topologyString = builder.build().describe().toString();
-        assertThat(1, is(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern)));
+        assertEquals(1, getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern));
         assertTrue(topologyString.contains("grouping-repartition"));
     }
 
@@ -142,7 +141,7 @@ public class RepartitionTopicNamingTest {
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(30L))).count().toStream().to("output-two");
 
         final String topologyString = builder.build().describe().toString();
-        assertThat(1, is(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern)));
+        assertEquals(1, getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern));
         assertTrue(topologyString.contains("grouping-repartition"));
     }
 
@@ -154,7 +153,7 @@ public class RepartitionTopicNamingTest {
         kGroupedTable.count().toStream().to("output-count");
         kGroupedTable.reduce((v, v2) -> v2, (v, v2) -> v2).toStream().to("output-reduce");
         final String topologyString = builder.build().describe().toString();
-        assertThat(1, is(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern)));
+        assertEquals(1, getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern));
         assertTrue(topologyString.contains("grouping-repartition"));
     }
 
@@ -167,7 +166,7 @@ public class RepartitionTopicNamingTest {
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(10L))).count().toStream().to("output-one");
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(30L))).count().toStream().to("output-two");
         final String topologyString = builder.build().describe().toString();
-        assertThat(2, is(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern)));
+        assertEquals(2, getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern));
     }
 
     @Test
@@ -177,7 +176,7 @@ public class RepartitionTopicNamingTest {
         kGroupedTable.count().toStream().to("output-count");
         kGroupedTable.reduce((v, v2) -> v2, (v, v2) -> v2).toStream().to("output-reduce");
         final String topologyString = builder.build().describe().toString();
-        assertThat(2, is(getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern)));
+        assertEquals(2, getCountOfRepartitionTopicsFound(topologyString, repartitionTopicPattern));
     }
 
     @Test
@@ -191,7 +190,7 @@ public class RepartitionTopicNamingTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final Topology topology = builder.build(properties);
-        assertThat(getCountOfRepartitionTopicsFound(topology.describe().toString(), repartitionTopicPattern), is(1));
+        assertEquals(1, getCountOfRepartitionTopicsFound(topology.describe().toString(), repartitionTopicPattern));
     }
 
 

@@ -48,8 +48,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasActiveTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasStandbyTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -163,18 +163,18 @@ public class ClientStateTest {
     public void shouldUnassignActiveTask() {
         final ClientState clientState = new ClientState(1);
         clientState.assignActive(TASK_0_0);
-        assertThat(clientState, hasActiveTasks(1));
+        assertHasActiveTasks(clientState, 1);
         clientState.unassignActive(TASK_0_0);
-        assertThat(clientState, hasActiveTasks(0));
+        assertHasActiveTasks(clientState, 0);
     }
 
     @Test
     public void shouldUnassignStandbyTask() {
         final ClientState clientState = new ClientState(1);
         clientState.assignStandby(TASK_0_0);
-        assertThat(clientState, hasStandbyTasks(1));
+        assertHasStandbyTasks(clientState, 1);
         clientState.unassignStandby(TASK_0_0);
-        assertThat(clientState, hasStandbyTasks(0));
+        assertHasStandbyTasks(clientState, 0);
     }
 
     @Test
@@ -182,7 +182,7 @@ public class ClientStateTest {
         final ClientState clientState = new ClientState(1);
         final Set<TaskId> taskIds = clientState.activeTasks();
         assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
-        assertThat(clientState, hasActiveTasks(0));
+        assertHasActiveTasks(clientState, 0);
     }
 
     @Test
@@ -190,7 +190,7 @@ public class ClientStateTest {
         final ClientState clientState = new ClientState(1);
         final Set<TaskId> taskIds = clientState.standbyTasks();
         assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
-        assertThat(clientState, hasStandbyTasks(0));
+        assertHasStandbyTasks(clientState, 0);
     }
 
     @Test
@@ -198,8 +198,8 @@ public class ClientStateTest {
         final ClientState clientState = new ClientState(1);
         final Set<TaskId> taskIds = clientState.assignedTasks();
         assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
-        assertThat(clientState, hasActiveTasks(0));
-        assertThat(clientState, hasStandbyTasks(0));
+        assertHasActiveTasks(clientState, 0);
+        assertHasStandbyTasks(clientState, 0);
     }
 
     @Test

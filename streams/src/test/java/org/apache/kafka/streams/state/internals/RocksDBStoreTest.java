@@ -53,6 +53,10 @@ import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializati
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -101,6 +105,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -527,6 +533,23 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
         final Position actual = rocksDBStore.getPosition();
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void shouldMatchPositionAfterPutAll() {
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Every entry in one putAll is processed under the same record context, so the per-entry
+        // updatePosition calls are idempotent: the position lands exactly where a single update at
+        // that offset would leave it, regardless of the batch size.
+        context.setRecordContext(new ProcessorRecordContext(0, 5, 0, "", new RecordHeaders()));
+        rocksDBStore.putAll(List.of(
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "one")), stringSerializer.serialize(null, "A")),
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "two")), stringSerializer.serialize(null, "B")),
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "three")), stringSerializer.serialize(null, "C"))));
+
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 5L)))));
+        assertEquals(expected, rocksDBStore.getPosition());
     }
 
     @Test
@@ -1662,6 +1685,181 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         try (KeyValueIterator<Bytes, byte[]> it = rocksDBStore.prefixScan("k", stringSerializer)) {
             assertEquals(List.of("k1"), keysOf(it));
         }
+    }
+
+    @Test
+    public void putAllShouldStageWritesUntilCommitWhenTransactional() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        // An empty RocksDB WriteBatch already reports a fixed header size, so the baseline is non-zero.
+        final long emptyBufferBytes = rocksDBStore.approximateNumUncommittedBytes();
+
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        rocksDBStore.putAll(List.of(
+            KeyValue.pair(k1, stringSerializer.serialize(null, "v1")),
+            KeyValue.pair(k2, stringSerializer.serialize(null, "v2"))));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> committed = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED);
+
+        // the batch is staged rather than written: it counts towards the uncommitted byte total ...
+        assertTrue(rocksDBStore.approximateNumUncommittedBytes() > emptyBufferBytes);
+        // ... is visible to the owner and at READ_UNCOMMITTED ...
+        assertEquals("v1", stringDeserializer.deserialize(null, rocksDBStore.get(k1)));
+        assertEquals("v2", stringDeserializer.deserialize(null, uncommitted.get(k2)));
+        // ... and stays hidden at READ_COMMITTED until the store commits.
+        assertNull(committed.get(k1));
+        assertNull(committed.get(k2));
+
+        rocksDBStore.commit(Map.of());
+
+        assertEquals("v1", stringDeserializer.deserialize(null, committed.get(k1)));
+        assertEquals("v2", stringDeserializer.deserialize(null, committed.get(k2)));
+    }
+
+    @Test
+    public void putAllShouldBeDiscardedOnRollbackWhenTransactional() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "committed"));
+        rocksDBStore.commit(Map.of());
+
+        rocksDBStore.putAll(List.of(
+            KeyValue.pair(k1, stringSerializer.serialize(null, "k1-new-staged")),
+            KeyValue.pair(k2, stringSerializer.serialize(null, "k2-staged"))));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> readUncommittedView =
+            rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertEquals("k1-new-staged", stringDeserializer.deserialize(null, readUncommittedView.get(k1)));
+        assertEquals("k2-staged", stringDeserializer.deserialize(null, readUncommittedView.get(k2)));
+
+        rocksDBStore.dbAccessor.rollbackStagedWrites();
+
+        assertEquals("committed", stringDeserializer.deserialize(null, rocksDBStore.get(k1)));
+        assertNull(rocksDBStore.get(k2));
+    }
+
+    @Test
+    public void putAllShouldStageTombstonesWhenTransactional() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "v1"));
+        rocksDBStore.put(k2, stringSerializer.serialize(null, "v2"));
+        rocksDBStore.commit(Map.of());
+
+        // a null value in the batch is a delete, and must be staged like any other write
+        rocksDBStore.putAll(Arrays.asList(
+            KeyValue.pair(k1, null),
+            KeyValue.pair(k2, stringSerializer.serialize(null, "v2-updated"))));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> committed = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertNull(uncommitted.get(k1));
+        assertEquals("v1", stringDeserializer.deserialize(null, committed.get(k1)));
+        assertEquals("v2-updated", stringDeserializer.deserialize(null, uncommitted.get(k2)));
+        assertEquals("v2", stringDeserializer.deserialize(null, committed.get(k2)));
+
+        rocksDBStore.commit(Map.of());
+
+        assertNull(committed.get(k1));
+        assertEquals("v2-updated", stringDeserializer.deserialize(null, committed.get(k2)));
+    }
+
+    @Test
+    public void putAllShouldRejectNullKeyWithoutStagingAnyEntryWhenTransactional() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final long emptyBufferBytes = rocksDBStore.approximateNumUncommittedBytes();
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+
+        assertThrows(NullPointerException.class, () -> rocksDBStore.putAll(Arrays.asList(
+            KeyValue.pair(k1, stringSerializer.serialize(null, "v1")),
+            KeyValue.pair(null, stringSerializer.serialize(null, "v2")))));
+
+        // the batch is rejected whole: the valid entry ahead of the null key was never staged
+        assertEquals(emptyBufferBytes, rocksDBStore.approximateNumUncommittedBytes());
+        assertNull(rocksDBStore.get(k1));
+    }
+
+    @Test
+    public void putAllShouldThrowOnClosedStore() {
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.close();
+
+        assertThrows(InvalidStateStoreException.class, () -> rocksDBStore.putAll(List.of(
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "k1")),
+                stringSerializer.serialize(null, "v1")))));
+    }
+
+    @Test
+    public void shouldNotDeadlockOnConcurrentPutAndQuery() throws Exception {
+        // KAFKA-19629: put() takes the store monitor and then the position lock, so IQ queries
+        // must take the two locks in the same order.
+        rocksDBStore.init(context, rocksDBStore);
+
+        final int iterations = 5000;
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        final Thread writer = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    rocksDBStore.put(
+                        new Bytes(stringSerializer.serialize(null, "key" + (i % 100))),
+                        stringSerializer.serialize(null, "value" + i));
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "writer");
+
+        final Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    final QueryResult<KeyValueIterator<Bytes, byte[]>> result = rocksDBStore.query(
+                        RangeQuery.withNoBounds(),
+                        PositionBound.unbounded(),
+                        new QueryConfig(false));
+                    result.getResult().close();
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "iq-reader");
+
+        writer.setDaemon(true);
+        reader.setDaemon(true);
+        writer.start();
+        reader.start();
+        final long deadlineMs = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(60);
+        writer.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+        reader.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        final boolean deadlocked = writer.isAlive() || reader.isAlive();
+        if (deadlocked) {
+            // leak the deadlocked store: tearDown's synchronized close() would block forever
+            rocksDBStore = getRocksDBStore();
+        }
+        assertFalse(deadlocked, "deadlock between concurrent put and IQ query");
     }
 
     private List<String> keysOf(final KeyValueIterator<Bytes, byte[]> it) {

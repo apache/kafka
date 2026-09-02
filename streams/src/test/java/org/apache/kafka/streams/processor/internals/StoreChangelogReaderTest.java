@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -62,8 +63,11 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -96,6 +100,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -1533,8 +1538,598 @@ public class StoreChangelogReaderTest {
         }
     }
 
+    /**
+     * The first poll after assignment returns nothing and every record arrives from the next poll
+     * on. An empty poll only means the fetch has not landed, so giving up on it sends partitions
+     * to a log-start seek with no margin against retention.
+     */
     @Test
-    public void shouldSeekByTimestampForWindowedStoreWithoutCheckpoint() {
+    public void shouldRetryProbePollBeforeFallingBackToLogStart() {
+        final long shortRetentionMs = Duration.ofSeconds(3).toMillis();
+        final long beginOffset = 900_000L;
+        final long logEndOffset = 1_000_000L;
+        final long seekTarget = 999_000L;
+        final int numPartitions = 12;      // more than one poll can plausibly serve at once
+
+        final TopicPartition[] tps = new TopicPartition[numPartitions];
+        final Map<TopicPartition, Long> begins = new HashMap<>();
+        final Map<TopicPartition, Long> ends = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            tps[i] = new TopicPartition(tp.topic(), i);
+            begins.put(tps[i], beginOffset);
+            ends.put(tps[i], logEndOffset);
+        }
+
+        // a position after restore reflects records since consumed, not where it was seeked, so
+        // seekToBeginning is the only unambiguous signal that the optimisation was abandoned
+        final Set<TopicPartition> seekedToBeginning = new HashSet<>();
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
+                        final Map<TopicPartition, Long> timestampsToSearch) {
+                    final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                    timestampsToSearch.forEach((k, v) ->
+                        result.put(k, new OffsetAndTimestamp(seekTarget, v)));
+                    return result;
+                }
+
+                @Override
+                public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {
+                    seekedToBeginning.addAll(partitions);
+                    super.seekToBeginning(partitions);
+                }
+            };
+        probeConsumer.updateBeginningOffsets(begins);
+        probeConsumer.updateEndOffsets(ends);
+        adminClient.updateEndOffsets(ends);
+
+        // records can only be added once assigned, and earlier polls happen before that; the first
+        // poll after assignment delivers nothing, standing in for a fetch that has not landed
+        final int[] assignedPolls = {0};
+        for (int round = 0; round < numPartitions * 4; round++) {
+            probeConsumer.schedulePollTask(() -> {
+                if (!probeConsumer.assignment().contains(tps[0])) {
+                    return;
+                }
+                if (++assignedPolls[0] <= 1) {
+                    return;
+                }
+                for (final TopicPartition partition : tps) {
+                    probeConsumer.addRecord(new ConsumerRecord<>(
+                        partition.topic(), partition.partition(), logEndOffset - 1,
+                        10_000_000L, TimestampType.CREATE_TIME,
+                        0, 0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty()));
+                }
+            });
+        }
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        for (int i = 0; i < numPartitions; i++) {
+            final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+            final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+            final StateStore store = mock(StateStore.class);
+            when(meta.changelogPartition()).thenReturn(tps[i]);
+            when(meta.store()).thenReturn(store);
+            when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
+            when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
+            when(store.name()).thenReturn(storeName);
+            when(manager.storeMetadata(tps[i])).thenReturn(meta);
+            when(manager.taskType()).thenReturn(ACTIVE);
+            when(manager.taskId()).thenReturn(new TaskId(0, i));
+            probeReader.register(tps[i], manager);
+        }
+
+        final Map<TaskId, Task> probeTasks = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            probeTasks.put(new TaskId(0, i), mock(Task.class));
+        }
+        probeReader.restore(probeTasks);
+
+        assertEquals(Collections.emptySet(), seekedToBeginning,
+            "every partition has a 3s retention against a 100k-record log, so the optimisation "
+                + "should apply to all of them; these were abandoned on one empty poll");
+    }
+
+    /**
+     * One partition is answered per poll, so resolving all of them takes more polls than any fixed
+     * budget in the old design allowed. A budget that stops while partitions are still being served
+     * sends them to a log-start restore with no margin against retention.
+     */
+    @Test
+    public void shouldKeepPollingWhileTheWindowIsStillResolvingPartitions() {
+        final long shortRetentionMs = Duration.ofSeconds(3).toMillis();
+        final long beginOffset = 900_000L;
+        final long logEndOffset = 1_000_000L;
+        final long seekTarget = 999_000L;
+        final int numPartitions = 20;      // more polls than any fixed budget in the old design
+
+        final TopicPartition[] tps = new TopicPartition[numPartitions];
+        final Map<TopicPartition, Long> begins = new HashMap<>();
+        final Map<TopicPartition, Long> ends = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            tps[i] = new TopicPartition(tp.topic(), i);
+            begins.put(tps[i], beginOffset);
+            ends.put(tps[i], logEndOffset);
+        }
+
+        final Set<TopicPartition> seekedToBeginning = new HashSet<>();
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
+                        final Map<TopicPartition, Long> timestampsToSearch) {
+                    final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                    timestampsToSearch.forEach((k, v) ->
+                        result.put(k, new OffsetAndTimestamp(seekTarget, v)));
+                    return result;
+                }
+
+                @Override
+                public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {
+                    seekedToBeginning.addAll(partitions);
+                    super.seekToBeginning(partitions);
+                }
+            };
+        probeConsumer.updateBeginningOffsets(begins);
+        probeConsumer.updateEndOffsets(ends);
+        adminClient.updateEndOffsets(ends);
+
+        // one partition per poll: the shape a shared max.poll.records budget produces when each
+        // window is large enough to fill a poll on its own
+        final int[] answered = {0};
+        for (int round = 0; round < numPartitions * 4; round++) {
+            probeConsumer.schedulePollTask(() -> {
+                if (!probeConsumer.assignment().contains(tps[0]) || answered[0] >= numPartitions) {
+                    return;
+                }
+                final TopicPartition partition = tps[answered[0]++];
+                probeConsumer.addRecord(new ConsumerRecord<>(
+                    partition.topic(), partition.partition(), logEndOffset - 1,
+                    10_000_000L, TimestampType.CREATE_TIME,
+                    0, 0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty()));
+            });
+        }
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        for (int i = 0; i < numPartitions; i++) {
+            final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+            final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+            final StateStore store = mock(StateStore.class);
+            when(meta.changelogPartition()).thenReturn(tps[i]);
+            when(meta.store()).thenReturn(store);
+            when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
+            when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
+            when(store.name()).thenReturn(storeName);
+            when(manager.storeMetadata(tps[i])).thenReturn(meta);
+            when(manager.taskType()).thenReturn(ACTIVE);
+            when(manager.taskId()).thenReturn(new TaskId(0, i));
+            probeReader.register(tps[i], manager);
+        }
+
+        final Map<TaskId, Task> probeTasks = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            probeTasks.put(new TaskId(0, i), mock(Task.class));
+        }
+        probeReader.restore(probeTasks);
+
+        assertEquals(Collections.emptySet(), seekedToBeginning,
+            "every partition answered the probe, just not all in the same poll; these were "
+                + "abandoned by a budget that stopped while they were still being served");
+    }
+
+    /**
+     * A poll that returns without waiting has given no fetch a chance to land, so a run of them is
+     * no more evidence than none. Here ten polls deliver nothing while the clock does not move,
+     * which must not be read as an empty window.
+     */
+    @Test
+    public void shouldNotGiveUpOnPollsThatHaveNotWaited() {
+        final long shortRetentionMs = Duration.ofSeconds(3).toMillis();
+        final long beginOffset = 900_000L;
+        final long logEndOffset = 1_000_000L;
+        final long seekTarget = 999_000L;
+        final int numPartitions = 6;
+        final int silentPolls = 10;        // well past PROBE_IDLE_POLLS, with time standing still
+
+        final TopicPartition[] tps = new TopicPartition[numPartitions];
+        final Map<TopicPartition, Long> begins = new HashMap<>();
+        final Map<TopicPartition, Long> ends = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            tps[i] = new TopicPartition(tp.topic(), i);
+            begins.put(tps[i], beginOffset);
+            ends.put(tps[i], logEndOffset);
+        }
+
+        final Set<TopicPartition> seekedToBeginning = new HashSet<>();
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
+                        final Map<TopicPartition, Long> timestampsToSearch) {
+                    final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                    timestampsToSearch.forEach((k, v) ->
+                        result.put(k, new OffsetAndTimestamp(seekTarget, v)));
+                    return result;
+                }
+
+                @Override
+                public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {
+                    seekedToBeginning.addAll(partitions);
+                    super.seekToBeginning(partitions);
+                }
+            };
+        probeConsumer.updateBeginningOffsets(begins);
+        probeConsumer.updateEndOffsets(ends);
+        adminClient.updateEndOffsets(ends);
+
+        final int[] answered = {0};
+        for (int round = 0; round < 60; round++) {
+            probeConsumer.schedulePollTask(() -> {
+                if (!probeConsumer.assignment().contains(tps[0]) || ++answered[0] <= silentPolls) {
+                    return;
+                }
+                for (final TopicPartition partition : tps) {
+                    probeConsumer.addRecord(new ConsumerRecord<>(
+                        partition.topic(), partition.partition(), logEndOffset - 1,
+                        10_000_000L, TimestampType.CREATE_TIME,
+                        0, 0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty()));
+                }
+            });
+        }
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        for (int i = 0; i < numPartitions; i++) {
+            final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+            final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+            final StateStore store = mock(StateStore.class);
+            when(meta.changelogPartition()).thenReturn(tps[i]);
+            when(meta.store()).thenReturn(store);
+            when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
+            when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
+            when(store.name()).thenReturn(storeName);
+            when(manager.storeMetadata(tps[i])).thenReturn(meta);
+            when(manager.taskType()).thenReturn(ACTIVE);
+            when(manager.taskId()).thenReturn(new TaskId(0, i));
+            probeReader.register(tps[i], manager);
+        }
+
+        final Map<TaskId, Task> probeTasks = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            probeTasks.put(new TaskId(0, i), mock(Task.class));
+        }
+        probeReader.restore(probeTasks);
+
+        assertEquals(Collections.emptySet(), seekedToBeginning,
+            "no time passed while those polls came back empty, so none of them waited on a fetch; "
+                + "abandoning the window on that basis sends partitions to a log-start restore");
+    }
+
+    /**
+     * After a producer fence the restore consumer answers nothing for a while. Here twelve polls
+     * each block a full poll timeout and return empty before the window finally answers, which is
+     * shorter than the slowest probes measured on a soak, so none of it may be called an empty
+     * window.
+     */
+    @Test
+    public void shouldWaitOutAnUnreadyConsumerBeforeAbandoningTheWindow() {
+        final long shortRetentionMs = Duration.ofSeconds(3).toMillis();
+        final long beginOffset = 900_000L;
+        final long logEndOffset = 1_000_000L;
+        final long seekTarget = 999_000L;
+        final int numPartitions = 6;
+        final int unreadyPolls = 12;       // 1.2s at the default poll.ms, all of it fruitless
+
+        final TopicPartition[] tps = new TopicPartition[numPartitions];
+        final Map<TopicPartition, Long> begins = new HashMap<>();
+        final Map<TopicPartition, Long> ends = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            tps[i] = new TopicPartition(tp.topic(), i);
+            begins.put(tps[i], beginOffset);
+            ends.put(tps[i], logEndOffset);
+        }
+
+        final Set<TopicPartition> seekedToBeginning = new HashSet<>();
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
+                        final Map<TopicPartition, Long> timestampsToSearch) {
+                    final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                    timestampsToSearch.forEach((k, v) ->
+                        result.put(k, new OffsetAndTimestamp(seekTarget, v)));
+                    return result;
+                }
+
+                @Override
+                public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {
+                    seekedToBeginning.addAll(partitions);
+                    super.seekToBeginning(partitions);
+                }
+            };
+        probeConsumer.updateBeginningOffsets(begins);
+        probeConsumer.updateEndOffsets(ends);
+        adminClient.updateEndOffsets(ends);
+
+        final long pollMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
+        final int[] answered = {0};
+        for (int round = 0; round < 60; round++) {
+            probeConsumer.schedulePollTask(() -> {
+                if (!probeConsumer.assignment().contains(tps[0])) {
+                    return;
+                }
+                if (++answered[0] <= unreadyPolls) {
+                    time.sleep(pollMs);      // the poll blocked its full timeout and found nothing
+                    return;
+                }
+                for (final TopicPartition partition : tps) {
+                    probeConsumer.addRecord(new ConsumerRecord<>(
+                        partition.topic(), partition.partition(), logEndOffset - 1,
+                        10_000_000L, TimestampType.CREATE_TIME,
+                        0, 0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty()));
+                }
+            });
+        }
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        for (int i = 0; i < numPartitions; i++) {
+            final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+            final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+            final StateStore store = mock(StateStore.class);
+            when(meta.changelogPartition()).thenReturn(tps[i]);
+            when(meta.store()).thenReturn(store);
+            when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
+            when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
+            when(store.name()).thenReturn(storeName);
+            when(manager.storeMetadata(tps[i])).thenReturn(meta);
+            when(manager.taskType()).thenReturn(ACTIVE);
+            when(manager.taskId()).thenReturn(new TaskId(0, i));
+            probeReader.register(tps[i], manager);
+        }
+
+        final Map<TaskId, Task> probeTasks = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            probeTasks.put(new TaskId(0, i), mock(Task.class));
+        }
+        probeReader.restore(probeTasks);
+
+        assertEquals(Collections.emptySet(), seekedToBeginning,
+            "the consumer was not ready to answer for 1.2s, which is inside the window the probe "
+                + "owes before it may conclude anything; these were abandoned early");
+    }
+
+    /**
+     * A task corrupted, wiped and re-registered with no offset would otherwise pay a full probe on
+     * every iteration. A probe that fell back is left alone until the backoff expires, which bounds
+     * a loop to one probe per interval without suppressing a probe that was working.
+     */
+    @Test
+    public void shouldBackOffProbingAPartitionWhoseProbeJustFailed() {
+        final long retentionMs = Duration.ofSeconds(3).toMillis();
+        final long endOffset = 1_000L;
+        final int[] probeRounds = {0};
+
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
+                    probeRounds[0]++;      // only the probe looks these up
+                    return super.beginningOffsets(partitions);
+                }
+            };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        // no records are ever scheduled, so no window can answer and every probe falls back
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        final TaskId probeTaskId = new TaskId(0, 0);
+        final Map<TaskId, Task> probeTasks = Collections.singletonMap(probeTaskId, mock(Task.class));
+
+        for (int round = 0; round < 5; round++) {
+            registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+        }
+        assertEquals(1, probeRounds[0],
+            "the probe fell back, so re-registering in a loop should not probe again");
+
+        time.sleep(Duration.ofSeconds(60).toMillis());     // PROBE_RETRY_BACKOFF
+        registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+        assertEquals(2, probeRounds[0],
+            "once the backoff expires the partition is probed again, so a transient failure does "
+                + "not disable the optimisation for good");
+    }
+
+    private void registerRestoreAndRevoke(final StoreChangelogReader probeReader,
+                                          final TaskId probeTaskId,
+                                          final Map<TaskId, Task> probeTasks,
+                                          final long retentionMs) {
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+        final StateStore store = mock(StateStore.class);
+        when(meta.changelogPartition()).thenReturn(tp);
+        when(meta.store()).thenReturn(store);
+        when(meta.offset()).thenReturn(null, 0L);
+        when(meta.retentionPeriod()).thenReturn(retentionMs);
+        when(store.name()).thenReturn(storeName);
+        when(manager.storeMetadata(tp)).thenReturn(meta);
+        when(manager.taskType()).thenReturn(ACTIVE);
+        when(manager.taskId()).thenReturn(probeTaskId);
+
+        probeReader.register(tp, manager);
+        probeReader.restore(probeTasks);
+        probeReader.unregister(Collections.singleton(tp));
+    }
+
+    /**
+     * A probe can also fail by the offset lookup timing out, which leaves through a catch rather
+     * than the normal path. That has to arm the backoff too, or a task looping on a slow broker
+     * re-probes on every iteration.
+     */
+    @Test
+    public void shouldBackOffWhenTheProbeFailsByTimeout() {
+        final long retentionMs = Duration.ofSeconds(3).toMillis();
+        final long endOffset = 1_000L;
+        final int[] lookups = {0};
+
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                    lookups[0]++;
+                    throw new TimeoutException("timed out looking up end offsets");
+                }
+            };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        final TaskId probeTaskId = new TaskId(0, 0);
+        final Map<TaskId, Task> probeTasks = Collections.singletonMap(probeTaskId, mock(Task.class));
+
+        for (int round = 0; round < 4; round++) {
+            registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+        }
+
+        assertEquals(1, lookups[0],
+            "the probe failed by timeout, so re-registering in a loop should not probe again");
+    }
+
+    /**
+     * Only a probe that fell back arms the backoff. Suppressing a probe that was working would send
+     * the next restore to log start, which is what gets a partition lapped and corrupted in the
+     * first place -- the guard would sustain the loop it exists to bound.
+     */
+    @Test
+    public void shouldNotBackOffAfterAProbeThatSucceeded() {
+        final long retentionMs = Duration.ofSeconds(3).toMillis();
+        final long endOffset = 1_000L;
+        final int[] probeRounds = {0};
+
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
+                    probeRounds[0]++;
+                    return super.beginningOffsets(partitions);
+                }
+
+                @Override
+                public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
+                        final Map<TopicPartition, Long> timestampsToSearch) {
+                    final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                    timestampsToSearch.forEach((k, v) -> result.put(k, new OffsetAndTimestamp(1L, v)));
+                    return result;
+                }
+            };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+
+        for (int round = 0; round < 40; round++) {
+            probeConsumer.schedulePollTask(() -> {
+                if (probeConsumer.assignment().contains(tp)) {
+                    probeConsumer.addRecord(new ConsumerRecord<>(
+                        tp.topic(), tp.partition(), endOffset - 1, 10_000_000L, TimestampType.CREATE_TIME,
+                        0, 0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty()));
+                }
+            });
+        }
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        final TaskId probeTaskId = new TaskId(0, 0);
+        final Map<TaskId, Task> probeTasks = Collections.singletonMap(probeTaskId, mock(Task.class));
+
+        // back to back, with no time passing at all
+        registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+        registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+
+        assertEquals(2, probeRounds[0],
+            "the probe answered, so nothing should be held back on the next registration");
+    }
+
+    /**
+     * The newest timestamp sits in the middle of the window, so taking the first or the last record
+     * in offset order picks the wrong one. The probe estimates observed stream time, a maximum.
+     */
+    @Test
+    public void shouldSeekFromTheNewestTimestampInTheProbedWindow() {
+        final long retentionMs = Duration.ofSeconds(30).toMillis();
+        final long logEndOffset = 1_000L;
+        final long oldest = 500_000L;
+        final long newest = 900_000L;
+        final long middle = 700_000L;    // last in offset order, but not the newest
+
+        final Map<TopicPartition, Long> requested = new HashMap<>();
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
+                        final Map<TopicPartition, Long> timestampsToSearch) {
+                    requested.putAll(timestampsToSearch);
+                    final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                    timestampsToSearch.forEach((k, v) -> result.put(k, new OffsetAndTimestamp(1L, v)));
+                    return result;
+                }
+            };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, logEndOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, logEndOffset));
+
+        for (int round = 0; round < 8; round++) {
+            probeConsumer.schedulePollTask(() -> {
+                if (!probeConsumer.assignment().contains(tp)) {
+                    return;
+                }
+                long offset = logEndOffset - 3;
+                for (final long timestamp : new long[] {oldest, newest, middle}) {
+                    probeConsumer.addRecord(new ConsumerRecord<>(
+                        tp.topic(), tp.partition(), offset++, timestamp, TimestampType.CREATE_TIME,
+                        0, 0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty()));
+                }
+            });
+        }
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        final TaskId probeTaskId = new TaskId(0, 0);
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+        final StateStore store = mock(StateStore.class);
+        when(meta.changelogPartition()).thenReturn(tp);
+        when(meta.store()).thenReturn(store);
+        when(meta.offset()).thenReturn(null, 0L);   // no stored offset, then a value once restoring
+        when(meta.retentionPeriod()).thenReturn(retentionMs);
+        when(store.name()).thenReturn(storeName);
+        when(manager.storeMetadata(tp)).thenReturn(meta);
+        when(manager.taskType()).thenReturn(ACTIVE);
+        when(manager.taskId()).thenReturn(probeTaskId);
+        probeReader.register(tp, manager);
+
+        probeReader.restore(Collections.singletonMap(probeTaskId, mock(Task.class)));
+
+        assertEquals(newest - retentionMs, requested.get(tp).longValue(),
+            "the seek must be derived from the newest timestamp in the window (" + newest
+                + "), not the first or last record in offset order");
+    }
+
+    @Test
+    public void shouldSeekByTimestampForWindowedStoreWithoutStoredOffset() {
         final long retentionMs = Duration.ofHours(2).toMillis();
         final long offsetForTimestamp = 42L;
         final long latestRecordTimestamp = 10_000_000L;
@@ -1633,7 +2228,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldSeekToBeginningForNonWindowedStoreWithoutCheckpoint() {
+    public void shouldSeekToBeginningForNonWindowedStoreWithoutStoredOffset() {
         final StateStoreMetadata kvStoreMetadata = mock(StateStoreMetadata.class);
         final ProcessorStateManager kvStateManager = mock(ProcessorStateManager.class);
         final StateStore kvStore = mock(StateStore.class);
@@ -1658,6 +2253,452 @@ public class StoreChangelogReaderTest {
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
         assertEquals(0L, consumer.position(tp), "Non-windowed store should seek to beginning, not by timestamp");
+    }
+
+    private ProcessorStateManager windowedActiveManager(final StateStoreMetadata meta,
+                                                        final TopicPartition partition,
+                                                        final TaskId taskId,
+                                                        final long retentionMs) {
+        final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+        final StateStore windowStore = mock(StateStore.class);
+        when(meta.changelogPartition()).thenReturn(partition);
+        when(meta.store()).thenReturn(windowStore);
+        when(meta.retentionPeriod()).thenReturn(retentionMs);
+        when(windowStore.name()).thenReturn(storeName);
+        when(manager.storeMetadata(partition)).thenReturn(meta);
+        when(manager.taskType()).thenReturn(ACTIVE);
+        when(manager.taskId()).thenReturn(taskId);
+        return manager;
+    }
+
+    private static ConsumerRecord<byte[], byte[]> changelogRecord(final TopicPartition partition,
+                                                                  final long offset,
+                                                                  final long timestamp) {
+        return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, timestamp,
+            TimestampType.CREATE_TIME, 0, 0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty());
+    }
+
+    /**
+     * With a stored offset far behind a large changelog, the reader used to replay the whole gap. It
+     * should instead probe for observed stream time and skip data the store discards on restore,
+     * just as it does when restoring from scratch.
+     */
+    @Test
+    public void shouldSeekPastStoredOffsetByTimestampWhenGapIsLarge() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long storedOffset = 100L;
+        final long endOffset = 100_000L;          // gap far exceeds PROBE_MIN_OFFSET_GAP
+        final long offsetForTimestamp = 50_000L;  // well past the stored offset
+
+        final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                timestampsToSearch.forEach((key, value) -> result.put(key, new OffsetAndTimestamp(offsetForTimestamp, value)));
+                return result;
+            }
+        };
+        timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        timestampConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        timestampConsumer.schedulePollTask(() -> timestampConsumer.addRecord(changelogRecord(tp, endOffset - 1, 10_000_000L)));
+
+        final TaskId taskId = new TaskId(0, 0);
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenReturn(storedOffset);
+        final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
+        reader.register(tp, manager);
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(offsetForTimestamp, timestampConsumer.position(tp),
+            "a stored offset far behind a large changelog should skip expired data, not replay from the stored offset");
+        assertEquals(offsetForTimestamp, callback.restoreStartOffset,
+            "restoration should be reported as starting at the skipped-to offset");
+    }
+
+    /**
+     * After skipping past a stored offset, the first restored batch begins at the skip target, not at
+     * the stored offset. Measuring the batch from the stored offset would decrement the remaining-records
+     * metric by the whole skipped gap and drive it negative.
+     */
+    @Test
+    public void shouldNotDecrementRemainingRecordsBelowZeroWhenSkippingPastStoredOffset() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long storedOffset = 100L;
+        final long endOffset = 100_000L;
+        final long offsetForTimestamp = 50_000L;
+        final long batchRecordOffset = 60_000L;
+
+        final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                timestampsToSearch.forEach((key, value) -> result.put(key, new OffsetAndTimestamp(offsetForTimestamp, value)));
+                return result;
+            }
+        };
+        timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        timestampConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        // the probe consumes the record at the head; the batch record sits below the probe position
+        // and is only returned by the main poll after the skip
+        timestampConsumer.schedulePollTask(() -> {
+            timestampConsumer.addRecord(changelogRecord(tp, endOffset - 1, 10_000_000L));
+            timestampConsumer.addRecord(changelogRecord(tp, batchRecordOffset, 10_000_000L));
+        });
+
+        // storeMetadata.offset() advances as records are restored, mirroring ProcessorStateManager.restore
+        final long[] storeOffset = {storedOffset};
+        final TaskId taskId = new TaskId(0, 0);
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenAnswer(invocation -> storeOffset[0]);
+        final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
+        doAnswer(invocation -> {
+            final List<ConsumerRecord<byte[], byte[]>> restored = invocation.getArgument(1);
+            if (!restored.isEmpty()) {
+                storeOffset[0] = restored.get(restored.size() - 1).offset();
+            }
+            return null;
+        }).when(manager).restore(any(), any(), any());
+
+        final Task task = mock(Task.class);
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
+        reader.register(tp, manager);
+        reader.restore(Collections.singletonMap(taskId, task));
+
+        final ArgumentCaptor<Long> numOffsets = ArgumentCaptor.forClass(Long.class);
+        final ArgumentCaptor<Boolean> initRemaining = ArgumentCaptor.forClass(Boolean.class);
+        verify(task, atLeastOnce()).recordRestoration(any(), anyLong(), numOffsets.capture(), initRemaining.capture());
+
+        long initialized = 0L;
+        long decremented = 0L;
+        for (int i = 0; i < initRemaining.getAllValues().size(); i++) {
+            if (initRemaining.getAllValues().get(i)) {
+                initialized += numOffsets.getAllValues().get(i);
+            } else {
+                decremented += numOffsets.getAllValues().get(i);
+            }
+        }
+        assertEquals(offsetForTimestamp, callback.restoreStartOffset,
+            "restoration should be reported as starting at the skipped-to offset");
+        assertTrue(decremented <= initialized,
+            "remaining-records was initialised to " + initialized + " but decremented by " + decremented
+                + "; measuring the first batch from the stored offset instead of the skip target drives it negative");
+    }
+
+    /**
+     * When little of the gap is expired, offsetsForTimes returns an offset at or before the
+     * stored offset. Seeking there would re-apply already-applied records and rewind the stored offset, so
+     * the seek must be floored at the stored offset.
+     */
+    @Test
+    public void shouldNotSeekBelowStoredOffsetWhenTimestampOffsetIsBehindIt() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long storedOffset = 100L;
+        final long endOffset = 100_000L;
+        final long offsetForTimestamp = 90L;   // behind the stored offset: almost all of the gap is live
+
+        final Map<TopicPartition, Long> probed = new HashMap<>();
+        final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                probed.putAll(timestampsToSearch);
+                final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                timestampsToSearch.forEach((key, value) -> result.put(key, new OffsetAndTimestamp(offsetForTimestamp, value)));
+                return result;
+            }
+        };
+        timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        timestampConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        timestampConsumer.schedulePollTask(() -> timestampConsumer.addRecord(changelogRecord(tp, endOffset - 1, 10_000_000L)));
+
+        final TaskId taskId = new TaskId(0, 0);
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenReturn(storedOffset);
+        final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
+        reader.register(tp, manager);
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertTrue(probed.containsKey(tp), "a large gap should route the stored-offset partition through the probe");
+        assertEquals(storedOffset + 1, timestampConsumer.position(tp),
+            "when offsetsForTimes lands at or before the stored offset, restoration must resume at the stored offset, never rewind below it");
+    }
+
+    /**
+     * A probe that resolves at or below the stored offset skipped nothing, so it must arm the backoff
+     * just like a probe that never answered: an immediate re-registration should replay from the
+     * stored offset without probing again, rather than re-paying for a probe that cannot help.
+     */
+    @Test
+    public void shouldBackOffWhenTimestampOffsetClampsToStoredOffset() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long storedOffset = 100L;
+        final long endOffset = 100_000L;
+        final long offsetForTimestamp = 90L;   // at or below the stored offset: nothing in the gap expired
+        final int[] probeRounds = {0};
+
+        final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                probeRounds[0]++;
+                final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                timestampsToSearch.forEach((key, value) -> result.put(key, new OffsetAndTimestamp(offsetForTimestamp, value)));
+                return result;
+            }
+        };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        // the probe resolves a stream time from the head record, then offsetsForTimes clamps to the stored offset
+        probeConsumer.schedulePollTask(() -> probeConsumer.addRecord(changelogRecord(tp, endOffset - 1, 10_000_000L)));
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+        final TaskId taskId = new TaskId(0, 0);
+
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenReturn(storedOffset);
+        reader.register(tp, windowedActiveManager(meta, tp, taskId, retentionMs));
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(storedOffset + 1, probeConsumer.position(tp),
+            "a probe that clamps to the stored offset must resume there, not rewind below it");
+        assertEquals(1, probeRounds[0], "the first registration probes once");
+
+        reader.unregister(Collections.singleton(tp));
+
+        final StateStoreMetadata meta2 = mock(StateStoreMetadata.class);
+        when(meta2.offset()).thenReturn(storedOffset);
+        reader.register(tp, windowedActiveManager(meta2, tp, taskId, retentionMs));
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(1, probeRounds[0],
+            "a probe that skipped nothing must arm the backoff, so re-registering immediately replays from the stored offset without probing");
+        assertEquals(storedOffset + 1, probeConsumer.position(tp), "the backed-off registration replays from the stored offset");
+    }
+
+    /**
+     * A small stored offset gap is not worth a probe: replaying it costs about what the probe spends,
+     * and the probe pauses every restoring partition while it runs. Common restores should pay no
+     * new RPCs.
+     */
+    @Test
+    public void shouldNotProbeWhenStoredOffsetGapIsSmall() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long storedOffset = 100L;
+        final long endOffset = 200L;   // gap far below PROBE_MIN_OFFSET_GAP
+
+        final MockConsumer<byte[], byte[]> noProbeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                throw new AssertionError("a small stored offset gap must not trigger a probe");
+            }
+
+            @Override
+            public synchronized Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
+                throw new AssertionError("a small stored offset gap must not trigger a probe");
+            }
+
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                throw new AssertionError("a small stored offset gap must not trigger a probe");
+            }
+        };
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+
+        final TaskId taskId = new TaskId(0, 0);
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenReturn(storedOffset);
+        final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, noProbeConsumer, callback, standbyListener);
+        reader.register(tp, manager);
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(storedOffset + 1, noProbeConsumer.position(tp), "a small gap should replay from the stored offset, cheaply");
+    }
+
+    /**
+     * A probe that never answers must send a stored-offset partition back to its stored offset, not to
+     * the beginning, and arm the backoff so a re-registration loop does not probe on every iteration.
+     */
+    @Test
+    public void shouldFallBackToStoredOffsetAndBackOffWhenProbeNeverAnswers() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long storedOffset = 100L;
+        final long endOffset = 100_000L;
+        final int[] probeRounds = {0};
+
+        final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
+                probeRounds[0]++;      // only the probe looks these up
+                return super.beginningOffsets(partitions);
+            }
+        };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        // no records are scheduled, so the probe never answers and must fall back
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+        final TaskId taskId = new TaskId(0, 0);
+
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenReturn(storedOffset);
+        reader.register(tp, windowedActiveManager(meta, tp, taskId, retentionMs));
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(storedOffset + 1, probeConsumer.position(tp),
+            "a probe that never answers must fall back to the stored offset, not the beginning");
+        assertEquals(1, probeRounds[0], "the first registration probes once");
+
+        reader.unregister(Collections.singleton(tp));
+
+        final StateStoreMetadata meta2 = mock(StateStoreMetadata.class);
+        when(meta2.offset()).thenReturn(storedOffset);
+        reader.register(tp, windowedActiveManager(meta2, tp, taskId, retentionMs));
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(1, probeRounds[0],
+            "the probe just fell back, so re-registering immediately must replay from the stored offset without probing");
+        assertEquals(storedOffset + 1, probeConsumer.position(tp), "the backed-off registration replays from the stored offset");
+    }
+
+    /**
+     * When a probe falls back for a mixed set, each partition must land on its own safe position: a
+     * partition with no stored offset at the beginning, a stored-offset one at its stored offset.
+     */
+    @Test
+    public void shouldFallBackNoStoredOffsetToBeginningAndStoredOffsetToItsFloor() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long storedOffset = 100L;
+        final long endOffset = 100_000L;
+
+        final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
+        final Map<TopicPartition, Long> begins = new HashMap<>();
+        begins.put(tp, 0L);
+        begins.put(tp1, 0L);
+        final Map<TopicPartition, Long> ends = new HashMap<>();
+        ends.put(tp, endOffset);
+        ends.put(tp1, endOffset);
+        probeConsumer.updateBeginningOffsets(begins);
+        probeConsumer.updateEndOffsets(ends);
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp1, endOffset));
+        // no records are scheduled, so both probes fall back
+
+        final TaskId taskId0 = new TaskId(0, 0);
+        final TaskId taskId1 = new TaskId(0, 1);
+        final StateStoreMetadata meta0 = mock(StateStoreMetadata.class);
+        when(meta0.offset()).thenReturn(null);
+        final StateStoreMetadata meta1 = mock(StateStoreMetadata.class);
+        when(meta1.offset()).thenReturn(storedOffset);
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+        reader.register(tp, windowedActiveManager(meta0, tp, taskId0, retentionMs));
+        reader.register(tp1, windowedActiveManager(meta1, tp1, taskId1, retentionMs));
+
+        final Map<TaskId, Task> tasks = new HashMap<>();
+        tasks.put(taskId0, mock(Task.class));
+        tasks.put(taskId1, mock(Task.class));
+        reader.restore(tasks);
+
+        assertEquals(0L, probeConsumer.position(tp), "the partition with no stored offset falls back to the beginning");
+        assertEquals(storedOffset + 1, probeConsumer.position(tp1),
+            "the stored-offset partition falls back to its stored offset, not the beginning");
+    }
+
+    /**
+     * A stored offset below the current log start means records in (stored offset, logStart) were deleted
+     * before they could be verified. The skip cannot certify them, so the partition takes the
+     * deterministic InvalidOffsetException -> TaskCorruptedException wipe path, exactly as a plain
+     * seek to the stored offset would.
+     */
+    @Test
+    public void shouldMarkTaskCorruptedWhenStoredOffsetIsBelowTheLogStart() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long storedOffset = 100L;
+        final long logStart = 5_000L;   // (stored offset, logStart) has been truncated
+        final long endOffset = 100_000L;
+
+        final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, logStart));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        // a record must be queued so the out-of-range position is discovered on the next poll
+        probeConsumer.schedulePollTask(() -> probeConsumer.addRecord(changelogRecord(tp, logStart, 10_000_000L)));
+
+        final TaskId taskId = new TaskId(0, 0);
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenReturn(storedOffset);
+        final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+        reader.register(tp, manager);
+
+        assertThrows(TaskCorruptedException.class,
+            () -> reader.restore(Collections.singletonMap(taskId, mock(Task.class))),
+            "a stored offset below the log start cannot be verified and must trigger the wipe path");
+    }
+
+    /**
+     * The skip optimisation is active-only: a standby with a stored offset replays its gap and is never
+     * probed.
+     */
+    @Test
+    public void shouldNotProbeStandbyWithStoredOffset() {
+        final long storedOffset = 100L;
+
+        final MockConsumer<byte[], byte[]> noProbeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                throw new AssertionError("standbys must not probe");
+            }
+
+            @Override
+            public synchronized Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
+                throw new AssertionError("standbys must not probe");
+            }
+
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                throw new AssertionError("standbys must not probe");
+            }
+        };
+
+        final TaskId taskId = new TaskId(0, 0);
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+        final StateStore windowStore = mock(StateStore.class);
+        when(meta.changelogPartition()).thenReturn(tp);
+        when(meta.store()).thenReturn(windowStore);
+        when(meta.offset()).thenReturn(storedOffset);
+        when(windowStore.name()).thenReturn(storeName);
+        when(manager.storeMetadata(tp)).thenReturn(meta);
+        when(manager.taskType()).thenReturn(STANDBY);
+        when(manager.taskId()).thenReturn(taskId);
+        when(manager.changelogAsSource(tp)).thenReturn(false);
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, noProbeConsumer, callback, standbyListener);
+        reader.register(tp, manager);
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(storedOffset + 1, noProbeConsumer.position(tp),
+            "a standby replays its stored offset gap; the skip optimisation is active-only");
     }
 
     private void assignPartition(final long messages,
