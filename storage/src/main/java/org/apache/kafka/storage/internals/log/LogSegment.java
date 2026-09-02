@@ -633,8 +633,8 @@ public class LogSegment implements Closeable {
                 @Override
                 public Void call() throws IOException {
                     log.flush();
-                    offsetIndex().flush(true);
-                    timeIndex().flush(true);
+                    offsetIndex().flush();
+                    timeIndex().flush();
                     txnIndex.flush();
                     return null;
                 }

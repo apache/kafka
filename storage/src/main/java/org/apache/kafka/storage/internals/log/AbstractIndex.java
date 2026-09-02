@@ -78,6 +78,7 @@ public abstract class AbstractIndex implements Closeable {
     private volatile int maxEntries;
     /** The number of entries in this index */
     private volatile int entries;
+    private boolean dirtyMetadata;
 
 
     /**
@@ -213,6 +214,7 @@ public abstract class AbstractIndex implements Closeable {
 
                             safeForceUnmap();
                             raf.setLength(roundedNewSize);
+                            dirtyMetadata = true;
                             this.length = roundedNewSize;
                             mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
                             this.maxEntries = mmap.limit() / entrySize();
@@ -241,17 +243,17 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     /**
-     * Flush the data in the index to disk
-     * @param metadata true if the metadata should be flushed as well
+     * Flush the data in the index and its metadata to disk
      */
-    public void flush(boolean metadata) throws IOException {
+    public void flush() throws IOException {
         inLock(() -> {
             if (mmap != null) {
                 mmap.force();
-                if (metadata) {
+                if (dirtyMetadata) {
                     try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE)) {
                         channel.force(true);
                     }
+                    dirtyMetadata = false;
                 }
             }
         });
@@ -289,7 +291,7 @@ public abstract class AbstractIndex implements Closeable {
 
     public void close() throws IOException {
         trimToValidSize();
-        flush(true); // Ensure the index content and metadata are durable
+        flush();
         closeHandler();
     }
 
