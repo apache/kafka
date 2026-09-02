@@ -334,7 +334,7 @@ public class AdminMetadataManager {
                 }
             }
         } else {
-            log.info("Metadata update failed", exception);
+            log.debug("Metadata update failed", exception);
         }
     }
 
