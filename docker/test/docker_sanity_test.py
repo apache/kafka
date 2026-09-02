@@ -209,7 +209,7 @@ class DockerSanityTest(unittest.TestCase):
             total_errors.append(str(e))
         
         self.assertEqual(total_errors, [])
-    
+
 class DockerSanityTestCombinedMode(DockerSanityTest):
     def setUp(self) -> None:
         self.start_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
