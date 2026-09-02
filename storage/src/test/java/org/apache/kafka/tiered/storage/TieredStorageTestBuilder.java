@@ -235,7 +235,7 @@ public final class TieredStorageTestBuilder {
 
     public TieredStorageTestBuilder waitForEarliestLocalOffset(String topic,
                                                                int partition,
-                                                               Long earliestLocalOffset) {
+                                                               long earliestLocalOffset) {
         assertTrue(partition >= 0, "Partition must be >= 0");
         assertTrue(earliestLocalOffset >= 0, "Record offset must be >= 0");
         actions.add(new WaitForEarliestLocalOffsetAction(new TopicPartition(topic, partition), earliestLocalOffset));

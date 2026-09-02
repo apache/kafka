@@ -28,10 +28,10 @@ import java.util.concurrent.ExecutionException;
 public final class WaitForEarliestLocalOffsetAction implements TieredStorageTestAction {
 
     private final TopicPartition topicPartition;
-    private final Long earliestLocalOffset;
+    private final long earliestLocalOffset;
 
     public WaitForEarliestLocalOffsetAction(TopicPartition topicPartition,
-                                            Long earliestLocalOffset) {
+                                            long earliestLocalOffset) {
         this.topicPartition = topicPartition;
         this.earliestLocalOffset = earliestLocalOffset;
     }
