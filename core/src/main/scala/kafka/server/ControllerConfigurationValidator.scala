@@ -42,8 +42,10 @@ import scala.collection.mutable
  *
  * For changes to GROUP resources, the forwarding broker performs validation in
  * {@link kafka.server.ConfigAdminManager#preprocess()} before sending the change to
- * the controller. The validation here is only run when the cluster may contain brokers
- * that predate the broker-side validation.
+ * the controller, starting from metadata version 4.5-IV0. The validation here is only run
+ * for requests that did not come through such a broker: requests sent directly to the
+ * controller, and requests forwarded while the cluster may still contain brokers that
+ * predate the broker-side validation.
  *
  * This validator does not handle changes to BROKER_LOGGER resources. Despite being bundled
  * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
@@ -119,7 +121,8 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
     resource: ConfigResource,
     newConfigs: util.Map[String, String],
     oldConfigs: util.Map[String, String],
-    metadataVersion: MetadataVersion
+    metadataVersion: MetadataVersion,
+    forwarded: Boolean
   ): Unit = {
     resource.`type`() match {
       case TOPIC =>
@@ -133,12 +136,14 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
         ClientMetricsConfigs.validate(resource.name(), filteredConfigs)
       case GROUP =>
         ConfigAdminManager.validateGroupResourceName(resource.name())
-        // Validate on the controller when the cluster may contain forwarding brokers that do
-        // not validate. Can be removed once upgrading directly from a
-        // pre-{@link MetadataVersion#IBP_4_5_IV0} cluster is no longer supported.
-        if (!metadataVersion.isAtLeast(MetadataVersion.IBP_4_5_IV0)) {
+        // From IBP_4_5_IV0 on, the forwarding broker has already validated the change, so only
+        // validate here when the request did not come through such a broker. The metadata version
+        // check can be removed once upgrading directly from a pre-{@link MetadataVersion#IBP_4_5_IV0}
+        // cluster is no longer supported.
+        val validatedOnBroker = forwarded && metadataVersion.isAtLeast(MetadataVersion.IBP_4_5_IV0)
+        if (!validatedOnBroker) {
           val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "group")
-          GroupConfig.validateOnController(filteredConfigs, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
+          GroupConfig.validateOnController(filteredConfigs, oldConfigs, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
         }
       case _ => throwExceptionForUnknownResourceType(resource)
     }

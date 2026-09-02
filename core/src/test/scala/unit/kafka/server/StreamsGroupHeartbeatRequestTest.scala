@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.{InvalidConfigurationException, Unsupporte
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertThrows, assertTrue}
 
+import java.util
 import java.util.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
@@ -1099,6 +1100,76 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         s"Unexpected error message: ${executionException.getCause.getMessage}")
     } finally {
       admin.close()
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      // Registered on the broker only, not on the controller.
+      // The class name has to be spelled out because annotation values must be compile-time constants.
+      new ClusterConfigProperty(
+        id = 0,
+        key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+        value = "kafka.server.CustomStreamsTaskAssignor"
+      )
+    )
+  )
+  def testAlterGroupConfigSentDirectlyToTheControllerIsValidatedOnTheController(): Unit = {
+    val admin = cluster.admin()
+    // Requests sent directly to the controller are not forwarded by a broker, so the controller validates them.
+    val controllerAdmin = cluster.admin(util.Map.of[String, AnyRef](), true)
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      def alterGroupConfig(admin: Admin, configName: String, value: String): Unit = {
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(
+            new AlterConfigOp(new ConfigEntry(configName, value), AlterConfigOp.OpType.SET)
+          ).asJavaCollection).asJava
+        ).all().get()
+      }
+
+      def assertRejected(expectedMessage: String)(alter: => Unit): Unit = {
+        val executionException = assertThrows(classOf[ExecutionException], () => alter)
+        assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+          s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+        assertTrue(executionException.getCause.getMessage.contains(expectedMessage),
+          s"Unexpected error message: ${executionException.getCause.getMessage}")
+      }
+
+      // The controller only knows its own assignors, so an assignor registered on the broker alone is rejected...
+      assertRejected(s"'${CustomStreamsTaskAssignor.NAME}' is not a registered task assignor") {
+        alterGroupConfig(controllerAdmin, GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME)
+      }
+      // ...and so is an out-of-range value.
+      assertRejected("must be in the range") {
+        alterGroupConfig(controllerAdmin, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10")
+      }
+      // A valid change is accepted.
+      alterGroupConfig(controllerAdmin, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+
+      // An assignor set through the broker does not block later changes sent directly to the controller,
+      // even though the controller does not know that assignor.
+      alterGroupConfig(admin, GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME)
+      alterGroupConfig(controllerAdmin, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "55000")
+
+      TestUtils.waitUntilTrue(() => {
+        val groupConfig = admin.describeConfigs(List(groupConfigResource).asJava).all().get().get(groupConfigResource)
+        groupConfig.get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() == CustomStreamsTaskAssignor.NAME &&
+          groupConfig.get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value() == "55000"
+      }, "Group configs were not updated to the expected values within the timeout period.")
+    } finally {
+      admin.close()
+      controllerAdmin.close()
     }
   }
 

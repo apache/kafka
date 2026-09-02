@@ -73,9 +73,10 @@ import scala.jdk.CollectionConverters._
  * The active controller performs its own configuration validation step in
  * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
  * TOPIC resources, since we already validated changes to BROKER and GROUP resources on the
- * forwarding broker. When the cluster may contain brokers that predate the broker-side GROUP
- * validation, GROUP resources are validated on the controller too. The controller is also
- * responsible for enforcing the configured [[org.apache.kafka.server.policy.AlterConfigPolicy]].
+ * forwarding broker. GROUP resources are validated on the forwarding broker from metadata version
+ * 4.5-IV0 on; the controller validates them too when the request did not come through such a
+ * broker. The controller is also responsible for enforcing the configured
+ * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
 class ConfigAdminManager(nodeId: Int,
                          conf: KafkaConfig,

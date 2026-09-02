@@ -29,7 +29,7 @@ public interface ConfigurationValidator {
         public void validate(ConfigResource resource) { }
 
         @Override
-        public void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs, MetadataVersion metadataVersion) { }
+        public void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs, MetadataVersion metadataVersion, boolean forwarded) { }
     };
 
     /**
@@ -46,6 +46,7 @@ public interface ConfigurationValidator {
      * @param newConfigs             The new configuration.
      * @param existingConfigs        The existing configuration.
      * @param metadataVersion        The cluster's current finalized metadata version.
+     * @param forwarded              True if the request was forwarded by a broker.
      */
-    void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs, MetadataVersion metadataVersion);
+    void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs, MetadataVersion metadataVersion, boolean forwarded);
 }

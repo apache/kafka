@@ -397,6 +397,26 @@ public class GroupConfigTest {
     }
 
     @Test
+    public void testStreamsAssignorNameValidatedOnControllerOnlyWhenChanged() {
+        Map<String, String> existing = Map.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+
+        // An assignor the group already selects is not validated, since it may be registered on the brokers only...
+        assertDoesNotThrow(() -> GroupConfig.validateOnController(
+            Map.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist", GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000"),
+            existing, createGroupCoordinatorConfig(), createShareGroupConfig()));
+
+        // ...but changing it is validated against the assignors registered on the controller.
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validateOnController(
+            Map.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist"),
+            Map.of(), createGroupCoordinatorConfig(), createShareGroupConfig()));
+
+        // The other checks still apply.
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validateOnController(
+            Map.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist", GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10"),
+            existing, createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
+    @Test
     public void testStreamsAssignorNameSelectsCustomAssignor() {
         // A custom assignor registered on the broker can be selected by its name.
         GroupCoordinatorConfig groupCoordinatorConfig = createGroupCoordinatorConfig(Map.of(
