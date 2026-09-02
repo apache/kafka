@@ -149,7 +149,8 @@ public class SaslClientsWithInvalidCredentialsTest {
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
             ))) {
                 consumer.subscribe(List.of(TOPIC));
-                verifyConsumerWithAuthenticationFailure(consumer, user, true);
+                verifyAuthenticationException(() -> consumer.poll(Duration.ofMillis(1000)));
+                verifyConsumerRecovery(consumer, user);
             }
         }
     }
@@ -162,7 +163,8 @@ public class SaslClientsWithInvalidCredentialsTest {
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
             ))) {
                 consumer.assign(List.of(TP));
-                verifyConsumerWithAuthenticationFailure(consumer, user, false);
+                verifyAuthenticationException(() -> consumer.partitionsFor(TOPIC));
+                verifyConsumerRecovery(consumer, user);
             }
         }
     }
@@ -177,25 +179,13 @@ public class SaslClientsWithInvalidCredentialsTest {
             ))) {
                 consumer.assign(List.of(TP));
                 consumer.seek(TP, 0);
-                verifyConsumerWithAuthenticationFailure(consumer, user, false);
+                verifyAuthenticationException(() -> consumer.partitionsFor(TOPIC));
+                verifyConsumerRecovery(consumer, user);
             }
         }
     }
 
-    private void verifyConsumerWithAuthenticationFailure(
-        Consumer<byte[], byte[]> consumer,
-        String user,
-        boolean usePollForInitialFailure
-    ) throws InterruptedException {
-        long startMs = System.currentTimeMillis();
-        if (usePollForInitialFailure) {
-            assertThrows(Exception.class, () -> consumer.poll(Duration.ofMillis(1000)));
-        } else {
-            assertThrows(Exception.class, () -> consumer.partitionsFor(TOPIC));
-        }
-        long elapsedMs = System.currentTimeMillis() - startMs;
-        assertTrue(elapsedMs <= 5000, "Poll took too long, elapsed=" + elapsedMs);
-
+    private void verifyConsumerRecovery(Consumer<byte[], byte[]> consumer, String user) throws InterruptedException {
         createScramCredential(user);
         try (var producer = cluster.<byte[], byte[]>producer(clientConfig(user, Map.of()))) {
             TestUtils.retryOnExceptionWithTimeout(() -> sendOneRecord(producer, 15000));
@@ -274,7 +264,6 @@ public class SaslClientsWithInvalidCredentialsTest {
         );
         try {
             producer.send(record).get(maxWaitMs, TimeUnit.MILLISECONDS);
-            producer.flush();
         } catch (ExecutionException e) {
             throw (RuntimeException) e.getCause();
         }
