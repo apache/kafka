@@ -975,6 +975,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val mbeanServer = ManagementFactory.getPlatformMBeanServer
     val byteRate = mbeanServer.getAttribute(new ObjectName(s"kafka.server:type=Produce,client-id=$clientId"), "byte-rate")
     assertTrue(byteRate.asInstanceOf[Double] > 0, "JMX attribute not updated")
+    val quotaUtilization = mbeanServer.getAttribute(
+      new ObjectName(s"kafka.server:type=Produce,client-id=$clientId"), "quota-utilization")
+    assertTrue(quotaUtilization.asInstanceOf[Double] > 0, "Quota utilization JMX attribute not updated")
 
     // Property not related to the metrics reporter config should not reconfigure reporter
     newProps.setProperty("some.prop", "some.value")

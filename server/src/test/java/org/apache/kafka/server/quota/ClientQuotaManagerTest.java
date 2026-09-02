@@ -17,7 +17,10 @@
 package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -26,11 +29,18 @@ import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -609,6 +619,266 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
         } finally {
             clientQuotaManager.shutdown();
         }
+    }
+
+    @Test
+    public void testQuotaUtilization() {
+        for (QuotaType quotaType : List.of(QuotaType.PRODUCE, QuotaType.FETCH)) {
+            withQuotaManager(quotaType, clientQuotaManager -> {
+                String user = "userA";
+                String clientId = "client1";
+                Map<String, String> metricTags = Map.of("user", user, "client-id", clientId);
+                // Default quota window is 11 samples of 1s; Rate pads to n-1 windows, so 800 recorded once is 80/s.
+                clientQuotaManager.updateQuota(
+                        Optional.of(new ClientQuotaManager.UserEntity(user)),
+                        Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)),
+                        Optional.of(Quota.upperBound(100))
+                );
+
+                maybeRecord(clientQuotaManager, user, clientId, 800);
+                KafkaMetric utilizationMetric = metrics.metric(metrics.metricName("quota-utilization", quotaType.toString(), metricTags));
+                assertNotNull(utilizationMetric);
+                assertEquals(80, (Double) utilizationMetric.metricValue(), 0.001);
+
+                clientQuotaManager.updateQuota(
+                        Optional.of(new ClientQuotaManager.UserEntity(user)),
+                        Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)),
+                        Optional.of(Quota.upperBound(50))
+                );
+                assertEquals(160, (Double) utilizationMetric.metricValue(), 0.001);
+
+                clientQuotaManager.updateQuota(
+                        Optional.of(new ClientQuotaManager.UserEntity(user)),
+                        Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)),
+                        Optional.empty()
+                );
+                assertTrue(Double.isNaN((Double) utilizationMetric.metricValue()));
+            });
+        }
+    }
+
+    @Test
+    public void testMeasuringQuotaUtilizationDoesNotResolveQuotaAgain() {
+        AtomicInteger quotaLimitCalls = new AtomicInteger();
+        ClientQuotaCallback customQuotaCallback = new ClientQuotaCallback() {
+            @Override
+            public void configure(Map<String, ?> configs) {}
+
+            @Override
+            public Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
+                return Map.of("custom-tag", "custom-value");
+            }
+
+            @Override
+            public Double quotaLimit(ClientQuotaType quotaType, Map<String, String> metricTags) {
+                quotaLimitCalls.incrementAndGet();
+                return 100.0;
+            }
+
+            @Override
+            public void updateQuota(ClientQuotaType quotaType, ClientQuotaEntity entity, double newValue) {}
+
+            @Override
+            public void removeQuota(ClientQuotaType quotaType, ClientQuotaEntity entity) {}
+
+            @Override
+            public boolean quotaResetRequired(ClientQuotaType quotaType) {
+                return false;
+            }
+
+            @Override
+            public void close() {}
+        };
+        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(
+                config,
+                metrics,
+                QuotaType.PRODUCE,
+                time,
+                "",
+                Optional.of(Plugin.wrapInstance(customQuotaCallback, metrics, ""))
+        );
+
+        try {
+            maybeRecord(clientQuotaManager, "userA", "client1", 800);
+            int callsBeforeMeasurement = quotaLimitCalls.get();
+            KafkaMetric utilizationMetric = metrics.metric(metrics.metricName(
+                    "quota-utilization",
+                    QuotaType.PRODUCE.toString(),
+                    Map.of("custom-tag", "custom-value")
+            ));
+            assertNotNull(utilizationMetric);
+            assertEquals(80, (Double) utilizationMetric.metricValue(), 0.001);
+            assertEquals(callsBeforeMeasurement, quotaLimitCalls.get());
+        } finally {
+            clientQuotaManager.shutdown();
+        }
+    }
+
+    @Test
+    public void testQuotaUtilizationTagsMatchRateMetric() {
+        record TagCase(Optional<ClientQuotaEntity.ConfigEntity> userEntity,
+                       Optional<ClientQuotaEntity.ConfigEntity> clientEntity,
+                       String user,
+                       String clientId,
+                       Map<String, String> tags) {}
+        List<TagCase> cases = List.of(
+                new TagCase(
+                        Optional.empty(),
+                        Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
+                        "userA",
+                        "client1",
+                        Map.of("user", "", "client-id", "client1")
+                ),
+                new TagCase(
+                        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+                        Optional.empty(),
+                        "userA",
+                        "client1",
+                        Map.of("user", "userA", "client-id", "")
+                ),
+                new TagCase(
+                        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+                        Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
+                        "userA",
+                        "client1",
+                        Map.of("user", "userA", "client-id", "client1")
+                ),
+                new TagCase(
+                        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+                        Optional.empty(),
+                        "userC",
+                        "client3",
+                        Map.of("user", "userC", "client-id", "")
+                ),
+                new TagCase(
+                        Optional.empty(),
+                        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+                        "userB",
+                        "client2",
+                        Map.of("user", "", "client-id", "client2")
+                )
+        );
+
+        for (TagCase tagCase : cases) {
+            Metrics localMetrics = new Metrics(new MetricConfig(), List.of(), time);
+            ClientQuotaManager clientQuotaManager = new ClientQuotaManager(config, localMetrics, QuotaType.PRODUCE, time, "");
+            try {
+                clientQuotaManager.updateQuota(tagCase.userEntity(), tagCase.clientEntity(), Optional.of(Quota.upperBound(100)));
+                maybeRecord(clientQuotaManager, tagCase.user(), tagCase.clientId(), 800);
+                KafkaMetric rateMetric = localMetrics.metric(localMetrics.metricName("byte-rate", QuotaType.PRODUCE.toString(), tagCase.tags()));
+                KafkaMetric utilizationMetric = localMetrics.metric(localMetrics.metricName("quota-utilization", QuotaType.PRODUCE.toString(), tagCase.tags()));
+                assertNotNull(rateMetric, "missing byte-rate for " + tagCase.tags());
+                assertNotNull(utilizationMetric, "missing quota-utilization for " + tagCase.tags());
+                assertEquals(rateMetric.metricName().tags(), utilizationMetric.metricName().tags());
+                assertEquals(80, (Double) utilizationMetric.metricValue(), 0.001);
+            } finally {
+                clientQuotaManager.shutdown();
+                localMetrics.close();
+            }
+        }
+    }
+
+    @Test
+    public void testQuotaUtilizationNanForNonPositiveAndMissingBounds() {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
+            String user = "userA";
+            String clientId = "client1";
+            Map<String, String> tags = Map.of("user", user, "client-id", clientId);
+
+            clientQuotaManager.updateQuota(
+                    Optional.of(new ClientQuotaManager.UserEntity(user)),
+                    Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)),
+                    Optional.of(Quota.upperBound(0))
+            );
+            maybeRecord(clientQuotaManager, user, clientId, 800);
+            assertTrue(Double.isNaN((Double) metric("quota-utilization", QuotaType.PRODUCE.toString()).metricValue()));
+
+            clientQuotaManager.updateQuota(
+                    Optional.of(new ClientQuotaManager.UserEntity(user)),
+                    Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)),
+                    Optional.of(Quota.upperBound(-10))
+            );
+            assertTrue(Double.isNaN((Double) metric("quota-utilization", QuotaType.PRODUCE.toString()).metricValue()));
+
+            KafkaMetric rateMetric = metrics.metric(metrics.metricName("byte-rate", QuotaType.PRODUCE.toString(), tags));
+            rateMetric.config(new MetricConfig());
+            assertTrue(Double.isNaN((Double) metric("quota-utilization", QuotaType.PRODUCE.toString()).metricValue()));
+        });
+    }
+
+    @Test
+    public void testFetchUnrecordIsReflectedInQuotaUtilization() {
+        withQuotaManager(QuotaType.FETCH, clientQuotaManager -> {
+            String user = "userA";
+            String clientId = "client1";
+            Map<String, String> tags = Map.of("user", user, "client-id", clientId);
+
+            clientQuotaManager.updateQuota(
+                    Optional.of(new ClientQuotaManager.UserEntity(user)),
+                    Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)),
+                    Optional.of(Quota.upperBound(100))
+            );
+
+            double recorded = 1500;
+            int throttleTimeMs = maybeRecord(clientQuotaManager, user, clientId, recorded);
+            assertTrue(throttleTimeMs > 0);
+            KafkaMetric utilizationMetric = metrics.metric(metrics.metricName("quota-utilization", QuotaType.FETCH.toString(), tags));
+            assertEquals(150, (Double) utilizationMetric.metricValue(), 0.001);
+
+            unrecord(clientQuotaManager, user, clientId, recorded);
+            double utilizationAfterUnrecord = (Double) utilizationMetric.metricValue();
+            assertEquals(0, utilizationAfterUnrecord, 0.001);
+            assertTrue(utilizationAfterUnrecord < 100);
+        });
+    }
+
+    @Test
+    public void testQuotaUtilizationJmxAttribute() throws Exception {
+        for (QuotaType quotaType : List.of(QuotaType.PRODUCE, QuotaType.FETCH)) {
+            Metrics jmxMetrics = new Metrics(new MetricConfig(), List.of(new JmxReporter()), time);
+            ClientQuotaManager clientQuotaManager = new ClientQuotaManager(config, jmxMetrics, quotaType, time, "");
+            String user = "userA";
+            String clientId = "client1";
+            Map<String, String> tags = Map.of("user", user, "client-id", clientId);
+
+            try {
+                clientQuotaManager.updateQuota(
+                        Optional.of(new ClientQuotaManager.UserEntity(user)),
+                        Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)),
+                        Optional.of(Quota.upperBound(100))
+                );
+                maybeRecord(clientQuotaManager, user, clientId, 800);
+
+                KafkaMetric rateMetric = jmxMetrics.metric(jmxMetrics.metricName("byte-rate", quotaType.toString(), tags));
+                assertNotNull(rateMetric);
+                ObjectName objectName = new ObjectName(":type=" + quotaType + ",user=" + user + ",client-id=" + clientId);
+                MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
+                assertTrue(Arrays.stream(mbeanServer.getMBeanInfo(objectName).getAttributes())
+                        .anyMatch(attr -> attr.getName().equals("quota-utilization")));
+                assertEquals("double", Arrays.stream(mbeanServer.getMBeanInfo(objectName).getAttributes())
+                        .filter(attr -> attr.getName().equals("quota-utilization"))
+                        .findFirst()
+                        .orElseThrow()
+                        .getType());
+
+                double quota = 100;
+                double byteRate = (Double) mbeanServer.getAttribute(objectName, "byte-rate");
+                double utilization = (Double) mbeanServer.getAttribute(objectName, "quota-utilization");
+                assertEquals(byteRate / quota * 100, utilization, 0.001);
+                assertEquals(80, utilization, 0.001);
+            } finally {
+                clientQuotaManager.shutdown();
+                jmxMetrics.close();
+            }
+        }
+    }
+
+    private KafkaMetric metric(String name, String group) {
+        List<KafkaMetric> found = metrics.metrics().values().stream()
+                .filter(m -> m.metricName().name().equals(name) && m.metricName().group().equals(group))
+                .toList();
+        assertEquals(1, found.size(), "expected one " + name + " metric in " + group + ", found " + found.stream().map(KafkaMetric::metricName).toList());
+        return found.get(0);
     }
 
     record UserClient(
