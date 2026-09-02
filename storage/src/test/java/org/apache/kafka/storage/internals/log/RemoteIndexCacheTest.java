@@ -1229,8 +1229,8 @@ public class RemoteIndexCacheTest {
                 offsetIndex.append(offset, i);
                 timeIndex.maybeAppend(curTime + i, offset, true);
             }
-            offsetIndex.flush(false);
-            timeIndex.flush(false);
+            offsetIndex.flush();
+            timeIndex.flush();
         }
     }
 
