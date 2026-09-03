@@ -148,6 +148,14 @@ Every describe response that requested a topology description carries a `Streams
 
 When a streams group is deleted while a topology description plugin is configured, the broker calls the plugin's `deleteTopology` method before removing the group. If the plugin fails to delete its data, the `DeleteGroups` request returns the error code `GROUP_DELETION_FAILED` for that group, with the plugin's exception message in the per-group `ErrorMessage` field (available in `DeleteGroups` version 3 and higher), and the broker does **not** delete the group. Retrying the deletion re-invokes `deleteTopology` idempotently. Groups that expire through periodic cleanup are treated identically — their removal is deferred to a future cleanup cycle until the plugin deletion succeeds.
 
+This cleanup guarantee holds as long as the same plugin stays configured on the broker that owns the group. It relies on the broker's own group-deletion and periodic-cleanup logic to invoke `deleteTopology`; if that logic stops running against a given plugin instance, entries in the plugin's storage are left behind.
+
+# Removing the plugin or downgrading the broker
+
+Turning off the plugin (unsetting `group.streams.topology.description.plugin.class`) or downgrading the broker to a version that predates KIP-1331 both stop the broker from calling `deleteTopology` for groups that already have data recorded. Those entries are left behind in the plugin's backing storage — the broker has no way to reach them once it stops running the plugin.
+
+This is expected, not a sign of corruption: the plugin's storage is external to the broker, so removing or downgrading the component that manages its lifecycle naturally leaves it self-managed from then on. If you plan to remove the plugin permanently or downgrade for good, clean up the plugin's backing storage yourself (however your plugin implementation exposes that — a table truncate, a key prefix delete, and so on) rather than relying on the broker to do it after the fact. A brief downgrade that gets rolled forward again does not need any cleanup: once the plugin is reconfigured and the broker upgraded back, normal pushes and cleanup cycles resume and reconcile the group's state with the plugin as usual.
+
 # Observability
 
 The broker exposes metrics for every plugin interaction under the MBean group `kafka.server:type=group-coordinator-metrics`; the full list is in the [group coordinator monitoring reference](/{version}/operations/monitoring#group-coordinator-monitoring). Each sensor is published as both a `-rate` (per-second) and a `-count` (cumulative) metric, so `streams-group-topology-description-set-success` becomes `streams-group-topology-description-set-success-rate` and `streams-group-topology-description-set-success-count`.
@@ -188,6 +196,10 @@ Before reading broker logs, check the `streams-group-topology-description-*-erro
 **`UnsupportedVersionException` when requesting the topology description.**
 
   * The broker is older than Apache Kafka 4.4 and does not support `StreamsGroupDescribe` version 1. Upgrade the broker, or describe the group without requesting the topology description.
+
+**Leftover entries in the plugin's storage after removing the plugin or downgrading.**
+
+  * See [Removing the plugin or downgrading the broker](#removing-the-plugin-or-downgrading-the-broker) — this is expected, and the storage needs to be cleaned up manually.
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
