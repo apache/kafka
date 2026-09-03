@@ -2512,6 +2512,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
             when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(true);
             time.sleep(1234);
 
@@ -2540,6 +2541,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
             when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(shouldNotWaitForHeartbeatInterval);
             time.sleep(1234);
 
@@ -2563,12 +2565,31 @@ class StreamsGroupHeartbeatRequestManagerTest {
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
             time.sleep(1234);
 
             final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
 
             assertEquals(5, maximumTimeToWait);
             verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @Test
+    public void testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin() {
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class);
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.heartbeatIntervalMs()).thenReturn(6000L))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(6000L, maximumTimeToWait);
         }
     }
 
