@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.admin;
 
+import kafka.server.KafkaConfig;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigResource;
@@ -29,6 +31,8 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +46,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -106,10 +111,69 @@ public class AlterConfigsIntegrationTest {
         checkAlterConfigs(adminConfig, ClusterAuthorizationException.class, "token", true);
     }
 
+    // Non-STRING configs resolved through a config provider must be applied by the broker, not only accepted
+    // by the request validation (KAFKA-20973).
+
+    @ClusterTest
+    public void testAlterConfigsWithConfigProvidersAppliesIntConfigPerBroker() throws Exception {
+        checkAlterConfigsApplied(
+            brokerResource(),
+            ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG,
+            ServerConfigs.NUM_IO_THREADS_CONFIG,
+            "10"
+        );
+        assertEquals(10, brokerConfig().getInt(ServerConfigs.NUM_IO_THREADS_CONFIG));
+    }
+
+    @ClusterTest
+    public void testAlterConfigsWithConfigProvidersAppliesIntConfigClusterWide() throws Exception {
+        checkAlterConfigsApplied(
+            new ConfigResource(ConfigResource.Type.BROKER, ""),
+            ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG,
+            ServerConfigs.NUM_IO_THREADS_CONFIG,
+            "10"
+        );
+        assertEquals(10, brokerConfig().getInt(ServerConfigs.NUM_IO_THREADS_CONFIG));
+    }
+
+    @ClusterTest
+    public void testAlterConfigsWithConfigProvidersAppliesLongConfig() throws Exception {
+        checkAlterConfigsApplied(
+            brokerResource(),
+            ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG,
+            ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG,
+            "86400000"
+        );
+        assertEquals(86400000L, brokerConfig().getLong(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG));
+    }
+
+    @ClusterTest
+    public void testAlterConfigsWithConfigProvidersAppliesBooleanConfig() throws Exception {
+        checkAlterConfigsApplied(
+            brokerResource(),
+            ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG,
+            ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG,
+            "true"
+        );
+        assertTrue(brokerConfig().getBoolean(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG));
+    }
+
+    @ClusterTest
+    public void testAlterConfigsWithConfigProvidersAppliesListConfig() throws Exception {
+        checkAlterConfigsApplied(
+            brokerResource(),
+            ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG,
+            ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG,
+            "compact,delete"
+        );
+        assertEquals(List.of("compact", "delete"), brokerConfig().getList(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG));
+    }
+
     private void checkAlterConfigs(Map<String, Object> adminConfig, Class<? extends Throwable> expectedCause, String value, boolean placeholder) {
         try (Admin admin = clusterInstance.admin(adminConfig)) {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "");
-            Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(brokerResource, configProviderOps());
+            Map<ConfigResource, Collection<AlterConfigOp>> alterations =
+                Map.of(brokerResource, configProviderOps(ServerConfigs.NUM_IO_THREADS_CONFIG));
             ExecutionException ee = assertThrows(ExecutionException.class,
                     () -> admin.incrementalAlterConfigs(alterations).all().get());
             assertInstanceOf(expectedCause, ee.getCause());
@@ -125,14 +189,50 @@ public class AlterConfigsIntegrationTest {
         }
     }
 
-    private Collection<AlterConfigOp> configProviderOps() {
+    private void checkAlterConfigsApplied(
+        ConfigResource target,
+        ConfigEntry.ConfigSource expectedSource,
+        String configName,
+        String value
+    ) throws Exception {
+        Files.writeString(file, "key=" + value);
+        ConfigResource brokerResource = brokerResource();
+        try (Admin admin = clusterInstance.admin()) {
+            admin.incrementalAlterConfigs(Map.of(target, configProviderOps(configName))).all().get();
+            // The broker applies the update asynchronously when it replays the metadata log. DescribeConfigs is
+            // served from the broker's own config, so the source only changes once the update took effect.
+            TestUtils.waitForCondition(
+                () -> describeConfig(admin, brokerResource, configName).source() == expectedSource,
+                configName + " was not applied with source " + expectedSource
+            );
+            assertEquals(value, describeConfig(admin, brokerResource, configName).value());
+        }
+    }
+
+    private static ConfigEntry describeConfig(Admin admin, ConfigResource resource, String name) throws Exception {
+        return admin.describeConfigs(List.of(resource)).all().get().get(resource).get(name);
+    }
+
+    private int brokerId() {
+        return clusterInstance.brokerIds().iterator().next();
+    }
+
+    private ConfigResource brokerResource() {
+        return new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(brokerId()));
+    }
+
+    private KafkaConfig brokerConfig() {
+        return clusterInstance.brokers().get(brokerId()).config();
+    }
+
+    private Collection<AlterConfigOp> configProviderOps(String configName) {
         return List.of(
             new AlterConfigOp(new ConfigEntry(CONFIG_PROVIDERS_CONFIG, "file"),
                     AlterConfigOp.OpType.SET),
             new AlterConfigOp(new ConfigEntry(
                 CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName()),
                     AlterConfigOp.OpType.SET),
-            new AlterConfigOp(new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + file.toAbsolutePath() + ":key}"),
+            new AlterConfigOp(new ConfigEntry(configName, "${file:" + file.toAbsolutePath() + ":key}"),
                     AlterConfigOp.OpType.SET)
         );
     }
