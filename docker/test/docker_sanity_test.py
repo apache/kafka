@@ -15,11 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
-import subprocess
-from HTMLTestRunner import HTMLTestRunner
-import test.constants as constants
 import os
+import subprocess
+import unittest
+
+import pytest
+import test.constants as constants
 
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
@@ -231,22 +232,20 @@ def run_tests(image, mode, fixtures_dir, container_runtime="docker"):
     DockerSanityTest.MODE = mode
     DockerSanityTest.CONTAINER_RUNTIME = container_runtime
 
-    test_classes_to_run = []
-    if mode == "jvm" or mode == "native":
-        test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
-    
-    loader = unittest.TestLoader()
-    suites_list = []
-    for test_class in test_classes_to_run:
-        suite = loader.loadTestsFromTestCase(test_class)
-        suites_list.append(suite)
-    combined_suite = unittest.TestSuite(suites_list)
     cur_directory = os.path.dirname(os.path.realpath(__file__))
-    outfile = open(f"{cur_directory}/report_{mode}.html", "w")
-    runner = HTMLTestRunner.HTMLTestRunner(
-                stream=outfile,
-                title=f'Test Report: Apache Kafka {mode.capitalize()} Docker Image',
-                description='This demonstrates the report output.'
-                )
-    result = runner.run(combined_suite)
-    return (result.failure_count, result.error_count)
+    report_path = f"{cur_directory}/report_{mode}.html"
+
+    class ReportTitlePlugin:
+        @pytest.hookimpl(optionalhook=True)
+        def pytest_html_report_title(self, report):
+            report.title = f"Test Report: Apache Kafka {mode.capitalize()} Docker Image"
+
+    return pytest.main([
+        "--pyargs",
+        __name__,
+        f"--html={report_path}",
+        "--self-contained-html",
+        "--capture=tee-sys",
+        "-p",
+        "no:cacheprovider",
+    ], plugins=[ReportTitlePlugin()])
