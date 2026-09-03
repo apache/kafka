@@ -1362,9 +1362,13 @@ public class IntegrationTestUtils {
 
     public static void waitUntilStreamsHasPolled(final KafkaStreams kafkaStreams, final int pollNumber)
         throws InterruptedException {
-        final Double initialCount = getStreamsPollNumber(kafkaStreams);
+        final double initialCount = getStreamsPollNumber(kafkaStreams);
+        final double expectedCount = initialCount + pollNumber;
         retryOnExceptionWithTimeout(10000, () -> {
-            assertTrue(getStreamsPollNumber(kafkaStreams) >= initialCount + pollNumber);
+            final double currentCount = getStreamsPollNumber(kafkaStreams);
+            assertTrue(currentCount >= expectedCount,
+                () -> "Expected poll-total to reach at least " + expectedCount
+                    + " (initial " + initialCount + " + " + pollNumber + "), but was " + currentCount);
         });
     }
 
