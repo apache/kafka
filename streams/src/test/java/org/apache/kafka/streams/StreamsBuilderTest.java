@@ -189,8 +189,7 @@ public class StreamsBuilderTest {
         assertEquals(
             Set.of(topology.stateStores().get(0).name()),
             topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"));
-        assertTrue(
-            topology.processorConnectedStateStores("KTABLE-FILTER-0000000003").isEmpty());
+        assertTrue(topology.processorConnectedStateStores("KTABLE-FILTER-0000000003").isEmpty());
     }
 
     @Test
@@ -228,8 +227,7 @@ public class StreamsBuilderTest {
         assertEquals(
             Set.of(topology.stateStores().get(0).name()),
             topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"));
-        assertTrue(
-            topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003").isEmpty());
+        assertTrue(topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003").isEmpty());
     }
 
     @Test
@@ -266,8 +264,7 @@ public class StreamsBuilderTest {
         assertEquals(
             Set.of(topology.stateStores().get(0).name(), topology.stateStores().get(1).name()),
             topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"));
-        assertTrue(
-            topology.processorConnectedStateStores("KTABLE-MERGE-0000000007").isEmpty());
+        assertTrue(topology.processorConnectedStateStores("KTABLE-MERGE-0000000007").isEmpty());
     }
 
     @Test
