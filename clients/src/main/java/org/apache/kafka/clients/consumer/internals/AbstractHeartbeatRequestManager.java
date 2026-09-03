@@ -259,13 +259,16 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         if (pollTimer.isExpired()) {
             return 0L;
         }
-        // KAFKA-20253: mirror the guard in poll(). A heartbeat is only sent when the coordinator is known
-        // and the member is in a state that heartbeats. When the coordinator is unavailable (e.g. after a
-        // re-authentication failure) or the member should skip heartbeats (FATAL/FENCED/STALE/UNSUBSCRIBED),
-        // poll() returns EMPTY, so falling through to the timer-based branches below would return 0 (the
-        // heartbeat timer is left permanently expired) and busy-spin both the application and network threads.
+        // Mirror the guard in poll(). A heartbeat is only sent when the coordinator is known and the
+        // member is in a state that heartbeats. When the coordinator is unavailable (e.g. after a
+        // re-authentication failure, or while bootstrap DNS resolution is still in progress) or the
+        // member should skip heartbeats (FATAL/FENCED/STALE/UNSUBSCRIBED), poll() returns EMPTY, so
+        // falling through to the timer-based branches below would return 0 (the heartbeat timer is left
+        // permanently expired) and busy-spin both the application and network threads. Wait a retry
+        // backoff rather than the heartbeat interval, because the interval is zero until the first
+        // heartbeat response is received, which would also busy-spin.
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
-            return heartbeatRequestState.heartbeatIntervalMs();
+            return heartbeatRequestState.retryBackoffMs();
         }
         if (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight()) {
             return 0L;

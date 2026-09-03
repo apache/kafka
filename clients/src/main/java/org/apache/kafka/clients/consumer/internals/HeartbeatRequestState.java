@@ -60,6 +60,10 @@ public class HeartbeatRequestState extends RequestState {
         return heartbeatIntervalMs;
     }
 
+    public long retryBackoffMs() {
+        return exponentialBackoff.initialInterval();
+    }
+
     public void resetTimer() {
         this.heartbeatTimer.reset(heartbeatIntervalMs);
     }
