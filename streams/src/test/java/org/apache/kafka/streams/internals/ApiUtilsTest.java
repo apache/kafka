@@ -46,7 +46,7 @@ public class ApiUtilsTest {
     }
 
     @Test
-    public void shouldThrowArithmeticExceptionForMaxDuration() {
+    public void shouldThrowIllegalArgumentExceptionForMaxDuration() {
         final Duration maxDurationInDays = Duration.ofDays(MAX_ACCEPTABLE_DAYS_FOR_DURATION);
         final String maxDurationPrefix = prepareMillisCheckFailMsgPrefix(maxDurationInDays, "maxDuration");
 
@@ -69,7 +69,7 @@ public class ApiUtilsTest {
     }
 
     @Test
-    public void shouldThrowArithmeticExceptionForMaxInstant() {
+    public void shouldThrowIllegalArgumentExceptionForMaxInstant() {
         final String maxInstantPrefix = prepareMillisCheckFailMsgPrefix(Instant.MAX, "maxInstant");
 
         final IllegalArgumentException e = assertThrows(
