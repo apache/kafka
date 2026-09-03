@@ -41,7 +41,7 @@ public class MetricsDuringTopicCreationDeletionTest {
     private static final String TOPIC_NAME_PREFIX = "topic";
     private static final int TOPIC_NUM = 2;
     private static final int CREATE_DELETE_ITERATIONS = 3;
-    private static final short REPLICATION_FACTOR = 1;
+    private static final short REPLICATION_FACTOR = 3;
     private static final int PARTITION_NUM = 3;
 
     private final ClusterInstance clusterInstance;
@@ -61,7 +61,7 @@ public class MetricsDuringTopicCreationDeletionTest {
      */
     @ClusterTest(
         types = {Type.KRAFT},
-        brokers = 1,
+        brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
@@ -76,7 +76,7 @@ public class MetricsDuringTopicCreationDeletionTest {
 
         final int initialOfflinePartitionsCount = getGauge("OfflinePartitionsCount").value();
         final int initialPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
-        final int initialUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
+        final int initialUnderReplicatedPartitionsCount = underReplicatedPartitionCount();
 
         AtomicInteger offlinePartitionsCount = new AtomicInteger(initialOfflinePartitionsCount);
         AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(initialPreferredReplicaImbalanceCount);
@@ -88,7 +88,7 @@ public class MetricsDuringTopicCreationDeletionTest {
                 preferredReplicaImbalanceCount.set(
                     getGauge("PreferredReplicaImbalanceCount").value());
                 underReplicatedPartitionsCount.set(
-                    getGauge("UnderReplicatedPartitions").value());
+                    underReplicatedPartitionCount());
 
                 if (offlinePartitionsCount.get() != initialOfflinePartitionsCount ||
                     preferredReplicaImbalanceCount.get() != initialPreferredReplicaImbalanceCount ||
@@ -151,5 +151,11 @@ public class MetricsDuringTopicCreationDeletionTest {
             .findFirst()
             .map(entry -> (Gauge<Integer>) entry.getValue())
             .orElseThrow(() -> new AssertionError("Unable to find metric " + metricName));
+    }
+
+    private int underReplicatedPartitionCount() {
+        return clusterInstance.brokers().values().stream()
+            .mapToInt(broker -> broker.replicaManager().underReplicatedPartitionCount())
+            .sum();
     }
 }
