@@ -78,7 +78,6 @@ public abstract class AbstractIndex implements Closeable {
     private volatile int maxEntries;
     /** The number of entries in this index */
     private volatile int entries;
-    private boolean dirtyMetadata;
 
 
     /**
@@ -214,7 +213,6 @@ public abstract class AbstractIndex implements Closeable {
 
                             safeForceUnmap();
                             raf.setLength(roundedNewSize);
-                            dirtyMetadata = true;
                             this.length = roundedNewSize;
                             mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
                             this.maxEntries = mmap.limit() / entrySize();
@@ -249,11 +247,8 @@ public abstract class AbstractIndex implements Closeable {
         inLock(() -> {
             if (mmap != null) {
                 mmap.force();
-                if (dirtyMetadata) {
-                    try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE)) {
-                        channel.force(true);
-                    }
-                    dirtyMetadata = false;
+                try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE)) {
+                    channel.force(true);
                 }
             }
         });
