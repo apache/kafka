@@ -32,6 +32,7 @@ import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -115,7 +116,7 @@ public class AlterConfigsIntegrationTest {
     // by the request validation (KAFKA-20973).
 
     @ClusterTest
-    public void testAlterConfigsWithConfigProvidersAppliesIntConfigPerBroker() throws Exception {
+    public void testAlterConfigsWithConfigProvidersForPerBrokerIntConfig() throws Exception {
         checkAlterConfigsApplied(
             brokerResource(),
             ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG,
@@ -126,7 +127,7 @@ public class AlterConfigsIntegrationTest {
     }
 
     @ClusterTest
-    public void testAlterConfigsWithConfigProvidersAppliesIntConfigClusterWide() throws Exception {
+    public void testAlterConfigsWithConfigProvidersForClusterWideIntConfig() throws Exception {
         checkAlterConfigsApplied(
             new ConfigResource(ConfigResource.Type.BROKER, ""),
             ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG,
@@ -137,7 +138,7 @@ public class AlterConfigsIntegrationTest {
     }
 
     @ClusterTest
-    public void testAlterConfigsWithConfigProvidersAppliesLongConfig() throws Exception {
+    public void testAlterConfigsWithConfigProvidersForLongConfig() throws Exception {
         checkAlterConfigsApplied(
             brokerResource(),
             ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG,
@@ -148,7 +149,18 @@ public class AlterConfigsIntegrationTest {
     }
 
     @ClusterTest
-    public void testAlterConfigsWithConfigProvidersAppliesBooleanConfig() throws Exception {
+    public void testAlterConfigsWithConfigProvidersForDoubleConfig() throws Exception {
+        checkAlterConfigsApplied(
+            brokerResource(),
+            ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG,
+            CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP,
+            "0.75"
+        );
+        assertEquals(0.75, brokerConfig().getDouble(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP));
+    }
+
+    @ClusterTest
+    public void testAlterConfigsWithConfigProvidersForBooleanConfig() throws Exception {
         checkAlterConfigsApplied(
             brokerResource(),
             ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG,
@@ -159,7 +171,7 @@ public class AlterConfigsIntegrationTest {
     }
 
     @ClusterTest
-    public void testAlterConfigsWithConfigProvidersAppliesListConfig() throws Exception {
+    public void testAlterConfigsWithConfigProvidersForListConfig() throws Exception {
         checkAlterConfigsApplied(
             brokerResource(),
             ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG,
