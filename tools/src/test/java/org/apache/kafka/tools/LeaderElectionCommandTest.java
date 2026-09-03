@@ -29,9 +29,11 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -57,23 +59,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
-@ClusterTestDefaults(brokers = 3, serverProperties = {
+@ClusterTestDefaults(types = {Type.KRAFT}, brokers = 3, serverProperties = {
     @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
     @ClusterConfigProperty(key = "auto.leader.rebalance.enable", value = "false"),
     @ClusterConfigProperty(key = "controlled.shutdown.enable", value = "true"),
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2")
 })
 public class LeaderElectionCommandTest {
-    private final ClusterInstance cluster;
+    private static final String BOOTSTRAP_SERVER = "localhost:9092";
     int broker2 = 1;
     int broker3 = 2;
 
-    public LeaderElectionCommandTest(ClusterInstance cluster) {
-        this.cluster = cluster;
-    }
-
     @ClusterTest
-    public void testAllTopicPartition() throws Exception {
+    public void testAllTopicPartition(ClusterInstance cluster) throws Exception {
         String topic = "unclean-topic";
         int partition = 0;
         List<Integer> assignment = List.of(broker2, broker3);
@@ -106,7 +104,7 @@ public class LeaderElectionCommandTest {
         }
     }
 
-    @ClusterTest
+    @Test
     public void testDeprecatedAdminConfig() throws Exception {
         String defaultApiTimeoutMs = String.valueOf(110000);
         String requestTimeoutMs = String.valueOf(55000);
@@ -115,7 +113,7 @@ public class LeaderElectionCommandTest {
         try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class)) {
             String output = ToolsTestUtils.captureStandardOut(() ->
                 LeaderElectionCommand.mainNoExit(
-                    "--bootstrap-server", cluster.bootstrapServers(),
+                    "--bootstrap-server", BOOTSTRAP_SERVER,
                     "--election-type", "unclean", "--all-topic-partitions",
                     "--admin.config", adminConfigPath.toString()
                 )
@@ -131,7 +129,7 @@ public class LeaderElectionCommandTest {
         }
     }
 
-    @ClusterTest
+    @Test
     public void testCommandConfig() throws Exception {
         String defaultApiTimeoutMs = String.valueOf(110000);
         String requestTimeoutMs = String.valueOf(55000);
@@ -139,7 +137,7 @@ public class LeaderElectionCommandTest {
 
         try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class)) {
             assertEquals(1, LeaderElectionCommand.mainNoExit(
-                "--bootstrap-server", cluster.bootstrapServers(),
+                "--bootstrap-server", BOOTSTRAP_SERVER,
                 "--election-type", "unclean", "--all-topic-partitions",
                 "--command-config", adminConfigPath.toString()
             ));
@@ -153,7 +151,7 @@ public class LeaderElectionCommandTest {
         }
     }
 
-    @ClusterTest
+    @Test
     public void testCommandConfigAndDeprecatedConfigPresent() throws Exception {
         String defaultApiTimeoutMs = String.valueOf(110000);
         String requestTimeoutMs = String.valueOf(55000);
@@ -180,7 +178,7 @@ public class LeaderElectionCommandTest {
     }
 
     @ClusterTest
-    public void testTopicPartition() throws Exception {
+    public void testTopicPartition(ClusterInstance cluster) throws Exception {
         String topic = "unclean-topic";
         int partition = 0;
         List<Integer> assignment = List.of(broker2, broker3);
@@ -215,7 +213,7 @@ public class LeaderElectionCommandTest {
     }
 
     @ClusterTest
-    public void testPathToJsonFile() throws Exception {
+    public void testPathToJsonFile(ClusterInstance cluster) throws Exception {
         String topic = "unclean-topic";
         int partition = 0;
         List<Integer> assignment = List.of(broker2, broker3);
@@ -254,7 +252,7 @@ public class LeaderElectionCommandTest {
     }
 
     @ClusterTest
-    public void testPreferredReplicaElection() throws Exception {
+    public void testPreferredReplicaElection(ClusterInstance cluster) throws Exception {
         String topic = "preferred-topic";
         int partition = 0;
         List<Integer> assignment = List.of(broker2, broker3);
@@ -287,7 +285,7 @@ public class LeaderElectionCommandTest {
     }
 
     @ClusterTest
-    public void testTopicDoesNotExist() {
+    public void testTopicDoesNotExist(ClusterInstance cluster) {
         Throwable e = assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
             Duration.ofSeconds(30),
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -299,7 +297,7 @@ public class LeaderElectionCommandTest {
     }
 
     @ClusterTest
-    public void testElectionResultOutput() throws Exception {
+    public void testElectionResultOutput(ClusterInstance cluster) throws Exception {
         String topic = "non-preferred-topic";
         int partition0 = 0;
         int partition1 = 1;
