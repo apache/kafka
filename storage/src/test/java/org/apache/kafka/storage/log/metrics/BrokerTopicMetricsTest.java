@@ -73,7 +73,7 @@ public class BrokerTopicMetricsTest {
                 if (systemRemoteStorageEnabled) {
                     assertTrue(metrics.metricGaugeMap().containsKey(metricName), "The metric is missing:" + metricName);
                 } else {
-                    assertFalse(metrics.metricGaugeMap().containsKey(metricName), "The metric should appear:" + metricName);
+                    assertFalse(metrics.metricGaugeMap().containsKey(metricName), "The metric should not appear:" + metricName);
                 }
             });
         }
@@ -450,6 +450,9 @@ public class BrokerTopicMetricsTest {
 
         assertEquals(15, brokerTopicMetrics.remoteLogSizeBytes());
         assertEquals(15, allTopicMetrics.remoteLogSizeBytes());
+
+        brokerTopicStats.recordRemoteLogSizeBytes(TOPIC2, 2, 5);
+        assertEquals(20, allTopicMetrics.remoteLogSizeBytes());
     }
 
     @Test
