@@ -100,15 +100,9 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     private volatile QuotaConfig quotaConfig;
     private final boolean doLog;
 
-    @SuppressWarnings("this-escape")
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
         this.doLog = doLog;
-        validateValues();
-    }
-
-    private void validateValues() {
-        validateGroupCoordinatorRebalanceProtocols();
     }
 
     public QuotaConfig quotaConfig() {
@@ -856,7 +850,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     @SuppressWarnings("removal")
-    private void validateGroupCoordinatorRebalanceProtocols() {
+    protected void validateGroupCoordinatorRebalanceProtocols() {
         Set<GroupType> protocols = groupCoordinatorRebalanceProtocols();
 
         if (!protocols.contains(GroupType.CLASSIC)) {
