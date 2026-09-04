@@ -97,6 +97,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private static final int RECEIVED_TASK_OFFSET_INTERVAL_MS = 7000;
     private static final long RECEIVED_ACCEPTABLE_RECOVERY_LAG = 4242;
     private static final int DEFAULT_MAX_POLL_INTERVAL_MS = 10000;
+    private static final long DEFAULT_RETRY_BACKOFF_MS = 100;
     private static final String GROUP_ID = "group-id";
     private static final String MEMBER_ID = "member-id";
     private static final int MEMBER_EPOCH = 1;
@@ -2482,6 +2483,55 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(INSTANCE_ID, streamsRequest.data().instanceId());
     }
 
+    /**
+     * A heartbeat request is in flight and the heartbeat timer is already expired. That happens both
+     * while the very first heartbeat is in flight, when the interval is still unknown (it is initialised
+     * to 0 and only learned from the first heartbeat response), and later on, when a response takes
+     * longer than the interval. In that window no heartbeat can be sent until the in-flight one
+     * completes, so both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
+     * {@link StreamsGroupHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay;
+     * returning 0 busy-spins the consumer network thread and the application thread until the in-flight
+     * request completes, which can be as long as request.timeout.ms when the coordinator is unreachable.
+     */
+    @ParameterizedTest
+    @ValueSource(longs = {0, 5000})
+    public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin(final long heartbeatIntervalMs) {
+        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        // The member keeps joining for both intervals, so the heartbeat below is sent without waiting for
+        // the interval and the total simulated time stays under max.poll.interval.ms.
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+
+        if (heartbeatIntervalMs > 0) {
+            // The manager always starts with a zero (unknown) interval, so the only way to give it a
+            // non-zero one is to complete a first heartbeat with a response carrying that interval.
+            completeSuccessfulHeartbeat(heartbeatRequestManager, buildClientResponseWithConfig(
+                (int) heartbeatIntervalMs, RECEIVED_TASK_OFFSET_INTERVAL_MS, RECEIVED_ACCEPTABLE_RECOVERY_LAG));
+        }
+
+        final NetworkClientDelegate.PollResult firstResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, firstResult.unsentRequests.size(),
+            "A heartbeat should be sent as soon as the coordinator is known");
+
+        // Deliberately do not complete the request, so it stays in flight while the heartbeat timer expires.
+        time.sleep(heartbeatIntervalMs + 1);
+
+        final NetworkClientDelegate.PollResult secondResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, secondResult.unsentRequests.size(),
+            "No heartbeat should be sent while another one is in flight");
+        assertTrue(secondResult.timeUntilNextPollMs > 0,
+            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy-spin; got "
+                + secondResult.timeUntilNextPollMs);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, secondResult.timeUntilNextPollMs);
+
+        final long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy-spin; got " + result);
+        // maximumTimeToWait is min(pollTimer.remainingMs() / 2, retry backoff), and half of the remaining
+        // max.poll.interval.ms is still larger than the backoff at this point.
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
+    }
+
     @Test
     public void testMaximumTimeToWaitPollTimerExpired() {
         try (
@@ -2720,6 +2770,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         prop.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
+        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS));
         prop.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         return new ConsumerConfig(prop);
     }
