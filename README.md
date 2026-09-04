@@ -126,7 +126,7 @@ To reduce NVD API rate limiting, supply an [NVD API key](https://nvd.nist.gov/de
 through the `NVD_API_KEY` environment variable when running a dependency check:
 
 ```bash
-NVD_API_KEY=your-nvd-api-key ./gradlew dependencyCheckAggregate
+NVD_API_KEY=your-nvd-api-key ./gradlew dependencyCheckAggregate --no-parallel
 ```
 
 ### Building a binary release gzipped tarball
