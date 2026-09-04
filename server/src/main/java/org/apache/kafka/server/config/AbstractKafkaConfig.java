@@ -49,6 +49,8 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -68,6 +70,8 @@ import java.util.stream.Collectors;
  * For more details check KAFKA-15853
  */
 public abstract class AbstractKafkaConfig extends AbstractConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(AbstractKafkaConfig.class);
 
     private static final InetAddressValidator INET_ADDRESS_VALIDATOR = InetAddressValidator.getInstance();
 
@@ -96,9 +100,15 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     private volatile QuotaConfig quotaConfig;
     private final boolean doLog;
 
+    @SuppressWarnings("this-escape")
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
         this.doLog = doLog;
+        validateValues();
+    }
+
+    private void validateValues() {
+        validateGroupCoordinatorRebalanceProtocols();
     }
 
     public QuotaConfig quotaConfig() {
@@ -837,21 +847,17 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     // ********* Group Coordinator Configuration **********
 
-    private volatile Set<GroupType> groupCoordinatorRebalanceProtocols;
-
-    public Set<GroupType> groupCoordinatorRebalanceProtocols() {
-        if (groupCoordinatorRebalanceProtocols == null) {
-            groupCoordinatorRebalanceProtocols = computeGroupCoordinatorRebalanceProtocols();
-        }
-        return groupCoordinatorRebalanceProtocols;
-    }
-
     @SuppressWarnings("removal")
-    private Set<GroupType> computeGroupCoordinatorRebalanceProtocols() {
-        Set<GroupType> protocols = getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
+    public Set<GroupType> groupCoordinatorRebalanceProtocols() {
+        return getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
                 .stream()
                 .map(s -> GroupType.valueOf(s.toUpperCase(Locale.ROOT)))
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @SuppressWarnings("removal")
+    private void validateGroupCoordinatorRebalanceProtocols() {
+        Set<GroupType> protocols = groupCoordinatorRebalanceProtocols();
 
         if (!protocols.contains(GroupType.CLASSIC)) {
             throw new ConfigException("Disabling the '" + GroupType.CLASSIC + "' protocol is not supported.");
@@ -888,8 +894,6 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
                         GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG);
             }
         }
-
-        return protocols;
     }
 
     // ********* Metric Configuration **********
