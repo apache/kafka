@@ -38,7 +38,6 @@ import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -58,8 +57,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.entriesToMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -210,10 +207,10 @@ public final class AssignmentTestUtils {
     public static final Subtopology SUBTOPOLOGY_1 = new Subtopology(1, null);
     public static final Subtopology SUBTOPOLOGY_2 = new Subtopology(2, null);
 
-    public static final Set<TaskId> EMPTY_TASKS = emptySet();
+    public static final Set<TaskId> EMPTY_TASKS = Set.of();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
-    public static final List<String> EMPTY_RACK_AWARE_ASSIGNMENT_TAGS = Collections.emptyList();
-    public static final Map<String, String> EMPTY_CLIENT_TAGS = Collections.emptyMap();
+    public static final List<String> EMPTY_RACK_AWARE_ASSIGNMENT_TAGS = List.of();
+    public static final Map<String, String> EMPTY_CLIENT_TAGS = Map.of();
 
     private static final String USER_END_POINT = "localhost:8080";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
@@ -365,12 +362,11 @@ public final class AssignmentTestUtils {
 
         if (!misassigned.isEmpty()) {
             assertEquals(
-                emptyMap(),
+                Map.of(),
                 misassigned,
                 "Found some over- or under-assigned tasks in the final assignment with " + numStandbyReplicas +
-                    " and max warmups " + maxWarmupReplicas + " standby replicas, stateful tasks:" + statefulTasks +
-                    ", and stateless tasks:" + statelessTasks + failureContext
-            );
+                " and max warmups " + maxWarmupReplicas + " standby replicas, stateful tasks:" + statefulTasks +
+                ", and stateless tasks:" + statelessTasks + failureContext);
         }
     }
 
@@ -593,8 +589,8 @@ public final class AssignmentTestUtils {
             "cluster",
             new HashSet<>(nodeList),
             partitionInfoSet,
-            Collections.emptySet(),
-            Collections.emptySet()
+            Set.of(),
+            Set.of()
         );
     }
 
@@ -675,7 +671,7 @@ public final class AssignmentTestUtils {
 
                 final Node[] replica = getRandomReplica(nodeList, i, j);
                 final TopicPartitionInfo info = new TopicPartitionInfo(j, replica[0],
-                    Arrays.asList(replica), Arrays.asList(replica));
+                    List.of(replica), List.of(replica));
 
                 topicPartitionInfo.computeIfAbsent(topicName, tp -> new ArrayList<>()).add(info);
             }
@@ -778,8 +774,8 @@ public final class AssignmentTestUtils {
                 PI_3_1,
                 PI_3_2
             ),
-            Collections.emptySet(),
-            Collections.emptySet()
+            Set.of(),
+            Set.of()
         );
     }
 
@@ -853,37 +849,37 @@ public final class AssignmentTestUtils {
         doReturn(
             mkMap(
                 mkEntry(
-                    CHANGELOG_TP_0_NAME, Arrays.asList(
-                        new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
-                        new TopicPartitionInfo(1, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
-                        new TopicPartitionInfo(2, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
-                        new TopicPartitionInfo(3, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
-                        new TopicPartitionInfo(4, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
-                        new TopicPartitionInfo(5, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
-                        new TopicPartitionInfo(6, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList())
+                    CHANGELOG_TP_0_NAME, List.of(
+                        new TopicPartitionInfo(0, NODE_0, List.of(REPLICA_0), List.of()),
+                        new TopicPartitionInfo(1, NODE_1, List.of(REPLICA_1), List.of()),
+                        new TopicPartitionInfo(2, NODE_1, List.of(REPLICA_1), List.of()),
+                        new TopicPartitionInfo(3, NODE_2, List.of(REPLICA_2), List.of()),
+                        new TopicPartitionInfo(4, NODE_3, List.of(REPLICA_3), List.of()),
+                        new TopicPartitionInfo(5, NODE_4, List.of(REPLICA_4), List.of()),
+                        new TopicPartitionInfo(6, NODE_0, List.of(REPLICA_0), List.of())
                     )
                 ),
                 mkEntry(
-                    CHANGELOG_TP_1_NAME, Arrays.asList(
-                        new TopicPartitionInfo(0, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
-                        new TopicPartitionInfo(1, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
-                        new TopicPartitionInfo(2, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
-                        new TopicPartitionInfo(3, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList())
+                    CHANGELOG_TP_1_NAME, List.of(
+                        new TopicPartitionInfo(0, NODE_2, List.of(REPLICA_2), List.of()),
+                        new TopicPartitionInfo(1, NODE_3, List.of(REPLICA_3), List.of()),
+                        new TopicPartitionInfo(2, NODE_0, List.of(REPLICA_0), List.of()),
+                        new TopicPartitionInfo(3, NODE_4, List.of(REPLICA_4), List.of())
                     )
                 ),
                 mkEntry(
-                    CHANGELOG_TP_2_NAME, Arrays.asList(
-                        new TopicPartitionInfo(0, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
-                        new TopicPartitionInfo(1, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
-                        new TopicPartitionInfo(2, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
-                        new TopicPartitionInfo(3, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList())
+                    CHANGELOG_TP_2_NAME, List.of(
+                        new TopicPartitionInfo(0, NODE_1, List.of(REPLICA_1), List.of()),
+                        new TopicPartitionInfo(1, NODE_2, List.of(REPLICA_2), List.of()),
+                        new TopicPartitionInfo(2, NODE_4, List.of(REPLICA_4), List.of()),
+                        new TopicPartitionInfo(3, NODE_3, List.of(REPLICA_3), List.of())
                     )
                 ),
                 mkEntry(
-                    CHANGELOG_TP_3_NAME, Arrays.asList(
-                        new TopicPartitionInfo(0, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
-                        new TopicPartitionInfo(1, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
-                        new TopicPartitionInfo(2, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList())
+                    CHANGELOG_TP_3_NAME, List.of(
+                        new TopicPartitionInfo(0, NODE_4, List.of(REPLICA_4), List.of()),
+                        new TopicPartitionInfo(1, NODE_3, List.of(REPLICA_3), List.of()),
+                        new TopicPartitionInfo(2, NODE_1, List.of(REPLICA_1), List.of())
                     )
                 )
             )
@@ -892,7 +888,7 @@ public final class AssignmentTestUtils {
     }
 
     static Map<Subtopology, Set<TaskId>> getTopologyGroupTaskMap() {
-        return Collections.singletonMap(SUBTOPOLOGY_0, Collections.singleton(new TaskId(1, 1)));
+        return Map.of(SUBTOPOLOGY_0, Set.of(new TaskId(1, 1)));
     }
 
     static void verifyStandbySatisfyRackReplica(
@@ -920,10 +916,7 @@ public final class AssignmentTestUtils {
 
                 if (!relaxRackCheck && clientState.hasAssignedTask(taskId)) {
                     final String rack = racksForProcess.get(processId);
-                    assertFalse(
-                        racks.containsKey(rack),
-                        "Task " + taskId + " appears in both " + processId + " and " + racks.get(rack)
-                    );
+                    assertFalse(racks.containsKey(rack), "Task " + taskId + " appears in both " + processId + " and " + racks.get(rack));
                     racks.put(rack, processId);
                 }
 

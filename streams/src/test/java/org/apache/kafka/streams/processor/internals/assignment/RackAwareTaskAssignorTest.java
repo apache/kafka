@@ -38,10 +38,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
@@ -52,8 +51,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Stream;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
@@ -102,9 +99,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForChangelog;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForRandomChangelog;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.verifyStandbySatisfyRackReplica;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -364,13 +358,13 @@ public class RackAwareTaskAssignorTest {
         setUp(stateful);
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
         doReturn(
-            Collections.singletonMap(
+            Map.of(
                 TP_0_NAME,
-                Collections.singletonList(
-                    new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_1), Collections.emptyList())
+                List.of(
+                    new TopicPartitionInfo(0, NODE_0, List.of(REPLICA_1), List.of())
                 )
             )
-        ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TP_0_NAME));
+        ).when(spyTopicManager).getTopicPartitionInfo(Set.of(TP_0_NAME));
 
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterWithNoNode(),
@@ -392,22 +386,22 @@ public class RackAwareTaskAssignorTest {
         setUp(stateful);
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
         doReturn(
-            Collections.singletonMap(
+            Map.of(
                 TP_0_NAME,
-                Collections.singletonList(
-                    new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_1), Collections.emptyList())
+                List.of(
+                    new TopicPartitionInfo(0, NODE_0, List.of(REPLICA_1), List.of())
                 )
             )
-        ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TP_0_NAME));
+        ).when(spyTopicManager).getTopicPartitionInfo(Set.of(TP_0_NAME));
 
         doReturn(
-            Collections.singletonMap(
+            Map.of(
                 CHANGELOG_TP_0_NAME,
-                Collections.singletonList(
-                    new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_1), Collections.emptyList())
+                List.of(
+                    new TopicPartitionInfo(0, NODE_0, List.of(REPLICA_1), List.of())
                 )
             )
-        ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(CHANGELOG_TP_0_NAME));
+        ).when(spyTopicManager).getTopicPartitionInfo(Set.of(CHANGELOG_TP_0_NAME));
 
         final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
             getClusterWithNoNode(),
@@ -438,15 +432,15 @@ public class RackAwareTaskAssignorTest {
         setUp(stateful);
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
         doReturn(
-            Collections.singletonMap(
+            Map.of(
                 TP_0_NAME,
-                Collections.singletonList(
-                    new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_1), Collections.emptyList())
+                List.of(
+                    new TopicPartitionInfo(0, NODE_0, List.of(REPLICA_1), List.of())
                 )
             )
-        ).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(TP_0_NAME));
+        ).when(spyTopicManager).getTopicPartitionInfo(Set.of(TP_0_NAME));
 
-        doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(
+        doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Set.of(
             CHANGELOG_TP_0_NAME));
 
         final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
@@ -470,7 +464,7 @@ public class RackAwareTaskAssignorTest {
     public void shouldDisableRackAwareAssignorWithDescribingTopicsFailure(final boolean stateful, final String assignmentStrategy) {
         setUp(stateful);
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
-        doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Collections.singleton(
+        doThrow(new TimeoutException("Timeout describing topic")).when(spyTopicManager).getTopicPartitionInfo(Set.of(
             TP_0_NAME));
 
         final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
@@ -505,7 +499,7 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_1, TASK_1_1));
 
@@ -543,9 +537,9 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_1, TASK_1_1));
         clientState2.assignActive(TASK_1_0);
@@ -605,7 +599,7 @@ public class RackAwareTaskAssignorTest {
         assertTrue(assignor.canEnableRackAwareAssignor());
         final long originalCost = assignor.activeTasksCost(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost);
-        assertThat(cost, lessThanOrEqualTo(originalCost));
+        assertTrue(cost <= originalCost);
 
         for (final Entry<ProcessId, ClientState> entry : clientStateMap.entrySet()) {
             assertEquals((int) clientTaskCount.get(entry.getKey()), entry.getValue().activeTasks().size());
@@ -662,7 +656,7 @@ public class RackAwareTaskAssignorTest {
             }
         } else {
             // Balanced assignment recalculate the assignment using max flow first, so original assignment may not be maintained
-            assertValidAssignment(0, taskIds, emptySet(), clientStateMap, new StringBuilder());
+            assertValidAssignment(0, taskIds, Set.of(), clientStateMap, new StringBuilder());
         }
     }
 
@@ -685,9 +679,9 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
 
         clientState2.assignActive(TASK_1_0);
         clientState3.assignActive(TASK_0_0);
@@ -737,9 +731,9 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
 
         clientState2.assignActiveTasks(Set.of(TASK_0_1, TASK_1_0));
         clientState3.assignActive(TASK_0_0);
@@ -789,8 +783,8 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActive(TASK_0_1);
@@ -839,8 +833,8 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActive(TASK_0_1);
@@ -871,8 +865,8 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActiveTasks(Set.of(TASK_0_1, TASK_1_1));
@@ -905,8 +899,8 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActive(TASK_0_1);
@@ -938,13 +932,13 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_3
         );
 
@@ -982,22 +976,22 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_3
         );
-        final ClientState clientState4 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState4 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_4
         );
-        final ClientState clientState5 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState5 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_6
         );
-        final ClientState clientState6 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState6 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_7
         );
 
@@ -1059,22 +1053,22 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState1 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_1
         );
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState2 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_2
         );
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState3 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_3
         );
-        final ClientState clientState4 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState4 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_4
         );
-        final ClientState clientState5 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState5 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_6
         );
-        final ClientState clientState6 = new ClientState(emptySet(), emptySet(), emptyMap(), EMPTY_CLIENT_TAGS, 1,
+        final ClientState clientState6 = new ClientState(Set.of(), Set.of(), Map.of(), EMPTY_CLIENT_TAGS, 1,
             PID_7
         );
 
@@ -1161,11 +1155,11 @@ public class RackAwareTaskAssignorTest {
             replicaCount, false, null);
 
         final long originalCost = assignor.standByTasksCost(taskIds, clientStateMap, 10, 1);
-        assertThat(originalCost, greaterThanOrEqualTo(0L));
+        assertTrue(originalCost >= 0L);
 
         final long cost = assignor.optimizeStandbyTasks(clientStateMap, 10, 1,
             standbyTaskAssignor::isAllowedTaskMovement);
-        assertThat(cost, lessThanOrEqualTo(originalCost));
+        assertTrue(cost <= originalCost);
         // Validate tasks in different racks after moving
         verifyStandbySatisfyRackReplica(taskIds, assignor.racksForProcess(), clientStateMap,
             replicaCount, false, standbyTaskCount);
@@ -1176,8 +1170,8 @@ public class RackAwareTaskAssignorTest {
             "cluster",
             Set.of(NODE_0, NODE_1, NODE_2),
             Set.of(PI_0_0, PI_0_1),
-            Collections.emptySet(),
-            Collections.emptySet()
+            Set.of(),
+            Set.of()
         );
     }
 
@@ -1188,8 +1182,8 @@ public class RackAwareTaskAssignorTest {
             "cluster",
             Set.of(NODE_0, NODE_1, NODE_2),
             Set.of(partitionInfoMissingNode, PI_0_1),
-            Collections.emptySet(),
-            Collections.emptySet()
+            Set.of(),
+            Set.of()
         );
     }
 
@@ -1199,9 +1193,9 @@ public class RackAwareTaskAssignorTest {
         return new Cluster(
             "cluster",
             Set.of(NODE_0, NODE_1, NODE_2, Node.noNode()), // mockClientSupplier.setCluster requires noNode
-            Collections.singleton(noNodeInfo),
-            Collections.emptySet(),
-            Collections.emptySet()
+            Set.of(noNodeInfo),
+            Set.of(),
+            Set.of()
         );
     }
 
@@ -1212,7 +1206,7 @@ public class RackAwareTaskAssignorTest {
     private Map<ProcessId, Map<String, Optional<String>>> getProcessRacksForProcess0(final boolean missingRack) {
         final Map<ProcessId, Map<String, Optional<String>>> processRacks = new HashMap<>();
         final Optional<String> rack = missingRack ? Optional.empty() : Optional.of("rack1");
-        processRacks.put(PID_1, Collections.singletonMap("consumer1", rack));
+        processRacks.put(PID_1, Map.of("consumer1", rack));
         return processRacks;
     }
 
@@ -1238,6 +1232,6 @@ public class RackAwareTaskAssignorTest {
         if (extraTopic) {
             topicPartitions.add(TP_1_0);
         }
-        return Collections.singletonMap(TASK_0_0, topicPartitions);
+        return Map.of(TASK_0_0, topicPartitions);
     }
 }

@@ -49,7 +49,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.ACTIVE;
 import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.STANDBY;
@@ -71,15 +70,11 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.mkStreamState;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.mkTaskInfo;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.processId;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.hasItems;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class CustomStickyTaskAssignorTest {
@@ -112,7 +107,7 @@ public class CustomStickyTaskAssignorTest {
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
         for (final KafkaStreamsAssignment assignment : assignments.values()) {
-            assertThat(assignment.tasks().size(), equalTo(1));
+            assertEquals(1, assignment.tasks().size());
         }
     }
 
@@ -221,9 +216,9 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
-        assertThat(assignments.get(processId(1)).tasks().values().size(), equalTo(1));
-        assertThat(assignments.get(processId(2)).tasks().values().size(), equalTo(1));
-        assertThat(assignments.get(processId(3)).tasks().values().size(), equalTo(1));
+        assertEquals(1, assignments.get(processId(1)).tasks().size());
+        assertEquals(1, assignments.get(processId(2)).tasks().size());
+        assertEquals(1, assignments.get(processId(3)).tasks().size());
 
         assertHasAssignment(assignments, 2, TASK_0_1, ACTIVE);
     }
@@ -246,8 +241,8 @@ public class CustomStickyTaskAssignorTest {
             mkStreamState(2, 2, Optional.empty())
         );
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
-        assertThat(assignments.get(processId(1)).tasks().values().size(), equalTo(1));
-        assertThat(assignments.get(processId(2)).tasks().values().size(), equalTo(2));
+        assertEquals(1, assignments.get(processId(1)).tasks().size());
+        assertEquals(2, assignments.get(processId(2)).tasks().size());
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -274,25 +269,18 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
-        final Set<TaskId> client1Tasks = assignments.get(processId(1)).tasks().values().stream()
-            .filter(t -> t.type() == ACTIVE)
-            .map(AssignedTask::id)
-            .collect(Collectors.toSet());
-        final Set<TaskId> client2Tasks = assignments.get(processId(2)).tasks().values().stream()
-            .filter(t -> t.type() == ACTIVE)
-            .map(AssignedTask::id)
-            .collect(Collectors.toSet());
+        final Set<TaskId> client1Tasks = taskIdsOfType(assignments.get(processId(1)).tasks().values(), ACTIVE);
+        final Set<TaskId> client2Tasks = taskIdsOfType(assignments.get(processId(2)).tasks().values(), ACTIVE);
 
         final Set<TaskId> allTasks = tasks.keySet();
 
         // one client should get 3 tasks and the other should have 4
-        assertThat(
+        assertTrue(
             (client1Tasks.size() == 3 && client2Tasks.size() == 4) ||
-            (client1Tasks.size() == 4 && client2Tasks.size() == 3),
-            is(true));
+            (client1Tasks.size() == 4 && client2Tasks.size() == 3));
         allTasks.removeAll(client1Tasks);
         // client2 should have all the remaining tasks not assigned to client 1
-        assertThat(client2Tasks, equalTo(allTasks));
+        assertEquals(allTasks, client2Tasks);
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -318,11 +306,11 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
-        assertThat(assignments.get(processId(1)).tasks().size(), is(1));
-        assertThat(assignments.get(processId(2)).tasks().size(), is(1));
-        assertThat(assignments.get(processId(3)).tasks().size(), is(1));
-        assertThat(assignments.get(processId(4)).tasks().size(), is(0));
-        assertThat(assignments.get(processId(5)).tasks().size(), is(0));
+        assertEquals(1, assignments.get(processId(1)).tasks().size());
+        assertEquals(1, assignments.get(processId(2)).tasks().size());
+        assertEquals(1, assignments.get(processId(3)).tasks().size());
+        assertEquals(0, assignments.get(processId(4)).tasks().size());
+        assertEquals(0, assignments.get(processId(5)).tasks().size());
 
         assertHasAssignment(assignments, 1, TASK_0_0, ACTIVE);
         assertHasAssignment(assignments, 2, TASK_0_2, ACTIVE);
@@ -338,11 +326,11 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments2 = assign(streamStates2, tasks, rackAwareStrategy);
-        assertThat(assignments2.get(processId(1)).tasks().size(), is(0));
-        assertThat(assignments2.get(processId(2)).tasks().size(), is(0));
-        assertThat(assignments2.get(processId(3)).tasks().size(), is(1));
-        assertThat(assignments2.get(processId(4)).tasks().size(), is(1));
-        assertThat(assignments2.get(processId(5)).tasks().size(), is(1));
+        assertEquals(0, assignments2.get(processId(1)).tasks().size());
+        assertEquals(0, assignments2.get(processId(2)).tasks().size());
+        assertEquals(1, assignments2.get(processId(3)).tasks().size());
+        assertEquals(1, assignments2.get(processId(4)).tasks().size());
+        assertEquals(1, assignments2.get(processId(5)).tasks().size());
 
         assertHasAssignment(assignments2, 3, TASK_0_1, ACTIVE);
         assertHasAssignment(assignments2, 4, TASK_0_0, ACTIVE);
@@ -395,8 +383,8 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
-        assertThat(assignments.get(processId(1)).tasks().size(), is(1));
-        assertThat(assignments.get(processId(2)).tasks().size(), is(2));
+        assertEquals(1, assignments.get(processId(1)).tasks().size());
+        assertEquals(2, assignments.get(processId(2)).tasks().size());
         assertHasAssignment(assignments, 1, TASK_0_0, ACTIVE);
         assertHasAssignment(assignments, 2, TASK_0_1, ACTIVE);
         assertHasAssignment(assignments, 2, TASK_0_2, ACTIVE);
@@ -425,33 +413,30 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 1, rackAwareStrategy);
-        assertThat(standbyTasks(assignments, 1).size(), lessThanOrEqualTo(2));
-        assertThat(standbyTasks(assignments, 2).size(), lessThanOrEqualTo(2));
-        assertThat(standbyTasks(assignments, 3).size(), lessThanOrEqualTo(2));
-        assertThat(standbyTasks(assignments, 4).size(), lessThanOrEqualTo(2));
+        assertTrue(standbyTasks(assignments, 1).size() <= 2);
+        assertTrue(standbyTasks(assignments, 2).size() <= 2);
+        assertTrue(standbyTasks(assignments, 3).size() <= 2);
+        assertTrue(standbyTasks(assignments, 4).size() <= 2);
 
-        assertThat(standbyTasks(assignments, 1), not(hasItems(TASK_0_0)));
-        assertThat(standbyTasks(assignments, 2), not(hasItems(TASK_0_1)));
-        assertThat(standbyTasks(assignments, 3), not(hasItems(TASK_0_2)));
-        assertThat(standbyTasks(assignments, 4), not(hasItems(TASK_0_3)));
+        assertFalse(standbyTasks(assignments, 1).contains(TASK_0_0));
+        assertFalse(standbyTasks(assignments, 2).contains(TASK_0_1));
+        assertFalse(standbyTasks(assignments, 3).contains(TASK_0_2));
+        assertFalse(standbyTasks(assignments, 4).contains(TASK_0_3));
 
-        assertThat(activeTasks(assignments, 1), hasItems(TASK_0_0));
-        assertThat(activeTasks(assignments, 2), hasItems(TASK_0_1));
-        assertThat(activeTasks(assignments, 3), hasItems(TASK_0_2));
-        assertThat(activeTasks(assignments, 4), hasItems(TASK_0_3));
+        assertTrue(activeTasks(assignments, 1).contains(TASK_0_0));
+        assertTrue(activeTasks(assignments, 2).contains(TASK_0_1));
+        assertTrue(activeTasks(assignments, 3).contains(TASK_0_2));
+        assertTrue(activeTasks(assignments, 4).contains(TASK_0_3));
 
         int nonEmptyStandbyTaskCount = 0;
         for (int i = 1; i <= 4; i++) {
             nonEmptyStandbyTaskCount += standbyTasks(assignments, i).isEmpty() ? 0 : 1;
         }
 
-        assertThat(nonEmptyStandbyTaskCount, greaterThanOrEqualTo(3));
+        assertTrue(nonEmptyStandbyTaskCount >= 3);
 
-        final Set<TaskId> allStandbyTasks = allTasks(assignments).stream()
-            .filter(t -> t.type() == STANDBY)
-            .map(AssignedTask::id)
-            .collect(Collectors.toSet());
-        assertThat(allStandbyTasks, equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+        final Set<TaskId> allStandbyTasks = taskIdsOfType(allTasks(assignments), STANDBY);
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), allStandbyTasks);
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -475,13 +460,13 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 2, rackAwareStrategy);
-        assertThat(activeTasks(assignments, 1), equalTo(Set.of(TASK_0_0)));
-        assertThat(activeTasks(assignments, 2), equalTo(Set.of(TASK_0_1)));
-        assertThat(activeTasks(assignments, 3), equalTo(Set.of(TASK_0_2)));
+        assertEquals(Set.of(TASK_0_0), activeTasks(assignments, 1));
+        assertEquals(Set.of(TASK_0_1), activeTasks(assignments, 2));
+        assertEquals(Set.of(TASK_0_2), activeTasks(assignments, 3));
 
-        assertThat(standbyTasks(assignments, 1), equalTo(Set.of(TASK_0_1, TASK_0_2)));
-        assertThat(standbyTasks(assignments, 2), equalTo(Set.of(TASK_0_0, TASK_0_2)));
-        assertThat(standbyTasks(assignments, 3), equalTo(Set.of(TASK_0_0, TASK_0_1)));
+        assertEquals(Set.of(TASK_0_1, TASK_0_2), standbyTasks(assignments, 1));
+        assertEquals(Set.of(TASK_0_0, TASK_0_2), standbyTasks(assignments, 2));
+        assertEquals(Set.of(TASK_0_0, TASK_0_1), standbyTasks(assignments, 3));
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -500,8 +485,8 @@ public class CustomStickyTaskAssignorTest {
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_0), Set.of())
         );
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 2, rackAwareStrategy);
-        assertThat(activeTasks(assignments, 1), equalTo(Set.of(TASK_0_0)));
-        assertThat(standbyTasks(assignments, 1), equalTo(Set.of()));
+        assertEquals(Set.of(TASK_0_0), activeTasks(assignments, 1));
+        assertEquals(Set.of(), standbyTasks(assignments, 1));
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -526,10 +511,8 @@ public class CustomStickyTaskAssignorTest {
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 1, rackAwareStrategy);
         final List<AssignedTask> allTasks = allTasks(assignments);
-        assertThat(allTasks.stream().filter(t -> t.type() == ACTIVE).map(AssignedTask::id).collect(
-            Collectors.toSet()), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
-        assertThat(allTasks.stream().filter(t -> t.type() == STANDBY).map(AssignedTask::id).collect(
-            Collectors.toSet()), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2), taskIdsOfType(allTasks, ACTIVE));
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2), taskIdsOfType(allTasks, STANDBY));
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -553,9 +536,9 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
-        assertThat(activeTasks(assignments, 1).size(), is(1));
-        assertThat(activeTasks(assignments, 2).size(), is(1));
-        assertThat(activeTasks(assignments, 3).size(), is(1));
+        assertEquals(1, activeTasks(assignments, 1).size());
+        assertEquals(1, activeTasks(assignments, 2).size());
+        assertEquals(1, activeTasks(assignments, 3).size());
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -583,13 +566,11 @@ public class CustomStickyTaskAssignorTest {
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
         final List<AssignedTask> allTasks = allTasks(assignments);
-        assertThat(allTasks.stream().filter(t -> t.type() == ACTIVE).map(AssignedTask::id).collect(
-            Collectors.toSet()), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
-        assertThat(allTasks.stream().filter(t -> t.type() == STANDBY).map(AssignedTask::id).collect(
-            Collectors.toSet()), equalTo(Set.of()));
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2), taskIdsOfType(allTasks, ACTIVE));
+        assertEquals(Set.of(), taskIdsOfType(allTasks, STANDBY));
 
         final int clientsWithATask = assignments.values().stream().mapToInt(assignment -> assignment.tasks().isEmpty() ? 0 : 1).sum();
-        assertThat(clientsWithATask, greaterThanOrEqualTo(3));
+        assertTrue(clientsWithATask >= 3);
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -617,7 +598,7 @@ public class CustomStickyTaskAssignorTest {
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 1, rackAwareStrategy);
         for (final KafkaStreamsAssignment assignment : assignments.values()) {
-            assertThat(assignment.tasks().values(), not(hasSize(0)));
+            assertFalse(assignment.tasks().isEmpty());
         }
     }
 
@@ -650,8 +631,8 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
-        assertThat(activeTasks(assignments, 1).size(), equalTo(4));
-        assertThat(activeTasks(assignments, 2).size(), equalTo(8));
+        assertEquals(4, activeTasks(assignments, 1).size());
+        assertEquals(8, activeTasks(assignments, 2).size());
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -689,8 +670,7 @@ public class CustomStickyTaskAssignorTest {
                 if (!client1.processId().equals(client2.processId())) {
                     final Set<TaskId> assignedTasks1 = assignments.get(client1.processId()).tasks().keySet();
                     final Set<TaskId> assignedTasks2 = assignments.get(client2.processId()).tasks().keySet();
-                    assertThat("clients shouldn't have same task assignment", assignedTasks1,
-                        not(equalTo(assignedTasks2)));
+                    assertNotEquals(assignedTasks2, assignedTasks1, "clients shouldn't have same task assignment");
                 }
             }
         }
@@ -725,8 +705,7 @@ public class CustomStickyTaskAssignorTest {
                 if (!client1.processId().equals(client2.processId())) {
                     final Set<TaskId> assignedTasks1 = assignments.get(client1.processId()).tasks().keySet();
                     final Set<TaskId> assignedTasks2 = assignments.get(client2.processId()).tasks().keySet();
-                    assertThat("clients shouldn't have same task assignment", assignedTasks1,
-                        not(equalTo(assignedTasks2)));
+                    assertNotEquals(assignedTasks2, assignedTasks1, "clients shouldn't have same task assignment");
                 }
             }
         }
@@ -754,10 +733,10 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 3, rackAwareStrategy);
-        assertThat(standbyTasks(assignments, 1), equalTo(Set.of()));
-        assertThat(standbyTasks(assignments, 2), equalTo(Set.of(TASK_0_0)));
-        assertThat(standbyTasks(assignments, 3), equalTo(Set.of(TASK_0_0)));
-        assertThat(standbyTasks(assignments, 4), equalTo(Set.of(TASK_0_0)));
+        assertEquals(Set.of(), standbyTasks(assignments, 1));
+        assertEquals(Set.of(TASK_0_0), standbyTasks(assignments, 2));
+        assertEquals(Set.of(TASK_0_0), standbyTasks(assignments, 3));
+        assertEquals(Set.of(TASK_0_0), standbyTasks(assignments, 4));
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -803,7 +782,7 @@ public class CustomStickyTaskAssignorTest {
             1,
             numStandbys,
             60_000L,
-            Collections.emptyList(),
+            List.of(),
             OptionalInt.of(1),
             OptionalInt.of(2),
             rackAwareStrategy
@@ -812,11 +791,11 @@ public class CustomStickyTaskAssignorTest {
         final List<TaskId> allActiveTasks = allTasks(assignments).stream().filter(t -> t.type() == ACTIVE)
             .map(AssignedTask::id)
             .collect(Collectors.toList());
-        assertThat(allActiveTasks.size(), equalTo(topicCount * taskPerTopic));
+        assertEquals(topicCount * taskPerTopic, allActiveTasks.size());
         final List<TaskId> allStandbyTasks = allTasks(assignments).stream().filter(t -> t.type() == STANDBY)
             .map(AssignedTask::id)
             .collect(Collectors.toList());
-        assertThat(allStandbyTasks.size(), equalTo(topicCount * taskPerTopic * numStandbys));
+        assertEquals(topicCount * taskPerTopic * numStandbys, allStandbyTasks.size());
     }
 
     private Map<ProcessId, KafkaStreamsAssignment> assign(final Map<ProcessId, KafkaStreamsState> streamStates,
@@ -842,7 +821,7 @@ public class CustomStickyTaskAssignorTest {
         );
         final TaskAssignment taskAssignment = assignor.assign(applicationState);
         final TaskAssignor.AssignmentError assignmentError = TaskAssignmentUtils.validateTaskAssignment(applicationState, taskAssignment);
-        assertThat(assignmentError, equalTo(TaskAssignor.AssignmentError.NONE));
+        assertEquals(TaskAssignor.AssignmentError.NONE, assignmentError);
         return indexAssignment(taskAssignment.assignment());
     }
 
@@ -852,7 +831,7 @@ public class CustomStickyTaskAssignorTest {
             1,
             numStandbys,
             60_000L,
-            Collections.emptyList(),
+            List.of(),
             OptionalInt.empty(),
             OptionalInt.empty(),
             rackAwareStrategy
@@ -869,9 +848,7 @@ public class CustomStickyTaskAssignorTest {
         if (assignment == null) {
             return Set.of();
         }
-        return assignment.tasks().values().stream().filter(t -> t.type() == ACTIVE)
-            .map(AssignedTask::id)
-            .collect(Collectors.toSet());
+        return taskIdsOfType(assignment.tasks().values(), ACTIVE);
     }
 
     private Set<TaskId> standbyTasks(final Map<ProcessId, KafkaStreamsAssignment> assignments,
@@ -880,7 +857,13 @@ public class CustomStickyTaskAssignorTest {
         if (assignment == null) {
             return Set.of();
         }
-        return assignment.tasks().values().stream().filter(t -> t.type() == STANDBY)
+        return taskIdsOfType(assignment.tasks().values(), STANDBY);
+    }
+
+    private Set<TaskId> taskIdsOfType(final Collection<AssignedTask> tasks,
+                                      final AssignedTask.Type type) {
+        return tasks.stream()
+            .filter(t -> t.type() == type)
             .map(AssignedTask::id)
             .collect(Collectors.toSet());
     }
@@ -896,11 +879,11 @@ public class CustomStickyTaskAssignorTest {
                                      final TaskId taskId,
                                      final AssignedTask.Type taskType) {
         final KafkaStreamsAssignment assignment = assignments.getOrDefault(processId(client), null);
-        assertThat(assignment, notNullValue());
+        assertNotNull(assignment);
         final AssignedTask assignedTask = assignment.tasks().getOrDefault(taskId, null);
-        assertThat(assignedTask, notNullValue());
-        assertThat(assignedTask.id().equals(taskId), is(true));
-        assertThat(assignedTask.type().equals(taskType), is(true));
+        assertNotNull(assignedTask);
+        assertEquals(assignedTask.id(), taskId);
+        assertEquals(assignedTask.type(), taskType);
     }
 
     private void assertActiveTaskTopicGroupIdsEvenlyDistributed(final Map<ProcessId, KafkaStreamsAssignment> assignments) {
@@ -913,7 +896,7 @@ public class CustomStickyTaskAssignorTest {
                 topicGroupIds.add(activeTask.subtopology());
             }
             Collections.sort(topicGroupIds);
-            assertThat(topicGroupIds, equalTo(asList(1, 2)));
+            assertEquals(List.of(1, 2), topicGroupIds);
         }
     }
 
@@ -937,8 +920,8 @@ public class CustomStickyTaskAssignorTest {
         final Set<TaskId> instance1Tasks = activeTasks(assignments, 1);
         final int retained = (int) firstHalf.stream().filter(instance1Tasks::contains).count();
 
-        assertThat("Instance should retain all of its fair share tasks, but only retained " + retained + " of " + firstHalf.size(),
-            retained, equalTo(firstHalf.size()));
+        assertEquals(firstHalf.size(), retained,
+            "Instance should retain all of its fair share tasks, but only retained " + retained + " of " + firstHalf.size());
     }
 
     @Test
