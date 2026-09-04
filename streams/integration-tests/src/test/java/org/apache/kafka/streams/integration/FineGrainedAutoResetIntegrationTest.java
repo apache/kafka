@@ -60,9 +60,7 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(600)
@@ -244,7 +242,7 @@ public class FineGrainedAutoResetIntegrationTest {
 
         Collections.sort(actualValues);
         Collections.sort(expectedReceivedValues);
-        assertThat(actualValues, equalTo(expectedReceivedValues));
+        assertEquals(expectedReceivedValues, actualValues);
     }
 
     private void commitInvalidOffsets() {
@@ -352,13 +350,13 @@ public class FineGrainedAutoResetIntegrationTest {
 
         Collections.sort(actualValuesOne);
         Collections.sort(expectedValues);
-        assertThat(actualValuesOne, equalTo(expectedValues));
+        assertEquals(expectedValues, actualValuesOne);
 
         Collections.sort(actualValuesTwo);
         Collections.sort(allExpectedValues);
-        assertThat(actualValuesTwo, equalTo(allExpectedValues));
+        assertEquals(allExpectedValues, actualValuesTwo);
 
-        assertThat(actualValuesThree, equalTo(singleFinalExpectedValues));
+        assertEquals(singleFinalExpectedValues, actualValuesThree);
     }
 
     @Test
@@ -428,8 +426,8 @@ public class FineGrainedAutoResetIntegrationTest {
         boolean correctExceptionThrown = false;
         @Override
         public StreamThreadExceptionResponse handle(final Throwable throwable) {
-            assertThat(throwable.getClass().getSimpleName(), is("StreamsException"));
-            assertThat(throwable.getCause().getClass().getSimpleName(), is("NoOffsetForPartitionException"));
+            assertEquals("StreamsException", throwable.getClass().getSimpleName());
+            assertEquals("NoOffsetForPartitionException", throwable.getCause().getClass().getSimpleName());
             correctExceptionThrown = true;
             return StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         }
