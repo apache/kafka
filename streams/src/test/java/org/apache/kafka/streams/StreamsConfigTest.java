@@ -89,11 +89,6 @@ import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSize;
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -209,16 +204,16 @@ public class StreamsConfigTest {
     @Test
     public void testGetProducerConfigs() {
         final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
-        assertThat(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), equalTo(clientId));
-        assertThat(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), equalTo("100"));
+        assertEquals(clientId, returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG));
+        assertEquals("100", returnedProps.get(ProducerConfig.LINGER_MS_CONFIG));
     }
 
     @Test
     public void testGetConsumerConfigs() {
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), equalTo(clientId));
-        assertThat(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), equalTo(groupId));
-        assertThat(returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), equalTo("1000"));
+        assertEquals(clientId, returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG));
+        assertEquals(groupId, returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
+        assertEquals("1000", returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
         assertNull(returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
     }
 
@@ -231,9 +226,9 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(
-            returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG),
-            equalTo("group-instance-id-1-" + threadIdx)
+        assertEquals(
+            "group-instance-id-1-" + threadIdx,
+            returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG)
         );
 
         returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
@@ -253,9 +248,9 @@ public class StreamsConfigTest {
         final Map<String, Object> mainConsumerConfigs =
             streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
 
-        assertThat(
-            mainConsumerConfigs.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG),
-            equalTo("static-member-1-" + threadIdx)
+        assertEquals(
+            "static-member-1-" + threadIdx,
+            mainConsumerConfigs.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG)
         );
     }
 
@@ -691,7 +686,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosDisabled() {
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(nullValue()));
+        assertNull(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"));
     }
 
     @Test
@@ -699,7 +694,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(true));
+        assertEquals(Boolean.TRUE, consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"));
     }
 
     @Test
@@ -707,7 +702,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
-        assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
+        assertNull(producerConfigs.get("internal.auto.downgrade.txn.commit"));
     }
 
     @Test
@@ -733,7 +728,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetDefaultBuiltInMetricsVersionIfNoneIsSpecified() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG), is(StreamsConfig.METRICS_LATEST));
+        assertEquals(StreamsConfig.METRICS_LATEST, config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
     }
 
     @Test
@@ -741,10 +736,9 @@ public class StreamsConfigTest {
         final String invalidVersion = "0.0.1";
         props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, invalidVersion);
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
-        assertThat(
-            exception.getMessage(),
-            containsString("Invalid value " + invalidVersion + " for configuration built.in.metrics.version")
-        );
+        assertTrue(exception.getMessage().contains(
+            "Invalid value " + invalidVersion + " for configuration built.in.metrics.version"
+        ));
     }
 
     @Test
@@ -753,10 +747,7 @@ public class StreamsConfigTest {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "anyValue");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(
-            consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-            equalTo(READ_COMMITTED.toString())
-        );
+        assertEquals(READ_COMMITTED.toString(), consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG));
     }
 
     @Test
@@ -764,10 +755,7 @@ public class StreamsConfigTest {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.toString());
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(
-            consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-            equalTo(READ_UNCOMMITTED.toString())
-        );
+        assertEquals(READ_UNCOMMITTED.toString(), consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG));
     }
 
     @Test
@@ -784,7 +772,7 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
-        assertThat(producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), equalTo(false));
+        assertEquals(Boolean.FALSE, producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
     }
 
     @Test
@@ -795,14 +783,11 @@ public class StreamsConfigTest {
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
-        assertThat(
-            consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-            equalTo(READ_COMMITTED.toString())
-        );
+        assertEquals(READ_COMMITTED.toString(), consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG));
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
-        assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));
-        assertThat(producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), equalTo(10000));
-        assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(100L));
+        assertEquals(Integer.MAX_VALUE, producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG));
+        assertEquals(10000, producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
+        assertEquals(100L, streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
     }
 
     @Test
@@ -813,7 +798,7 @@ public class StreamsConfigTest {
 
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
-        assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
+        assertNull(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
     }
 
     @Test
@@ -825,7 +810,7 @@ public class StreamsConfigTest {
 
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
-        assertThat(producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(numberOfRetries));
+        assertEquals(numberOfRetries, producerConfigs.get(ProducerConfig.RETRIES_CONFIG));
     }
 
     @Test
@@ -835,7 +820,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
-        assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(commitIntervalMs));
+        assertEquals(commitIntervalMs, streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
     }
 
     @Test
@@ -1117,7 +1102,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetDefaultAcceptableRecoveryLag() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG), is(10000L));
+        assertEquals(10000L, config.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG));
     }
 
     @Test
@@ -1129,7 +1114,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetDefaultNumStandbyReplicas() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG), is(0));
+        assertEquals(0, config.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
     }
 
     @Test
@@ -1141,7 +1126,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetDefaultMaxWarmupReplicas() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG), is(2));
+        assertEquals(2, config.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG));
     }
 
     @Test
@@ -1153,7 +1138,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetDefaultProbingRebalanceInterval() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG), is(10 * 60 * 1000L));
+        assertEquals(10 * 60 * 1000L, config.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG));
     }
 
     @Test
@@ -1508,7 +1493,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldReturnDefaultProcessorWrapperClass() {
         final String defaultWrapperClassName = streamsConfig.getClass(PROCESSOR_WRAPPER_CLASS_CONFIG).getName();
-        assertThat(defaultWrapperClassName, equalTo(NoOpProcessorWrapper.class.getName()));
+        assertEquals(NoOpProcessorWrapper.class.getName(), defaultWrapperClassName);
     }
 
     @Test
@@ -1615,10 +1600,7 @@ public class StreamsConfigTest {
 
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
 
-        assertThat(
-                exception.getMessage(),
-                containsString("main.consumer metrics push is disabled")
-        );
+        assertTrue(exception.getMessage().contains("main.consumer metrics push is disabled"));
     }
 
     @Test
@@ -1627,10 +1609,9 @@ public class StreamsConfigTest {
 
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
 
-        assertThat(
-                exception.getMessage(),
-                containsString("Kafka Streams metrics push enabled but consumer.enable.metrics is false, the setting needs to be consistent between the two")
-        );
+        assertTrue(exception.getMessage().contains(
+            "Kafka Streams metrics push enabled but consumer.enable.metrics is false, the setting needs to be consistent between the two"
+        ));
     }
 
     @Test
@@ -1641,10 +1622,9 @@ public class StreamsConfigTest {
 
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
 
-        assertThat(
-                exception.getMessage(),
-                containsString("Kafka Streams metrics push and consumer.enable.metrics are enabled, but main.consumer and admin.client metrics push are disabled")
-        );
+        assertTrue(exception.getMessage().contains(
+            "Kafka Streams metrics push and consumer.enable.metrics are enabled, but main.consumer and admin.client metrics push are disabled"
+        ));
     }
 
     @Test
@@ -1654,10 +1634,7 @@ public class StreamsConfigTest {
 
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
 
-        assertThat(
-                exception.getMessage(),
-                containsString("main.consumer metrics push is disabled")
-        );
+        assertTrue(exception.getMessage().contains("main.consumer metrics push is disabled"));
     }
 
     @Test
@@ -1667,10 +1644,7 @@ public class StreamsConfigTest {
 
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
 
-        assertThat(
-                exception.getMessage(),
-                containsString("admin.client metrics push is disabled")
-        );
+        assertTrue(exception.getMessage().contains("admin.client metrics push is disabled"));
     }
 
     @Test
@@ -1703,10 +1677,7 @@ public class StreamsConfigTest {
 
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
 
-        assertThat(
-                exception.getMessage(),
-                containsString("admin.client metrics push is disabled")
-        );
+        assertTrue(exception.getMessage().contains("admin.client metrics push is disabled"));
     }
 
     @Test
@@ -1716,10 +1687,7 @@ public class StreamsConfigTest {
 
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
 
-        assertThat(
-                exception.getMessage(),
-                containsString("main.consumer and admin.client metrics push are disabled")
-        );
+        assertTrue(exception.getMessage().contains("main.consumer and admin.client metrics push are disabled"));
     }
 
     @Test
@@ -1742,11 +1710,10 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, "org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler");
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
 
-        assertThat(
-                exception.getMessage(),
-                containsString("Invalid value org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler " +
-                        "for configuration processing.exception.handler: Class org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler could not be found.")
-        );
+        assertTrue(exception.getMessage().contains(
+            "Invalid value org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler " +
+                "for configuration processing.exception.handler: Class org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler could not be found."
+        ));
     }
 
     @Test
