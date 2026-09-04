@@ -18,7 +18,9 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -209,5 +211,182 @@ public class AddPartitionsTest {
                     "Leader should be one of the replicas");
             }
         }
+    }
+
+    @ClusterTest(brokers = 3)
+    public void testCreatePartitions(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.admin()) {
+            String topic1 = "create-partitions-topic-1";
+            String topic2 = "create-partitions-topic-2";
+            admin.createTopics(List.of(
+                    new NewTopic(topic1, 1, (short) 1),
+                    new NewTopic(topic2, 1, (short) 2))).all().get();
+            cluster.waitTopicCreation(topic1, 1);
+            cluster.waitTopicCreation(topic2, 1);
+            assertEquals(1, numPartitions(admin, topic1));
+            assertEquals(1, numPartitions(admin, topic2));
+
+            CreatePartitionsOptions validateOnly = new CreatePartitionsOptions().validateOnly(true);
+            CreatePartitionsOptions actuallyDoIt = new CreatePartitionsOptions().validateOnly(false);
+
+            admin.createPartitions(Map.of(topic1, NewPartitions.increaseTo(3)), validateOnly)
+                    .values().get(topic1).get();
+            cluster.waitTopicCreation(topic1, 1);
+
+            admin.createPartitions(Map.of(topic1, NewPartitions.increaseTo(3)), actuallyDoIt)
+                    .values().get(topic1).get();
+            cluster.waitTopicCreation(topic1, 3);
+
+            List<Integer> brokerIds = cluster.brokerIds().stream().sorted().toList();
+            List<List<Integer>> newPartition2Assignments = List.of(
+                    List.of(brokerIds.get(0), brokerIds.get(1)),
+                    List.of(brokerIds.get(1), brokerIds.get(2)));
+            admin.createPartitions(Map.of(topic2,
+                    NewPartitions.increaseTo(3, newPartition2Assignments)), validateOnly)
+                    .values().get(topic2).get();
+            cluster.waitTopicCreation(topic2, 1);
+
+            admin.createPartitions(Map.of(topic2,
+                    NewPartitions.increaseTo(3, newPartition2Assignments)), actuallyDoIt)
+                    .values().get(topic2).get();
+            cluster.waitTopicCreation(topic2, 3);
+
+            List<TopicPartitionInfo> actualPartitions2 = partitions(admin, topic2);
+            assertEquals(3, actualPartitions2.size());
+            assertEquals(newPartition2Assignments.get(0), replicaIds(actualPartitions2.get(1)));
+            assertEquals(newPartition2Assignments.get(1), replicaIds(actualPartitions2.get(2)));
+
+            int firstBrokerId = brokerIds.get(0);
+            int secondBrokerId = brokerIds.get(1);
+            int thirdBrokerId = brokerIds.get(2);
+            int unknownBrokerId = brokerIds.get(brokerIds.size() - 1) + 1;
+            for (CreatePartitionsOptions option : List.of(validateOnly, actuallyDoIt)) {
+                assertCreatePartitionsFailure(admin, option, topic1,
+                        NewPartitions.increaseTo(1),
+                        InvalidPartitionsException.class,
+                        "The topic create-partitions-topic-1 currently has 3 partition(s); " +
+                                "1 would not be an increase.",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic2,
+                        NewPartitions.increaseTo(3),
+                        InvalidPartitionsException.class,
+                        "Topic already has 3 partition(s).",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic2,
+                        NewPartitions.increaseTo(3, newPartition2Assignments),
+                        InvalidPartitionsException.class,
+                        "Topic already has 3 partition(s).",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic2,
+                        NewPartitions.increaseTo(3, List.of(
+                                newPartition2Assignments.get(1), newPartition2Assignments.get(0))),
+                        InvalidPartitionsException.class,
+                        "Topic already has 3 partition(s).",
+                        3);
+                assertCreatePartitionsFailure(admin, option, "an-unknown-topic",
+                        NewPartitions.increaseTo(2),
+                        UnknownTopicOrPartitionException.class,
+                        "This server does not host this topic-partition.",
+                        null);
+                assertCreatePartitionsFailure(admin, option, topic1,
+                        NewPartitions.increaseTo(-22),
+                        InvalidPartitionsException.class,
+                        "The topic create-partitions-topic-1 currently has 3 partition(s); " +
+                                "-22 would not be an increase.",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic1,
+                        NewPartitions.increaseTo(4, List.of(List.of(secondBrokerId, thirdBrokerId))),
+                        InvalidReplicaAssignmentException.class,
+                        "The manual partition assignment includes a partition with 2 replica(s), " +
+                                "but this is not consistent with previous partitions, which have 1 replica(s).",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic1,
+                        NewPartitions.increaseTo(6, List.of(List.of(secondBrokerId))),
+                        InvalidReplicaAssignmentException.class,
+                        "Attempted to add 3 additional partition(s), but only 1 assignment(s) were specified.",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic1,
+                        NewPartitions.increaseTo(4, List.of(
+                                List.of(secondBrokerId), List.of(thirdBrokerId))),
+                        InvalidReplicaAssignmentException.class,
+                        "Attempted to add 1 additional partition(s), but only 2 assignment(s) were specified.",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic1,
+                        NewPartitions.increaseTo(4, List.of(List.of(secondBrokerId, secondBrokerId))),
+                        InvalidReplicaAssignmentException.class,
+                        "The manual partition assignment includes the broker " + secondBrokerId + " more than once.",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic1,
+                        NewPartitions.increaseTo(5, List.of(
+                                List.of(secondBrokerId), List.of(secondBrokerId, firstBrokerId))),
+                        InvalidReplicaAssignmentException.class,
+                        "The manual partition assignment includes a partition with 2 replica(s), " +
+                                "but this is not consistent with previous partitions, which have 1 replica(s).",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic1,
+                        NewPartitions.increaseTo(4, List.of(List.of(unknownBrokerId))),
+                        InvalidReplicaAssignmentException.class,
+                        "The manual partition assignment includes broker " + unknownBrokerId +
+                                ", but no such broker is registered.",
+                        3);
+                assertCreatePartitionsFailure(admin, option, topic1,
+                        NewPartitions.increaseTo(4, List.of()),
+                        InvalidReplicaAssignmentException.class,
+                        "Attempted to add 1 additional partition(s), but only 0 assignment(s) were specified.",
+                        3);
+            }
+
+            CreatePartitionsResult mixedResult = admin.createPartitions(Map.of(
+                    topic1, NewPartitions.increaseTo(4),
+                    topic2, NewPartitions.increaseTo(2)), actuallyDoIt);
+            mixedResult.values().get(topic1).get();
+            cluster.waitTopicCreation(topic1, 4);
+            Throwable cause = assertThrows(ExecutionException.class,
+                    () -> mixedResult.values().get(topic2).get()).getCause();
+            assertInstanceOf(InvalidPartitionsException.class, cause);
+            assertEquals("The topic create-partitions-topic-2 currently has 3 partition(s); " +
+                    "2 would not be an increase.", cause.getMessage());
+            cluster.waitTopicCreation(topic2, 3);
+
+            admin.deleteTopics(List.of(topic1)).topicNameValues().get(topic1).get();
+            CreatePartitionsResult deletedTopicResult = admin.createPartitions(
+                    Map.of(topic1, NewPartitions.increaseTo(4)), validateOnly);
+            cause = assertThrows(ExecutionException.class,
+                    () -> deletedTopicResult.values().get(topic1).get()).getCause();
+            assertInstanceOf(UnknownTopicOrPartitionException.class, cause);
+            assertEquals("This server does not host this topic-partition.", cause.getMessage());
+        }
+    }
+
+    private static void assertCreatePartitionsFailure(
+            Admin admin,
+            CreatePartitionsOptions option,
+            String topic,
+            NewPartitions newPartitions,
+            Class<? extends Throwable> expectedException,
+            String expectedMessage,
+            Integer expectedPartitionCount
+    ) throws Exception {
+        String description = "validateOnly=" + option.validateOnly();
+        CreatePartitionsResult result = admin.createPartitions(Map.of(topic, newPartitions), option);
+        Throwable cause = assertThrows(ExecutionException.class,
+                () -> result.values().get(topic).get(), description).getCause();
+        assertInstanceOf(expectedException, cause, description);
+        assertEquals(expectedMessage, cause.getMessage(), description);
+        if (expectedPartitionCount != null) {
+            assertEquals(expectedPartitionCount, numPartitions(admin, topic), description);
+        }
+    }
+
+    private static int numPartitions(Admin admin, String topic) throws Exception {
+        return partitions(admin, topic).size();
+    }
+
+    private static List<TopicPartitionInfo> partitions(Admin admin, String topic) throws Exception {
+        return admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic).partitions();
+    }
+
+    private static List<Integer> replicaIds(TopicPartitionInfo partition) {
+        return partition.replicas().stream().map(Node::id).toList();
     }
 }
