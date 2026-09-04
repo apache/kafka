@@ -799,14 +799,14 @@ public class DumpLogSegmentsTest {
 
         // Get all the batches
         String output = runDumpLogSegments(new String[] {"--files", logFilePath});
-        ListIterator<String> lines = Arrays.asList(output.split("\n")).listIterator();
+        ListIterator<String> lines = List.of(output.split("\n")).listIterator();
 
         // Get total bytes of the partial batches
         int partialBatchesBytes = readPartialBatchesBytes(lines, partialBatches);
 
         // Request only the partial batches by bytes
         String partialOutput = runDumpLogSegments(new String[] {"--max-bytes", Integer.toString(partialBatchesBytes), "--files", logFilePath});
-        ListIterator<String> partialLines = Arrays.asList(partialOutput.split("\n")).listIterator();
+        ListIterator<String> partialLines = List.of(partialOutput.split("\n")).listIterator();
 
         // Count the total of partial batches limited by bytes
         int partialBatchesCount = countBatches(partialLines);
@@ -1140,7 +1140,7 @@ public class DumpLogSegmentsTest {
         FetchDataInfo logReadInfo = log.read(0, Integer.MAX_VALUE, FetchIsolation.LOG_END, true);
 
         String output = runDumpLogSegments(new String[] {"--deep-iteration", "--files", logFilePath});
-        ListIterator<String> lines = Arrays.asList(output.split("\n")).listIterator();
+        ListIterator<String> lines = List.of(output.split("\n")).listIterator();
 
         for (RecordBatch batch : logReadInfo.records.batches()) {
             Optional<String> parsedBatchOpt = readBatchMetadata(lines);
