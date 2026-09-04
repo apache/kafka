@@ -1362,6 +1362,8 @@ org.apache.kafka.clients.consumer.internals.CommitRequestManagerTest:
 - testEnsureCommitSensorRecordsMetric
 - testFetchOffsetsWithTopicIdsDoesNotFailOnUnsubscribedTopics
 - testLastEpochSentOnCommit
+- testMaximumTimeToWaitDoesNotSpinDuringRealBootstrapDnsResolution
+- testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin
 - testOffsetCommitAsyncFailedWithRetriableThrowsRetriableCommitException
 - testOffsetCommitRequestErroredRequestsNotRetriedForAsyncCommit
 - testOffsetCommitSingleFailedAttemptPerRequestWhenPartitionErrors
@@ -2613,6 +2615,7 @@ org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerT
 - testLogsReceivedGroupConfigWhenAnyValueChanges
 - testMaximumTimeToWaitPollTimerExpired
 - testMaximumTimeToWaitSelectingMinimumWaitTime
+- testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin
 - testMaximumTimeToWaitWhenHeartbeatShouldBeNotSentImmediately
 - testMaximumTimeToWaitWhenHeartbeatShouldBeSentImmediately
 - testMissingClientTagsStatusLogsWarningOnlyOnce
@@ -4528,6 +4531,7 @@ org.apache.kafka.common.record.internal.FileLogInputStreamTest:
 org.apache.kafka.common.record.internal.FileRecordsTest:
 - testAppendProtectsFromOverflow
 - testBytesLengthOfWriteTo
+- testCloseFlushesAfterTrim
 - testConversion
 - testFileSize
 - testIterationDoesntChangePosition
