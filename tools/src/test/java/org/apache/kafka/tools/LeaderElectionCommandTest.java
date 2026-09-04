@@ -71,36 +71,63 @@ public class LeaderElectionCommandTest {
     int broker3 = 2;
 
     @ClusterTest
-    public void testAllTopicPartition(ClusterInstance cluster) throws Exception {
-        String topic = "unclean-topic";
+    public void testUncleanLeaderElectionInputModes(ClusterInstance cluster) throws Exception {
+        String topicPartitionTopic = "unclean-topic-partition";
+        String jsonFileTopic = "unclean-json-file";
+        String allTopicPartitionsTopic = "unclean-all-topic-partitions";
         int partition = 0;
         List<Integer> assignment = List.of(broker2, broker3);
 
+        TopicPartition topicPartition = new TopicPartition(topicPartitionTopic, partition);
+        TopicPartition jsonFileTopicPartition = new TopicPartition(jsonFileTopic, partition);
+        TopicPartition allTopicPartitionsTopicPartition = new TopicPartition(allTopicPartitionsTopic, partition);
+        Set<TopicPartition> topicPartitions = Set.of(
+            topicPartition,
+            jsonFileTopicPartition,
+            allTopicPartitionsTopicPartition
+        );
+
         cluster.waitForReadyBrokers();
         try (Admin client = cluster.admin()) {
+            createTopic(client, topicPartitionTopic, Map.of(partition, assignment));
+            createTopic(client, jsonFileTopic, Map.of(partition, assignment));
+            createTopic(client, allTopicPartitionsTopic, Map.of(partition, assignment));
 
-            createTopic(client, topic, Map.of(partition, assignment));
+            for (TopicPartition partitionToCheck : topicPartitions) {
+                assertLeader(client, partitionToCheck, broker2);
+            }
 
-            TopicPartition topicPartition = new TopicPartition(topic, partition);
-
-            assertLeader(client, topicPartition, broker2);
             cluster.shutdownBroker(broker3);
-            waitForBrokersOutOfIsr(client,
-                    Set.of(topicPartition),
-                    Set.of(broker3)
-            );
+            waitForBrokersOutOfIsr(client, topicPartitions, Set.of(broker3));
             cluster.shutdownBroker(broker2);
-            assertNoLeader(client, topicPartition);
+            for (TopicPartition partitionToCheck : topicPartitions) {
+                assertNoLeader(client, partitionToCheck);
+            }
             cluster.startBroker(broker3);
             waitForOnlineBroker(client, broker3);
 
             assertEquals(0, LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", cluster.bootstrapServers(),
                     "--election-type", "unclean",
-                    "--all-topic-partitions"
-            ));
-
+                    "--topic", topicPartition.topic(),
+                    "--partition", Integer.toString(topicPartition.partition())
+            ), "topic/partition input should succeed");
             assertLeader(client, topicPartition, broker3);
+
+            Path topicPartitionPath = tempTopicPartitionFile(List.of(jsonFileTopicPartition));
+            assertEquals(0, LeaderElectionCommand.mainNoExit(
+                    "--bootstrap-server", cluster.bootstrapServers(),
+                    "--election-type", "unclean",
+                    "--path-to-json-file", topicPartitionPath.toString()
+            ), "path-to-json-file input should succeed");
+            assertLeader(client, jsonFileTopicPartition, broker3);
+
+            assertEquals(0, LeaderElectionCommand.mainNoExit(
+                    "--bootstrap-server", cluster.bootstrapServers(),
+                    "--election-type", "unclean",
+                    "--all-topic-partitions"
+            ), "all-topic-partitions input should succeed");
+            assertLeader(client, allTopicPartitionsTopicPartition, broker3);
         }
     }
 
@@ -178,80 +205,6 @@ public class LeaderElectionCommandTest {
     }
 
     @ClusterTest
-    public void testTopicPartition(ClusterInstance cluster) throws Exception {
-        String topic = "unclean-topic";
-        int partition = 0;
-        List<Integer> assignment = List.of(broker2, broker3);
-
-        cluster.waitForReadyBrokers();
-        try (Admin client = cluster.admin()) {
-            createTopic(client, topic, Map.of(partition, assignment));
-
-            TopicPartition topicPartition = new TopicPartition(topic, partition);
-
-            assertLeader(client, topicPartition, broker2);
-
-            cluster.shutdownBroker(broker3);
-            waitForBrokersOutOfIsr(client,
-                    Set.of(topicPartition),
-                    Set.of(broker3)
-            );
-            cluster.shutdownBroker(broker2);
-            assertNoLeader(client, topicPartition);
-            cluster.startBroker(broker3);
-            waitForOnlineBroker(client, broker3);
-
-            assertEquals(0, LeaderElectionCommand.mainNoExit(
-                    "--bootstrap-server", cluster.bootstrapServers(),
-                    "--election-type", "unclean",
-                    "--topic", topic,
-                    "--partition", Integer.toString(partition)
-            ));
-
-            assertLeader(client, topicPartition, broker3);
-        }
-    }
-
-    @ClusterTest
-    public void testPathToJsonFile(ClusterInstance cluster) throws Exception {
-        String topic = "unclean-topic";
-        int partition = 0;
-        List<Integer> assignment = List.of(broker2, broker3);
-
-        cluster.waitForReadyBrokers();
-        Map<Integer, List<Integer>> partitionAssignment = new HashMap<>();
-        partitionAssignment.put(partition, assignment);
-
-        try (Admin client = cluster.admin()) {
-            createTopic(client, topic, partitionAssignment);
-
-            TopicPartition topicPartition = new TopicPartition(topic, partition);
-
-            assertLeader(client, topicPartition, broker2);
-
-            cluster.shutdownBroker(broker3);
-            waitForBrokersOutOfIsr(client,
-                    Set.of(topicPartition),
-                    Set.of(broker3)
-            );
-            cluster.shutdownBroker(broker2);
-            assertNoLeader(client, topicPartition);
-            cluster.startBroker(broker3);
-            waitForOnlineBroker(client, broker3);
-
-            Path topicPartitionPath = tempTopicPartitionFile(List.of(topicPartition));
-
-            assertEquals(0, LeaderElectionCommand.mainNoExit(
-                    "--bootstrap-server", cluster.bootstrapServers(),
-                    "--election-type", "unclean",
-                    "--path-to-json-file", topicPartitionPath.toString()
-            ));
-
-            assertLeader(client, topicPartition, broker3);
-        }
-    }
-
-    @ClusterTest
     public void testPreferredReplicaElection(ClusterInstance cluster) throws Exception {
         String topic = "preferred-topic";
         int partition = 0;
@@ -284,7 +237,7 @@ public class LeaderElectionCommandTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTest(brokers = 1)
     public void testTopicDoesNotExist(ClusterInstance cluster) {
         Throwable e = assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
             Duration.ofSeconds(30),
