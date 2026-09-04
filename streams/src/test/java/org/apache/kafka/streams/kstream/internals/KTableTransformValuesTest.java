@@ -69,12 +69,11 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.isA;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doNothing;
@@ -161,7 +160,7 @@ public class KTableTransformValuesTest {
 
         processor.init(context);
 
-        assertThat(transformer.context, isA((Class) ForwardingDisabledProcessorContext.class));
+        assertInstanceOf(ForwardingDisabledProcessorContext.class, transformer.context);
     }
 
     @Test
@@ -237,7 +236,7 @@ public class KTableTransformValuesTest {
 
         final String result = getter.get("Key").value();
 
-        assertThat(result, is("Key->Value!"));
+        assertEquals("Key->Value!", result);
     }
 
     @Test
@@ -273,8 +272,8 @@ public class KTableTransformValuesTest {
 
         final ValueTimestampHeaders<String> result = getter.get("Key");
 
-        assertThat(result.value(), is("Key->null!"));
-        assertThat(result.headers(), is(contextHeaders));
+        assertEquals("Key->null!", result.value());
+        assertEquals(contextHeaders, result.headers());
     }
 
     @Test
@@ -290,7 +289,7 @@ public class KTableTransformValuesTest {
 
         final String result = getter.get("Key").value();
 
-        assertThat(result, is("something"));
+        assertEquals("something", result);
     }
 
     @Test
@@ -303,7 +302,7 @@ public class KTableTransformValuesTest {
 
         final String[] storeNames = transformValues.view().storeNames();
 
-        assertThat(storeNames, is(new String[]{"store1", "store2"}));
+        assertArrayEquals(new String[]{"store1", "store2"}, storeNames);
     }
 
     @Test
@@ -313,7 +312,7 @@ public class KTableTransformValuesTest {
 
         final String[] storeNames = transformValues.view().storeNames();
 
-        assertThat(storeNames, is(new String[]{QUERYABLE_NAME}));
+        assertArrayEquals(new String[]{QUERYABLE_NAME}, storeNames);
     }
 
     @Test
@@ -379,10 +378,11 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("D", null, 15L);
 
 
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
-                new KeyValueTimestamp<>("B", "B->b!", 10),
-                new KeyValueTimestamp<>("D", "D->null!", 15)
-        ));
+        assertTrue(output().containsAll(List.of(
+            new KeyValueTimestamp<>("A", "A->a!", 5),
+            new KeyValueTimestamp<>("B", "B->b!", 10),
+            new KeyValueTimestamp<>("D", "D->null!", 15)
+        )));
         assertNull(driver.getKeyValueStore(QUERYABLE_NAME), "Store should not be materialized");
     }
 
@@ -408,21 +408,23 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("B", "b", 10L);
         inputTopic.pipeInput("C", null, 15L);
 
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
-                new KeyValueTimestamp<>("B", "B->b!", 10),
-                new KeyValueTimestamp<>("C", "C->null!", 15)));
+        assertTrue(output().containsAll(List.of(
+            new KeyValueTimestamp<>("A", "A->a!", 5),
+            new KeyValueTimestamp<>("B", "B->b!", 10),
+            new KeyValueTimestamp<>("C", "C->null!", 15)
+        )));
 
         {
             final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
-            assertThat(keyValueStore.get("A"), is("A->a!"));
-            assertThat(keyValueStore.get("B"), is("B->b!"));
-            assertThat(keyValueStore.get("C"), is("C->null!"));
+            assertEquals("A->a!", keyValueStore.get("A"));
+            assertEquals("B->b!", keyValueStore.get("B"));
+            assertEquals("C->null!", keyValueStore.get("C"));
         }
         {
             final KeyValueStore<String, ValueAndTimestamp<String>> keyValueStore = driver.getTimestampedKeyValueStore(QUERYABLE_NAME);
-            assertThat(keyValueStore.get("A"), is(ValueAndTimestamp.make("A->a!", 5L)));
-            assertThat(keyValueStore.get("B"), is(ValueAndTimestamp.make("B->b!", 10L)));
-            assertThat(keyValueStore.get("C"), is(ValueAndTimestamp.make("C->null!", 15L)));
+            assertEquals(ValueAndTimestamp.make("A->a!", 5L), keyValueStore.get("A"));
+            assertEquals(ValueAndTimestamp.make("B->b!", 10L), keyValueStore.get("B"));
+            assertEquals(ValueAndTimestamp.make("C->null!", 15L), keyValueStore.get("C"));
         }
     }
 
@@ -450,14 +452,18 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "ignored1", 15L);
         inputTopic.pipeInput("A", "ignored2", 10L);
 
-        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
-                new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "3", 15))));
+        assertEquals(List.of(
+            new KeyValueTimestamp<>("A", "1", 5),
+            new KeyValueTimestamp<>("A", "2", 15),
+            new KeyValueTimestamp<>("A", "3", 15)
+        ), output());
 
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
-        assertThat(keyValueStore.get("A"), is(3));
-        assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of(QUERYABLE_NAME, "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
+        assertEquals(3, keyValueStore.get("A"));
+        assertEquals(
+            Set.of(QUERYABLE_NAME, "KTABLE-AGGREGATE-STATE-STORE-0000000005"),
+            driver.getAllStateStores().keySet()
+        );
     }
 
     @ParameterizedTest
@@ -480,11 +486,15 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "aa", 15L);
         inputTopic.pipeInput("A", "aaa", 10);
 
-        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
-                new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "3", 15))));
-        assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
+        assertEquals(List.of(
+            new KeyValueTimestamp<>("A", "1", 5),
+            new KeyValueTimestamp<>("A", "2", 15),
+            new KeyValueTimestamp<>("A", "3", 15)
+        ), output());
+        assertEquals(
+            Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005"),
+            driver.getAllStateStores().keySet()
+        );
     }
 
     @ParameterizedTest
@@ -509,11 +519,15 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "aa", 15L);
         inputTopic.pipeInput("A", "aaa", 10);
 
-        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
+        assertEquals(List.of(
+            new KeyValueTimestamp<>("A", "1", 5),
             new KeyValueTimestamp<>("A", "2", 15),
-            new KeyValueTimestamp<>("A", "3", 15))));
-        assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
+            new KeyValueTimestamp<>("A", "3", 15)
+        ), output());
+        assertEquals(
+            Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005"),
+            driver.getAllStateStores().keySet()
+        );
     }
 
     private ArrayList<KeyValueTimestamp<String, String>> output() {

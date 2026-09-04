@@ -55,8 +55,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Properties;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -204,9 +203,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                 "      --> test-cogroup-agg-0\n" +
@@ -225,7 +223,8 @@ public class CogroupedKStreamImplTest {
                 "      --> KSTREAM-SINK-0000000006\n" +
                 "      <-- test-cogroup-merge\n" +
                 "    Sink: KSTREAM-SINK-0000000006 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000005\n\n"));
+                "      <-- KTABLE-TOSTREAM-0000000005\n\n",
+            topologyDescription);
     }
 
     @ParameterizedTest
@@ -249,9 +248,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000002\n" +
@@ -281,7 +279,8 @@ public class CogroupedKStreamImplTest {
                         "      --> KSTREAM-SINK-0000000011\n" +
                         "      <-- COGROUPKSTREAM-MERGE-0000000009\n" +
                         "    Sink: KSTREAM-SINK-0000000011 (topic: output)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000010\n\n"));
+                        "      <-- KTABLE-TOSTREAM-0000000010\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -304,9 +303,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000002\n" +
@@ -336,7 +334,8 @@ public class CogroupedKStreamImplTest {
                         "      --> KSTREAM-SINK-0000000010\n" +
                         "      <-- test-cogroup-merge\n" +
                         "    Sink: KSTREAM-SINK-0000000010 (topic: output)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000009\n\n"));
+                        "      <-- KTABLE-TOSTREAM-0000000009\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -366,9 +365,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000002\n" +
@@ -419,7 +417,8 @@ public class CogroupedKStreamImplTest {
                         "    Sink: KSTREAM-SINK-0000000018 (topic: output)\n" +
                         "      <-- KTABLE-TOSTREAM-0000000017\n" +
                         "    Sink: KSTREAM-SINK-0000000020 (topic: OUTPUT2)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000019\n\n"));
+                        "      <-- KTABLE-TOSTREAM-0000000019\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -450,9 +449,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build(props).describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000002\n" +
@@ -496,7 +494,8 @@ public class CogroupedKStreamImplTest {
                         "    Sink: KSTREAM-SINK-0000000018 (topic: output)\n" +
                         "      <-- KTABLE-TOSTREAM-0000000017\n" +
                         "    Sink: KSTREAM-SINK-0000000020 (topic: OUTPUT2)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000019\n\n"));
+                        "      <-- KTABLE-TOSTREAM-0000000019\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -523,9 +522,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000003\n" +
@@ -569,7 +567,8 @@ public class CogroupedKStreamImplTest {
                         "      <-- KSTREAM-SOURCE-0000000002\n" +
                         "    Processor: COGROUPKSTREAM-MERGE-0000000010 (stores: [])\n" +
                         "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000009\n\n"));
+                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000009\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -599,9 +598,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build(properties).describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000003\n" +
@@ -637,7 +635,8 @@ public class CogroupedKStreamImplTest {
                         "      <-- COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000009\n" +
                         "    Processor: COGROUPKSTREAM-MERGE-0000000017 (stores: [])\n" +
                         "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000015, COGROUPKSTREAM-AGGREGATE-0000000016\n\n"));
+                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000015, COGROUPKSTREAM-AGGREGATE-0000000016\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -660,9 +659,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000002\n" +
@@ -698,7 +696,8 @@ public class CogroupedKStreamImplTest {
                         "      --> KSTREAM-AGGREGATE-0000000011\n" +
                         "    Processor: KSTREAM-AGGREGATE-0000000011 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
                         "      --> none\n" +
-                        "      <-- KSTREAM-SOURCE-0000000014\n\n"));
+                        "      <-- KSTREAM-SOURCE-0000000014\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -724,9 +723,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build(properties).describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000002\n" +
@@ -754,7 +752,8 @@ public class CogroupedKStreamImplTest {
                         "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
                         "    Processor: KSTREAM-AGGREGATE-0000000011 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
                         "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n\n"));
+                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -787,9 +786,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build(properties).describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000003, KSTREAM-MAP-0000000004\n" +
@@ -836,7 +834,8 @@ public class CogroupedKStreamImplTest {
                         "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-source\n" +
                         "    Processor: COGROUPKSTREAM-MERGE-0000000018 (stores: [])\n" +
                         "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000016, COGROUPKSTREAM-AGGREGATE-0000000017\n\n"));
+                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000016, COGROUPKSTREAM-AGGREGATE-0000000017\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -857,9 +856,8 @@ public class CogroupedKStreamImplTest {
 
         final String topologyDescription = builder.build(properties).describe().toString();
 
-        assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
+        assertEquals(
+                "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000001\n" +
@@ -885,7 +883,8 @@ public class CogroupedKStreamImplTest {
                         "      <-- COGROUPKSTREAM-AGGREGATE-0000000006\n" +
                         "    Processor: COGROUPKSTREAM-MERGE-0000000013 (stores: [])\n" +
                         "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000012\n\n"));
+                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000012\n\n",
+                topologyDescription);
     }
 
     @ParameterizedTest
@@ -1316,17 +1315,13 @@ public class CogroupedKStreamImplTest {
                                                final String expectedKey,
                                                final String expectedValue,
                                                final long expectedTimestamp) {
-        assertThat(
-            outputTopic.readRecord(),
-            equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
+        assertEquals(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp), outputTopic.readRecord());
     }
 
     private void assertOutputKeyValueTimestamp(final TestOutputTopic<String, Integer> outputTopic,
                                                final String expectedKey,
                                                final Integer expectedValue,
                                                final long expectedTimestamp) {
-        assertThat(
-            outputTopic.readRecord(),
-            equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
+        assertEquals(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp), outputTopic.readRecord());
     }
 }

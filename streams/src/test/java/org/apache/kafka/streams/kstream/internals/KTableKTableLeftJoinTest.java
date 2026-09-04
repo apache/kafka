@@ -58,10 +58,6 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -336,9 +332,9 @@ public class KTableKTableLeftJoinTest {
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues(true);
 
-        assertThat(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled(), is(true));
-        assertThat(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled(), is(true));
-        assertThat(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled(), is(true));
+        assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
+        assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
+        assertTrue(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
 
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
@@ -527,10 +523,9 @@ public class KTableKTableLeftJoinTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableLeftJoin.class)) {
             join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]"
+            ));
         }
     }
 
@@ -538,6 +533,6 @@ public class KTableKTableLeftJoinTest {
                                                final Integer expectedKey,
                                                final String expectedValue,
                                                final long expectedTimestamp) {
-        assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
+        assertEquals(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp), outputTopic.readRecord());
     }
 }

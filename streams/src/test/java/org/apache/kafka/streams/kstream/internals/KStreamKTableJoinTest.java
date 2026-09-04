@@ -63,11 +63,9 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamKTableJoinTest {
     private static final KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
@@ -175,10 +173,7 @@ public class KStreamKTableJoinTest {
 
         final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
             () -> streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one"));
-        assertThat(
-            exception.getMessage(),
-            is("KTable must be versioned to use a grace period in a stream table join.")
-        );
+        assertEquals("KTable must be versioned to use a grace period in a stream table join.", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -197,10 +192,7 @@ public class KStreamKTableJoinTest {
         streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
 
         final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, builder::build);
-        assertThat(
-            exception.getMessage(),
-            is("KTable must be versioned to use a grace period in a stream table join.")
-        );
+        assertEquals("KTable must be versioned to use a grace period in a stream table join.", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -236,7 +228,7 @@ public class KStreamKTableJoinTest {
         streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMinutes(6))).to("out-one");
 
         final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> builder.build(props));
-        assertThat(exception.getMessage(), is("History retention must be at least grace period."));
+        assertEquals("History retention must be at least grace period.", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -255,7 +247,7 @@ public class KStreamKTableJoinTest {
         streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
 
         final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> builder.build(props));
-        assertThat(exception.getMessage(), is("History retention must be at least grace period."));
+        assertEquals("History retention must be at least grace period.", exception.getMessage());
     }
 
 
@@ -544,13 +536,13 @@ public class KStreamKTableJoinTest {
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "A");
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
-                    + "offset=[0]"));
+            assertTrue(appender.getMessages().contains(
+                "Skipping record due to null join key or value. topic=[streamTopic] partition=[0] offset=[0]"
+            ));
         }
 
-        assertThat(
+        assertEquals(
+            1.0,
             driver.metrics().get(
                 new MetricName(
                     "dropped-records-total",
@@ -561,8 +553,7 @@ public class KStreamKTableJoinTest {
                         mkEntry("task-id", "0_0")
                     )
                 ))
-                .metricValue(),
-            is(1.0)
+                .metricValue()
         );
     }
 
@@ -575,14 +566,13 @@ public class KStreamKTableJoinTest {
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
             inputTopic.pipeInput(1, null);
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
-                    + "offset=[0]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Skipping record due to null join key or value. topic=[streamTopic] partition=[0] offset=[0]"
+            ));
         }
 
-        assertThat(
+        assertEquals(
+            1.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -593,8 +583,7 @@ public class KStreamKTableJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(1.0)
+                .metricValue()
         );
     }
 
