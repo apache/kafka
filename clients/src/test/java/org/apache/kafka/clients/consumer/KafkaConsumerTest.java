@@ -2544,7 +2544,9 @@ public class KafkaConsumerTest {
 
                 assertInstanceOf(InterruptException.class, closeException.get(), "Expected exception not thrown " + closeException);
             } else {
-                future.get(closeTimeoutMs, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+                // closeTimeoutMs is enforced against MockTime, so it cannot bound how long the close thread needs in
+                // real time to finish; wait with a fixed real-time bound instead.
+                future.get(TestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
                 assertNull(closeException.get(), "Unexpected exception during close");
             }
         } finally {
