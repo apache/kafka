@@ -121,6 +121,14 @@ Core Module (:core): `core/build/reports/scoverageTest/index.html`
 
 Other Modules: `<module>/build/reports/jacoco/test/html/index.html`
 
+### Running dependency vulnerability checks
+To reduce NVD API rate limiting, supply an [NVD API key](https://nvd.nist.gov/developers/request-an-api-key)
+through the `NVD_API_KEY` environment variable when running a dependency check:
+
+```bash
+NVD_API_KEY=your-nvd-api-key ./gradlew dependencyCheckAggregate
+```
+
 ### Building a binary release gzipped tarball
 ```bash
 ./gradlew clean releaseTarGz
