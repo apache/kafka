@@ -90,37 +90,6 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
     }
 
     private static void validate(ShareGroupDLQRecordParameter param) {
-        String prefix = "DLQ records parameters";
-        if (param == null) {
-            throw new IllegalArgumentException(prefix + " cannot be null.");
-        }
-
-        if (param.groupId() == null || param.groupId().isEmpty()) {
-            throw new IllegalArgumentException(prefix + " group cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition() == null) {
-            throw new IllegalArgumentException(prefix + " topic/partition data cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition().topicId() == null) {
-            throw new IllegalArgumentException(prefix + " topic id data cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition().partition() < 0) {
-            throw new IllegalArgumentException(prefix + " partition cannot be negative.");
-        }
-
-        if (param.firstOffset() < 0) {
-            throw new IllegalArgumentException(prefix + " first offset cannot be negative.");
-        }
-
-        if (param.lastOffset() < 0) {
-            throw new IllegalArgumentException(prefix + " last offset cannot be negative.");
-        }
-
-        if (param.lastOffset() < param.firstOffset()) {
-            throw new IllegalArgumentException(prefix + " last offset cannot be less than first offset.");
-        }
+        ShareGroupDLQValidator.validateParam(param);
     }
 }
