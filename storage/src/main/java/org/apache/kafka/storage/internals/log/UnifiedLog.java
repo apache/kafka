@@ -2000,14 +2000,15 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     private int deleteRetentionMsBreachedSegments() throws IOException {
-        long retentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled());
+        boolean remoteLogEnabledAndRemoteCopyEnabled = remoteLogEnabledAndRemoteCopyEnabled();
+        long retentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled);
         if (retentionMs < 0) return 0;
         long startMs = time().milliseconds();
 
         DeletionCondition shouldDelete = (segment, nextSegmentOpt) -> {
             long anchorTimestamp = segment.largestTimestamp();
             if (startMs < anchorTimestamp) {
-                if (remoteLogEnabledAndRemoteCopyEnabled()) {
+                if (remoteLogEnabledAndRemoteCopyEnabled) {
                     anchorTimestamp = segment.lastModified();
                     futureTimestampLogger.warn("{} contains future timestamp(s), using lastModified time {} as the retention anchor", segment, anchorTimestamp);
                 } else {
@@ -2020,15 +2021,13 @@ public class UnifiedLog implements AutoCloseable {
             return delete;
         };
         return deleteOldSegments(shouldDelete, toDelete -> {
-            boolean remoteCopyEnabled = remoteLogEnabledAndRemoteCopyEnabled();
-            long localRetentionMs = UnifiedLog.localRetentionMs(config(), remoteCopyEnabled);
-            String retentionScope = remoteCopyEnabled ? "local log retention" : "log retention";
+            String retentionScope = remoteLogEnabledAndRemoteCopyEnabled ? "local log retention" : "log retention";
             for (LogSegment segment : toDelete) {
-                String anchor = segment.largestRecordTimestamp().isEmpty() || (remoteCopyEnabled && startMs < segment.largestTimestamp())
+                String anchor = segment.largestRecordTimestamp().isEmpty() || (remoteLogEnabledAndRemoteCopyEnabled && startMs < segment.largestTimestamp())
                         ? "last modified time of the segment"
                         : "largest record timestamp in the segment";
                 logger.info("Deleting segment {} due to {} time {}ms breach based on the {}",
-                        segment, retentionScope, localRetentionMs, anchor);
+                        segment, retentionScope, retentionMs, anchor);
             }
         });
     }
