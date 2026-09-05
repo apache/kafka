@@ -36,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A unit test for ImplicitLinkedHashCollection.
@@ -398,12 +397,7 @@ public class ImplicitLinkedHashCollectionTest {
         coll.add(new TestElement(5));
 
         ListIterator<TestElement> iter = coll.valuesList().listIterator();
-        try {
-            iter.remove();
-            fail("Calling remove() without calling next() or previous() should raise an exception");
-        } catch (IllegalStateException e) {
-            // expected
-        }
+        assertThrows(IllegalStateException.class, () -> iter.remove());
 
         // Remove after next()
         iter.next();
@@ -415,12 +409,7 @@ public class ImplicitLinkedHashCollectionTest {
         assertEquals(2, iter.nextIndex());
         assertEquals(1, iter.previousIndex());
 
-        try {
-            iter.remove();
-            fail("Calling remove() twice without calling next() or previous() in between should raise an exception");
-        } catch (IllegalStateException e) {
-            // expected
-        }
+        assertThrows(IllegalStateException.class, () -> iter.remove());
 
         // Remove after previous()
         assertEquals(2, iter.previous().key);

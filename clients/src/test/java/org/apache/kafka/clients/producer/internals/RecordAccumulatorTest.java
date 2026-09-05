@@ -89,7 +89,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class RecordAccumulatorTest {
 
@@ -699,12 +698,9 @@ public class RecordAccumulatorTest {
         accum.beginFlush();
         assertTrue(accum.flushInProgress());
         delayedInterrupt(Thread.currentThread(), 1000L);
-        try {
-            accum.awaitFlushCompletion();
-            fail("awaitFlushCompletion should throw InterruptException");
-        } catch (InterruptedException e) {
-            assertFalse(accum.flushInProgress(), "flushInProgress count should be decremented even if thread is interrupted");
-        }
+        assertThrows(InterruptedException.class, () -> accum.awaitFlushCompletion());
+        assertFalse(accum.flushInProgress());
+
     }
 
     @Test

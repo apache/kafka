@@ -31,7 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProtocolSerializationTest {
 
@@ -150,12 +149,19 @@ public class ProtocolSerializationTest {
         for (BoundField f : this.schema.fields()) {
             Object o = this.struct.get(f);
             try {
-                this.struct.set(f, null);
-                this.struct.validate();
-                if (!f.def.type.isNullable())
-                    fail("Should not allow serialization of null value.");
-            } catch (SchemaException e) {
-                assertFalse(f.def.type.isNullable(), f + " should not be nullable");
+                if (f.def.type.isNullable()) {
+                    this.struct.set(f, null);
+                    this.struct.validate();
+                } else {
+                    assertThrows(
+                            SchemaException.class,
+                            () -> {
+                                this.struct.set(f, null);
+                                this.struct.validate();
+                            }
+                    );
+                    assertFalse(f.def.type.isNullable(), f + " should not be nullable");
+                }
             } finally {
                 this.struct.set(f, o);
             }

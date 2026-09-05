@@ -100,12 +100,7 @@ public class ProducerBatchTest {
         assertEquals(exception, callback.exception);
         assertNull(callback.metadata);
 
-        try {
-            batch.abort(new KafkaException());
-            fail("Expected exception from abort");
-        } catch (IllegalStateException e) {
-            // expected
-        }
+        assertThrows(IllegalStateException.class, () -> batch.abort(new KafkaException()));
 
         assertEquals(1, callback.invocations);
         assertTrue(future.isDone());

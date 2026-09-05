@@ -1213,13 +1213,8 @@ public class FetchRequestManagerTest {
         ensureBlockOnRecord(1L);
         seekAndConsumeRecord(buffer, 2L);
         ensureBlockOnRecord(3L);
-        try {
-            // For a record that cannot be retrieved from the iterator, we cannot seek over it within the batch.
-            seekAndConsumeRecord(buffer, 4L);
-            fail("Should have thrown exception when fail to retrieve a record from iterator.");
-        } catch (KafkaException ke) {
-            // let it go
-        }
+        // For a record that cannot be retrieved from the iterator, we cannot seek over it within the batch.
+        assertThrows(KafkaException.class, () -> seekAndConsumeRecord(buffer, 4L));
         ensureBlockOnRecord(4L);
     }
 

@@ -659,12 +659,8 @@ public class OffsetFetcherTest {
         consumerClient.pollNoWakeup();
         assertFalse(subscriptions.hasValidPosition(tp0));
 
-        try {
-            offsetFetcher.resetPositionsIfNeeded();
-            fail("Expected authorization error to be raised");
-        } catch (TopicAuthorizationException e) {
-            assertEquals(singleton(tp0.topic()), e.unauthorizedTopics());
-        }
+        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> offsetFetcher.resetPositionsIfNeeded());
+        assertEquals(singleton(tp0.topic()), e.unauthorizedTopics());
 
         // The exception should clear after being raised, but no retry until the backoff
         offsetFetcher.resetPositionsIfNeeded();

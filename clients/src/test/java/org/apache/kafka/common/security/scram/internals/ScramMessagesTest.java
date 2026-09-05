@@ -34,8 +34,8 @@ import javax.security.sasl.SaslException;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ScramMessagesTest {
 
@@ -344,11 +344,6 @@ public class ScramMessagesTest {
     }
 
     private <T extends AbstractScramMessage> void checkInvalidScramMessage(Class<T> clazz, String message) {
-        try {
-            createScramMessage(clazz, message);
-            fail("Exception not throws for invalid message of type " + clazz + " : " + message);
-        } catch (SaslException e) {
-            // Expected exception
-        }
+        assertThrows(SaslException.class, () -> createScramMessage(clazz, message));
     }
 }

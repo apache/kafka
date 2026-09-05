@@ -121,6 +121,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -131,7 +132,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.AdditionalMatchers.geq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -3096,12 +3096,8 @@ public class SenderTest {
         assertFutureFailure(future2, TransactionAbortableException.class);
 
         // Verify transaction API requests also fail with TransactionAbortableException
-        try {
-            txnManager.beginCommit();
-            fail("Expected beginCommit() to fail with TransactionAbortableException when in abortable error state");
-        } catch (KafkaException e) {
-            assertEquals(TransactionAbortableException.class, e.getCause().getClass());
-        }
+        KafkaException e = assertThrows(KafkaException.class, () -> txnManager.beginCommit());
+        assertEquals(TransactionAbortableException.class, e.getCause().getClass());
     }
 
     @Test
@@ -3280,13 +3276,9 @@ public class SenderTest {
         // Attempt to commit transaction
         TransactionalRequestResult commitResult = transactionManager.beginCommit();
         sender.runOnce();
-        try {
-            commitResult.await(1000, TimeUnit.MILLISECONDS, "Unexpected time out during the test.");
-            fail("Expected abortable error to be thrown for commit");
-        } catch (KafkaException e) {
-            assertTrue(transactionManager.hasAbortableError());
-            assertEquals(TransactionAbortableException.class, commitResult.error().getClass());
-        }
+        assertThrows(KafkaException.class, () -> commitResult.await(1000, TimeUnit.MILLISECONDS, "Unexpected time out during the test"));
+        assertTrue(transactionManager.hasAbortableError());
+        assertEquals(TransactionAbortableException.class, commitResult.error().getClass());
 
         // Abort API with TRANSACTION_ABORTABLE error should convert to Fatal error i.e. KafkaException
         client.prepareResponse(new EndTxnResponse(new EndTxnResponseData()
@@ -3297,15 +3289,11 @@ public class SenderTest {
         sender.runOnce();
 
         // Verify the error is converted to KafkaException (not TransactionAbortableException)
-        try {
-            abortResult.await(1000, TimeUnit.MILLISECONDS, "Unexpected time out during the test.");
-            fail("Expected KafkaException to be thrown");
-        } catch (KafkaException e) {
-            // Verify TM is in FATAL_ERROR state
-            assertTrue(transactionManager.hasFatalError());
-            assertFalse(e instanceof TransactionAbortableException);
-            assertEquals(KafkaException.class, abortResult.error().getClass());
-        }
+        KafkaException e = assertThrows(KafkaException.class, () -> abortResult.await(1000, TimeUnit.MILLISECONDS, "Unexpected time out during the test"));
+        // Verify TM is in FATAL_ERROR state
+        assertTrue(transactionManager.hasFatalError());
+        assertFalse(e instanceof TransactionAbortableException);
+        assertEquals(KafkaException.class, abortResult.error().getClass());
     }
 
     @Test
@@ -3881,23 +3869,15 @@ public class SenderTest {
         client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
         sender.runOnce();
         assertTrue(future.isDone());
-        try {
-            future.get();
-        } catch (ExecutionException e) {
-            fail("Future should not have raised an exception: " + e.getCause());
-        }
+        assertDoesNotThrow(() -> future.get());
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         sender.runOnce();
         assertTrue(future.isDone());
-        try {
-            future.get();
-            fail("Future should have raised " + expectedError.getSimpleName());
-        } catch (ExecutionException e) {
-            assertTrue(expectedError.isAssignableFrom(e.getCause().getClass()));
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, () -> future.get());
+        assertTrue(expectedError.isAssignableFrom(e.getCause().getClass()));
     }
 
     private void prepareAndReceiveInitProducerId(long producerId, Errors error) {
@@ -3948,13 +3928,9 @@ public class SenderTest {
     private void assertFutureFailure(Future<?> future, Class<? extends Exception> expectedExceptionType)
             throws InterruptedException {
         assertTrue(future.isDone());
-        try {
-            future.get();
-            fail("Future should have raised " + expectedExceptionType.getName());
-        } catch (ExecutionException e) {
-            Class<? extends Throwable> causeType = e.getCause().getClass();
-            assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, () -> future.get());
+        Class<? extends Throwable> causeType = e.getCause().getClass();
+        assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
     }
 
     private void createMockClientWithMaxFlightOneMetadataPending() {

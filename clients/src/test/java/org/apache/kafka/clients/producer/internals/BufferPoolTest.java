@@ -43,7 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
@@ -178,12 +177,7 @@ public class BufferPoolTest {
     public void testCleanupMemoryAvailabilityWaiterOnBlockTimeout() throws Exception {
         BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
         pool.allocate(1, maxBlockTimeMs);
-        try {
-            pool.allocate(2, maxBlockTimeMs);
-            fail("The buffer allocated more memory than its maximum value 2");
-        } catch (BufferExhaustedException e) {
-            // this is good
-        }
+        assertThrows(BufferExhaustedException.class, () -> pool.allocate(2, maxBlockTimeMs));
         assertEquals(0, pool.queued());
         assertEquals(1, pool.availableMemory());
     }
@@ -228,11 +222,7 @@ public class BufferPoolTest {
         doThrow(new OutOfMemoryError()).when(bufferPool).recordWaitTime(anyLong());
 
         bufferPool.allocate(1, 0);
-        try {
-            bufferPool.allocate(2, 1000);
-            fail("Expected oom.");
-        } catch (OutOfMemoryError expected) {
-        }
+        assertThrows(OutOfMemoryError.class, () -> bufferPool.allocate(2, 1000));
         assertEquals(1, bufferPool.availableMemory());
         assertEquals(0, bufferPool.queued());
         assertEquals(1, bufferPool.unallocatedMemory());
@@ -253,14 +243,11 @@ public class BufferPoolTest {
 
         @Override
         public void run() {
-            try {
-                pool.allocate(2, maxBlockTimeMs);
-                fail("The buffer allocated more memory than its maximum value 2");
-            } catch (BufferExhaustedException e) {
-                // this is good
-            } catch (InterruptedException e) {
-                // this can be neglected
-            }
+            Exception e = assertThrows(Exception.class, () -> pool.allocate(2, maxBlockTimeMs));
+            assertTrue(
+                    e instanceof BufferExhaustedException || e instanceof InterruptedException,
+                    "Unexpected exception type: " + e.getClass()
+            );
         }
     }
 
@@ -323,14 +310,7 @@ public class BufferPoolTest {
                 throw new OutOfMemoryError();
             }
         };
-
-        try {
-            bufferPool.allocateByteBuffer(1024);
-            // should not reach here
-            fail("Should have thrown OutOfMemoryError");
-        } catch (OutOfMemoryError ignored) {
-
-        }
+        assertThrows(OutOfMemoryError.class, () -> bufferPool.allocateByteBuffer(1024));
 
         assertEquals(1024, bufferPool.availableMemory());
     }

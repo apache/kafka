@@ -45,7 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Tests parsing of {@link SaslConfigs#SASL_JAAS_CONFIG} property and verifies that the format
@@ -394,18 +393,11 @@ public class JaasContextTest {
     }
 
     private void checkInvalidConfiguration(String jaasConfigProp) throws IOException {
-        try {
+        assertThrows(SecurityException.class, () -> {
             writeConfiguration(JaasContext.Type.SERVER.name(), jaasConfigProp);
-            AppConfigurationEntry entry = configurationEntry(JaasContext.Type.SERVER, null);
-            fail("Invalid JAAS configuration file didn't throw exception, entry=" + entry);
-        } catch (SecurityException e) {
-            // Expected exception
-        }
-        try {
-            AppConfigurationEntry entry = configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp);
-            fail("Invalid JAAS configuration property didn't throw exception, entry=" + entry);
-        } catch (IllegalArgumentException e) {
-            // Expected exception
-        }
+            configurationEntry(JaasContext.Type.SERVER, null);
+        });
+        assertThrows(IllegalArgumentException.class, () -> configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp));
+
     }
 }

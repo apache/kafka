@@ -274,12 +274,7 @@ public abstract class SslFactoryTest {
         Map<String, Object> sslConfig2 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        try {
-            sslFactory.validateReconfiguration(sslConfig2);
-            fail("Truststore configured dynamically for listener without previous truststore");
-        } catch (ConfigException e) {
-            // Expected exception
-        }
+        assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(sslConfig2));
     }
 
     @Test
@@ -310,15 +305,10 @@ public abstract class SslFactoryTest {
         assertNotSame(sslContext, ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext(),
                 "SSL context not recreated");
 
-        sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
+        Map<String, Object> sslConfig2 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(newTrustStoreFile)
                 .build();
-        try {
-            sslFactory.validateReconfiguration(sslConfig);
-            fail("Keystore configured dynamically for listener without previous keystore");
-        } catch (ConfigException e) {
-            // Expected exception
-        }
+        assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(sslConfig2));
     }
 
     @Test
@@ -389,12 +379,7 @@ public abstract class SslFactoryTest {
                 SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG)) {
             sslConfig1.put(key, sslConfig2.get(key));
         }
-        try {
-            sslFactory.configure(sslConfig1);
-            fail("Validation did not fail with untrusted truststore");
-        } catch (ConfigException e) {
-            // Expected exception
-        }
+        assertThrows(ConfigException.class, () -> sslFactory.configure(sslConfig1));
     }
 
     @Test
@@ -425,12 +410,7 @@ public abstract class SslFactoryTest {
         // the new truststore, if certificate is not trusted by the existing truststore on the `SslFactory`.
         // This is to prevent both keystores and truststores to be modified simultaneously on an inter-broker
         // listener to stores that may not work with other brokers where the update hasn't yet been performed.
-        try {
-            sslFactory.validateReconfiguration(sslConfig2);
-            fail("ValidateReconfiguration did not fail as expected");
-        } catch (ConfigException e) {
-            // Expected exception
-        }
+        assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(sslConfig2));
     }
 
     @Test

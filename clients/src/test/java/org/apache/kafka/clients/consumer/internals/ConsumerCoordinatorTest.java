@@ -2303,11 +2303,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(Collections.singletonList(partition), Errors.NONE));
 
         // The first call to poll should raise the exception from the rebalance listener
-        try {
-            coordinator.poll(time.timer(Long.MAX_VALUE));
-            fail("Expected exception thrown from assignment callback");
-        } catch (WakeupException e) {
-        }
+        assertThrows(WakeupException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
 
         // The second call should retry the assignment callback and succeed
         coordinator.poll(time.timer(Long.MAX_VALUE));
@@ -3981,12 +3977,7 @@ public abstract class ConsumerCoordinatorTest {
                 Thread.sleep(200);
             if (expectedMinTimeMs > 0) {
                 time.sleep(expectedMinTimeMs - 1);
-                try {
-                    future.get(500, TimeUnit.MILLISECONDS);
-                    fail("Close completed ungracefully without waiting for timeout");
-                } catch (TimeoutException e) {
-                    // Expected timeout
-                }
+                assertThrows(TimeoutException.class, () -> future.get(500, TimeUnit.MILLISECONDS));
             }
             if (expectedMaxTimeMs >= 0)
                 time.sleep(expectedMaxTimeMs - expectedMinTimeMs + 2);

@@ -33,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(120)
 public class ApiMessageTypeTest {
@@ -48,12 +47,7 @@ public class ApiMessageTypeTest {
 
     @Test
     public void testInvalidFromApiKey() {
-        try {
-            ApiMessageType.fromApiKey((short) -1);
-            fail("expected to get an UnsupportedVersionException");
-        } catch (UnsupportedVersionException uve) {
-            // expected
-        }
+        assertThrows(UnsupportedVersionException.class, () -> ApiMessageType.fromApiKey((short) -1));
     }
 
     @Test
