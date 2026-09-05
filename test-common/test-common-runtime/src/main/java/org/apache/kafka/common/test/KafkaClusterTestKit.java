@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.controller.Controller;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.storage.Formatter;
 import org.apache.kafka.network.SocketServerConfigs;
@@ -67,6 +68,7 @@ import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -78,6 +80,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
@@ -326,55 +329,26 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), List.of());
                     KafkaConfig config = createNodeConfig(node, sslConfig);
-                    SharedServer sharedServer = new SharedServer(
+                    Entry<SharedServer, ControllerServer> sharedServerAndController = createSharedServerAndController(
                         config,
-                        node.initialMetaPropertiesEnsemble(),
-                        Time.SYSTEM,
-                        new Metrics(),
-                        CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                        QuorumConfig.parseBootstrapServers(config.quorumConfig().bootstrapServers()),
+                        node,
                         faultHandlerFactory,
-                        socketFactoryManager.getOrCreateSocketFactory(node.id())
+                        socketFactoryManager,
+                        nodes.bootstrapMetadata()
                     );
-                    ControllerServer controller = null;
-                    try {
-                        controller = new ControllerServer(
-                                sharedServer,
-                                KafkaRaftServer.configSchema(),
-                                nodes.bootstrapMetadata());
-                    } catch (Throwable e) {
-                        log.error("Error creating controller {}", node.id(), e);
-                        Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", sharedServer::stopForController);
-                        throw e;
-                    }
-                    controllers.put(node.id(), controller);
-                    jointServers.put(node.id(), sharedServer);
+                    jointServers.put(node.id(), sharedServerAndController.getKey());
+                    controllers.put(node.id(), sharedServerAndController.getValue());
                 }
                 for (TestKitNode node : nodes.brokerNodes().values()) {
-                    SharedServer sharedServer = jointServers.get(node.id());
-                    if (sharedServer == null) {
-                        KafkaConfig config = createNodeConfig(node, sslConfig);
-                        sharedServer = new SharedServer(
-                            config,
-                            node.initialMetaPropertiesEnsemble(),
-                            Time.SYSTEM,
-                            new Metrics(),
-                            CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                            QuorumConfig.parseBootstrapServers(config.quorumConfig().bootstrapServers()),
-                            faultHandlerFactory,
-                            socketFactoryManager.getOrCreateSocketFactory(node.id())
-                        );
-                        jointServers.put(node.id(), sharedServer);
-                    }
-                    BrokerServer broker = null;
-                    try {
-                        broker = new BrokerServer(sharedServer);
-                    } catch (Throwable e) {
-                        log.error("Error creating broker {}", node.id(), e);
-                        Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", sharedServer::stopForBroker);
-                        throw e;
-                    }
-                    brokers.put(node.id(), broker);
+                    Entry<SharedServer, BrokerServer> sharedServerAndBroker = createSharedServerAndBroker(
+                        createNodeConfig(node, sslConfig),
+                        node,
+                        jointServers.get(node.id()),
+                        faultHandlerFactory,
+                        socketFactoryManager
+                    );
+                    jointServers.putIfAbsent(node.id(), sharedServerAndBroker.getKey());
+                    brokers.put(node.id(), sharedServerAndBroker.getValue());
                 }
             } catch (Exception e) {
                 for (BrokerServer brokerServer : brokers.values()) {
@@ -435,20 +409,24 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     private static final String KAFKA_CLUSTER_THREAD_PREFIX = "kafka-cluster-test-kit-";
-    private final ExecutorService executorService;
+    private final int numOfExecutorThreads;
+    private ExecutorService executorService;
     private final KafkaClusterThreadFactory threadFactory = new KafkaClusterThreadFactory(KAFKA_CLUSTER_THREAD_PREFIX);
     private final TestKitNodes nodes;
     private final Map<Integer, ControllerServer> controllers;
     private final Map<Integer, BrokerServer> brokers;
     private final File baseDirectory;
     private final SimpleFaultHandlerFactory faultHandlerFactory;
-    private final PreboundSocketFactoryManager socketFactoryManager;
+    private PreboundSocketFactoryManager socketFactoryManager;
     private final String controllerListenerName;
     private final Optional<File> jaasFile;
     private final SslManager sslManager;
     private final boolean standalone;
     private final Optional<Map<Integer, Uuid>> initialVoterSet;
     private final boolean deleteOnClose;
+    private Map<Integer, Set<String>> nodeIdToListeners = new HashMap<>();
+    private final AtomicBoolean isStarted = new AtomicBoolean(false);
+    private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
     private KafkaClusterTestKit(
         TestKitNodes nodes,
@@ -468,7 +446,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             = Total number of brokers + Total number of controllers * 2
                               (Raft Manager per broker/controller)
         */
-        int numOfExecutorThreads = (nodes.brokerNodes().size() + nodes.controllerNodes().size()) * 2;
+        this.numOfExecutorThreads = (nodes.brokerNodes().size() + nodes.controllerNodes().size()) * 2;
         this.executorService = Executors.newFixedThreadPool(numOfExecutorThreads, threadFactory);
         this.nodes = nodes;
         this.controllers = controllers;
@@ -588,24 +566,26 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public void startup() throws ExecutionException, InterruptedException {
-        List<Future<?>> futures = new ArrayList<>();
-        try {
-            // Note the startup order here is chosen to be consistent with
-            // `KafkaRaftServer`. See comments in that class for an explanation.
-            for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(controller::startup));
+        if (!isClosed.get() && isStarted.compareAndSet(false, true)) {
+            List<Future<?>> futures = new ArrayList<>();
+            try {
+                // Note the startup order here is chosen to be consistent with
+                // `KafkaRaftServer`. See comments in that class for an explanation.
+                for (ControllerServer controller : controllers.values()) {
+                    futures.add(executorService.submit(controller::startup));
+                }
+                for (BrokerServer broker : brokers.values()) {
+                    futures.add(executorService.submit(broker::startup));
+                }
+                for (Future<?> future: futures) {
+                    future.get();
+                }
+            } catch (Exception e) {
+                for (Future<?> future: futures) {
+                    future.cancel(true);
+                }
+                throw e;
             }
-            for (BrokerServer broker : brokers.values()) {
-                futures.add(executorService.submit(broker::startup));
-            }
-            for (Future<?> future: futures) {
-                future.get();
-            }
-        } catch (Exception e) {
-            for (Future<?> future: futures) {
-                future.cancel(true);
-            }
-            throw e;
         }
     }
 
@@ -866,32 +846,116 @@ public class KafkaClusterTestKit implements AutoCloseable {
         return faultHandlerFactory.nonFatalFaultHandler();
     }
 
+    public void shutdown(boolean keepData) throws Exception {
+        if (isStarted.compareAndSet(true, false)) {
+            List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();
+            try {
+                // Note the shutdown order here is chosen to be consistent with
+                // `KafkaRaftServer`. See comments in that class for an explanation.
+                for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
+                    int brokerId = entry.getKey();
+                    BrokerServer broker = entry.getValue();
+                    if (keepData) {
+                        nodeIdToListeners.computeIfAbsent(brokerId, __ -> new HashSet<>());
+                        Set<String> listeners = nodeIdToListeners.get(brokerId);
+                        broker.socketServer().dataPlaneAcceptors().forEach((endpoint, acceptor) -> {
+                            listeners.add(endpoint.listener() + "://" + endpoint.host() + ":" + acceptor.localPort());
+                        });
+                    }
+                    futureEntries.add(new SimpleImmutableEntry<>("broker" + brokerId,
+                        executorService.submit((Runnable) broker::shutdown)));
+                }
+                waitForAllFutures(futureEntries);
+                futureEntries.clear();
+                for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
+                    int controllerId = entry.getKey();
+                    ControllerServer controller = entry.getValue();
+                    if (keepData) {
+                        nodeIdToListeners.computeIfAbsent(controllerId, __ -> new HashSet<>());
+                        Set<String> listeners = nodeIdToListeners.get(controllerId);
+                        controller.socketServer().dataPlaneAcceptors().forEach((endpoint, acceptor) -> {
+                            listeners.add(endpoint.listener() + "://" + endpoint.host() + ":" + acceptor.localPort());
+                        });
+                    }
+                    futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
+                        executorService.submit(controller::shutdown)));
+                }
+                waitForAllFutures(futureEntries);
+                futureEntries.clear();
+            } catch (Exception e) {
+                for (Entry<String, Future<?>> entry : futureEntries) {
+                    entry.getValue().cancel(true);
+                }
+                throw e;
+            } finally {
+                ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
+                socketFactoryManager.close();
+            }
+            waitForAllThreads();
+        }
+    }
+
+    public void restart(Map<Integer, Map<String, Object>> perServerOverriddenConfig) throws Exception {
+        if (isClosed.get()) {
+            return;
+        }
+        shutdown(true);
+
+        executorService = Executors.newFixedThreadPool(numOfExecutorThreads, threadFactory);
+        socketFactoryManager = new PreboundSocketFactoryManager();
+        Map<Integer, SharedServer> jointServers = new HashMap<>();
+        controllers.forEach((id, controller) -> {
+            if (perServerOverriddenConfig.get(-1) != null || perServerOverriddenConfig.get(id) != null) {
+                Map<String, Object> config = controller.config().originals();
+                config.putAll(perServerOverriddenConfig.getOrDefault(-1, Map.of()));
+                config.putAll(perServerOverriddenConfig.getOrDefault(id, Map.of()));
+                config.put(SocketServerConfigs.LISTENERS_CONFIG, String.join(",", nodeIdToListeners.get(id)));
+                TestKitNode node = nodes.controllerNodes().get(id);
+                KafkaConfig nodeConfig = new KafkaConfig(config, false);
+                Entry<SharedServer, ControllerServer> sharedServerAndController = createSharedServerAndController(
+                    nodeConfig,
+                    node,
+                    faultHandlerFactory,
+                    socketFactoryManager,
+                    nodes.bootstrapMetadata()
+                );
+                jointServers.put(node.id(), sharedServerAndController.getKey());
+                controllers.put(node.id(), sharedServerAndController.getValue());
+            }
+        });
+
+        brokers.forEach((id, broker) -> {
+            if (perServerOverriddenConfig.get(-1) != null || perServerOverriddenConfig.get(id) != null) {
+                Map<String, Object> config = broker.config().originals();
+                config.putAll(perServerOverriddenConfig.getOrDefault(-1, Map.of()));
+                config.putAll(perServerOverriddenConfig.getOrDefault(id, Map.of()));
+                config.put(SocketServerConfigs.LISTENERS_CONFIG, String.join(",", nodeIdToListeners.get(id)));
+
+                TestKitNode node = nodes.brokerNodes().get(id);
+                KafkaConfig nodeConfig = new KafkaConfig(config);
+                Entry<SharedServer, BrokerServer> sharedServerAndBroker = createSharedServerAndBroker(
+                    nodeConfig,
+                    node,
+                    jointServers.get(node.id()),
+                    faultHandlerFactory,
+                    socketFactoryManager
+                );
+                jointServers.putIfAbsent(node.id(), sharedServerAndBroker.getKey());
+                brokers.put(node.id(), sharedServerAndBroker.getValue());
+            }
+        });
+
+        startup();
+    }
+
     public SslManager sslManager() {
         return sslManager;
     }
-    
+
     @Override
     public void close() throws Exception {
-        List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();
-        try {
-            // Note the shutdown order here is chosen to be consistent with
-            // `KafkaRaftServer`. See comments in that class for an explanation.
-            for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
-                int brokerId = entry.getKey();
-                BrokerServer broker = entry.getValue();
-                futureEntries.add(new SimpleImmutableEntry<>("broker" + brokerId,
-                    executorService.submit((Runnable) broker::shutdown)));
-            }
-            waitForAllFutures(futureEntries);
-            futureEntries.clear();
-            for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
-                int controllerId = entry.getKey();
-                ControllerServer controller = entry.getValue();
-                futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
-                    executorService.submit(controller::shutdown)));
-            }
-            waitForAllFutures(futureEntries);
-            futureEntries.clear();
+        if (isClosed.compareAndSet(false, true)) {
+            shutdown(false);
             if (deleteOnClose) {
                 Utils.delete(baseDirectory);
                 if (jaasFile.isPresent()) {
@@ -899,18 +963,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 }
                 sslManager.close();
             }
-        } catch (Exception e) {
-            for (Entry<String, Future<?>> entry : futureEntries) {
-                entry.getValue().cancel(true);
-            }
-            throw e;
-        } finally {
-            ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
-            socketFactoryManager.close();
+            faultHandlerFactory.fatalFaultHandler().maybeRethrowFirstException();
+            faultHandlerFactory.nonFatalFaultHandler().maybeRethrowFirstException();
         }
-        waitForAllThreads();
-        faultHandlerFactory.fatalFaultHandler().maybeRethrowFirstException();
-        faultHandlerFactory.nonFatalFaultHandler().maybeRethrowFirstException();
     }
 
     private void waitForAllFutures(List<Entry<String, Future<?>>> futureEntries)
@@ -926,5 +981,70 @@ public class KafkaClusterTestKit implements AutoCloseable {
         TestUtils.waitForCondition(() -> Thread.getAllStackTraces().keySet()
                     .stream().noneMatch(t -> threadFactory.getThreadIds().contains(t.getId())),
                 "Failed to wait for all threads to shut down.");
+    }
+
+    private static Entry<SharedServer, ControllerServer> createSharedServerAndController(
+        KafkaConfig nodeConfig,
+        TestKitNode node,
+        SimpleFaultHandlerFactory faultHandlerFactory,
+        PreboundSocketFactoryManager socketFactoryManager,
+        BootstrapMetadata bootstrapMetadata) {
+        SharedServer sharedServer = createSharedServer(
+            nodeConfig,
+            node,
+            faultHandlerFactory,
+            socketFactoryManager
+        );
+        ControllerServer controller = null;
+        try {
+            controller = new ControllerServer(sharedServer, KafkaRaftServer.configSchema(), bootstrapMetadata);
+        } catch (Throwable e) {
+            log.error("Error creating controller {}", node.id(), e);
+            Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", sharedServer::stopForController);
+            throw e;
+        }
+        return new SimpleImmutableEntry<>(sharedServer, controller);
+    }
+
+    private static Entry<SharedServer, BrokerServer> createSharedServerAndBroker(
+        KafkaConfig nodeConfig,
+        TestKitNode node,
+        SharedServer sharedServer,
+        SimpleFaultHandlerFactory faultHandlerFactory,
+        PreboundSocketFactoryManager socketFactoryManager) {
+        if (sharedServer == null) {
+            sharedServer = createSharedServer(
+                nodeConfig,
+                node,
+                faultHandlerFactory,
+                socketFactoryManager
+            );
+        }
+        BrokerServer broker = null;
+        try {
+            broker = new BrokerServer(sharedServer);
+        } catch (Throwable e) {
+            log.error("Error creating broker {}", node.id(), e);
+            Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", sharedServer::stopForBroker);
+            throw e;
+        }
+        return new SimpleImmutableEntry<>(sharedServer, broker);
+    }
+
+    private static SharedServer createSharedServer(
+        KafkaConfig nodeConfig,
+        TestKitNode node,
+        SimpleFaultHandlerFactory faultHandlerFactory,
+        PreboundSocketFactoryManager socketFactoryManager) {
+        return new SharedServer(
+            nodeConfig,
+            node.initialMetaPropertiesEnsemble(),
+            Time.SYSTEM,
+            new Metrics(),
+            CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(nodeConfig.quorumConfig().voters())),
+            QuorumConfig.parseBootstrapServers(nodeConfig.quorumConfig().bootstrapServers()),
+            faultHandlerFactory,
+            socketFactoryManager.getOrCreateSocketFactory(node.id())
+        );
     }
 }
