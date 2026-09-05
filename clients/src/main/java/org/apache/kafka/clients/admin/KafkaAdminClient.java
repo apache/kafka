@@ -697,7 +697,7 @@ public class KafkaAdminClient extends AdminClient {
             CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.clientTelemetryReporter = clientTelemetryReporter;
         this.metadataRecoveryStrategy = MetadataRecoveryStrategy.forName(config.getString(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
-        this.partitionLeaderCache = new PartitionLeaderCache();
+        this.partitionLeaderCache = new PartitionLeaderCache(time, config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
         this.adminFetchMetricsManager = new AdminFetchMetricsManager(metrics);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
