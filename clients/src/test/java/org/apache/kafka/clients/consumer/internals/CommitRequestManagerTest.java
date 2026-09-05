@@ -616,6 +616,133 @@ public class CommitRequestManagerTest {
     }
 
     @Test
+    public void testAutoCommitOnAssignmentNonRetriableFailureDoesNotResetInterval() {
+        long commitInterval = 200;
+        TopicPartition tp = new TopicPartition("topic", 1);
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 100);
+
+        CommitRequestManager commitRequestManager = create(true, commitInterval);
+        time.sleep(commitInterval / 2);
+        commitRequestManager.maybeAutoCommitOnAssignment();
+        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManager);
+        futures.get(0).onComplete(mockOffsetCommitResponse(
+            tp.topic(),
+            tp.partition(),
+            (short) 1,
+            Errors.OFFSET_METADATA_TOO_LARGE));
+
+        // The assignment-triggered commit must not postpone the periodic commit, even if it
+        // fails with a non-retriable error.
+        time.sleep(commitInterval / 2);
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        assertPoll(1, commitRequestManager);
+    }
+
+    @Test
+    public void testAutoCommitOnAssignmentSuccessDoesNotResetInterval() {
+        long commitInterval = 200;
+        TopicPartition tp = new TopicPartition("topic", 1);
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 100);
+
+        CommitRequestManager commitRequestManager = create(true, commitInterval);
+        time.sleep(commitInterval / 2);
+        commitRequestManager.maybeAutoCommitOnAssignment();
+        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManager);
+        futures.get(0).onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>())));
+
+        // A successful assignment-triggered commit covers the previous assignment and must not
+        // postpone the periodic commit for the current assignment.
+        time.sleep(commitInterval / 2);
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        assertPoll(1, commitRequestManager);
+    }
+
+    @Test
+    public void testAutoCommitOnAssignmentRetriableFailureDoesNotResetInterval() {
+        long commitInterval = retryBackoffMs * 4;
+        TopicPartition tp = new TopicPartition("topic", 1);
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 100);
+
+        CommitRequestManager commitRequestManager = create(true, commitInterval);
+        commitRequestManager.maybeAutoCommitOnAssignment();
+        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManager);
+        futures.get(0).onComplete(mockOffsetCommitResponse(
+            tp.topic(),
+            tp.partition(),
+            (short) 1,
+            Errors.COORDINATOR_LOAD_IN_PROGRESS));
+
+        // Assignment-triggered commits leave the periodic timer unchanged, even on a retriable
+        // failure.
+        time.sleep(retryBackoffMs);
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        assertPoll(0, commitRequestManager);
+
+        time.sleep(commitInterval - retryBackoffMs);
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        assertPoll(1, commitRequestManager);
+    }
+
+    @Test
+    public void testOverlappingAutoCommitsKeepInflightGuardUntilAllComplete() {
+        long commitInterval = 100;
+        TopicPartition tp = new TopicPartition("topic", 1);
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 100);
+
+        CommitRequestManager commitRequestManager = create(true, commitInterval);
+        time.sleep(commitInterval);
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        NetworkClientDelegate.FutureCompletionHandler intervalCommit =
+            assertPoll(1, commitRequestManager).get(0);
+
+        subscriptionState.seek(tp, 200);
+        commitRequestManager.maybeAutoCommitOnAssignment();
+        NetworkClientDelegate.FutureCompletionHandler assignmentCommit =
+            assertPoll(1, commitRequestManager).get(0);
+
+        time.sleep(commitInterval);
+        intervalCommit.onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>())));
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        assertPoll(0, commitRequestManager);
+
+        assignmentCommit.onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>())));
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        assertPoll(1, commitRequestManager);
+    }
+
+    @Test
+    public void testOverlappingAutoCommitsKeepInflightGuardWhenAssignmentCommitCompletesFirst() {
+        long commitInterval = 100;
+        TopicPartition tp = new TopicPartition("topic", 1);
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 100);
+
+        CommitRequestManager commitRequestManager = create(true, commitInterval);
+        time.sleep(commitInterval);
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        NetworkClientDelegate.FutureCompletionHandler intervalCommit =
+            assertPoll(1, commitRequestManager).get(0);
+
+        subscriptionState.seek(tp, 200);
+        commitRequestManager.maybeAutoCommitOnAssignment();
+        NetworkClientDelegate.FutureCompletionHandler assignmentCommit =
+            assertPoll(1, commitRequestManager).get(0);
+
+        time.sleep(commitInterval);
+        assignmentCommit.onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>())));
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        assertPoll(0, commitRequestManager);
+
+        intervalCommit.onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>())));
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
+        assertPoll(1, commitRequestManager);
+    }
+
+    @Test
     public void testAutoCommitBeforeRevocationNotBlockedByAutoCommitOnIntervalInflightRequest() {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         TopicPartition t1p = new TopicPartition("topic1", 0);

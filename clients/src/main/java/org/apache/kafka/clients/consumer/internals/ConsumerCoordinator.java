@@ -1249,7 +1249,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         });
     }
 
-    private RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
+    public RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
         if (autoCommitEnabled)
             return autoCommitOffsetsAsync();
         return null;
