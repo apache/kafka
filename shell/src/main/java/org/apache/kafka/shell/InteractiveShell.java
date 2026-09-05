@@ -122,7 +122,7 @@ public final class InteractiveShell implements AutoCloseable {
     }
 
     public int screenWidth() {
-        return terminal.getWidth();
+        return terminal.getSize().getColumns();
     }
 
     public Iterator<Entry<Integer, String>> history(int numEntriesToShow) {
