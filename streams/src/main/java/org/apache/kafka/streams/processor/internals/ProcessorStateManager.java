@@ -92,13 +92,15 @@ public class ProcessorStateManager implements StateManager {
         // applied to the store used for both restoration (active and standby tasks restored offset) and
         // normal processing that update stores (written offset); could be null (when initialized)
         //
-        // the offset is updated in three ways:
+        // the offset is updated in four ways:
         //   1. when loading from the checkpoint file, when the corresponding task has acquired the state
         //      directory lock and have registered all the state store; it is only one-time
         //   2. when updating with restore records (by both restoring active and standby),
         //      update to the last restore record's offset
         //   3. when checkpointing with the given written offsets from record collector,
         //      update blindly with the given offset
+        //   4. when restoration reaches a confirmed catch-up boundary with no further records to apply
+        //      (KAFKA-14302), as last-applied = next-fetch - 1, never moving backwards
         private Long offset;
 
         // Will be updated on batch restored
@@ -531,6 +533,31 @@ public class ProcessorStateManager implements StateManager {
 
             stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());
         }
+    }
+
+    /**
+     * Records that restoration has conclusively reached {@code nextOffsetToFetch} (Kafka next-offset-to-fetch
+     * semantics: log-end offset / restore boundary), converting to last-applied as
+     * {@code nextOffsetToFetch - 1}. Used when a catch-up boundary is confirmed with no further records
+     * to apply (KAFKA-14302). Does not change {@link #changelogOffsets()} mapping of {@code null -> 0}.
+     */
+    void advanceRestoredOffsetTo(final StateStoreMetadata storeMetadata, final long nextOffsetToFetch) {
+        if (!stores.containsValue(storeMetadata)) {
+            throw new IllegalStateException("Advancing offset for " + storeMetadata + " which is not registered in this state manager, " +
+                "this should not happen.");
+        }
+        if (nextOffsetToFetch <= 0L) {
+            return;
+        }
+        final long lastAppliedOffset = nextOffsetToFetch - 1L;
+        final Long currentOffset = storeMetadata.offset();
+        if (currentOffset != null && currentOffset >= lastAppliedOffset) {
+            return;
+        }
+        storeMetadata.setOffset(lastAppliedOffset);
+        log.debug("State store {} restored offset advanced to {} at changelog {} (next fetch {})",
+            storeMetadata.stateStore.name(), storeMetadata.offset, storeMetadata.changelogPartition, nextOffsetToFetch);
+        stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());
     }
 
     /**
