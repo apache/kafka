@@ -440,7 +440,7 @@ public class ProcessorStateManager implements StateManager {
 
     /**
      * @return whether this state manager currently has any registered state stores. After
-     *         {@link #close()} the registered stores are cleared, so an empty result means
+     *         {@link #close()} the registered stores are cleared, so a {@code false} return value means
      *         there is nothing left to close.
      */
     boolean hasRegisteredStores() {
