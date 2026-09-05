@@ -102,10 +102,11 @@ public class RemoteLogMetadataCache {
             = new ConcurrentHashMap<>();
 
     // It contains leader epoch to the respective entry containing the state.
-    // TODO We are not clearing the entry for epoch when RemoteLogLeaderEpochState becomes empty. This will be addressed
-    // later. We will look into it when we integrate these APIs along with RemoteLogManager changes.
-    // https://issues.apache.org/jira/browse/KAFKA-12641
+    // Entries are removed once all segments for the epoch are deleted to avoid unbounded growth (KAFKA-12641).
     protected final ConcurrentMap<Integer, RemoteLogLeaderEpochState> leaderEpochEntries = new ConcurrentHashMap<>();
+    // Tracks the highest offset per leader epoch that has been successfully copied. This is monotonic and retained
+    // after deletions to avoid recopying; it grows only with the number of leader epochs.
+    private final ConcurrentMap<Integer, Long> leaderEpochToHighestOffset = new ConcurrentHashMap<>();
 
     private final CountDownLatch initializedLatch = new CountDownLatch(1);
 
@@ -120,6 +121,7 @@ public class RemoteLogMetadataCache {
     boolean awaitInitialized(long timeout, TimeUnit unit) throws InterruptedException {
         return initializedLatch.await(timeout, unit);
     }
+
 
     /**
      * Returns {@link RemoteLogSegmentMetadata} if it exists for the given leader-epoch containing the offset and with
@@ -217,9 +219,10 @@ public class RemoteLogMetadataCache {
     protected final void handleSegmentWithCopySegmentFinishedState(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         doHandleSegmentStateTransitionForLeaderEpochs(remoteLogSegmentMetadata,
             (leaderEpoch, remoteLogLeaderEpochState, startOffset, segmentId) -> {
-                long leaderEpochEndOffset = highestOffsetForEpoch(leaderEpoch, remoteLogSegmentMetadata);
+                long epochEndOffset = highestOffsetForEpoch(leaderEpoch, remoteLogSegmentMetadata);
                 remoteLogLeaderEpochState
-                        .handleSegmentWithCopySegmentFinishedState(startOffset, segmentId, leaderEpochEndOffset);
+                        .handleSegmentWithCopySegmentFinishedState(startOffset, segmentId, epochEndOffset);
+                leaderEpochToHighestOffset.merge(leaderEpoch, epochEndOffset, Math::max);
             });
 
         // Put the entry with the updated metadata.
@@ -240,13 +243,17 @@ public class RemoteLogMetadataCache {
     private void handleSegmentWithDeleteSegmentFinishedState(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.debug("Removing the entry as it reached the terminal state: [{}]", remoteLogSegmentMetadata);
 
-        doHandleSegmentStateTransitionForLeaderEpochs(remoteLogSegmentMetadata,
-            (leaderEpoch, remoteLogLeaderEpochState, startOffset, segmentId) ->
-                    remoteLogLeaderEpochState.handleSegmentWithDeleteSegmentFinishedState(segmentId));
+        RemoteLogSegmentId remoteLogSegmentId = remoteLogSegmentMetadata.remoteLogSegmentId();
+        for (Integer leaderEpoch : remoteLogSegmentMetadata.segmentLeaderEpochs().keySet()) {
+            leaderEpochEntries.computeIfPresent(leaderEpoch, (epoch, remoteLogLeaderEpochState) -> {
+                remoteLogLeaderEpochState.handleSegmentWithDeleteSegmentFinishedState(remoteLogSegmentId);
+                return remoteLogLeaderEpochState.isEmpty() ? null : remoteLogLeaderEpochState;
+            });
+        }
 
         // Remove the segment's id to metadata mapping because this segment is considered as deleted and it cleared all
         // the state of this segment in the cache.
-        idToSegmentMetadata.remove(remoteLogSegmentMetadata.remoteLogSegmentId());
+        idToSegmentMetadata.remove(remoteLogSegmentId);
     }
 
     private void doHandleSegmentStateTransitionForLeaderEpochs(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
@@ -299,14 +306,16 @@ public class RemoteLogMetadataCache {
     }
 
     /**
-     * Returns the highest offset of a segment for the given leader epoch if exists, else it returns empty. The segments
-     * that have reached the {@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED} or later states are considered here.
+     * Returns the highest offset that has reached {@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED} for the given
+     * leader epoch. This is a monotonic progress marker and is retained even after delete transitions so it does not
+     * regress or disappear. It may be higher than the end offset of segments currently present in remote storage
+     * when older segments have been deleted due to retention.
      *
      * @param leaderEpoch leader epoch
      */
     Optional<Long> highestOffsetForEpoch(int leaderEpoch) {
-        RemoteLogLeaderEpochState entry = leaderEpochEntries.get(leaderEpoch);
-        return entry != null ? Optional.ofNullable(entry.highestLogOffset()) : Optional.empty();
+        // TODO: If a future snapshot/rehydration path bypasses COPY_SEGMENT_FINISHED updates, it must rebuild this map.
+        return Optional.ofNullable(leaderEpochToHighestOffset.get(leaderEpoch));
     }
 
     /**
