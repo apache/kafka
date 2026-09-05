@@ -220,7 +220,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 internalProcessorContext.recordContext().topic(),
                 internalProcessorContext.recordContext().partition(),
                 internalProcessorContext.recordContext().offset(),
-                internalProcessorContext.recordContext().headers(),
+                internalProcessorContext.recordContext().sourceRawHeaders(),
                 internalProcessorContext.currentNode().name(),
                 internalProcessorContext.taskId(),
                 internalProcessorContext.recordContext().timestamp(),
@@ -310,4 +310,5 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         }
         return sb.toString();
     }
+
 }
