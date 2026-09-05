@@ -178,7 +178,8 @@ import static org.mockito.Mockito.when;
 public class WorkerTest {
 
     private static final String CONNECTOR_ID = "test-connector";
-    private static final ConnectorTaskId TASK_ID = new ConnectorTaskId("job", 0);
+    private static final int TASK = 0;
+    private static final ConnectorTaskId TASK_ID = new ConnectorTaskId("job", TASK);
     private static final String WORKER_ID = "localhost:8083";
     private static final String CLUSTER_ID = "test-cluster";
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
@@ -1141,7 +1142,7 @@ public class WorkerTest {
         setup(enableTopicCreation);
         Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
         expectedConfigs.put("group.id", "connect-test-connector");
-        expectedConfigs.put("client.id", "connector-consumer-job-0");
+        expectedConfigs.put("client.id", "connector-consumer-job" + "-" + TASK);
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).thenReturn(new HashMap<>());
@@ -1165,7 +1166,7 @@ public class WorkerTest {
         expectedConfigs.put("group.id", "connect-test");
         expectedConfigs.put("auto.offset.reset", "latest");
         expectedConfigs.put("max.poll.records", "1000");
-        expectedConfigs.put("client.id", "consumer-test-id");
+        expectedConfigs.put("client.id", "consumer-test-id" + "-" + TASK);
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).thenReturn(new HashMap<>());
@@ -1189,7 +1190,7 @@ public class WorkerTest {
         expectedConfigs.put("auto.offset.reset", "latest");
         expectedConfigs.put("max.poll.records", "5000");
         expectedConfigs.put("max.poll.interval.ms", "1000");
-        expectedConfigs.put("client.id", "connector-consumer-job-0");
+        expectedConfigs.put("client.id", "connector-consumer-job" + "-" + TASK);
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         Map<String, Object> connConfig = new HashMap<>();
