@@ -2515,13 +2515,13 @@ public class KafkaConsumerTest {
             // LEAVE_GROUP as part of coordinator close and second is FETCH with epoch=FINAL_EPOCH. At this stage
             // we expect only the first one to have been requested. Hence, waiting for total 2 requests, one for
             // commit and another for LEAVE_GROUP.
-            client.waitForRequests(2, 1000);
+            client.waitForRequests(2, TestUtils.DEFAULT_MAX_WAIT_MS);
 
             // In graceful mode, commit response results in close() completing immediately without a timeout
             // In non-graceful mode, close() times out without an exception even though commit response is pending
             int nonCloseRequests = 1;
             for (int i = 0; i < responses.size(); i++) {
-                client.waitForRequests(1, 1000);
+                client.waitForRequests(1, TestUtils.DEFAULT_MAX_WAIT_MS);
                 if (i == responses.size() - 1 && responses.get(i) instanceof FetchResponse) {
                     // last request is the close session request which is sent to the leader of the partition.
                     client.respondFrom(responses.get(i), node);
@@ -2544,9 +2544,9 @@ public class KafkaConsumerTest {
 
                 assertInstanceOf(InterruptException.class, closeException.get(), "Expected exception not thrown " + closeException);
             } else {
-                // closeTimeoutMs is enforced against MockTime, so it cannot bound how long the close thread needs in
-                // real time to finish; wait with a fixed real-time bound instead.
-                future.get(TestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+                // The close timeout runs on MockTime, so bound the wait in real time; it should complete without
+                // TimeoutException or ExecutionException.
+                future.get(TestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
                 assertNull(closeException.get(), "Unexpected exception during close");
             }
         } finally {
