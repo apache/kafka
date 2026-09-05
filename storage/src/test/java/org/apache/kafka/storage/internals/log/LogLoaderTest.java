@@ -1279,6 +1279,9 @@ public class LogLoaderTest {
         // Split the segment
         List<LogSegment> newSegments = logAndSegment.log.splitOverflowedSegment(logAndSegment.segment);
 
+        // Close the log before the test renames segments to .swap below, since close() opens the index file by path.
+        logAndSegment.log.close();
+
         // Simulate recovery right after all new segments have been renamed to .swap. On recovery, existing split operation
         // is completed and the old segment must be deleted.
         for (int i = newSegments.size() - 1; i >= 0; i--) {
@@ -1295,7 +1298,6 @@ public class LogLoaderTest {
         UnifiedLog recoveredLog = recoverAndCheck(logConfig, expectedKeys);
         assertEquals(expectedKeys, LogTestUtils.keysInLog(recoveredLog));
         assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments().size());
-        logAndSegment.log.close();
     }
 
     @Test

@@ -42,7 +42,7 @@ public class AbstractIndexTest {
         }
 
         @Override
-        public void flush() {
+        public void flush() throws IOException {
             flushInvoked = true;
             super.flush();
         }
