@@ -68,11 +68,10 @@ public class TargetAssignmentBuilderTest {
         int groupEpoch = 1;
         TaskAssignor assignor = mock(TaskAssignor.class);
         ConfiguredTopology topology = mock(ConfiguredTopology.class);
-        Map<String, String> assignmentConfigs = new HashMap<>();
 
         when(topology.isReady()).thenReturn(false);
 
-        TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor, assignmentConfigs)
+        TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor, AssignmentConfigsImpl.DEFAULT)
             .withTime(new MockTime(0, 12345L, 12345L))
             .withTopology(topology);
 
@@ -489,7 +488,7 @@ public class TargetAssignmentBuilderTest {
 
             // Create and populate the assignment builder.
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder builder = new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
-                groupId, groupEpoch, assignor, Map.of())
+                groupId, groupEpoch, assignor, AssignmentConfigsImpl.DEFAULT)
                 .withTime(new MockTime(0, assignmentTimestamp, assignmentTimestamp))
                 .withMembers(members)
                 .withTopology(topology)

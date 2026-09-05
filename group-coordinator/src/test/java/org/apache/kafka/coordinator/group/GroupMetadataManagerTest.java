@@ -23267,6 +23267,162 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupEpochBumpsOnlyWhenRackAwareAssignmentTagsLeaveOrReturnToTheirDefault() {
+        // rack.aware.assignment.tags walks default -> zone -> default. Only the two real changes may bump
+        // the group epoch, and the map recorded at either end must hold no tags, like older brokers record.
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            // Pinned to its default, so that the tags are the only configuration that leaves its default value.
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG,
+                GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+            // Compute each assignment right away, so that the two changes below are not deferred into one.
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+                    .build())
+                .withTargetAssignment(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+                .withTargetAssignmentEpoch(10)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))))
+                // A version from before the tags configuration existed recorded only the standby replicas.
+                .withLastAssignmentConfigs(Map.of("num.standby.replicas",
+                    String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)))
+            )
+            .build();
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // The group sets no tags, so this broker computes the very map the older version recorded: no epoch bump.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
+            context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1, List.of(0, 1, 2, 3, 4, 5)));
+
+        assertEquals(10, result.response().data().memberEpoch());
+        assertTrue(
+            result.records().stream().noneMatch(record -> record.key() instanceof StreamsGroupMetadataKey),
+            "Expected no StreamsGroupMetadata record, and therefore no group epoch bump"
+        );
+        assertEquals(10, group.groupEpoch());
+
+        // Setting the tags takes them away from their default: epoch bump, and the tags are recorded.
+        Properties newConfig = new Properties();
+        newConfig.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone");
+        context.groupConfigManager.updateGroupConfig(groupId, newConfig);
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+        );
+
+        result = context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1, List.of(0, 1, 2, 3, 4, 5)));
+
+        assertEquals(11, result.response().data().memberEpoch());
+        assertEquals(11, group.groupEpoch());
+        assertEquals("zone", group.lastAssignmentConfigs().get("rack.aware.assignment.tags"));
+        assertEquals(List.of("zone"), assignor.lastPassedAssignmentConfigs().rackAwareAssignmentTags());
+
+        // Clearing the tags is a change too, even though the value is back at its default.
+        context.groupConfigManager.updateGroupConfig(groupId, new Properties());
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+        );
+
+        result = context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 11, subtopology1, List.of(0, 1, 2, 3, 4, 5)));
+
+        assertEquals(12, result.response().data().memberEpoch());
+        assertEquals(12, group.groupEpoch());
+        // Asserted in full: this is exactly the map 4.2 and 4.3 record for a group that sets nothing.
+        Map<String, String> defaultConfigs =
+            Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
+        assertEquals(defaultConfigs, group.lastAssignmentConfigs());
+        assertEquals(AssignmentConfigsImpl.DEFAULT, assignor.lastPassedAssignmentConfigs());
+    }
+
+    @Test
+    public void testStreamsGroupEpochDoesNotIncreaseWhenEveryAssignmentConfigIsAtItsDefault() {
+        // A group that sets nothing must compare equal to the empty map an older version recorded, or
+        // upgrading the broker rebalances every group.
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        // Nothing is set on the broker or on the group: every configuration is at its static default.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+                    .build())
+                .withTargetAssignment(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+                .withTargetAssignmentEpoch(10)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))))
+                // A version that recorded no assignment configurations at all replays as an empty map.
+                .withLastAssignmentConfigs(Map.of())
+            )
+            .build();
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // Nothing should be recomputed here; prepared anyway, so a spurious recompute reaches the assertion below.
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+        );
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
+            context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1, List.of(0, 1, 2, 3, 4, 5)));
+
+        assertTrue(
+            result.records().stream().noneMatch(record -> record.key() instanceof StreamsGroupMetadataKey),
+            "Expected no StreamsGroupMetadata record, and therefore no group epoch bump. A configuration "
+                + "absent from the recorded map must parse to its static default."
+        );
+        assertEquals(10, result.response().data().memberEpoch());
+        assertEquals(10, group.groupEpoch());
+    }
+
+    @Test
     public void testStreamsGroupEpochShouldNotIncreaseWithAcceptableRecoveryLagConfigChange() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
@@ -30688,5 +30844,23 @@ public class GroupMetadataManagerTest {
     ) {
         return responseTopics.stream()
             .collect(Collectors.toMap(DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic::topicId, Function.identity()));
+    }
+
+    private static StreamsGroupHeartbeatRequestData heartbeat(
+        String groupId,
+        String memberId,
+        int memberEpoch,
+        String subtopologyId,
+        List<Integer> ownedActivePartitions
+    ) {
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                .setSubtopologyId(subtopologyId)
+                .setPartitions(ownedActivePartitions)))
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
     }
 }

@@ -24,7 +24,6 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
@@ -103,20 +102,21 @@ public class TargetAssignmentBuilder {
     /**
      * Constructs the object.
      *
-     * @param groupId    The group ID.
-     * @param groupEpoch The group epoch to compute a target assignment for.
-     * @param assignor   The assignor to use to compute the target assignment.
+     * @param groupId           The group ID.
+     * @param groupEpoch        The group epoch to compute a target assignment for.
+     * @param assignor          The assignor to use to compute the target assignment.
+     * @param assignmentConfigs The assignment configs to pass to the assignor.
      */
     public TargetAssignmentBuilder(
         String groupId,
         int groupEpoch,
         TaskAssignor assignor,
-        Map<String, String> assignmentConfigs
+        AssignmentConfigs assignmentConfigs
     ) {
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
-        this.assignmentConfigs = AssignmentConfigsImpl.fromMap(Objects.requireNonNull(assignmentConfigs));
+        this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
 
     static MemberMetadataAndStateImpl createMemberMetadataAndState(
