@@ -293,6 +293,33 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldEnforceSynchronousBootstrapResolutionForAllClientsByDefault() {
+        assertEquals(0L, streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getRestoreConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getGlobalConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getProducerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getAdminConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
+    public void shouldIgnoreUserSpecifiedBootstrapResolveTimeout() {
+        props.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "120000");
+        props.put(StreamsConfig.consumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.mainConsumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.restoreConsumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.globalConsumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.producerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.adminClientPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertEquals(0L, streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getRestoreConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getGlobalConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getProducerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getAdminConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
     public void testGetRestoreConsumerConfigs() {
         final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId);
