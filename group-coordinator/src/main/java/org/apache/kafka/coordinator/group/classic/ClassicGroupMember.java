@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Bytes;
 
 import java.util.HashSet;
@@ -397,17 +398,56 @@ public class ClassicGroupMember {
     }
 
     /**
+     * Set the member's join future, completing any pending one with NOT_COORDINATOR.
+     *
      * @param value the updated join future.
      */
     public void setAwaitingJoinFuture(CompletableFuture<JoinGroupResponseData> value) {
+        completeJoinFuture(new JoinGroupResponseData()
+            .setMemberId(memberId)
+            .setErrorCode(Errors.NOT_COORDINATOR.code()));
         this.awaitingJoinFuture = value;
     }
 
     /**
+     * Complete the member's join future, if one is pending, with the given response, and clear it.
+     *
+     * @param response the join response to complete the future with.
+     * @return true if a join future was completed.
+     */
+    public boolean completeJoinFuture(JoinGroupResponseData response) {
+        if (isAwaitingJoin()) {
+            awaitingJoinFuture.complete(response);
+            awaitingJoinFuture = null;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Set the member's sync future, completing any pending one with NOT_COORDINATOR.
+     *
      * @param value the updated sync future.
      */
     public void setAwaitingSyncFuture(CompletableFuture<SyncGroupResponseData> value) {
+        completeSyncFuture(new SyncGroupResponseData()
+            .setErrorCode(Errors.NOT_COORDINATOR.code()));
         this.awaitingSyncFuture = value;
+    }
+
+    /**
+     * Complete the member's sync future, if one is pending, with the given response, and clear it.
+     *
+     * @param response the sync response to complete the future with.
+     * @return true if a sync future was completed.
+     */
+    public boolean completeSyncFuture(SyncGroupResponseData response) {
+        if (isAwaitingSync()) {
+            awaitingSyncFuture.complete(response);
+            awaitingSyncFuture = null;
+            return true;
+        }
+        return false;
     }
 
     /**
