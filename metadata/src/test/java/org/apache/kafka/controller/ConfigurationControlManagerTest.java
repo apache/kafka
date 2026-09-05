@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.SupportedConfigChecker;
@@ -191,7 +192,8 @@ public class ConfigurationControlManagerTest {
                 entry("quux", entry(SET, "abc")))),
                 entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
                 true,
-                false);
+                false,
+                KafkaPrincipal.ANONYMOUS);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -208,7 +210,7 @@ public class ConfigurationControlManagerTest {
                 toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("abc", entry(DELETE, "xyz"))))),
-                true, false));
+                true, false, KafkaPrincipal.ANONYMOUS));
     }
 
     @Test
@@ -221,7 +223,7 @@ public class ConfigurationControlManagerTest {
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
 
         ControllerResult<ApiError> result = manager.
-            incrementalAlterConfig(MYTOPIC, keyToOps, true, false);
+            incrementalAlterConfig(MYTOPIC, keyToOps, true, false, KafkaPrincipal.ANONYMOUS);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -234,13 +236,13 @@ public class ConfigurationControlManagerTest {
                     new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                         setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 ApiError.NONE),
-            manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true, false));
+            manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true, false, KafkaPrincipal.ANONYMOUS));
 
         // The configuration value exceeding the maximum size is not allowed to be added.
         String largeValue = new String(new char[Short.MAX_VALUE - APPEND.id() - 1]);
         Map<String, Entry<AlterConfigOp.OpType, String>> largeValueOfOps = toMap(entry("abc", entry(APPEND, largeValue)));
 
-        ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true, false);
+        ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true, false, KafkaPrincipal.ANONYMOUS);
         assertEquals(Errors.INVALID_CONFIG, invalidConfigValueResult.response().error());
         assertEquals("The configuration value cannot be added because it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.",
                 invalidConfigValueResult.response().message());
@@ -255,7 +257,7 @@ public class ConfigurationControlManagerTest {
             build();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
-            incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true, false);
+            incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true, false, KafkaPrincipal.ANONYMOUS);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -266,7 +268,7 @@ public class ConfigurationControlManagerTest {
 
         // It's ok for the appended value to be already present
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true, false);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true, false, KafkaPrincipal.ANONYMOUS);
         assertEquals(
             ControllerResult.atomicOf(List.of(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
@@ -274,7 +276,7 @@ public class ConfigurationControlManagerTest {
         RecordTestUtils.replayAll(manager, result.records());
 
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true, false);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true, false, KafkaPrincipal.ANONYMOUS);
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
@@ -284,7 +286,7 @@ public class ConfigurationControlManagerTest {
 
         // It's ok for the deleted value not to be present
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true, false);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true, false, KafkaPrincipal.ANONYMOUS);
         assertEquals(
             ControllerResult.atomicOf(List.of(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
@@ -309,7 +311,8 @@ public class ConfigurationControlManagerTest {
                 entry("quux", entry(SET, "1")))),
                 entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
                 false,
-                false);
+                false,
+                KafkaPrincipal.ANONYMOUS);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("ExistingTopic").
@@ -383,9 +386,9 @@ public class ConfigurationControlManagerTest {
                 ),
                 toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION,
                     "Expected: AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
-                    "type=TOPIC, name='mytopic'), configs={}). Got: " +
+                    "type=TOPIC, name='mytopic'), configs={}, principal=null). Got: " +
                     "AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
-                    "type=TOPIC, name='mytopic'), configs={foo.bar=123})")),
+                    "type=TOPIC, name='mytopic'), configs={foo.bar=123}, principal=User:ANONYMOUS)")),
                 entry(BROKER0, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("foo.bar", entry(SET, "123")))),
@@ -395,7 +398,63 @@ public class ConfigurationControlManagerTest {
                         entry("broker.config.to.remove", entry(DELETE, null))
                 ))),
                 true,
-                false));
+                false,
+                KafkaPrincipal.ANONYMOUS));
+    }
+
+    private static class CapturingAlterConfigsPolicy implements AlterConfigPolicy {
+        private final List<RequestMetadata> captured = new ArrayList<>();
+
+        @Override
+        public void validate(RequestMetadata requestMetadata) throws PolicyViolationException {
+            captured.add(requestMetadata);
+        }
+
+        @Override
+        public void close() {
+            // nothing to do
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // nothing to do
+        }
+    }
+
+    @Test
+    public void testIncrementalAlterConfigsPassesPrincipalToPolicy() {
+        CapturingAlterConfigsPolicy policy = new CapturingAlterConfigsPolicy();
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
+            setKafkaConfigSchema(SCHEMA).
+            setAlterConfigPolicy(Optional.of(policy)).
+            build();
+        KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "tenant-a");
+        manager.incrementalAlterConfigs(
+            toMap(entry(MYTOPIC, toMap(entry("foo.bar", entry(SET, "123"))))),
+            true,
+            false,
+            principal);
+        assertEquals(1, policy.captured.size());
+        assertEquals(Optional.of(principal), policy.captured.get(0).principal());
+    }
+
+    @Test
+    public void testLegacyAlterConfigsPassesPrincipalToPolicy() {
+        CapturingAlterConfigsPolicy policy = new CapturingAlterConfigsPolicy();
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
+            setKafkaConfigSchema(SCHEMA).
+            setAlterConfigPolicy(Optional.of(policy)).
+            build();
+        KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "tenant-b");
+        manager.legacyAlterConfigs(
+            toMap(entry(MYTOPIC, toMap(entry("foo.bar", "123")))),
+            true,
+            false,
+            principal);
+        assertEquals(1, policy.captured.size());
+        assertEquals(Optional.of(principal), policy.captured.get(0).principal());
     }
 
     private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
@@ -438,7 +497,7 @@ public class ConfigurationControlManagerTest {
                 expectedRecords1, toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(
                 toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901")))),
-                true, false));
+                true, false, KafkaPrincipal.ANONYMOUS));
         for (ApiMessageAndVersion message : expectedRecords1) {
             manager.replay((ConfigRecord) message.message());
         }
@@ -452,7 +511,7 @@ public class ConfigurationControlManagerTest {
                 CONFIG_RECORD.highestSupportedVersion())),
             toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
-                true, false));
+                true, false, KafkaPrincipal.ANONYMOUS));
     }
 
     @ParameterizedTest
@@ -469,7 +528,7 @@ public class ConfigurationControlManagerTest {
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps =
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "3")));
         ConfigResource brokerConfigResource = new ConfigResource(ConfigResource.Type.BROKER, "1");
-        ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true, false);
+        ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true, false, KafkaPrincipal.ANONYMOUS);
         assertEquals(Set.of(), manager.brokersWithConfigs());
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
@@ -536,7 +595,7 @@ public class ConfigurationControlManagerTest {
         result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                 removal ? entry(DELETE, null) : entry(SET, "3"))),
-            true, false);
+            true, false, KafkaPrincipal.ANONYMOUS);
         assertEquals(Errors.INVALID_CONFIG, result.response().error());
         assertEquals("Broker-level min.insync.replicas cannot be altered while ELR is enabled.",
             result.response().message());
@@ -545,7 +604,7 @@ public class ConfigurationControlManagerTest {
         result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, ""),
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                 removal ? entry(DELETE, null) : entry(SET, "3"))),
-            true, false);
+            true, false, KafkaPrincipal.ANONYMOUS);
         if (removal) {
             assertEquals(Errors.INVALID_CONFIG, result.response().error());
             assertEquals("Cluster-level min.insync.replicas cannot be removed while ELR is enabled.",
@@ -612,12 +671,12 @@ public class ConfigurationControlManagerTest {
 
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
                 toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, ""))),
-                true, false);
+                true, false, KafkaPrincipal.ANONYMOUS);
         assertEquals(enabled ? ApiError.NONE : DISABLED_CORDONED_LOG_DIRS_ERROR, result.response());
 
         result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
                 toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, "*"))),
-                true, false);
+                true, false, KafkaPrincipal.ANONYMOUS);
         assertEquals(enabled ? INVALID_CORDONED_LOG_DIRS_ERROR : DISABLED_CORDONED_LOG_DIRS_ERROR, result.response());
     }
 
@@ -662,7 +721,8 @@ public class ConfigurationControlManagerTest {
             MYTOPIC,
             toMap(entry("def", entry(SET, "newValue"))),
             false,
-            false);
+            false,
+            KafkaPrincipal.ANONYMOUS);
 
         assertEquals(ApiError.NONE, result.response());
     }

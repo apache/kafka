@@ -29,6 +29,7 @@ import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.SupportedConfigChecker;
@@ -228,7 +229,8 @@ public class ConfigurationControlManager {
     ControllerResult<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
         boolean newlyCreatedResource,
-        boolean forwarded
+        boolean forwarded,
+        KafkaPrincipal principal
     ) {
         List<ApiMessageAndVersion> outputRecords =
                 BoundedList.newArrayBacked(maxRecordsPerBatch);
@@ -239,7 +241,8 @@ public class ConfigurationControlManager {
                 resourceEntry.getValue(),
                 newlyCreatedResource,
                 outputRecords,
-                forwarded);
+                forwarded,
+                principal);
             outputResults.put(resourceEntry.getKey(), apiError);
         }
         outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
@@ -272,7 +275,8 @@ public class ConfigurationControlManager {
         ConfigResource configResource,
         Map<String, Entry<OpType, String>> keyToOps,
         boolean newlyCreatedResource,
-        boolean forwarded
+        boolean forwarded,
+        KafkaPrincipal principal
     ) {
         List<ApiMessageAndVersion> outputRecords =
                 BoundedList.newArrayBacked(maxRecordsPerBatch);
@@ -280,7 +284,8 @@ public class ConfigurationControlManager {
             keyToOps,
             newlyCreatedResource,
             outputRecords,
-            forwarded);
+            forwarded,
+            principal);
 
         outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
         return ControllerResult.atomicOf(outputRecords, apiError);
@@ -291,7 +296,8 @@ public class ConfigurationControlManager {
         Map<String, Entry<OpType, String>> keysToOps,
         boolean newlyCreatedResource,
         List<ApiMessageAndVersion> outputRecords,
-        boolean forwarded
+        boolean forwarded,
+        KafkaPrincipal principal
     ) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
         for (Entry<String, Entry<OpType, String>> keysToOpsEntry : keysToOps.entrySet()) {
@@ -343,7 +349,7 @@ public class ConfigurationControlManager {
                     setValue(newValue), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), newlyCreatedResource, forwarded);
+        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), newlyCreatedResource, forwarded, principal);
         if (error.isFailure()) {
             return error;
         }
@@ -356,7 +362,8 @@ public class ConfigurationControlManager {
         List<ApiMessageAndVersion> recordsExplicitlyAltered,
         List<ApiMessageAndVersion> recordsImplicitlyDeleted,
         boolean newlyCreatedResource,
-        boolean forwarded
+        boolean forwarded,
+        KafkaPrincipal principal
     ) {
         Map<String, String> allConfigs = new HashMap<>();
         Map<String, String> existingConfigsMap = new HashMap<>();
@@ -408,7 +415,7 @@ public class ConfigurationControlManager {
             if (!newlyCreatedResource) {
                 existenceChecker.accept(configResource);
             }
-            alterConfigPolicy.ifPresent(policy -> policy.validate(new RequestMetadata(configResource, alteredConfigsForAlterConfigPolicyCheck)));
+            alterConfigPolicy.ifPresent(policy -> policy.validate(new RequestMetadata(configResource, alteredConfigsForAlterConfigPolicyCheck, principal)));
         } catch (ConfigException e) {
             return new ApiError(INVALID_CONFIG, e.getMessage());
         } catch (Throwable e) {
@@ -511,7 +518,8 @@ public class ConfigurationControlManager {
     ControllerResult<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         Map<ConfigResource, Map<String, String>> newConfigs,
         boolean newlyCreatedResource,
-        boolean forwarded
+        boolean forwarded,
+        KafkaPrincipal principal
     ) {
         List<ApiMessageAndVersion> outputRecords =
                 BoundedList.newArrayBacked(maxRecordsPerBatch);
@@ -523,7 +531,8 @@ public class ConfigurationControlManager {
                 newlyCreatedResource,
                 outputRecords,
                 outputResults,
-                forwarded);
+                forwarded,
+                principal);
         }
         outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
         return ControllerResult.atomicOf(outputRecords, outputResults);
@@ -534,7 +543,8 @@ public class ConfigurationControlManager {
                                            boolean newlyCreatedResource,
                                            List<ApiMessageAndVersion> outputRecords,
                                            Map<ConfigResource, ApiError> outputResults,
-                                           boolean forwarded) {
+                                           boolean forwarded,
+                                           KafkaPrincipal principal) {
         List<ApiMessageAndVersion> recordsExplicitlyAltered = new ArrayList<>();
         Map<String, String> currentConfigs = configData.get(configResource);
         if (currentConfigs == null) {
@@ -563,7 +573,7 @@ public class ConfigurationControlManager {
                     setValue(null), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, newlyCreatedResource, forwarded);
+        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, newlyCreatedResource, forwarded, principal);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;
