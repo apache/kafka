@@ -195,7 +195,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
 
         Map<String, Pattern> patternsMap = new HashMap<>();
         patterns.forEach(pattern -> {
-            String[] nameValuePair = pattern.split("=");
+            String[] nameValuePair = pattern.split("=", 2);
             if (nameValuePair.length != 2) {
                 throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
             }
