@@ -172,6 +172,29 @@ class RemoteLogLeaderEpochStateTest {
     }
 
     @Test
+    void handleSegmentWithCopySegmentFinishedStateForReplacementBelowHighestOffset() {
+        RemoteLogSegmentId segmentId1 = new RemoteLogSegmentId(tpId, Uuid.randomUuid());
+        RemoteLogSegmentId segmentId2 = new RemoteLogSegmentId(tpId, Uuid.randomUuid());
+        RemoteLogSegmentId segmentId3 = new RemoteLogSegmentId(tpId, Uuid.randomUuid());
+        epochState.handleSegmentWithCopySegmentFinishedState(0L, segmentId1, 100L);
+        epochState.handleSegmentWithCopySegmentFinishedState(101L, segmentId2, 200L);
+        epochState.handleSegmentWithCopySegmentFinishedState(0L, segmentId3, 150L);
+
+        assertEquals(2, epochState.referencedSegmentIds().size());
+        assertTrue(epochState.referencedSegmentIds().containsAll(List.of(segmentId2, segmentId3)));
+        assertEquals(segmentId3, epochState.floorEntry(50L));
+        assertEquals(segmentId2, epochState.floorEntry(175L));
+        assertEquals(1, epochState.unreferencedSegmentIds().size());
+        assertTrue(epochState.unreferencedSegmentIds().contains(segmentId1));
+        assertEquals(200L, epochState.highestLogOffset());
+
+        // Replaying the same update must not make the referenced segment unreferenced.
+        epochState.handleSegmentWithCopySegmentFinishedState(0L, segmentId3, 150L);
+        assertEquals(1, epochState.unreferencedSegmentIds().size());
+        assertTrue(epochState.unreferencedSegmentIds().contains(segmentId1));
+    }
+
+    @Test
     void handleSegmentWithDeleteSegmentStartedState() {
         RemoteLogSegmentId segmentId1 = new RemoteLogSegmentId(tpId, Uuid.randomUuid());
         RemoteLogSegmentId segmentId2 = new RemoteLogSegmentId(tpId, Uuid.randomUuid());
