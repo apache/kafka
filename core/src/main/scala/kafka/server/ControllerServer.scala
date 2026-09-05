@@ -284,7 +284,7 @@ class ControllerServer(
       quotaManagers = QuotaFactory.instantiate(config,
         metrics,
         time,
-        s"controller-${config.nodeId}-", ProcessRole.ControllerRole.toString)
+        s"controller-${config.nodeId}-", sharedServer.clientQuotaCallbackPlugin)
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizerPlugin,

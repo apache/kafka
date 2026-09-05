@@ -97,7 +97,33 @@ public class QuotaFactory {
         );
     }
 
-    private static Optional<Plugin<ClientQuotaCallback>> createClientQuotaCallback(
+    /**
+     * Create {@link QuotaManagers} from a pre-created {@link ClientQuotaCallback} plugin instead of
+     * instantiating a new one. This lets a combined-mode broker and controller share a single callback
+     * instance (see KAFKA-20650) rather than each creating their own via reflection with divergent state.
+     */
+    public static QuotaManagers instantiate(
+        AbstractKafkaConfig cfg,
+        Metrics metrics,
+        Time time,
+        String threadNamePrefix,
+        Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin
+    ) {
+        return new QuotaManagers(
+            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.FETCH, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.PRODUCE, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ClientRequestQuotaManager(clientConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.LEADER_REPLICATION, time),
+            new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.FOLLOWER_REPLICATION, time),
+            new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, QuotaType.ALTER_LOG_DIRS_REPLICATION, time),
+            clientQuotaCallbackPlugin
+        );
+    }
+
+    // Public so a combined-mode SharedServer can create one callback and pass it to both the
+    // broker's and the controller's quota managers (KAFKA-20650).
+    public static Optional<Plugin<ClientQuotaCallback>> createClientQuotaCallback(
         AbstractKafkaConfig cfg,
         Metrics metrics,
         String role
