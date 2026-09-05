@@ -630,7 +630,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.server.AssignmentsManager"/>
             <Class name="org.apache.kafka.connect.file.FileStreamSourceTask"/>
             <Class name="org.apache.kafka.streams.processor.internals.InternalTopologyBuilder"/>
-            <Class name="org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
             <Class name="org.apache.kafka.streams.processor.internals.TaskManager"/>
             <Class name="org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore"/>
@@ -668,6 +667,16 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.trogdor.coordinator.NodeManager$NodeHeartbeat"/>
             <Class name="org.apache.kafka.connect.runtime.distributed.DistributedHerder$RebalanceListener"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
+        </Or>
+        <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+    </Match>
+
+    <Match>
+        <!-- KAFKA-20404: Both fields are accessed only from ConsumerPartitionAssignor callbacks (configure, subscriptionUserData, onAssignment) that the KafkaConsumer invokes from poll(); poll() in turn is driven by the StreamThread, so the read-modify-write happens on a single thread. -->
+        <Class name="org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor"/>
+        <Or>
+            <Field name="uniqueField"/>
+            <Field name="usedSubscriptionMetadataVersion"/>
         </Or>
         <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
     </Match>
