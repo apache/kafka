@@ -1807,7 +1807,8 @@ public class RemoteLogManagerTest {
                 return remoteLogMetadataManager;
             }
             @Override
-            Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset) {
+            Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset,
+                                                                      int maxMessageSize) {
                 return Optional.of(expectedRemoteResult);
             }
         };
@@ -3763,7 +3764,7 @@ public class RemoteLogManagerTest {
                 return Optional.of(segmentMetadata);
             }
             @Override
-            public RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
+            public RemoteLogInputStream getRemoteLogInputStream(InputStream in, int maxMessageSize) {
                 return remoteLogInputStream;
             }
             @Override
