@@ -152,7 +152,7 @@ public class AbstractConfig {
     }
 
     /**
-     * Called directly after user configs got parsed (and thus default values is not set).
+     * Called directly after user configs got parsed (and thus default values are not set).
      * This allows to check user's config.
      *
      * @param parsedValues unmodifiable map of current configuration
