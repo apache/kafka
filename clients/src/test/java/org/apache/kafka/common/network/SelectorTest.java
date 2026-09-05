@@ -456,6 +456,9 @@ public class SelectorTest {
         String id = "0";
         selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.waitForChannelConnected(selector, id);
+        NetworkTestUtils.waitForChannelReady(selector, id);
+        // Complete an application round trip so TLS 1.3 post-handshake messages are processed before the idle window.
+        assertEquals("", blockingRequest(id, ""));
         time.sleep(CONNECTION_MAX_IDLE_MS + 1_000);
         selector.poll(0);
 
