@@ -2012,6 +2012,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
         }
 
+        // If the background thread has already discovered a metadata error (e.g. TopicAuthorizationException)
+        // and completed the inflight poll event, skip blocking on the fetch buffer entirely. The error will
+        // be surfaced by checkInflightPoll on the next iteration of the poll loop. See KAFKA-20397.
+        if (inflightPoll != null && inflightPoll.error().isPresent()) {
+            return collectFetch();
+        }
+
         log.trace("Polling for fetches with timeout {}", pollTimeout);
 
         Timer pollTimer = time.timer(pollTimeout);
