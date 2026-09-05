@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -522,34 +523,34 @@ public class ListConsumerGroupTest {
     }
 
     private static AutoCloseable consumerGroupClosable(ClusterInstance clusterInstance, GroupProtocol protocol, String groupId, String topicName) {
-        Map<String, Object> configs = consumerConfigs(clusterInstance, groupId, protocol);
+        Map<String, Object> configs = composeConfigs(clusterInstance, groupId, protocol.name);
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
                 1,
                 false,
                 topicName,
-                () -> new KafkaConsumer<>(configs)
+                () -> new KafkaConsumer<String, String>(configs)
         );
     }
 
     private static AutoCloseable consumerGroupClosable(ClusterInstance clusterInstance, String groupId, Set<TopicPartition> topicPartitions) {
-        Map<String, Object> configs = consumerConfigs(clusterInstance, groupId, GroupProtocol.CLASSIC);
+        Map<String, Object> configs = composeConfigs(clusterInstance, groupId, GroupProtocol.CLASSIC.name);
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
                 1,
                 topicPartitions,
-                () -> new KafkaConsumer<>(configs)
+                () -> new KafkaConsumer<String, String>(configs)
         );
     }
 
-    private static Map<String, Object> consumerConfigs(ClusterInstance clusterInstance, String groupId, GroupProtocol groupProtocol) {
+    private static Map<String, Object> composeConfigs(ClusterInstance clusterInstance, String groupId, String groupProtocol) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         configs.put(GROUP_ID_CONFIG, groupId);
         configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name);
-        if (groupProtocol == GroupProtocol.CLASSIC) {
+        configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol);
+        if (GroupProtocol.CLASSIC.name.equalsIgnoreCase(groupProtocol)) {
             configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
         }
         return configs;
@@ -584,15 +585,15 @@ public class ListConsumerGroupTest {
      * @param expectedListing        Expected consumer group listings.
      */
     private static void assertGroupListing(
-            ConsumerGroupCommand.ConsumerGroupService service,
-            Set<GroupType> typeFilterSet,
-            Set<GroupState> groupStateFilterSet,
-            Set<GroupListing> expectedListing
+        ConsumerGroupCommand.ConsumerGroupService service,
+        Set<GroupType> typeFilterSet,
+        Set<GroupState> groupStateFilterSet,
+        Set<GroupListing> expectedListing
     ) throws Exception {
         final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>(Set.of());
         TestUtils.waitForCondition(() -> {
             foundListing.set(new HashSet<>(service.listConsumerGroupsWithFilters(typeFilterSet, groupStateFilterSet)));
-            return expectedListing.equals(foundListing.get());
+            return Objects.equals(expectedListing, foundListing.get());
         }, () -> "Expected to show groups " + expectedListing + ", but found " + foundListing.get() + ".");
     }
 
@@ -606,9 +607,9 @@ public class ListConsumerGroupTest {
      * @throws InterruptedException
      */
     private static void validateListOutput(
-            List<String> args,
-            List<String> expectedHeader,
-            Set<List<String>> expectedRows
+        List<String> args,
+        List<String> expectedHeader,
+        Set<List<String>> expectedRows
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
         TestUtils.waitForCondition(() -> {
