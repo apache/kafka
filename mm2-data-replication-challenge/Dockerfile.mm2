@@ -1,0 +1,18 @@
+# Builds a Kafka binary distribution from this checkout so the MM2 container
+# exercises the MirrorSourceTask changes in the PR.
+FROM eclipse-temurin:17-jdk-jammy AS build
+
+WORKDIR /src
+COPY . .
+RUN ./gradlew --no-daemon clean releaseTarGz
+RUN mkdir -p /opt/kafka \
+    && tar -xzf core/build/distributions/kafka_2.13-*.tgz -C /opt/kafka --strip-components=1
+
+FROM eclipse-temurin:17-jre-jammy
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash procps \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /opt/kafka /opt/kafka
+WORKDIR /opt/kafka
+ENTRYPOINT ["/opt/kafka/bin/connect-mirror-maker.sh"]
+CMD ["/etc/mm2/mm2.properties"]
