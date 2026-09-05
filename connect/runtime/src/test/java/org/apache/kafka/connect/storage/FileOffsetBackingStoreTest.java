@@ -23,18 +23,18 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -60,6 +60,8 @@ public class FileOffsetBackingStoreTest {
 
     private FileOffsetBackingStore store;
     private StandaloneConfig config;
+    @TempDir
+    private Path tempDir;
     private File tempFile;
     private Converter converter;
 
@@ -80,7 +82,7 @@ public class FileOffsetBackingStoreTest {
         when(converter.toConnectData(anyString(), any(byte[].class))).thenReturn(new SchemaAndValue(null,
                 List.of("connector", Map.of("partitionKey", "dummy"))));
         store = new FileOffsetBackingStore(converter);
-        tempFile = assertDoesNotThrow(() -> File.createTempFile("fileoffsetbackingstore", null));
+        tempFile = assertDoesNotThrow(() -> Files.createFile(tempDir.resolve("fileoffsetbackingstore.tmp")).toFile());
         Map<String, String> props = new HashMap<>();
         props.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
         props.put(StandaloneConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
@@ -91,11 +93,6 @@ public class FileOffsetBackingStoreTest {
         store.start();
         assertTrue(((ThreadPoolExecutor) store.executor).getThreadFactory()
                 .newThread(EMPTY_RUNNABLE).getName().startsWith(FileOffsetBackingStore.class.getSimpleName()));
-    }
-
-    @AfterEach
-    public void teardown() throws IOException {
-        Files.deleteIfExists(tempFile.toPath());
     }
 
     @Test
