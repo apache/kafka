@@ -185,6 +185,13 @@ public class OAuthBearerSaslServerTest {
     }
 
     @Test
+    public void factoryCreatesServerWithNullServerName() {
+        OAuthBearerSaslServer.OAuthBearerSaslServerFactory factory = new OAuthBearerSaslServer.OAuthBearerSaslServerFactory();
+        assertNotNull(factory.createSaslServer(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, "kafka", null,
+                CONFIGS, VALIDATOR_CALLBACK_HANDLER));
+    }
+
+    @Test
     public void authorizationIdNotEqualsAuthenticationId() {
         assertThrows(SaslAuthenticationException.class,
             () -> saslServer.evaluateResponse(clientInitialResponse(USER + "x")));
