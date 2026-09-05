@@ -25,10 +25,12 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -1353,6 +1355,16 @@ public class ConfigDef {
             this.alternativeString = alternativeString;
         }
 
+        private ConfigKey(ConfigKey.Builder<?> builder) {
+            this(builder.name, builder.type, builder.defaultValue, builder.validator, builder.importance, builder.documentation, builder.group,
+                    builder.orderInGroup, builder.width, builder.displayName, builder.getDependents(), builder.recommender, builder.internalConfig,
+                builder.alternativeString);
+        }
+
+        public static Builder<?> builder(String name) {
+            return new Builder<>(name);
+        }
+
         public boolean hasDefault() {
             return !NO_DEFAULT_VALUE.equals(this.defaultValue);
         }
@@ -1360,6 +1372,163 @@ public class ConfigDef {
         public Type type() {
             return type;
         }
+
+        /**
+         * Builder for ConfigDef.ConfigKey instances.
+         * @param <T> the class of the builder itself.
+         */
+        public static class Builder<T extends Builder<?>> {
+            private final String name;
+            private ConfigDef.Type type;
+            private Object defaultValue;
+            private ConfigDef.Validator validator;
+            private ConfigDef.Importance importance;
+            private String documentation;
+            private String group;
+            private int orderInGroup;
+            private ConfigDef.Width width;
+            private String displayName;
+            private Set<String> dependents;
+            private ConfigDef.Recommender recommender;
+            private boolean internalConfig;
+            private String alternativeString;
+
+            /**
+             * Initializes the builder with the specified {@code name}.  Sets the following defaults:
+             * <ul>
+             *     <li>type = {@link ConfigDef.Type#STRING}</li>
+             *     <li>displayName = {@code name}</li>
+             *     <li>defaultValue = {@link #NO_DEFAULT_VALUE}</li>
+             *     <li>orderInGorup = -1</li>
+             *     <li>width = {@link ConfigDef.Width#NONE}</li>
+             * </ul>
+             * @param name the name of the ConfigKey instance.
+             */
+            protected Builder(String name) {
+                this.name = name;
+                this.type = ConfigDef.Type.STRING;
+                this.displayName = name;
+                this.defaultValue = NO_DEFAULT_VALUE;
+                this.orderInGroup = -1;
+                this.width = ConfigDef.Width.NONE;
+            }
+
+            public ConfigDef.ConfigKey build() {
+                return new ConfigKey(this);
+            }
+
+            @SuppressWarnings("unchecked")
+            protected T self() {
+                return (T) this;
+            }
+
+            public final T type(final ConfigDef.Type type) {
+                this.type = type;
+                return self();
+            }
+
+            public final T  defaultValue(final Object defaultValue) {
+                this.defaultValue = defaultValue;
+                return self();
+            }
+
+            public final T validator(final ConfigDef.Validator validator) {
+                this.validator = validator;
+                return self();
+            }
+
+            public final T importance(final ConfigDef.Importance importance) {
+                this.importance = importance;
+                return self();
+            }
+
+            public final T documentation(final String documentation) {
+                this.documentation = documentation;
+                return self();
+            }
+
+            public final T group(final String group) {
+                this.group = group;
+                return self();
+            }
+
+            public final T orderInGroup(final int orderInGroup) {
+                this.orderInGroup = orderInGroup;
+                return self();
+            }
+
+            public final T width(final ConfigDef.Width width) {
+                this.width = width;
+                return self();
+            }
+
+            public final T displayName(final String displayName) {
+                this.displayName = displayName;
+                return self();
+            }
+
+            /**
+             * Adds the dependents to the dependents for the final ConfigDef.ConfigKey.
+             * Once added dependents can not be removed within the builder.
+             * Dependents are unique, Adding a dependent multiple times has no effect.
+             * @param dependents the collection of dependents to add.
+             * @return this
+             */
+            public final T dependents(final Collection<String> dependents) {
+                if (this.dependents == null) {
+                    this.dependents = new LinkedHashSet<>(dependents);
+                } else {
+                    this.dependents.addAll(dependents);
+                }
+                return self();
+            }
+
+            /**
+             * Adds the dependents to the dependents for the final ConfigDef.ConfigKey.
+             * Once added dependents can not be removed within the builder.
+             * Dependents are unique, Adding a dependent multiple times has no effect.
+             * @param dependents the collection of dependents to add.
+             * @return this
+             */
+            public final T dependents(final String... dependents) {
+                return dependents(Arrays.asList(dependents));
+            }
+
+            /**
+             * Adds a dependent to the dependents for the final ConfigDef.ConfigKey.
+             * Once added dependents can not be removed within the builder.
+             * Dependents are unique, Adding a dependent multiple times has no effect.
+             * @param dependent the dependent to add.
+             * @return this
+             */
+            public final T dependent(final String dependent) {
+                if (this.dependents == null) {
+                    this.dependents = new LinkedHashSet<>();
+                }
+                this.dependents.add(dependent);
+                return self();
+            }
+
+            private List<String> getDependents() {
+                return new LinkedList<>(dependents);
+            }
+
+            public final T recommender(final ConfigDef.Recommender recommender) {
+                this.recommender = recommender;
+                return self();
+            }
+
+            public final T internalConfig(final boolean internalConfig) {
+                this.internalConfig = internalConfig;
+                return self();
+            }
+
+            public final T alternativeString(final String alternativeString) {
+                this.alternativeString = alternativeString;
+                return self();
+            }
+        }
+
     }
 
     protected List<String> headers() {
@@ -1447,7 +1616,7 @@ public class ConfigDef {
     }
 
     public String toHtmlTable() {
-        return toHtmlTable(Map.of());
+        return toHtmlTable(Collections.emptyMap());
     }
 
     private void addHeader(StringBuilder builder, String headerName) {
