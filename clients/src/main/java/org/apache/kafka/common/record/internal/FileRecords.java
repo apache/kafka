@@ -126,15 +126,21 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Read log batches into the given buffer until there are no bytes remaining in the buffer or the end of the file
-     * is reached.
+     * Read log batches into the given buffer until there are no bytes remaining in the buffer or the end of these
+     * records is reached. A buffer with more room than the records left from {@code position} has its limit lowered
+     * so that only those records are read and the bytes which follow them in the file are left alone. The buffer is
+     * flipped before returning, so it is positioned at the first byte read and limited to the number of bytes read.
      *
      * @param buffer The buffer to write the batches to
-     * @param position Position in the buffer to read from
+     * @param position Position in these records to read from
+     * @throws IllegalArgumentException If the position is negative or past the end of these records
      * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
      * possible exceptions
      */
     public void readInto(ByteBuffer buffer, int position) throws IOException {
+        int available = availableBytes(position, buffer.remaining());
+        if (buffer.remaining() > available)
+            buffer.limit(buffer.position() + available);
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
     }
