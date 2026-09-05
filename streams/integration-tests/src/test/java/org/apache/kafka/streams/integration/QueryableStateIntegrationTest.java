@@ -812,6 +812,10 @@ public class QueryableStateIntegrationTest {
                 new KeyValue<>(keys[3], "5"),
                 new KeyValue<>(keys[4], "2"))
         );
+        final List<KeyValue<String, Long>> expectedRangeResult = List.of(
+                new KeyValue<>(keys[0], 1L),
+                new KeyValue<>(keys[4], 2L)
+        );
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamOne,
@@ -843,11 +847,13 @@ public class QueryableStateIntegrationTest {
             assertEquals(Long.valueOf(batchEntry.value), myMapStore.get(batchEntry.key));
         }
 
+        int index = 0;
         try (final KeyValueIterator<String, Long> range = myMapStore.range("hello", "kafka")) {
             while (range.hasNext()) {
-                System.out.println(range.next());
+                assertEquals(expectedRangeResult.get(index++), range.next());
             }
         }
+        assertEquals(expectedRangeResult.size(), index);
     }
 
     @Test
@@ -902,6 +908,7 @@ public class QueryableStateIntegrationTest {
                 assertEquals(expectedPrefixScanResult.get(index++), range.next());
             }
         }
+        assertEquals(expectedPrefixScanResult.size(), index);
     }
 
     @Test
