@@ -116,7 +116,7 @@ jobs:
           state: 'error'
       - name: Publish Scan
         id: publish-build-scan
-        if: ${{ steps.download-build-scan.outcome == 'success' }}
+        if: ${{ github.repository == 'apache/kafka' && steps.download-build-scan.outcome == 'success' }}
         run: |
           set +e
           ./gradlew --info buildScanPublishPrevious > gradle.out
@@ -132,7 +132,7 @@ jobs:
             echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
           fi
       - name: Handle failed publish
-        if: ${{ failure() && steps.publish-build-scan.outcome == 'failure' }}
+        if: ${{ github.repository == 'apache/kafka' && failure() && steps.publish-build-scan.outcome == 'failure' }}
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
