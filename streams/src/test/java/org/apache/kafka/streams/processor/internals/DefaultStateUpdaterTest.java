@@ -36,6 +36,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
@@ -121,6 +122,23 @@ class DefaultStateUpdaterTest {
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
     private final DefaultStateUpdater stateUpdater =
         new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time);
+    private final AtomicBoolean restoringActive = new AtomicBoolean(true);
+
+    @BeforeEach
+    public void setUp() {
+        restoringActive.set(true);
+        when(changelogReader.isRestoringActive()).thenAnswer(invocation -> restoringActive.get());
+        doAnswer(invocation -> {
+            restoringActive.set(true);
+            return null;
+        }).when(changelogReader).enforceRestoreActive();
+        doAnswer(invocation -> {
+            if (!restoringActive.compareAndSet(true, false)) {
+                throw new IllegalStateException("Changelog reader is already updating standbys");
+            }
+            return null;
+        }).when(changelogReader).transitToUpdateStandby();
+    }
 
     @AfterEach
     public void tearDown() {
@@ -800,6 +818,21 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
+    public void shouldRestoreActiveModeAfterLastStandbyTaskFailed() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(task.id()));
+        final Map<TaskId, Task> updatingTasks = Map.of(task.id(), task);
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        doThrow(taskCorruptedException).when(changelogReader).restore(updatingTasks);
+
+        stateUpdater.start();
+        stateUpdater.add(task);
+
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, task));
+        verify(changelogReader).enforceRestoreActive();
+    }
+
+    @Test
     public void shouldUpdateStandbyTaskAfterAllActiveStatefulTasksRemoved() throws Exception {
         final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
@@ -1265,12 +1298,12 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         // shutdown ensures that the test does not end before changelog reader methods verified below are called
         stateUpdater.shutdown(Duration.ofMinutes(1));
-        verify(changelogReader, times(1)).enforceRestoreActive();
+        verify(changelogReader, times(2)).enforceRestoreActive();
         verify(changelogReader, times(1)).transitToUpdateStandby();
     }
 
     @Test
-    public void shouldPauseStandbyTaskAndNotTransitToRestoreActive() throws Exception {
+    public void shouldPauseStandbyTaskAndNotTransitToRestoreActiveIfAnotherStandbyIsUpdating() throws Exception {
         final StandbyTask task1 = standbyTask(TASK_A_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         final StandbyTask task2 = standbyTask(TASK_B_0_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
 
@@ -1402,9 +1435,11 @@ class DefaultStateUpdaterTest {
     public void shouldResumeStandbyTask() throws Exception {
         final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         shouldResumeStatefulTask(task);
+        assertEquals(Optional.empty(), stateUpdater.fatalException());
         // shutdown ensures that the test does not end before changelog reader methods verified below are called
         stateUpdater.shutdown(Duration.ofMinutes(1));
         verify(changelogReader, times(2)).transitToUpdateStandby();
+        verify(changelogReader, times(2)).enforceRestoreActive();
     }
 
     private void shouldResumeStatefulTask(final Task task) throws Exception {
@@ -1490,7 +1525,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldAddFailedTasksToQueueWhenRestoreThrowsStreamsExceptionWithoutTask() throws Exception {
-        final StreamTask task1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StandbyTask task1 = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         final StandbyTask task2 = standbyTask(TASK_0_2, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
         final String exceptionMessage = "The Streams were crossed!";
         final StreamsException streamsException = new StreamsException(exceptionMessage);
@@ -1510,6 +1545,7 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks();
         verifyUpdatingTasks();
         verifyRestoredActiveTasks();
+        verify(changelogReader).enforceRestoreActive();
         assertTrue(stateUpdater.isRunning());
     }
 
