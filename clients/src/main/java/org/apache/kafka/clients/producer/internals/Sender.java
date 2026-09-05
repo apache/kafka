@@ -509,6 +509,11 @@ public class Sender implements Runnable {
             transactionManager.setInFlightCorrelationId(clientRequest.correlationId());
             client.poll(retryBackoffMs, time.milliseconds());
             return true;
+        } catch (AuthenticationException e) {
+            // The handler has already been removed from the pending queue, so fail it before
+            // propagating the exception to fail the remaining pending requests.
+            nextRequestHandler.fatalError(e);
+            throw e;
         } catch (IOException e) {
             log.debug("Disconnect from {} while trying to send request {}. Going " +
                     "to back off and retry.", targetNode, requestBuilder, e);

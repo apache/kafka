@@ -42,6 +42,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortableException;
@@ -98,6 +99,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
@@ -627,6 +629,72 @@ public class SenderTest {
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
         assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    @Test
+    public void testIdempotentInitProducerIdAuthenticationFailure() throws Exception {
+        client = spy(client);
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        Future<RecordMetadata> future = appendToAccumulator(tp0);
+
+        Node node = metadata.fetch().nodes().get(0);
+        SslAuthenticationException exception = new SslAuthenticationException("SSL handshake failed");
+        client.delayReady(node, REQUEST_TIMEOUT);
+        when(client.authenticationException(node)).thenReturn(exception);
+
+        sender.runOnce();
+
+        assertFalse(transactionManager.hasProducerId());
+        assertFalse(transactionManager.hasPendingRequests());
+        assertTrue(transactionManager.hasFatalError());
+        assertSame(exception, transactionManager.lastError());
+
+        sender.runOnce();
+        assertTrue(future.isDone());
+        assertSame(exception, assertThrows(ExecutionException.class, future::get).getCause());
+        assertFalse(accumulator.hasIncomplete());
+
+        // Authentication errors remain fatal even if the connection subsequently recovers.
+        client.delayReady(node, 0);
+        when(client.authenticationException(node)).thenReturn(null);
+        client.ready(node, time.milliseconds());
+        assertSendFailure(SslAuthenticationException.class);
+        assertFalse(client.hasInFlightRequests());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testTransactionalInitProducerIdAuthenticationFailure(boolean coordinatorKnown) {
+        client = spy(client);
+        TransactionManager transactionManager = new TransactionManager(new LogContext(), "testAuthenticationFailure",
+                60000, 100L, new ApiVersions(), metadata, false);
+        setupWithTransactionState(transactionManager);
+        TransactionalRequestResult result = transactionManager.initializeTransactions(false);
+        // Queue FindCoordinator while keeping InitProducerId pending.
+        sender.runOnce();
+
+        if (coordinatorKnown) {
+            prepareFindCoordinatorResponse(Errors.NONE, transactionManager.transactionalId());
+            sender.runOnce();
+            assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        }
+
+        Node node = metadata.fetch().nodes().get(0);
+        client.disconnect(node.idString());
+        client.delayReady(node, REQUEST_TIMEOUT);
+        SslAuthenticationException exception = new SslAuthenticationException("SSL handshake failed");
+        when(client.authenticationException(node)).thenReturn(exception);
+
+        sender.runOnce();
+
+        assertTrue(transactionManager.hasFatalError());
+        assertSame(exception, transactionManager.lastError());
+        assertTrue(result.isCompleted());
+        assertSame(exception, assertThrows(SslAuthenticationException.class,
+                () -> result.await(0, TimeUnit.MILLISECONDS, "Initialization should have failed")));
+        assertFalse(transactionManager.hasProducerId());
+        assertFalse(client.hasInFlightRequests());
     }
 
     /**
