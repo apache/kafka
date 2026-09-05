@@ -23,6 +23,10 @@
   // Version 2 adds flexible version support
   "validVersions": "1-2",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "Hmac", "type": "bytes", "versions": "0+",
       "about": "The HMAC of the delegation token to be expired." },

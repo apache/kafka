@@ -25,6 +25,10 @@
   // Version 5 adds IsCordoned field
   "validVersions": "1-5",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "1": "0",
+    "2+": "1"
+  },
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

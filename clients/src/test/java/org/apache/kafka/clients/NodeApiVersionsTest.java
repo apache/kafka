@@ -94,6 +94,7 @@ public class NodeApiVersionsTest {
                             append(apiKey.latestVersion());
                 }
                 bld.append(" [usable: ").append(apiKey.latestVersion()).
+                        append(", request header: ").append(apiKey.requestHeaderVersion(apiKey.latestVersion())).
                         append("]");
             }
             prefix = ", ";

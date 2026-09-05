@@ -26,6 +26,9 @@
   // Version 3 adds the NewIsrEpochs field and deprecates the NewIsr field (KIP-903).
   "validVersions": "2-3",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "2+": "2"
+  },
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The ID of the requesting broker." },

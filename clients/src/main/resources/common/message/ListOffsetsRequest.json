@@ -44,6 +44,10 @@
   // Version 11 enables listing offsets by earliest pending upload offset (KIP-1023)
   "validVersions": "1-11",
   "flexibleVersions": "6+",
+  "headerVersions": {
+    "1-5": "1",
+    "6+": "2"
+  },
   "latestVersionUnstable": false,
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",

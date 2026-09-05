@@ -24,6 +24,10 @@
   // Version 3 adds token requester into the response
   "validVersions": "1-3",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "Owners", "type": "[]DescribeDelegationTokenOwner", "versions": "0+", "nullableVersions": "0+",
       "about": "Each owner that we want to describe delegation tokens for, or null to describe all tokens.", "fields": [

@@ -43,6 +43,10 @@
   // It can return UNKNOWN_TOPIC_ID if topic IDs used and the topic is not found in metadata.
   "validVersions": "1-10",
   "flexibleVersions": "6+",
+  "headerVersions": {
+    "1-5": "0",
+    "6+": "1"
+  },
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
   // - NOT_COORDINATOR (version 0+)

@@ -24,6 +24,10 @@
   // Version 4 enables flexible versions.
   "validVersions": "1-4",
   "flexibleVersions": "4+",
+  "headerVersions": {
+    "1-3": "1",
+    "4+": "2"
+  },
   "fields": [
     { "name": "Resources", "type": "[]DescribeConfigsResource", "versions": "0+",
       "about": "The resources whose configurations we want to describe.", "fields": [

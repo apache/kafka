@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -34,6 +35,8 @@ public final class MessageSpec {
     private final List<StructSpec> commonStructs;
 
     private final Versions flexibleVersions;
+
+    private final Optional<HeaderVersions> headerVersions;
 
     private final List<RequestListenerType> listeners;
 
@@ -49,6 +52,7 @@ public final class MessageSpec {
                        @JsonProperty("type") MessageSpecType type,
                        @JsonProperty("commonStructs") List<StructSpec> commonStructs,
                        @JsonProperty("flexibleVersions") String flexibleVersions,
+                       @JsonProperty("headerVersions") Map<String, String> headerVersions,
                        @JsonProperty("listeners") List<RequestListenerType> listeners,
                        @JsonProperty("latestVersionUnstable") boolean latestVersionUnstable
     ) {
@@ -64,6 +68,11 @@ public final class MessageSpec {
             this.flexibleVersions = Versions.NONE;
             this.listeners = List.of();
             this.latestVersionUnstable = false;
+            if (headerVersions != null) {
+                throw new RuntimeException("The `headerVersions` property must not be specified for message " +
+                    name + ", which has no valid versions.");
+            }
+            this.headerVersions = Optional.empty();
         } else {
             if (flexibleVersions == null) {
                 throw new RuntimeException("You must specify a value for flexibleVersions. " +
@@ -88,6 +97,13 @@ public final class MessageSpec {
                         "messages with type `request`");
             }
             this.latestVersionUnstable = latestVersionUnstable;
+
+            if (headerVersions != null && type != MessageSpecType.REQUEST && type != MessageSpecType.RESPONSE) {
+                throw new RuntimeException("The `headerVersions` property is only valid for " +
+                        "messages with type `request` or `response`");
+            }
+            this.headerVersions = Optional.ofNullable(
+                    HeaderVersions.parse(name, headerVersions, this.validVersions()));
 
             if (type == MessageSpecType.COORDINATOR_KEY) {
                 if (this.apiKey.isEmpty()) {
@@ -158,6 +174,15 @@ public final class MessageSpec {
     @JsonProperty("flexibleVersions")
     public String flexibleVersionsString() {
         return flexibleVersions.toString();
+    }
+
+    public Optional<HeaderVersions> headerVersions() {
+        return headerVersions;
+    }
+
+    @JsonProperty("headerVersions")
+    public Map<String, String> headerVersionsStrings() {
+        return headerVersions.map(HeaderVersions::toMap).orElse(null);
     }
 
     @JsonProperty("listeners")

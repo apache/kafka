@@ -21,6 +21,9 @@
   // MISSING_CLIENT_TAGS status (code 6), which version 0 clients do not understand (KAFKA-20744).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
   // - GROUP_ID_NOT_FOUND (version 0+)

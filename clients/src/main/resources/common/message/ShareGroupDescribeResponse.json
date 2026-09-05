@@ -22,6 +22,9 @@
   // Version 1 is the initial stable version (KIP-932).
   "validVersions": "1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "1+": "1"
+  },
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
   // - TOPIC_AUTHORIZATION_FAILED (version 1+)

@@ -24,6 +24,10 @@
   // Version 3 adds user resource type.
   "validVersions": "1-3",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "Creations", "type": "[]AclCreation", "versions": "0+",
       "about": "The ACLs that we want to create.", "fields": [

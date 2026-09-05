@@ -23,6 +23,9 @@
   // Version 1 is the initial stable version (KIP-932).
   "validVersions": "1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "1+": "2"
+  },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group identifier." },

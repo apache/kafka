@@ -19,6 +19,9 @@
   "name": "PushTelemetryResponse",
   "validVersions": "0",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   "fields": [
     {
       "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

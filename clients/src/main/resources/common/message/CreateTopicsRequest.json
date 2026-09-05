@@ -33,6 +33,10 @@
   // Version 7 is the same as version 6.
   "validVersions": "2-7",
   "flexibleVersions": "5+",
+  "headerVersions": {
+    "2-4": "1",
+    "5+": "2"
+  },
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",
       "about": "The topics to create.", "fields": [

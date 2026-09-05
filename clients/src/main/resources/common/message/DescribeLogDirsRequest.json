@@ -26,6 +26,10 @@
   // Version 5 is the same as version 2 (new fields in response).
   "validVersions": "1-5",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "Topics", "type": "[]DescribableLogDirTopic", "versions": "0+", "nullableVersions": "0+",
       "about": "Each topic that we want to describe log directories for, or null for all topics.", "fields": [
