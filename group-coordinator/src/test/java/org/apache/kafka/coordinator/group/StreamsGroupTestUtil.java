@@ -25,6 +25,7 @@ import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.streams.MemberState;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
+import org.apache.kafka.coordinator.group.streams.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
@@ -150,7 +151,7 @@ class StreamsGroupTestUtil {
 
         public TasksTuple targetAssignment(Integer... partitions) {
             return TaskAssignmentTestUtil.mkTasksTuple(
-                TaskAssignmentTestUtil.TaskRole.ACTIVE,
+                TaskRole.ACTIVE,
                 tasks(partitions)
             );
         }
@@ -160,7 +161,7 @@ class StreamsGroupTestUtil {
             Integer... partitions
         ) {
             return mkTasksTupleWithCommonEpoch(
-                TaskAssignmentTestUtil.TaskRole.ACTIVE,
+                TaskRole.ACTIVE,
                 epoch,
                 tasks(partitions)
             );

@@ -25,15 +25,15 @@ import java.util.SortedMap;
 /**
  * Refines the task assignor's target assignment into the <em>intermediate</em> assignment that the reconciler
  * ({@link CurrentAssignmentBuilder}) converges the members toward.
- * <p>
- * The assignor decides <em>where</em> a task belongs; the refiner decides <em>how</em> the group gets there. When a
+ *
+ * <p>The assignor decides <em>where</em> a task belongs; the refiner decides <em>how</em> the group gets there. When a
  * stateful task has to move to a member that does not hold its state yet, handing it over right away would stall
  * processing while the new owner restores the state from the changelog. Instead, the refiner leaves the task with its
  * current owner and hands the new owner a warm-up task, so it can restore the state in the background. Once the warm-up
  * task has caught up -- its lag is within {@code acceptable.recovery.lag} -- a later refinement step moves the task
  * over. {@code num.warmup.replicas} bounds how many such warm-up tasks the group runs at a time.
- * <p>
- * Properties of the intermediate assignment that callers rely on:
+ *
+ * <p>Properties of the intermediate assignment that callers rely on:
  * <ul>
  *     <li>It is <b>derived for the whole group at once</b>, because both the warm-up budget and the rule that a
  *     process must not hold a task twice are group-wide. Callers take the individual member's slice out of the
@@ -60,20 +60,25 @@ public interface AssignmentRefiner {
     /**
      * Derives the intermediate assignment for all members of the group.
      *
-     * @param members               All members of the group, with their current assignments, the tasks they are still
-     *                              to revoke, and their process IDs.
-     * @param targetAssignment      All members' target assignments, as computed by the task assignor.
-     * @param taskOffsets           The latest changelog offsets/end-offsets reported by the members via heartbeats,
-     *                              from which the lag of a warm-up task is derived. Not populated for a member that
-     *                              has not reported any offsets yet, for example right after a coordinator failover.
-     * @param subtopologies         The group's resolved subtopologies, keyed by subtopology ID, which tell whether a
-     *                              subtopology is stateful. Only stateful tasks are warmed up; a stateless task has no
-     *                              state to restore. The coordinator resolves the topology and never invokes a refiner
-     *                              until it is ready, so an implementation does not deal with topology readiness.
-     * @param numWarmupReplicas     The maximum number of warm-up tasks the group may run at a time. Never zero: with
-     *                              warm-up tasks disabled, the intermediate assignment is the target assignment and
-     *                              the refiner is not called at all.
-     * @param acceptableRecoveryLag The lag at or below which a warm-up task is considered caught up.
+     * @param members
+     *        All members of the group, with their current assignments, the tasks they are still to revoke, and
+     *        their process IDs.
+     * @param targetAssignment
+     *        All members' target assignments, as computed by the task assignor.
+     * @param taskOffsets
+     *        The latest changelog offsets/end-offsets reported by the members via heartbeats, from which the lag
+     *        of a warm-up task is derived. Not populated for a member that has not reported any offsets yet, for
+     *        example right after a coordinator failover.
+     * @param subtopologies
+     *        The group's resolved subtopologies, keyed by subtopology ID, which tell whether a subtopology is
+     *        stateful. Only stateful tasks are warmed up; a stateless task has no state to restore. The coordinator
+     *        resolves the topology and never invokes a refiner until it is ready, so an implementation does not deal
+     *        with topology readiness.
+     * @param numWarmupReplicas
+     *        The maximum number of warm-up tasks the group may run at a time. Never zero: with warm-up tasks
+     *        disabled, the intermediate assignment is the target assignment and the refiner is not called at all.
+     * @param acceptableRecoveryLag
+     *        The lag at or below which a warm-up task is considered caught up.
      *
      * @return The intermediate assignment, keyed by member ID. It must hand out the same active tasks as the target
      *         assignment, only possibly to different members; an implementation that drops or duplicates one is
