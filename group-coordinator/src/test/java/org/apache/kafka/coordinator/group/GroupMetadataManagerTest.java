@@ -264,6 +264,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -4430,6 +4431,152 @@ public class GroupMetadataManagerTest {
                     .setSubscribedTopicNames(List.of("foo", "bar"))
                     .setServerAssignor("range")
                     .setTopicPartitions(List.of())));
+    }
+
+    @Test
+    public void testPartitionAssignorExceptionCommitsStep1PrefixAndRetryConverges() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        ConsumerGroupPartitionAssignor assignor = mock(ConsumerGroupPartitionAssignor.class);
+        when(assignor.name()).thenReturn("range");
+        when(assignor.assign(any(), any())).thenThrow(new PartitionAssignorException("Assignment failed."));
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
+                .buildCoordinatorMetadataImage())
+            .build();
+
+        // Member 1 joins. Step 2's target assignment computation fails, but step 1's
+        // member and epoch-bump records already committed: unlike whole-event atomicity,
+        // this is not reverted by a later step's failure.
+        assertThrows(UnknownServerException.class, () ->
+            context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId1)
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setServerAssignor("range")
+                    .setTopicPartitions(List.of())));
+
+        // The member's subscription and the group's epoch bump committed despite the
+        // failure: this is the normal "assignment lagging" state, the same one a
+        // deferred assignment interval would produce. The member's own epoch stays at
+        // its joining value since step 3 (reconciliation) never got to run.
+        ConsumerGroupMember member = context.groupMetadataManager
+            .consumerGroup(groupId)
+            .getOrMaybeCreateMember(memberId1, false);
+        assertEquals(0, member.memberEpoch());
+        assertEquals(Set.of(fooTopicName, barTopicName), member.subscribedTopicNames());
+        // A brand-new group starts at epoch 1; the subscription change bumps it to 2.
+        assertEquals(2, context.groupMetadataManager.consumerGroup(groupId).groupEpoch());
+
+        // Retry with the assignor now succeeding: the committed member/epoch prefix
+        // converges without the member needing to resend its subscription.
+        // (doReturn().when(), not when().thenReturn(): the mock currently throws, and
+        // when(assignor.assign(...)) would itself invoke - and re-throw - the old stub.)
+        doReturn(new GroupAssignment(Map.of())).when(assignor).assign(any(), any());
+
+        // The client never received a response to the first attempt, so it retries
+        // with the same (joining) epoch and full request fields, exactly as it would
+        // after a timeout.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of("foo", "bar"))
+                .setServerAssignor("range")
+                .setTopicPartitions(List.of()));
+
+        assertEquals(2, result.response().memberEpoch());
+    }
+
+    @Test
+    public void testConsumerGroupHeartbeatHealsPreExistingSubscriptionInconsistency() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicRegex("foo*")
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 10))
+                    .build())
+                // The regex is resolved, but no longer matches "foo": a pre-existing
+                // inconsistency between the assignment and the subscription that arose
+                // independently of this member's own heartbeats (e.g. another member
+                // triggered a regex-resolution refresh).
+                .withResolvedRegularExpression("foo*", new ResolvedRegularExpression(
+                    Set.of(), 0L, 0L))
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                .withAssignmentEpoch(10))
+            .build();
+
+        // The member heartbeats without changing its subscription at all.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(10)
+                .setTopicPartitions(List.of(
+                    new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                        .setTopicId(fooTopicId)
+                        .setPartitions(List.of(0, 1, 2, 3, 4, 5)))));
+
+        // Even though nothing changed in this request, the pre-existing inconsistency
+        // between the assignment and the already-resolved regex is healed: the
+        // state-derived check is a state fact, not a diff, so it fires regardless of
+        // what changed in this event (design doc §4.4: deliberate behavioral delta).
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicRegex("foo*")
+            .setServerAssignorName("range")
+            .setPartitionsPendingRevocation(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 10))
+            .build();
+
+        assertRecordsEquals(
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)),
+            result.records()
+        );
     }
 
     @Test
@@ -26074,9 +26221,10 @@ public class GroupMetadataManagerTest {
             // The member subscription is updated.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             // The previous regex is deleted.
-            GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, "foo*"),
-            // The previous member epoch is updated.
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)
+            GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, "foo*")
+            // No current-assignment record this time: the member owns no partitions, so its
+            // (empty) assignment is trivially consistent with the new, unresolved regex, and
+            // reconciliation is a no-op.
         );
 
         assertRecordsEquals(expectedRecords, result.records());

@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
 
@@ -60,9 +61,10 @@ public class CurrentAssignmentBuilder {
     private Assignment targetAssignment;
 
     /**
-     * Whether the member has changed its subscription on the current heartbeat.
+     * Whether the current assignment must be forced consistent with the subscription,
+     * i.e. no-longer-subscribed topics must be stripped from it.
      */
-    private boolean hasSubscriptionChanged;
+    private boolean enforceSubscriptionConsistency;
 
     /**
      * The resolved regular expressions.
@@ -122,15 +124,15 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Sets whether the member has changed its subscription on the current heartbeat.
+     * Sets whether the current assignment must be forced consistent with the subscription.
      *
-     * @param hasSubscriptionChanged If true, always removes unsubscribed topics from the current assignment.
+     * @param enforceSubscriptionConsistency If true, always removes unsubscribed topics from the current assignment.
      * @return This object.
      */
-    public CurrentAssignmentBuilder withHasSubscriptionChanged(
-        boolean hasSubscriptionChanged
+    public CurrentAssignmentBuilder withEnforceSubscriptionConsistency(
+        boolean enforceSubscriptionConsistency
     ) {
-        this.hasSubscriptionChanged = hasSubscriptionChanged;
+        this.enforceSubscriptionConsistency = enforceSubscriptionConsistency;
         return this;
     }
 
@@ -196,7 +198,7 @@ public class CurrentAssignmentBuilder {
                         member.memberEpoch(),
                         member.assignedPartitions()
                     );
-                } else if (hasSubscriptionChanged) {
+                } else if (enforceSubscriptionConsistency) {
                     return updateCurrentAssignment(
                         member.memberEpoch(),
                         member.assignedPartitions()
@@ -216,7 +218,7 @@ public class CurrentAssignmentBuilder {
                 // If the member provides its owned partitions. We verify if it still
                 // owns any of the revoked partitions. If it does, we cannot progress.
                 if (ownsRevokedPartitions(member.partitionsPendingRevocation())) {
-                    if (hasSubscriptionChanged) {
+                    if (enforceSubscriptionConsistency) {
                         return updateCurrentAssignment(
                             member.memberEpoch(),
                             member.assignedPartitions()
@@ -497,5 +499,58 @@ public class CurrentAssignmentBuilder {
         }
 
         return new TopicIds(subscriptions, metadataImage);
+    }
+
+    /**
+     * Checks whether a member's current assignment is consistent with its current
+     * subscription, i.e. whether every currently assigned topic is still subscribed to,
+     * either directly by name or through a resolved regular expression.
+     *
+     * This is a state fact: unlike diffing the member before and after an update, it
+     * only depends on the member's persisted state, so it can be evaluated safely at
+     * any time, including after a replay boundary where the diff that produced the
+     * current state is no longer available.
+     *
+     * An unresolved regular expression is treated as matching no topics, to be
+     * conservative, exactly like {@link #subscribedTopicIds()}.
+     *
+     * @param member                     The consumer group member.
+     * @param resolvedRegularExpressions The resolved regular expressions.
+     * @param metadataImage              The metadata image, used to resolve assigned topic ids to names.
+     * @return Whether the member's current assignment is consistent with its subscription.
+     */
+    public static boolean assignmentIsSubscriptionConsistent(
+        ConsumerGroupMember member,
+        Map<String, ResolvedRegularExpression> resolvedRegularExpressions,
+        CoordinatorMetadataImage metadataImage
+    ) {
+        Set<String> subscribedTopicNames = member.subscribedTopicNames();
+        String subscribedTopicRegex = member.subscribedTopicRegex();
+        ResolvedRegularExpression resolvedRegularExpression = null;
+        if (subscribedTopicRegex != null && !subscribedTopicRegex.isEmpty()) {
+            // Treat an unresolved regex as matching no topics, to be conservative.
+            resolvedRegularExpression = resolvedRegularExpressions.get(subscribedTopicRegex);
+        }
+
+        for (Uuid topicId : member.assignedPartitions().keySet()) {
+            Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadata = metadataImage.topicMetadata(topicId);
+            if (topicMetadata.isEmpty()) {
+                // The topic was deleted.
+                return false;
+            }
+
+            String topicName = topicMetadata.get().name();
+            if (subscribedTopicNames.contains(topicName)) {
+                continue;
+            }
+
+            if (resolvedRegularExpression != null && resolvedRegularExpression.topics().contains(topicName)) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 }
