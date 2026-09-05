@@ -632,7 +632,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.streams.processor.internals.InternalTopologyBuilder"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
-            <Class name="org.apache.kafka.streams.processor.internals.TaskManager"/>
             <Class name="org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore"/>
             <Class name="org.apache.kafka.streams.state.internals.AbstractDualSchemaRocksDBSegmentedBytesStore"/>
             <Class name="org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer"/>
@@ -669,6 +668,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.connect.runtime.distributed.DistributedHerder$RebalanceListener"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
         </Or>
+        <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+    </Match>
+
+    <Match>
+        <!-- KAFKA-20404: rebalanceInProgress is written from the ConsumerRebalanceListener callbacks (handleRebalanceStart / handleRebalanceComplete) and read from StreamThread.runLoop and TaskManager's commit paths; all of these run on the StreamThread, so a stale cross-thread write cannot occur. -->
+        <Class name="org.apache.kafka.streams.processor.internals.TaskManager"/>
+        <Field name="rebalanceInProgress"/>
         <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
     </Match>
 
