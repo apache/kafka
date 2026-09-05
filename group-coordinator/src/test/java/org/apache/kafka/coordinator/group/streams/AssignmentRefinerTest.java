@@ -242,7 +242,8 @@ public class AssignmentRefinerTest {
     // ---------------------------------------------------------------------------------------------------------------
 
     @Test
-    public void shouldIndexTheMemberRunningATaskAsItsActiveOwner() {
+    public void shouldIndexTheMemberProcessingATaskAsItsActiveHolder() {
+        // No offsets reported for an active task means the restore has finished and the member is processing it.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1)))
         );
@@ -251,19 +252,49 @@ public class AssignmentRefinerTest {
 
         assertEquals(
             Map.of(
-                STATEFUL_0, "memberA",
-                new TaskId(STATEFUL, 1), "memberA"
+                STATEFUL_0, new AssignmentRefinerImpl.ActiveHolder("memberA", true),
+                new TaskId(STATEFUL, 1), new AssignmentRefinerImpl.ActiveHolder("memberA", true)
             ),
-            index.activeOwner()
+            index.activeHolder()
         );
-        assertEquals(Map.of(), index.processesRevoking());
         assertEquals(Map.of(), index.taskCopies());
     }
 
     @Test
-    public void shouldNotIndexAnActiveOwnerForATaskThatIsPendingRevocation() {
-        // The member was told to give the task up, so it is not ownership to preserve. The process still holds it, and
-        // that is what gets recorded.
+    public void shouldIndexAnActiveHolderThatIsStillRestoringAsNotProcessing() {
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)))
+        );
+
+        final AssignmentRefinerImpl.CurrentAssignmentIndex index =
+            index(members, Map.of("memberA", offsets(500L, 10_000L)));
+
+        assertEquals(
+            Map.of(STATEFUL_0, new AssignmentRefinerImpl.ActiveHolder("memberA", false)),
+            index.activeHolder()
+        );
+    }
+
+    @Test
+    public void shouldIndexAnActiveHolderWhoseRestoreHasNotStartedAsNotProcessing() {
+        // Long.MAX_VALUE is the "restore not started" cap; it is still a report, so the task is still restoring.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)))
+        );
+
+        final AssignmentRefinerImpl.CurrentAssignmentIndex index =
+            index(members, Map.of("memberA", offsets(Long.MAX_VALUE, Long.MAX_VALUE)));
+
+        assertEquals(
+            Map.of(STATEFUL_0, new AssignmentRefinerImpl.ActiveHolder("memberA", false)),
+            index.activeHolder()
+        );
+    }
+
+    @Test
+    public void shouldNotIndexAnActiveHolderForATaskThatIsPendingRevocation() {
+        // The member was told to give the task up, so it is not ownership to preserve. The process it still occupies
+        // needs no tracking either: the reconciler blocks a colliding placement until the revocation lands.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member(
                 "memberA",
@@ -275,8 +306,8 @@ public class AssignmentRefinerTest {
 
         final AssignmentRefinerImpl.CurrentAssignmentIndex index = index(members, Map.of());
 
-        assertEquals(Map.of(), index.activeOwner());
-        assertEquals(Map.of(STATEFUL_0, Set.of("processA")), index.processesRevoking());
+        assertEquals(Map.of(), index.activeHolder());
+        assertEquals(Map.of(), index.taskCopies());
     }
 
     @Test
@@ -292,7 +323,7 @@ public class AssignmentRefinerTest {
 
         final AssignmentRefinerImpl.CurrentAssignmentIndex index = index(members, taskOffsets);
 
-        assertEquals(Map.of(), index.activeOwner());
+        assertEquals(Map.of(), index.activeHolder());
         assertEquals(
             Set.of(
                 new AssignmentRefinerImpl.TaskCopy("memberA", "processA", TaskRole.STANDBY, true),
@@ -311,7 +342,7 @@ public class AssignmentRefinerTest {
 
         final AssignmentRefinerImpl.CurrentAssignmentIndex index = index(members, Map.of());
 
-        assertEquals(Map.of(), index.activeOwner());
+        assertEquals(Map.of(), index.activeHolder());
         assertEquals(Map.of(), index.taskCopies());
     }
 
@@ -340,6 +371,122 @@ public class AssignmentRefinerTest {
     public void shouldStageAMigrationToAMemberThatHoldsNoState() {
         // The headline case: a scale-out moves a stateful task to a cold member, so the task keeps running where it is
         // while the new owner restores it.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(members, targetAssignment, Map.of());
+
+        assertEquals(List.of(), decisions.grantedTasks());
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.StagedMigration(
+                STATEFUL_0,
+                "memberA",
+                "memberB",
+                Optional.of("processB"),
+                Optional.empty()
+            )),
+            decisions.stagedMigrations()
+        );
+    }
+
+    @Test
+    public void shouldGrantATaskWhoseHolderIsStillRestoringItRatherThanStageIt() {
+        // Nothing is being processed, so staging would protect nothing: it would keep the task on a member that cannot
+        // run it, throw that restore away when the migration completes, and possibly spend a warm-up slot on the way.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        // memberA reports restore progress for the active task, so it is not processing it; memberB's standby is a
+        // long way behind, so without the restoring check this would stage and wait for it.
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of(
+            "memberA", offsets(500L, 10_000L),
+            "memberB", offsets(0L, 10_000L)
+        );
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(members, targetAssignment, taskOffsets);
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldGrantATaskWhoseHolderIsStillRestoringItEvenToAColdMember() {
+        // The refiner does not weigh how far along the two members are: choosing the better-placed candidate is a
+        // placement decision, so the assignor's choice stands even though it holds no state at all.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of("memberA", offsets(9_999L, 10_000L)));
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldDecideNothingWhenTheTaskIsAlreadyWithItsTargetOwnerButStillRestoring() {
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of("memberA", offsets(500L, 10_000L)));
+
+        assertEquals(List.of(), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldHoldATaskWithAHolderThatIsStillRestoringItWhenItsTargetOwnerIsGone() {
+        // Leaving it out would make the holder revoke it and discard a restore that is part-way through, for no gain:
+        // the task has nowhere else to go until the assignor names a member that still exists.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "departedMember", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of("memberA", offsets(500L, 10_000L)));
+
+        assertEquals(List.of(), decisions.grantedTasks());
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.StagedMigration(
+                STATEFUL_0,
+                "memberA",
+                "departedMember",
+                Optional.empty(),
+                Optional.empty()
+            )),
+            decisions.stagedMigrations()
+        );
+    }
+
+    @Test
+    public void shouldStageAMigrationWhenTheHolderHasNotReportedAnyOffsetsYet() {
+        // A member the coordinator has not heard from -- every member right after a failover -- reports nothing, so its
+        // active tasks read as processing. That is the safe direction: we stage rather than hand the task over.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
             "memberB", member("memberB", "processB", TasksTuple.EMPTY)

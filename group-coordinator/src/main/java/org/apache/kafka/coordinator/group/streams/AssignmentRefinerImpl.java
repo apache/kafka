@@ -21,7 +21,6 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,11 +54,16 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * Indexes the members' current assignment by task, so that the case analysis can look up what a task's situation is
+     * Indexes the members' current ownership by task, so that the case analysis can look up what a task's situation is
      * without scanning the group again for every task. This is a single pass over the members' task entries.
      *
      * <p>Only stateful tasks are indexed. A stateless task has no state to restore, so it is never staged and never
      * consulted here; it simply flows through from the target assignment.
+     *
+     * <p>A task a member has been told to give up is deliberately not indexed at all. Recording that member as the
+     * task's holder would make the case analysis try to keep the task there, undoing a hand-over that is already under
+     * way; and the process it occupies until the revocation completes needs no tracking here either, because the
+     * reconciler already refuses to grant a role for a task the process still holds.
      *
      * @param members
      *        All members of the group.
@@ -70,7 +74,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * @param acceptableRecoveryLag
      *        The lag at or below which a replica counts as caught up.
      *
-     * @return The current assignment, indexed by task.
+     * @return The current ownership, indexed by task.
      */
     static CurrentAssignmentIndex indexCurrentAssignment(
         final Map<String, StreamsGroupMember> members,
@@ -78,8 +82,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final SortedMap<String, ConfiguredSubtopology> subtopologies,
         final long acceptableRecoveryLag
     ) {
-        final Map<TaskId, String> activeOwner = new HashMap<>();
-        final Map<TaskId, Set<String>> processesRevoking = new HashMap<>();
+        final Map<TaskId, ActiveHolder> activeHolder = new HashMap<>();
         final Map<TaskId, List<TaskCopy>> taskCopies = new HashMap<>();
 
         for (final StreamsGroupMember member : members.values()) {
@@ -88,20 +91,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             forEachStatefulActiveTask(
                 member.assignedTasks().activeTasksWithEpochs(),
                 subtopologies,
-                task -> activeOwner.put(task, member.memberId())
-            );
-
-            // The member has been told to give this task up and has stopped running it, so the member is
-            // deliberately not recorded as the task's active owner. Recording the member as the owner would make the
-            // case analysis try to keep the task there, undoing a hand-over that is already under way.
-            //
-            // The task does still occupy the member's process until the revocation completes, and that is what stops
-            // a standby of the same task being placed there. The block applies to the whole process, not just this
-            // one member, so the process is what gets recorded.
-            forEachStatefulActiveTask(
-                member.tasksPendingRevocation().activeTasksWithEpochs(),
-                subtopologies,
-                task -> processesRevoking.computeIfAbsent(task, __ -> new HashSet<>()).add(member.processId())
+                task -> activeHolder.put(task, new ActiveHolder(member.memberId(), !isRestoring(offsets, task)))
             );
 
             forEachStatefulTask(
@@ -117,22 +107,46 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             );
         }
 
-        return new CurrentAssignmentIndex(activeOwner, processesRevoking, taskCopies);
+        return new CurrentAssignmentIndex(activeHolder, taskCopies);
+    }
+
+    /**
+     * Whether the member is still restoring the task it holds as an active task, rather than processing it.
+     *
+     * <p>A client reports changelog offsets for every task it is restoring and stops reporting them once the task is
+     * running, so a reported offset for an active task means the restore is still under way. The value does not matter,
+     * only that something was reported: the {@link Long#MAX_VALUE} "restore not started" cap counts as restoring too.
+     *
+     * <p><b>A member the coordinator has not heard from reports nothing, so its active tasks all read as running.</b>
+     * That is every member right after a coordinator failover -- the reported offsets are in-memory state that does not
+     * survive one -- and a newly joined member until its first report. It is the safe direction: the task is treated as
+     * something to protect, so at worst a migration is staged that could have been granted outright, and the next
+     * report corrects it. Reading the absence the other way would strip ownership from a whole group at once after a
+     * failover.
+     */
+    private static boolean isRestoring(final MemberTaskOffsets memberTaskOffsets, final TaskId task) {
+        return offsetOf(memberTaskOffsets.taskOffsets(), task) != null;
     }
 
     /**
      * Decides, for every stateful task whose active role is not already where the target assignment wants it, whether
      * the migration has to be staged behind a warm-up task or can be completed in this step.
      *
-     * <p>A task is <b>staged</b> only when all of the following hold: somebody runs it today, the target owner is
-     * somebody else, and there is a warming improvement left to achieve. Everything else completes right away, which
-     * needs no patch at all -- the target assignment already places the task on its target owner, and the previous
-     * owner's slice already omits it. That is why the two outcomes are so lopsided: staging is the exception, and the
-     * result is proportional to how far the current assignment has diverged from the target rather than to the group's
-     * size.
+     * <p>A task is <b>staged</b> only when all of the following hold: somebody is <em>processing</em> it today, the
+     * target owner is somebody else, and there is a warming improvement left to achieve. Everything else completes
+     * right away, which needs no patch at all -- the target assignment already places the task on its target owner, and
+     * the previous owner's slice already omits it. That is why the two outcomes are so lopsided: staging is the
+     * exception, and the result is proportional to how far the current ownership has diverged from the target rather
+     * than to the group's size.
+     *
+     * <p>Note it takes <em>processing</em>, not merely holding the active task. A member that has been granted an
+     * active task but is still restoring it processes nothing, so staging a migration away from it would protect
+     * nothing while wasting the restore work and possibly a warm-up slot; such a task is granted to its target
+     * straight away. What this deliberately does not do is compare how far along the two members are -- picking the
+     * better-placed of two candidates is a placement decision, and placement is the assignor's job.
      *
      * @param currentAssignment
-     *        The indexed current assignment, from {@link #indexCurrentAssignment}.
+     *        The indexed current ownership, from {@link #indexCurrentAssignment}.
      * @param targetAssignment
      *        All members' target assignments, as computed by the task assignor.
      * @param members
@@ -164,9 +178,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             final TaskId task = targetOwnerByTask.getKey();
             final String targetOwner = targetOwnerByTask.getValue();
 
-            final String currentOwner = currentAssignment.activeOwner().get(task);
-            if (targetOwner.equals(currentOwner)) {
-                // The task already runs where it belongs.
+            final ActiveHolder holder = currentAssignment.activeHolder().get(task);
+            if (holder != null && targetOwner.equals(holder.memberId())) {
+                // The task is already where it belongs, whether it is processing yet or still restoring.
                 continue;
             }
 
@@ -175,39 +189,42 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             // meantime. Such a member cannot restore anything, so nothing may be staged into it.
             final StreamsGroupMember targetMember = members.get(targetOwner);
             if (targetMember == null) {
-                if (currentOwner != null) {
-                    // Keep the task where it runs until the assignor names a member that still exists. Leaving it out
-                    // instead would make its current owner revoke it, so it would stop being processed for no gain.
+                if (holder != null) {
+                    // Keep the task with whoever holds it until the assignor names a member that still exists. Leaving
+                    // it out instead would make that member revoke it -- discarding a restore part-way through, or
+                    // stopping processing outright -- for no gain, since the task has nowhere else to go.
                     stagedMigrations.add(new StagedMigration(
                         task,
-                        currentOwner,
+                        holder.memberId(),
                         targetOwner,
                         Optional.empty(),
                         Optional.empty()
                     ));
                 }
-                // A task that nobody runs and whose target owner is gone is left to the next assignor run: granting it
-                // to a member that is no longer in the group would achieve nothing.
+                // A task nobody holds and whose target owner is gone is left to the next assignor run: granting it to
+                // a member that is no longer in the group would achieve nothing.
                 continue;
             }
 
             final String targetProcessId = targetMember.processId();
 
-            // The task moves now, for either of two reasons. Nobody runs it -- it is new, its owner left, or a
-            // hand-over is in flight and the previous owner has already released it -- so there is no running task to
-            // protect and the target owner takes it even cold; preferring a warmer owner would be a placement
-            // decision, and placement is the assignor's job. Or somebody runs it but no achievable warming improvement
-            // remains. The current owner, when there is one, is necessarily a member of the group, because the index it
-            // comes from was built from the members themselves.
-            if (currentOwner == null
-                || isReady(currentAssignment, task, members.get(currentOwner).processId(), targetProcessId)) {
+            // The task moves now, for any of three reasons. Nobody holds it -- it is new, its owner left, or a
+            // hand-over is in flight and the previous owner has already released it -- so there is nothing to protect
+            // and the target owner takes it even cold; preferring a warmer owner would be a placement decision, and
+            // placement is the assignor's job. Or somebody holds it but is still restoring it, so nothing is being
+            // processed and staging would protect nothing. Or somebody is processing it but no achievable warming
+            // improvement remains. The holder, when there is one, is necessarily a member of the group, because the
+            // index it comes from was built from the members themselves.
+            if (holder == null
+                || !holder.processing()
+                || isReady(currentAssignment, task, members.get(holder.memberId()).processId(), targetProcessId)) {
                 grantedTasks.add(new TaskGrant(task, targetOwner));
                 continue;
             }
 
             stagedMigrations.add(new StagedMigration(
                 task,
-                currentOwner,
+                holder.memberId(),
                 targetOwner,
                 Optional.of(targetProcessId),
                 findCopyOnProcess(currentAssignment, task, targetProcessId)
@@ -376,6 +393,16 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         });
     }
 
+    /**
+     * Whether the subtopology has state the coordinator can reason about, which here means state with a changelog.
+     *
+     * <p>A changelog is the <em>only</em> signal of state that reaches the coordinator -- the topology metadata carries
+     * changelog topics and nothing about stores -- so the two are not merely equal in effect, the broker has no way to
+     * tell them apart. A store configured without logging is therefore invisible here, and that is also the right
+     * outcome: without a changelog there is nothing to restore, so such a task can never be warmed up and is treated
+     * exactly like a stateless one. Note this is narrower than what "stateful" means client-side, where a task can
+     * have state and no changelog.
+     */
     private static boolean isStateful(
         final SortedMap<String, ConfiguredSubtopology> subtopologies,
         final String subtopologyId
@@ -385,32 +412,45 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * The members' current assignment, indexed by task. Only stateful tasks appear.
+     * The members' current ownership, indexed by task. Only stateful tasks appear.
      *
-     * @param activeOwner
-     *        The member running each task as an active task. A task that only sits in some member's pending revocation
+     * @param activeHolder
+     *        The member holding each task as an active task. A task that only sits in some member's pending revocation
      *        has no entry here, because an in-flight removal is a decision that has already been taken rather than a
      *        placement to preserve.
-     * @param processesRevoking
-     *        The processes that were told to revoke each task's active role. Recorded per process rather than per
-     *        member because what matters about it is physical ownership: it blocks a standby task of the same task
-     *        anywhere on that process.
      * @param taskCopies
      *        The standby and warm-up holders of each task.
      */
     record CurrentAssignmentIndex(
-        Map<TaskId, String> activeOwner,
-        Map<TaskId, Set<String>> processesRevoking,
+        Map<TaskId, ActiveHolder> activeHolder,
         Map<TaskId, List<TaskCopy>> taskCopies
     ) {
+    }
+
+    /**
+     * The member holding a task as an active task, and whether it is processing the task or still restoring it.
+     *
+     * <p>Only a member that is <em>processing</em> a task has something a staged migration could protect, so the two
+     * are kept apart rather than collapsed into a plain member ID. The identity is still needed for a member that is
+     * only restoring, though: it is what tells the case analysis the task is already in the right place, and what lets
+     * a task be kept where it is when the target assignment names a member the group no longer has.
+     *
+     * @param memberId
+     *        The member holding the task.
+     * @param processing
+     *        Whether the member is processing the task, as opposed to still restoring it. See {@link #isRestoring}
+     *        for how this is determined, and for why a member the coordinator has not heard from reads as processing.
+     */
+    record ActiveHolder(String memberId, boolean processing) {
     }
 
     /**
      * A copy of a task that exists on some member: which member holds it, in which role, and whether that member has
      * restored it far enough to take the task over as an active task.
      *
-     * <p>Only the {@link TaskRole#STANDBY} and {@link TaskRole#WARMUP} copies are recorded. The active copy is tracked
-     * separately, as {@link CurrentAssignmentIndex#activeOwner()}.
+     * <p>Only the {@link TaskRole#STANDBY} and {@link TaskRole#WARMUP} copies are recorded. A member holding the task
+     * as an active task is tracked separately, as {@link CurrentAssignmentIndex#activeHolder()}, whether it is
+     * processing the task or still restoring it.
      *
      * @param memberId
      *        The member the copy is on.
@@ -435,7 +475,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * @param task
      *        The task being migrated.
      * @param currentOwner
-     *        The member the task keeps running on for now.
+     *        The member the task stays with for now. Normally the member processing it; when the target assignment
+     *        names a member the group no longer has, it can also be one that is still restoring the task.
      * @param targetOwner
      *        The member the target assignment moves the task to.
      * @param targetProcessId
@@ -460,9 +501,10 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * A task that is granted to its target owner in this refinement step, rather than held back: the intermediate
      * assignment says what the target assignment says for it.
      *
-     * <p>That happens either because no achievable warming improvement remains -- the target owner's process already
-     * holds the task's state, or the move is within a single process, where warming up is impossible -- or because
-     * nobody runs the task at all, which covers a brand-new task as much as one whose owner departed. It notably does
+     * <p>That happens for any of three reasons: no achievable warming improvement remains -- the target owner's process
+     * already holds the task's state, or the move is within a single process, where warming up is impossible; or nobody
+     * holds the task at all, which covers a brand-new task as much as one whose owner departed; or the member holding
+     * it is still restoring it, so nothing is being processed and staging would protect nothing. It notably does
      * <b>not</b> happen because the warm-up budget ran out: a migration that cannot be funded stays a
      * {@link StagedMigration} and its task keeps running on its current owner.
      *
@@ -470,9 +512,10 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * still serializes it, so a task granted here can still spend a step in {@code UNRELEASED_TASKS} while its
      * previous owner revokes it.
      *
-     * <p>The member that ran the task before, if any, is deliberately not recorded here: it is
-     * {@link CurrentAssignmentIndex#activeOwner()} for the task, so repeating it would only be a second copy that
-     * could disagree.
+     * <p>The member that held the task before is deliberately not recorded here, because applying a grant needs no
+     * patch at all: the intermediate assignment is the target assignment plus patches, and the target assignment
+     * already both places the task on its new owner and omits it from the old one. Only a migration that is
+     * <em>delayed</em> has to patch the target assignment.
      *
      * @param task
      *        The task moving.
