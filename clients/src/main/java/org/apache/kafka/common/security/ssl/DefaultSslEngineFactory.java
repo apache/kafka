@@ -136,13 +136,6 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
         SecurityUtils.addConfiguredSecurityProviders(this.configs);
 
-        List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
-        if (!cipherSuitesList.isEmpty()) {
-            this.cipherSuites = cipherSuitesList.toArray(new String[0]);
-        } else {
-            this.cipherSuites = null;
-        }
-
         List<String> enabledProtocolsList = (List<String>) configs.get(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
         if (!enabledProtocolsList.isEmpty()) {
             this.enabledProtocols = enabledProtocolsList.toArray(new String[0]);
@@ -172,6 +165,15 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
                 (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG));
 
         this.sslContext = createSSLContext(keystore, truststore);
+
+        List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
+        if (!cipherSuitesList.isEmpty()) {
+            Set<String> supportedCiphers = Set.of(
+                    sslContext.getSupportedSSLParameters().getCipherSuites());
+            this.cipherSuites = filterCipherSuites(cipherSuitesList, supportedCiphers);
+        } else {
+            this.cipherSuites = null;
+        }
     }
 
     @Override
@@ -213,6 +215,29 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         }
         return sslEngine;
     }
+
+    // package access for testing
+    static String[] filterCipherSuites(List<String> configured, Set<String> supported) {
+        List<String> accepted = configured.stream()
+            .filter(supported::contains)
+            .collect(Collectors.toList());
+
+        if (accepted.isEmpty()) {
+            throw new InvalidConfigurationException(
+                "None of the cipher suites in " + configured +
+                    " are supported by the JDK security provider. " +
+                    "Supported cipher suites are: " + supported);
+        }
+        
+        if (accepted.size() < configured.size()) {
+            List<String> differences = new ArrayList<>(configured);
+            differences.removeAll(accepted);
+            log.warn("Configured cipher suites filtered from {} to {} based on JDK support. Unsupported cipher suites: {}. Effective cipher suites: {}",
+                configured.size(), accepted.size(), differences, accepted);
+        }
+        return accepted.toArray(new String[0]);
+    }
+
     private static SslClientAuth createSslClientAuth(String key) {
         SslClientAuth auth = SslClientAuth.forConfig(key);
         if (auth != null) {
