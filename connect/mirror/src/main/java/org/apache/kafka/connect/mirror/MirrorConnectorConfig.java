@@ -186,7 +186,9 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         result.putAll(Utils.entriesWithPrefix(props, CONSUMER_CLIENT_PREFIX));
         result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));
         result.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
-        result.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // The consumer never throws OffsetOutOfRangeException it auto reset the offset to 
+        // the earliest offset if the offset is out of range.
+        result.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "none");
         return result;
     }
 
