@@ -429,6 +429,7 @@ public class Sender implements Runnable {
         List<ProducerBatch> expiredInflightBatches = getExpiredInflightBatches(now);
         List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(now);
 
+        sensors.recordExpiredBatchQueueTime(expiredBatches, now);
         failExpiredBatches(expiredBatches, now, true);
         failExpiredBatches(expiredInflightBatches, now, false);
 
@@ -1092,13 +1093,23 @@ public class Sender implements Runnable {
 
                     // global metrics
                     this.batchSizeSensor.record(batch.estimatedSizeInBytes(), now);
-                    this.queueTimeSensor.record(batch.queueTimeMs(), now);
+                    recordQueueTime(batch.queueTimeMs(), now);
                     this.compressionRateSensor.record(batch.compressionRatio());
                     this.maxRecordSizeSensor.record(batch.maxRecordSize, now);
                     records += batch.recordCount;
                 }
                 this.recordsPerRequestSensor.record(records, now);
             }
+        }
+
+        public void recordExpiredBatchQueueTime(List<ProducerBatch> batches, long now) {
+            for (ProducerBatch batch : batches) {
+                recordQueueTime(Math.max(0, now - batch.createdMs), now);
+            }
+        }
+
+        private void recordQueueTime(long queueTimeMs, long now) {
+            this.queueTimeSensor.record(queueTimeMs, now);
         }
 
         public void recordRetries(String topic, int count) {
