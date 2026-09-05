@@ -2000,39 +2000,34 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     private int deleteRetentionMsBreachedSegments() throws IOException {
-        long retentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled());
+        boolean remoteLogEnabledAndRemoteCopyEnabled = remoteLogEnabledAndRemoteCopyEnabled();
+        long retentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled);
         if (retentionMs < 0) return 0;
         long startMs = time().milliseconds();
 
         DeletionCondition shouldDelete = (segment, nextSegmentOpt) -> {
-            if (startMs < segment.largestTimestamp()) {
-                futureTimestampLogger.warn("{} contains future timestamp(s), making it ineligible to be deleted", segment);
+            long anchorTimestamp = segment.largestTimestamp();
+            if (startMs < anchorTimestamp) {
+                if (remoteLogEnabledAndRemoteCopyEnabled) {
+                    anchorTimestamp = segment.lastModified();
+                    futureTimestampLogger.warn("{} contains future timestamp(s), using lastModified time {} as the retention anchor", segment, anchorTimestamp);
+                } else {
+                    futureTimestampLogger.warn("{} contains future timestamp(s), making it ineligible to be deleted", segment);
+                }
             }
-            boolean delete = startMs - segment.largestTimestamp() > retentionMs;
+            boolean delete = startMs - anchorTimestamp > retentionMs;
             logger.debug("{} retentionMs breached: {}, startMs={}, retentionMs={}",
                     segment, delete, startMs, retentionMs);
             return delete;
         };
         return deleteOldSegments(shouldDelete, toDelete -> {
-            long localRetentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled());
+            String retentionScope = remoteLogEnabledAndRemoteCopyEnabled ? "local log retention" : "log retention";
             for (LogSegment segment : toDelete) {
-                if (segment.largestRecordTimestamp().isPresent()) {
-                    if (remoteLogEnabledAndRemoteCopyEnabled()) {
-                        logger.info("Deleting segment {} due to local log retention time {}ms breach based on the largest " +
-                                "record timestamp in the segment", segment, localRetentionMs);
-                    } else {
-                        logger.info("Deleting segment {} due to log retention time {}ms breach based on the largest " +
-                                "record timestamp in the segment", segment, localRetentionMs);
-                    }
-                } else {
-                    if (remoteLogEnabledAndRemoteCopyEnabled()) {
-                        logger.info("Deleting segment {} due to local log retention time {}ms breach based on the " +
-                                "last modified time of the segment", segment, localRetentionMs);
-                    } else {
-                        logger.info("Deleting segment {} due to log retention time {}ms breach based on the " +
-                                "last modified time of the segment", segment, localRetentionMs);
-                    }
-                }
+                String anchor = segment.largestRecordTimestamp().isEmpty() || (remoteLogEnabledAndRemoteCopyEnabled && startMs < segment.largestTimestamp())
+                        ? "last modified time of the segment"
+                        : "largest record timestamp in the segment";
+                logger.info("Deleting segment {} due to {} time {}ms breach based on the {}",
+                        segment, retentionScope, retentionMs, anchor);
             }
         });
     }
