@@ -2248,7 +2248,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def createReplicaSelector(metrics: Metrics): Option[Plugin[ReplicaSelector]] = {
-    config.replicaSelectorClassName.map { className =>
+    config.replicaSelectorClassName.asScala.map { className =>
       val tmpReplicaSelector: ReplicaSelector = Utils.newInstance(className, classOf[ReplicaSelector])
       tmpReplicaSelector.configure(config.originals())
       Plugin.wrapInstance(tmpReplicaSelector, metrics, ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG)
