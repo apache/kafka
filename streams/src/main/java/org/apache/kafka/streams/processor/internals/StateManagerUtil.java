@@ -171,6 +171,20 @@ final class StateManagerUtil {
         final TaskId id = stateMgr.taskId();
         log.trace("Closing state manager for {} task {}", taskType, id);
 
+        // Nothing to close: the state manager has no registered stores (e.g. they were already
+        // closed during a previous hand-off, or the task is stateless). Skip acquiring the
+        // per-task state-directory lock so we don't emit a misleading lock-contention warning
+        // for a benign back-to-back rebalance. We must still run the close path when we intend
+        // to wipe the state store, since that deletes the on-disk task directory.
+        if (!wipeStateStore && !stateMgr.hasRegisteredStores()) {
+            log.trace("No registered state stores to close for {} task {}; skipping lock acquisition", taskType, id);
+            // registerStateStores() locks the state directory before registering any store, so an
+            // initialization failure can leave this thread holding the lock with no stores registered.
+            // Releasing here is a no-op unless the current thread is the cached owner.
+            stateDirectory.unlock(id);
+            return;
+        }
+
         final AtomicReference<ProcessorStateException> firstException = new AtomicReference<>(null);
         try {
             if (stateDirectory.lock(id)) {

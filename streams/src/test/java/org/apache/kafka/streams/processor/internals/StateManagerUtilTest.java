@@ -118,6 +118,7 @@ public class StateManagerUtilTest {
     public void testCloseStateManagerClean() {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
         when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(true);
 
         StateManagerUtil.closeStateManager(logger,
@@ -131,6 +132,7 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerThrowsExceptionWhenClean() {
         when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(true);
         doThrow(new ProcessorStateException("state manager failed to close")).when(stateManager).close();
 
@@ -148,6 +150,7 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerThrowsExceptionWhenDirty() {
         when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(true);
         doThrow(new ProcessorStateException("state manager failed to close")).when(stateManager).close();
 
@@ -221,6 +224,7 @@ public class StateManagerUtilTest {
     public void shouldNotCloseStateManagerIfUnableToLockTaskDirectory() {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
         when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         StateManagerUtil.closeStateManager(
@@ -232,6 +236,37 @@ public class StateManagerUtilTest {
         verify(stateManager, never()).baseDir();
         verify(stateDirectory, never()).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
+    }
+
+    @Test
+    public void shouldSkipLockAcquisitionWhenNoRegisteredStoresToClose() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.hasRegisteredStores()).thenReturn(false);
+
+        StateManagerUtil.closeStateManager(
+                logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
+
+        // With nothing to close and no wipe requested, we must not even attempt to acquire the
+        // state-directory lock, so no misleading lock-contention warning can be logged.
+        verify(stateDirectory, never()).lock(taskId);
+        verify(stateManager, never()).close();
+        verify(stateManager, never()).baseDir();
+        // The lock is still released in case registration failed after this thread acquired it.
+        verify(stateDirectory).unlock(taskId);
+    }
+
+    @Test
+    public void shouldReleaseHeldLockWhenNoRegisteredStoresToClose() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.hasRegisteredStores()).thenReturn(false);
+
+        // registerStateStores() locks the state directory before registering any store, so an
+        // initialization failure can leave the lock held with an empty store set. Closing must
+        // not strand that lock, otherwise the task directory can never be re-locked or cleaned up.
+        StateManagerUtil.closeStateManager(
+                logger, "logPrefix:", false, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
+
+        verify(stateDirectory).unlock(taskId);
     }
 
     @Test
@@ -255,6 +290,7 @@ public class StateManagerUtilTest {
     public void testCloseStateManagerTransactionalDoesNotWipeWhenNoCorruptedStores() {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
         when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(true);
         when(stateManager.hasCorruptedStores()).thenReturn(false);
 
