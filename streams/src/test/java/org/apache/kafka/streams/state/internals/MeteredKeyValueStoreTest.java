@@ -389,10 +389,7 @@ public class MeteredKeyValueStoreTest {
         );
 
         final InMemoryKeyValueStore innerStore = new InMemoryKeyValueStore(STORE_NAME);
-        final CachingKeyValueStore cachingStore = new CachingKeyValueStore(
-            innerStore,
-            CachingKeyValueStore.CacheType.KEY_VALUE_STORE
-        );
+        final CachingKeyValueStore cachingStore = new CachingKeyValueStore(innerStore);
         final MeteredKeyValueStore<String, String> meteredStore = new MeteredKeyValueStore<>(
             cachingStore,
             STORE_TYPE,
