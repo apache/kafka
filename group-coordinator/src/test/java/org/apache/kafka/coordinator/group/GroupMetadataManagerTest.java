@@ -7531,6 +7531,291 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testReplaceStaticMemberInStableStateWithUpdatedSubscriptionTriggersRebalance() throws Exception {
+        // A static member that rejoins during the Stable stage with the same selected protocol but a larger
+        // set of subscribed topics (for example a topics.regex member that discovered a new topic) must
+        // trigger a rebalance so that the newly subscribed topic is assigned. See KAFKA-12759.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ClassicGroup group = context.createClassicGroup("group-id");
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withGroupInstanceId("group-instance-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withProtocolType("consumer")
+            .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
+                List.of("foo"),
+                List.of()))
+            .build();
+
+        JoinGroupResponseData response = context.joinClassicGroupAndCompleteJoin(request, true, true);
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        assertEquals(1, group.numMembers());
+        assertEquals(1, group.generationId());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+
+        // Simulate successful sync group phase.
+        group.transitionTo(STABLE);
+
+        // Static member rejoins with UNKNOWN_MEMBER_ID and an additional subscribed topic. The selected
+        // protocol does not change but the subscription does, which triggers a rebalance.
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
+            request.setProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
+                List.of("foo", "bar"),
+                List.of()))
+        );
+
+        assertTrue(joinResult.records.isEmpty());
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.NONE.code(), joinResult.joinFuture.get().errorCode());
+        assertEquals(1, group.numMembers());
+        assertEquals(2, group.generationId());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+    }
+
+    @Test
+    public void testReplaceStaticMemberInStableStateWithShrunkSubscriptionTriggersRebalance() throws Exception {
+        // A static member that rejoins during the Stable stage with the same selected protocol but a smaller
+        // set of subscribed topics must also trigger a rebalance, so that the partitions of the topics it no
+        // longer subscribes to are revoked and reassigned.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ClassicGroup group = context.createClassicGroup("group-id");
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withGroupInstanceId("group-instance-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withProtocolType("consumer")
+            .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
+                List.of("foo", "bar"),
+                List.of()))
+            .build();
+
+        JoinGroupResponseData response = context.joinClassicGroupAndCompleteJoin(request, true, true);
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        assertEquals(1, group.numMembers());
+        assertEquals(1, group.generationId());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+
+        // Simulate successful sync group phase.
+        group.transitionTo(STABLE);
+
+        // Static member rejoins with UNKNOWN_MEMBER_ID and a smaller subscription. The selected protocol does
+        // not change but the subscription does, which triggers a rebalance.
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
+            request.setProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
+                List.of("foo"),
+                List.of()))
+        );
+
+        assertTrue(joinResult.records.isEmpty());
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.NONE.code(), joinResult.joinFuture.get().errorCode());
+        assertEquals(1, group.numMembers());
+        assertEquals(2, group.generationId());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+    }
+
+    @Test
+    public void testReplaceStaticMemberInStableStateWithUpdatedOwnedPartitionsDoesNotTriggerRebalance() throws Exception {
+        // A static member that rejoins during the Stable stage with the same subscribed topics but different
+        // owned partitions must not trigger a rebalance. Only the subscribed topics drive the assignment.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ClassicGroup group = context.createClassicGroup("group-id");
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withGroupInstanceId("group-instance-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withProtocolType("consumer")
+            .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
+                List.of("foo"),
+                List.of(new TopicPartition("foo", 0))))
+            .build();
+
+        JoinGroupResponseData response = context.joinClassicGroupAndCompleteJoin(request, true, true);
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        String oldMemberId = response.memberId();
+        assertEquals(1, group.numMembers());
+        assertEquals(1, group.generationId());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+
+        // Simulate successful sync group phase.
+        group.transitionTo(STABLE);
+
+        // Static member rejoins with UNKNOWN_MEMBER_ID, the same subscribed topics but different owned
+        // partitions. This must not trigger a rebalance.
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
+            request.setProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
+                List.of("foo"),
+                List.of(new TopicPartition("foo", 0), new TopicPartition("foo", 1)))),
+            true,
+            true
+        );
+
+        assertEquals(
+            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment())),
+            joinResult.records
+        );
+        assertFalse(joinResult.joinFuture.isDone());
+
+        // Write was successful.
+        joinResult.appendFuture.complete(null);
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.NONE.code(), joinResult.joinFuture.get().errorCode());
+        assertNotEquals(oldMemberId, group.staticMemberId("group-instance-id"));
+        assertEquals(1, group.numMembers());
+        assertEquals(1, group.generationId());
+        assertTrue(group.isInState(STABLE));
+    }
+
+    @Test
+    public void testReplaceStaticMemberInStableStateWithUnchangedSubscriptionDoesNotTriggerRebalance() throws Exception {
+        // A static member that rejoins during the Stable stage with the same subscribed topics, even when
+        // serialized with a different consumer protocol version, must not trigger a rebalance.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ClassicGroup group = context.createClassicGroup("group-id");
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withGroupInstanceId("group-instance-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withProtocolType("consumer")
+            .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
+                List.of("foo", "bar"),
+                List.of(),
+                ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION))
+            .build();
+
+        JoinGroupResponseData response = context.joinClassicGroupAndCompleteJoin(request, true, true);
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        String oldMemberId = response.memberId();
+        assertEquals(1, group.numMembers());
+        assertEquals(1, group.generationId());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+
+        // Simulate successful sync group phase.
+        group.transitionTo(STABLE);
+
+        // Static member rejoins with UNKNOWN_MEMBER_ID and the same subscribed topics serialized with the
+        // highest supported version. This must not trigger a rebalance.
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
+            request.setProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
+                List.of("foo", "bar"),
+                List.of(),
+                ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION)),
+            true,
+            true
+        );
+
+        assertEquals(
+            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment())),
+            joinResult.records
+        );
+        assertFalse(joinResult.joinFuture.isDone());
+
+        // Write was successful.
+        joinResult.appendFuture.complete(null);
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.NONE.code(), joinResult.joinFuture.get().errorCode());
+        assertNotEquals(oldMemberId, group.staticMemberId("group-instance-id"));
+        assertEquals(1, group.numMembers());
+        assertEquals(1, group.generationId());
+        assertTrue(group.isInState(STABLE));
+    }
+
+    @Test
+    public void testReplaceStaticMemberInStableStateOnlyComparesTheRejoiningMemberSubscription() throws Exception {
+        // In a multi-member static group, the rejoin decision must be based on the rejoining member's own
+        // subscription change, not on the group-wide union of subscribed topics. This test sets up two static
+        // members subscribed to different topics and verifies that:
+        //   1) a member rejoining with an unchanged subscription does not trigger a rebalance, even though its
+        //      subscription differs from the group-wide union; and
+        //   2) a member rejoining with an expanded subscription does trigger a rebalance.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ClassicGroup group = context.createClassicGroup("group-id");
+
+        JoinGroupRequestProtocolCollection fooProtocols =
+            GroupMetadataManagerTestContext.toConsumerProtocol(List.of("foo"), List.of());
+        JoinGroupRequestProtocolCollection barProtocols =
+            GroupMetadataManagerTestContext.toConsumerProtocol(List.of("bar"), List.of());
+
+        // Build a stable group with two static members subscribed to different topics. The group-wide
+        // subscription is therefore {foo, bar}. This is set up directly rather than via
+        // staticMembersJoinAndRebalance because that helper subscribes all members to the same topics.
+        group.setProtocolName(Optional.of("range"));
+        group.add(new ClassicGroupMember(
+            "member-1",
+            Optional.of("instance-1"),
+            "client-id",
+            "client-host",
+            10000,
+            5000,
+            "consumer",
+            fooProtocols,
+            new byte[]{1}
+        ));
+        group.add(new ClassicGroupMember(
+            "member-2",
+            Optional.of("instance-2"),
+            "client-id",
+            "client-host",
+            10000,
+            5000,
+            "consumer",
+            barProtocols,
+            new byte[]{2}
+        ));
+        group.setLeaderId(Optional.of("member-1"));
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(COMPLETING_REBALANCE);
+        group.transitionTo(STABLE);
+        group.setSubscribedTopics(group.computeSubscribedTopics());
+        assertEquals(Optional.of(Set.of("foo", "bar")), group.subscribedTopics());
+        int initialGenerationId = group.generationId();
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withGroupInstanceId("instance-1")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withProtocolType("consumer")
+            .withProtocols(fooProtocols)
+            .build();
+
+        // Member 1 rejoins with its unchanged {foo} subscription. Even though {foo} differs from the group-wide
+        // union {foo, bar}, this must not trigger a rebalance.
+        GroupMetadataManagerTestContext.JoinResult unchangedJoinResult = context.sendClassicGroupJoin(request);
+
+        assertEquals(
+            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment())),
+            unchangedJoinResult.records
+        );
+        assertFalse(unchangedJoinResult.joinFuture.isDone());
+        unchangedJoinResult.appendFuture.complete(null);
+        assertTrue(unchangedJoinResult.joinFuture.isDone());
+        assertEquals(Errors.NONE.code(), unchangedJoinResult.joinFuture.get().errorCode());
+        assertEquals(2, group.numMembers());
+        assertEquals(initialGenerationId, group.generationId());
+        assertTrue(group.isInState(STABLE));
+
+        // Member 1 rejoins with an expanded {foo, bar} subscription. This must trigger a rebalance.
+        GroupMetadataManagerTestContext.JoinResult changedJoinResult = context.sendClassicGroupJoin(
+            request.setProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(List.of("foo", "bar"), List.of()))
+        );
+
+        // The group transitions to PreparingRebalance, which confirms the subscription change triggered a
+        // rebalance. The generation is only bumped once the rebalance completes.
+        assertTrue(changedJoinResult.records.isEmpty());
+        assertEquals(2, group.numMembers());
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+    }
+
+    @Test
     public void testReplaceStaticMemberInStableStateErrors() throws Exception {
         // If the append future fails, confirm that the member is not updated.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
