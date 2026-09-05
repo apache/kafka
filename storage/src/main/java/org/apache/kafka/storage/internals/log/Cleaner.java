@@ -20,7 +20,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.message.AbortedTxn;
-import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
@@ -235,7 +234,6 @@ public class Cleaner {
         List<LogSegment> cleanedSegments = new ArrayList<>();
         // Create initial cleaned segment with the base offset of the first source segment
         LogSegment currentCleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), segments.get(0).baseOffset());
-        transactionMetadata.setCleanedIndex(Optional.of(currentCleaned.txnIndex()));
 
         try {
             Iterator<LogSegment> iter = segments.iterator();
@@ -269,7 +267,7 @@ public class Cleaner {
                 int position = 0;
 
                 while (true) {
-                    Optional<Integer> overflowOpt = cleanInto(
+                    Optional<OverflowedChunk> overflowOpt = cleanInto(
                             log.topicPartition(),
                             currentSegment.log(),
                             currentCleaned,
@@ -285,29 +283,33 @@ public class Cleaner {
                             currentTime
                     );
 
-                    if (overflowOpt.isPresent()) {
-                        // Overflow detected - complete current segment and create new one
-                        logger.info("Completing cleaned segment {} due to overflow, creating new segment", currentCleaned.baseOffset());
-
-                        currentCleaned.onBecomeInactiveSegment();
-                        currentCleaned.flush();
-                        currentCleaned.setLastModified(currentSegment.lastModified());
-                        cleanedSegments.add(currentCleaned);
-
-                        // Use the base offset of the next batch to be cleaned as the new segment's base offset.
-                        // We cannot use currentCleaned.readNextOffset() because compaction may leave holes
-                        // in the offset sequence, so the next batch's base offset could be much larger.
-                        int overflowPosition = overflowOpt.get();
-                        Iterator<FileChannelRecordBatch> nextBatches = currentSegment.log().batchesFrom(overflowPosition).iterator();
-                        long nextBaseOffset = nextBatches.hasNext() ? nextBatches.next().baseOffset() : currentCleaned.readNextOffset();
-                        currentCleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), nextBaseOffset);
-                        transactionMetadata.setCleanedIndex(Optional.of(currentCleaned.txnIndex()));
-
-                        logger.info("Created new cleaned segment with base offset {} for partition {}", nextBaseOffset, log.topicPartition());
-                        position = overflowPosition;
-                    } else {
+                    if (overflowOpt.isEmpty())
                         break;
-                    }
+
+                    // Overflow detected - complete the current segment and continue with the filtered chunk in a new cleaned segment
+                    OverflowedChunk chunk = overflowOpt.get();
+                    logger.info("Completing cleaned segment {} due to overflow, creating new segment", currentCleaned.baseOffset());
+
+                    currentCleaned.onBecomeInactiveSegment();
+                    currentCleaned.flush();
+                    currentCleaned.setLastModified(currentSegment.lastModified());
+                    cleanedSegments.add(currentCleaned);
+
+                    // Use the base offset of the first retained batch as the new segment's base offset.
+                    // We cannot use currentCleaned.readNextOffset() because compaction may leave holes
+                    // in the offset sequence, so the first retained batch's base offset could be much larger.
+                    long nextBaseOffset = chunk.retained().batches().iterator().next().baseOffset();
+                    currentCleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), nextBaseOffset);
+                    logger.info("Created new cleaned segment with base offset {} for partition {}", nextBaseOffset, log.topicPartition());
+
+                    // The chunk must be appended before the next cleanInto() call, which would clear the
+                    // shared write buffer backing the retained records
+                    currentCleaned.append(chunk.maxOffset(), chunk.retained());
+                    // Aborted transactions staged while filtering the chunk belong to the segment the
+                    // chunk was appended to
+                    transactionMetadata.flushPendingAbortedTxnsTo(currentCleaned.txnIndex());
+                    throttler.maybeThrottle(chunk.retained().sizeInBytes());
+                    position = chunk.nextPosition();
                 }
 
                 currentSegmentOpt = nextSegmentOpt;
@@ -342,6 +344,16 @@ public class Cleaner {
     }
 
     /**
+     * A filtered chunk that could not be appended to the current cleaned segment without overflowing it.
+     *
+     * @param retained The filtered records to append to the next cleaned segment. They are backed by
+     *                 the cleaner's shared write buffer and must be appended before the next {@link #cleanInto} call, which overwrites the shared buffer.
+     * @param maxOffset The max offset of the retained records
+     * @param nextPosition The position in the source segment from which to resume cleaning
+     */
+    private record OverflowedChunk(MemoryRecords retained, long maxOffset, int nextPosition) { }
+
+    /**
      * Clean the given source log segment into destination segment using the key=>offset mapping
      * provided, starting from the given position.
      *
@@ -360,10 +372,12 @@ public class Cleaner {
      * @param stats Collector for cleaning statistics
      * @param currentTime The time at which the clean was initiated
      *
-     * @return {@code Optional.of(position)} if the destination segment would overflow (position is where overflow
-     *         was detected in the source), or {@code Optional.empty()} if cleaning completed normally
+     * @return {@code Optional.of(chunk)} if appending the filtered chunk would overflow the destination
+     *         segment; the caller must append the chunk to a new cleaned segment before the next
+     *         {@link #cleanInto} call and resume from {@link OverflowedChunk#nextPosition()}.
+     *         {@code Optional.empty()} if cleaning completed normally.
      */
-    private Optional<Integer> cleanInto(TopicPartition topicPartition,
+    private Optional<OverflowedChunk> cleanInto(TopicPartition topicPartition,
                            FileRecords sourceRecords,
                            LogSegment dest,
                            int startPosition,
@@ -466,17 +480,24 @@ public class Cleaner {
                 // recompression during cleaning can cause the cleaned segment to exceed that size.
                 // Similarly, combining multiple source segments into one cleaned segment can cause
                 // the offset range to exceed Integer.MAX_VALUE.
-                // Always allow the first write to an empty segment to avoid an infinite loop where
-                // a single oversized batch can never make progress.
+                // Always write the chunk to an empty segment, since rolling yet another segment for
+                // it could not make it fit any better.
                 boolean sizeOverflow = dest.size() > 0 && retained.sizeInBytes() > maxCleanedSegmentSize - dest.size();
                 boolean offsetOverflow = dest.size() > 0 && result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange;
                 if (sizeOverflow || offsetOverflow) {
-                    return Optional.of(position - result.bytesRead());
+                    // Hand the filtered chunk to the caller for appending to a new cleaned segment.
+                    // The chunk must not be filtered again, since filtering consumes
+                    // transactionMetadata state and a second pass would observe inconsistent
+                    // transaction state (for example, treating an aborted batch as committed).
+                    return Optional.of(new OverflowedChunk(retained, result.maxOffset(), position));
                 }
 
                 // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
                 // after `Log.replaceSegments` (which acquires the lock) is called
                 dest.append(result.maxOffset(), retained);
+                // Aborted transactions staged while filtering this chunk belong to the segment the
+                // chunk was appended to.
+                transactionMetadata.flushPendingAbortedTxnsTo(dest.txnIndex());
                 throttler.maybeThrottle(outputBuffer.limit());
             }
 
