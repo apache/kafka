@@ -51,18 +51,16 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KGroupedStreamImplTest {
 
@@ -246,7 +244,7 @@ public class KGroupedStreamImplTest {
         final ArrayList<KeyValueTimestamp<Windowed<String>, Long>> actual = supplier.theCapturedProcessor().processed();
         actual.sort(comparator);
 
-        assertThat(actual, equalTo(Arrays.asList(
+        assertEquals(List.of(
             // processing A@500
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 500L),
             // processing A@600
@@ -313,7 +311,7 @@ public class KGroupedStreamImplTest {
             new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(100L, 600L)), 2L, 600L),
             // processing C@600
             new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(502L, 1002L)), 1L, 600L)
-        )));
+        ), actual);
     }
 
     private void doAggregateSessionWindows(final MockApiProcessorSupplier<Windowed<String>, Integer, Void, Void> supplier) {
@@ -600,16 +598,16 @@ public class KGroupedStreamImplTest {
             {
                 final KeyValueStore<String, Long> count = driver.getKeyValueStore("count");
 
-                assertThat(count.get("1"), equalTo(3L));
-                assertThat(count.get("2"), equalTo(1L));
-                assertThat(count.get("3"), equalTo(2L));
+                assertEquals(3L, count.get("1"));
+                assertEquals(1L, count.get("2"));
+                assertEquals(2L, count.get("3"));
             }
             {
                 final KeyValueStore<String, ValueAndTimestamp<Long>> count = driver.getTimestampedKeyValueStore("count");
 
-                assertThat(count.get("1"), equalTo(ValueAndTimestamp.make(3L, 10L)));
-                assertThat(count.get("2"), equalTo(ValueAndTimestamp.make(1L, 1L)));
-                assertThat(count.get("3"), equalTo(ValueAndTimestamp.make(2L, 9L)));
+                assertEquals(ValueAndTimestamp.make(3L, 10L), count.get("1"));
+                assertEquals(ValueAndTimestamp.make(1L, 1L), count.get("2"));
+                assertEquals(ValueAndTimestamp.make(2L, 9L), count.get("3"));
             }
         }
     }
@@ -623,11 +621,8 @@ public class KGroupedStreamImplTest {
 
             processData(driver);
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key or value. topic=[topic] partition=[0] "
-                    + "offset=[6]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Skipping record due to null key or value. topic=[topic] partition=[0] offset=[6]"));
         }
     }
 
@@ -645,16 +640,16 @@ public class KGroupedStreamImplTest {
             {
                 final KeyValueStore<String, String> reduced = driver.getKeyValueStore("reduce");
 
-                assertThat(reduced.get("1"), equalTo("A+C+D"));
-                assertThat(reduced.get("2"), equalTo("B"));
-                assertThat(reduced.get("3"), equalTo("E+F"));
+                assertEquals("A+C+D", reduced.get("1"));
+                assertEquals("B", reduced.get("2"));
+                assertEquals("E+F", reduced.get("3"));
             }
             {
                 final KeyValueStore<String, ValueAndTimestamp<String>> reduced = driver.getTimestampedKeyValueStore("reduce");
 
-                assertThat(reduced.get("1"), equalTo(ValueAndTimestamp.make("A+C+D", 10L)));
-                assertThat(reduced.get("2"), equalTo(ValueAndTimestamp.make("B", 1L)));
-                assertThat(reduced.get("3"), equalTo(ValueAndTimestamp.make("E+F", 9L)));
+                assertEquals(ValueAndTimestamp.make("A+C+D", 10L), reduced.get("1"));
+                assertEquals(ValueAndTimestamp.make("B", 1L), reduced.get("2"));
+                assertEquals(ValueAndTimestamp.make("E+F", 9L), reduced.get("3"));
             }
         }
     }
@@ -673,11 +668,8 @@ public class KGroupedStreamImplTest {
 
             processData(driver);
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key or value. topic=[topic] partition=[0] "
-                    + "offset=[6]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Skipping record due to null key or value. topic=[topic] partition=[0] offset=[6]"));
         }
     }
 
@@ -696,16 +688,16 @@ public class KGroupedStreamImplTest {
             {
                 final KeyValueStore<String, String> aggregate = driver.getKeyValueStore("aggregate");
 
-                assertThat(aggregate.get("1"), equalTo("0+A+C+D"));
-                assertThat(aggregate.get("2"), equalTo("0+B"));
-                assertThat(aggregate.get("3"), equalTo("0+E+F"));
+                assertEquals("0+A+C+D", aggregate.get("1"));
+                assertEquals("0+B", aggregate.get("2"));
+                assertEquals("0+E+F", aggregate.get("3"));
             }
             {
                 final KeyValueStore<String, ValueAndTimestamp<String>> aggregate = driver.getTimestampedKeyValueStore("aggregate");
 
-                assertThat(aggregate.get("1"), equalTo(ValueAndTimestamp.make("0+A+C+D", 10L)));
-                assertThat(aggregate.get("2"), equalTo(ValueAndTimestamp.make("0+B", 1L)));
-                assertThat(aggregate.get("3"), equalTo(ValueAndTimestamp.make("0+E+F", 9L)));
+                assertEquals(ValueAndTimestamp.make("0+A+C+D", 10L), aggregate.get("1"));
+                assertEquals(ValueAndTimestamp.make("0+B", 1L), aggregate.get("2"));
+                assertEquals(ValueAndTimestamp.make("0+E+F", 9L), aggregate.get("3"));
             }
         }
     }
@@ -721,15 +713,15 @@ public class KGroupedStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
 
-            assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey().get("1"),
-                equalTo(ValueAndTimestamp.make("0+A+C+D", 10L)));
-            assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey().get("2"),
-                equalTo(ValueAndTimestamp.make("0+B", 1L)));
-            assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey().get("3"),
-                equalTo(ValueAndTimestamp.make("0+E+F", 9L)));
+            assertEquals(
+                ValueAndTimestamp.make("0+A+C+D", 10L),
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey().get("1"));
+            assertEquals(
+                ValueAndTimestamp.make("0+B", 1L),
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey().get("2"));
+            assertEquals(
+                ValueAndTimestamp.make("0+E+F", 9L),
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey().get("3"));
         }
     }
 
@@ -762,7 +754,7 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("2", "B", 500L);
             inputTopic.pipeInput("3", "B", 100L);
         }
-        assertThat(supplier.theCapturedProcessor().processed(), equalTo(Arrays.asList(
+        assertEquals(List.of(
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 499L),
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 3L, 499L),
@@ -775,7 +767,7 @@ public class KGroupedStreamImplTest {
             new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 1L, 500L),
             new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 2L, 500L),
             new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 2L, 100L)
-        )));
+        ), supplier.theCapturedProcessor().processed());
     }
 
     @Test

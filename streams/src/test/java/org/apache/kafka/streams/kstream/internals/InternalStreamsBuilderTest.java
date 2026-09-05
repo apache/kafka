@@ -68,9 +68,6 @@ import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -297,7 +294,7 @@ public class InternalStreamsBuilderTest {
         builder.stream(Collections.singleton(topicName), consumed);
         builder.buildAndOptimizeTopology();
 
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(AutoOffsetResetStrategy.NONE));
+        assertEquals(AutoOffsetResetStrategy.NONE, builder.internalTopologyBuilder.offsetResetStrategy(topicName));
     }
 
     @Test
@@ -307,7 +304,7 @@ public class InternalStreamsBuilderTest {
         builder.stream(Collections.singleton(topicName), consumed);
         builder.buildAndOptimizeTopology();
 
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(AutoOffsetResetStrategy.EARLIEST));
+        assertEquals(AutoOffsetResetStrategy.EARLIEST, builder.internalTopologyBuilder.offsetResetStrategy(topicName));
     }
 
     @Test
@@ -317,7 +314,7 @@ public class InternalStreamsBuilderTest {
         final ConsumedInternal<String, String> consumed = new ConsumedInternal<>(Consumed.with(AutoOffsetReset.latest()));
         builder.stream(Collections.singleton(topicName), consumed);
         builder.buildAndOptimizeTopology();
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(AutoOffsetResetStrategy.LATEST));
+        assertEquals(AutoOffsetResetStrategy.LATEST, builder.internalTopologyBuilder.offsetResetStrategy(topicName));
     }
 
     @Test
@@ -327,8 +324,8 @@ public class InternalStreamsBuilderTest {
         final ConsumedInternal<String, String> consumed = new ConsumedInternal<>(Consumed.with(new AutoOffsetResetInternal(AutoOffsetReset.byDuration(Duration.ofSeconds(42L)))));
         builder.stream(Collections.singleton(topicName), consumed);
         builder.buildAndOptimizeTopology();
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName).type(), equalTo(AutoOffsetResetStrategy.StrategyType.BY_DURATION));
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName).duration().get().toSeconds(), equalTo(42L));
+        assertEquals(AutoOffsetResetStrategy.StrategyType.BY_DURATION, builder.internalTopologyBuilder.offsetResetStrategy(topicName).type());
+        assertEquals(42L, builder.internalTopologyBuilder.offsetResetStrategy(topicName).duration().get().toSeconds());
     }
 
     @Test
@@ -336,7 +333,7 @@ public class InternalStreamsBuilderTest {
         final String topicName = "topic-1";
         builder.table(topicName, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.none())), materialized);
         builder.buildAndOptimizeTopology();
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(AutoOffsetResetStrategy.NONE));
+        assertEquals(AutoOffsetResetStrategy.NONE, builder.internalTopologyBuilder.offsetResetStrategy(topicName));
     }
 
     @Test
@@ -344,7 +341,7 @@ public class InternalStreamsBuilderTest {
         final String topicName = "topic-1";
         builder.table(topicName, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.earliest())), materialized);
         builder.buildAndOptimizeTopology();
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(AutoOffsetResetStrategy.EARLIEST));
+        assertEquals(AutoOffsetResetStrategy.EARLIEST, builder.internalTopologyBuilder.offsetResetStrategy(topicName));
     }
 
     @Test
@@ -352,7 +349,7 @@ public class InternalStreamsBuilderTest {
         final String topicName = "topic-1";
         builder.table(topicName, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.latest())), materialized);
         builder.buildAndOptimizeTopology();
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(AutoOffsetResetStrategy.LATEST));
+        assertEquals(AutoOffsetResetStrategy.LATEST, builder.internalTopologyBuilder.offsetResetStrategy(topicName));
     }
 
     @Test
@@ -360,8 +357,8 @@ public class InternalStreamsBuilderTest {
         final String topicName = "topic-1";
         builder.table(topicName, new ConsumedInternal<>(Consumed.with(AutoOffsetResetInternal.byDuration(Duration.ofSeconds(42L)))), materialized);
         builder.buildAndOptimizeTopology();
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName).type(), equalTo(AutoOffsetResetStrategy.StrategyType.BY_DURATION));
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName).duration().get().toSeconds(), equalTo(42L));
+        assertEquals(AutoOffsetResetStrategy.StrategyType.BY_DURATION, builder.internalTopologyBuilder.offsetResetStrategy(topicName).type());
+        assertEquals(42L, builder.internalTopologyBuilder.offsetResetStrategy(topicName).duration().get().toSeconds());
     }
 
     @Test
@@ -371,7 +368,7 @@ public class InternalStreamsBuilderTest {
         builder.table(topicName, consumed, materialized);
         builder.buildAndOptimizeTopology();
 
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(null));
+        assertNull(builder.internalTopologyBuilder.offsetResetStrategy(topicName));
     }
 
     @Test
@@ -382,7 +379,7 @@ public class InternalStreamsBuilderTest {
         builder.stream(topicPattern, consumed);
         builder.buildAndOptimizeTopology();
 
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topic), equalTo(null));
+        assertNull(builder.internalTopologyBuilder.offsetResetStrategy(topic));
     }
 
     @Test
@@ -393,7 +390,7 @@ public class InternalStreamsBuilderTest {
         builder.stream(topicPattern, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.earliest())));
         builder.buildAndOptimizeTopology();
 
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicTwo), equalTo(AutoOffsetResetStrategy.EARLIEST));
+        assertEquals(AutoOffsetResetStrategy.EARLIEST, builder.internalTopologyBuilder.offsetResetStrategy(topicTwo));
     }
 
     @Test
@@ -404,7 +401,7 @@ public class InternalStreamsBuilderTest {
         builder.stream(topicPattern, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.latest())));
         builder.buildAndOptimizeTopology();
 
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicTwo), equalTo(AutoOffsetResetStrategy.LATEST));
+        assertEquals(AutoOffsetResetStrategy.LATEST, builder.internalTopologyBuilder.offsetResetStrategy(topicTwo));
     }
 
     @Test
@@ -415,8 +412,8 @@ public class InternalStreamsBuilderTest {
         builder.stream(topicPattern, new ConsumedInternal<>(Consumed.with(AutoOffsetResetInternal.byDuration(Duration.ofSeconds(42L)))));
         builder.buildAndOptimizeTopology();
 
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicTwo).type(), equalTo(AutoOffsetResetStrategy.StrategyType.BY_DURATION));
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicTwo).duration().get().toSeconds(), equalTo(42L));
+        assertEquals(AutoOffsetResetStrategy.StrategyType.BY_DURATION, builder.internalTopologyBuilder.offsetResetStrategy(topicTwo).type());
+        assertEquals(42L, builder.internalTopologyBuilder.offsetResetStrategy(topicTwo).duration().get().toSeconds());
     }
 
     @Test
@@ -436,7 +433,7 @@ public class InternalStreamsBuilderTest {
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .buildTopology();
-        assertThat(processorTopology.source("topic").timestampExtractor(), instanceOf(MockTimestampExtractor.class));
+        assertInstanceOf(MockTimestampExtractor.class, processorTopology.source("topic").timestampExtractor());
     }
 
     @Test
@@ -457,7 +454,7 @@ public class InternalStreamsBuilderTest {
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .buildTopology();
-        assertThat(processorTopology.source("topic").timestampExtractor(), instanceOf(MockTimestampExtractor.class));
+        assertInstanceOf(MockTimestampExtractor.class, processorTopology.source("topic").timestampExtractor());
     }
 
     @Test

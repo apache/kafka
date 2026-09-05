@@ -53,8 +53,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.TreeMap;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -115,8 +114,8 @@ public class KStreamRepartitionTest {
                 testInputTopic.pipeInput(expectedKeys[i], "X" + expectedKeys[i], i + 10);
             }
 
-            assertThat(testOutputTopic.readRecord(), equalTo(new TestRecord<>(0, "X0", Instant.ofEpochMilli(10))));
-            assertThat(testOutputTopic.readRecord(), equalTo(new TestRecord<>(1, "X1", Instant.ofEpochMilli(11))));
+            assertEquals(new TestRecord<>(0, "X0", Instant.ofEpochMilli(10)), testOutputTopic.readRecord());
+            assertEquals(new TestRecord<>(1, "X1", Instant.ofEpochMilli(11)), testOutputTopic.readRecord());
             assertTrue(testOutputTopic.readRecordsToList().isEmpty());
         }
 

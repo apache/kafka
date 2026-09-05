@@ -58,8 +58,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -236,7 +234,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         }
         // verifying primarily that no extra pseudo-topics were used, but it's nice to also verify the rest of the
         // topics our serdes serialize data for
-        assertThat(serdeScope.registeredTopics(), is(Set.of(
+        assertEquals(Set.of(
             // expected pseudo-topics
             applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-fk--key",
             applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-pk--key",
@@ -252,7 +250,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
             // output topics
             "output-topic--key",
             "output-topic--value"
-        )));
+        ), serdeScope.registeredTopics());
     }
 
     @ParameterizedTest
@@ -313,7 +311,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
             expectedOutput.put("producer1:product2", "(producer1|product2-data,producer1-data)");
             expectedOutput.put("producer2:product1", "(producer2|product1-data,producer2-data)");
 
-            assertThat(output.readKeyValuesToMap(), is(expectedOutput));
+            assertEquals(expectedOutput, output.readKeyValuesToMap());
         }
     }
 
@@ -374,7 +372,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
             expectedOutput.put("producer1:product2", "(product2-data,producer1-data)");
             expectedOutput.put("producer2:product1", "(product1-data,producer2-data)");
 
-            assertThat(output.readKeyValuesToMap(), is(expectedOutput));
+            assertEquals(expectedOutput, output.readKeyValuesToMap());
         }
     }
 
@@ -402,7 +400,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
             aTopic.pipeInput(1, "999-alpha");
             bTopic.pipeInput(999, "beta");
             final Map<Integer, String> x = output.readKeyValuesToMap();
-            assertThat(x, is(Collections.singletonMap(1, "(999-alpha,(999-alpha,beta))")));
+            assertEquals(Map.of(1, "(999-alpha,(999-alpha,beta))"), x);
         }
     }
 

@@ -34,9 +34,8 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -62,9 +61,9 @@ public class ChangedSerdeTest {
 
     private static <T> void checkRoundTrip(final T data, final Serializer<T> serializer, final Deserializer<T> deserializer) {
         final byte[] serialized = serializer.serialize(TOPIC, HEADERS, data);
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
         final T deserialized = deserializer.deserialize(TOPIC, HEADERS, serialized);
-        assertThat(deserialized, is(data));
+        assertEquals(data, deserialized);
     }
 
     @Test
@@ -110,7 +109,7 @@ public class ChangedSerdeTest {
     public void shouldThrowErrorIfEncountersAnUnknownByteValueForOldNewFlag() {
         final Change<String> data = new Change<>(null, nonNullOldValue);
         final byte[] serialized = CHANGED_STRING_SERIALIZER.serialize(TOPIC, HEADERS, data);
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
 
         // mutate the serialized array to replace OLD_NEW_FLAG with an unsupported byte value
         final ByteBuffer buffer = ByteBuffer.wrap(serialized);
@@ -182,9 +181,9 @@ public class ChangedSerdeTest {
 
     private static void checkRoundTripForReservedVersion(final Change<String> data) {
         final byte[] serialized = serializeVersions3Through5(TOPIC, data);
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
         final Change<String> deserialized = CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized);
-        assertThat(deserialized, is(data));
+        assertEquals(data, deserialized);
     }
 
     @Test

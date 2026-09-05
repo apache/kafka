@@ -68,13 +68,13 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
@@ -412,7 +412,7 @@ public class KTableImplTest {
         final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
         table.enableSendingOldValues(false);
 
-        assertThat(table.sendingOldValueEnabled(), is(false));
+        assertFalse(table.sendingOldValueEnabled());
     }
 
     @ParameterizedTest
@@ -424,7 +424,7 @@ public class KTableImplTest {
         final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
         table.enableSendingOldValues(true);
 
-        assertThat(table.sendingOldValueEnabled(), is(true));
+        assertTrue(table.sendingOldValueEnabled());
     }
 
     private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {
