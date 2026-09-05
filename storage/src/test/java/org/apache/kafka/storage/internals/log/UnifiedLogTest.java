@@ -3421,6 +3421,106 @@ public class UnifiedLogTest {
     }
 
     @Test
+    public void testFetchOffsetByMaxTimestampWithRemoteStorageAsyncPathProducesResult() throws Exception {
+        // When remote storage is enabled and the log is non-empty, MAX_TIMESTAMP must go
+        // through the async path and return a valid result via the future.
+        DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory =
+                new DelayedOperationPurgatory<>("RemoteListOffsets", 0);
+        RemoteLogManager remoteLogManager = spy(new RemoteLogManager(createRemoteLogManagerConfig(),
+                0,
+                logDir.getAbsolutePath(),
+                "clusterId",
+                mockTime,
+                tp -> Optional.empty(),
+                (tp, offset) -> { },
+                brokerTopicStats,
+                new Metrics(),
+                Optional.empty()));
+        remoteLogManager.setDelayedOperationPurgatory(purgatory);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(200)
+                .indexIntervalBytes(1)
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        long firstTs = mockTime.milliseconds();
+        int firstEpoch = 0;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTs), firstEpoch);
+        long secondTs = firstTs + 1;
+        int secondEpoch = 1;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), secondTs), secondEpoch);
+
+        // Remote returns nothing for MAX_TIMESTAMP (simulates all data still local).
+        doAnswer(ans -> Optional.empty()).when(remoteLogManager).findOffsetByTimestamp(
+                eq(log.topicPartition()), anyLong(), anyLong(), eq(log.leaderEpochCache()));
+
+        // The local supplier should pick the record with secondTs.
+        OffsetResultHolder holder = log.fetchOffsetByTimestamp(
+                ListOffsetsRequest.MAX_TIMESTAMP, Optional.of(remoteLogManager));
+        assertTrue(holder.futureHolderOpt().isPresent(), "Async path should produce a future");
+
+        holder.futureHolderOpt().get().taskFuture().get(1, TimeUnit.SECONDS);
+        assertTrue(holder.futureHolderOpt().get().taskFuture().isDone());
+        assertFalse(holder.futureHolderOpt().get().taskFuture().get().hasException());
+        Optional<FileRecords.TimestampAndOffset> result =
+                holder.futureHolderOpt().get().taskFuture().get().timestampAndOffset();
+        assertTrue(result.isPresent());
+        assertEquals(secondTs, result.get().timestamp);
+    }
+
+    @Test
+    public void testFetchOffsetByMaxTimestampWithRemoteStorage() throws Exception {
+        DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory =
+                new DelayedOperationPurgatory<>("RemoteListOffsets", 0);
+        RemoteLogManager remoteLogManager = spy(new RemoteLogManager(createRemoteLogManagerConfig(),
+                0,
+                logDir.getAbsolutePath(),
+                "clusterId",
+                mockTime,
+                tp -> Optional.empty(),
+                (tp, offset) -> { },
+                brokerTopicStats,
+                new Metrics(),
+                Optional.empty()));
+        remoteLogManager.setDelayedOperationPurgatory(purgatory);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(200)
+                .indexIntervalBytes(1)
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        long localTs = mockTime.milliseconds();
+        long remoteTs = localTs + 9999;
+        int localEpoch = 0;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), remoteTs), localEpoch);
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), localTs), localEpoch);
+        // Simulate the local record being deleted (moved to remote-only).
+        log.updateLocalLogStartOffset(1);
+
+        int remoteEpoch = 0;
+        FileRecords.TimestampAndOffset remoteResult =
+                new FileRecords.TimestampAndOffset(remoteTs, 0L, Optional.of(remoteEpoch));
+        doAnswer(ans -> Optional.of(remoteResult)).when(remoteLogManager).findOffsetByTimestamp(
+                eq(log.topicPartition()), anyLong(), anyLong(), eq(log.leaderEpochCache()));
+
+        OffsetResultHolder holder = log.fetchOffsetByTimestamp(
+                ListOffsetsRequest.MAX_TIMESTAMP, Optional.of(remoteLogManager));
+        assertTrue(holder.futureHolderOpt().isPresent());
+
+        holder.futureHolderOpt().get().taskFuture().get(1, TimeUnit.SECONDS);
+        assertFalse(holder.futureHolderOpt().get().taskFuture().get().hasException());
+        Optional<FileRecords.TimestampAndOffset> result =
+                holder.futureHolderOpt().get().taskFuture().get().timestampAndOffset();
+        assertTrue(result.isPresent());
+        assertEquals(remoteTs, result.get().timestamp);
+        assertEquals(0L, result.get().offset);
+    }
+
+    @Test
     public void testFetchOffsetByTimestampFromRemoteStorage() throws Exception {
         DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory = new DelayedOperationPurgatory<DelayedRemoteListOffsets>("RemoteListOffsets", 0);
         RemoteLogManager remoteLogManager = spy(new RemoteLogManager(createRemoteLogManagerConfig(),

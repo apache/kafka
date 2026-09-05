@@ -1724,7 +1724,7 @@ public class UnifiedLog implements AutoCloseable {
                     } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
                         return fetchEarliestPendingUploadOffset(remoteOffsetReader);
                     } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
-                        // Cache to avoid race conditions.
+                        // Cache local segments to avoid race conditions with rolling/truncation.
                         List<LogSegment> segments = logSegments();
                         LogSegment latestTimestampSegment = null;
                         for (LogSegment segment : segments) {
@@ -1734,19 +1734,37 @@ public class UnifiedLog implements AutoCloseable {
                                 latestTimestampSegment = segment;
                             }
                         }
-                        // cache the timestamp and offset
-                        TimestampOffset maxTimestampSoFar = latestTimestampSegment.readMaxTimestampAndOffsetSoFar();
-                        // lookup the position of batch to avoid extra I/O
-                        OffsetPosition position = latestTimestampSegment.offsetIndex().lookup(maxTimestampSoFar.offset());
-                        Optional<FileRecords.TimestampAndOffset> timestampAndOffsetOpt = findFirst(
-                                latestTimestampSegment.log().batchesFrom(position.position()),
+
+                        LogSegment logMaxSegment = latestTimestampSegment;
+                        AsyncOffsetReader.TimestampAndOffsetSupplier localMaxSupplier = () -> {
+                            if (logMaxSegment == null) {
+                                return Optional.empty();
+                            }
+                            // cache the timestamp and offset
+                            TimestampOffset maxTimestampSoFar = logMaxSegment.readMaxTimestampAndOffsetSoFar();
+                            // lookup the position of batch to avoid extra I/O
+                            OffsetPosition position = logMaxSegment.offsetIndex().lookup(maxTimestampSoFar.offset());
+                            return findFirst(
+                                logMaxSegment.log().batchesFrom(position.position()),
                                 item -> item.maxTimestamp() == maxTimestampSoFar.timestamp())
-                                    .flatMap(batch -> batch.offsetOfMaxTimestamp()
-                                        .map(offset -> new FileRecords.TimestampAndOffset(
-                                            batch.maxTimestamp(),
-                                            offset,
-                                            Optional.of(batch.partitionLeaderEpoch()).filter(epoch -> epoch >= 0))));
-                        return new OffsetResultHolder(timestampAndOffsetOpt);
+                                .flatMap(batch -> batch.offsetOfMaxTimestamp()
+                                    .map(offset -> new FileRecords.TimestampAndOffset(
+                                        batch.maxTimestamp(),
+                                        offset,
+                                        Optional.of(batch.partitionLeaderEpoch()).filter(epoch -> epoch >= 0))));
+                        };
+
+                        if (remoteLogEnabled() && !isEmpty()) {
+                            if (remoteOffsetReader.isEmpty()) {
+                                throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.");
+                            }
+                            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> asyncOffsetReadFutureHolder =
+                                    remoteOffsetReader.get().asyncOffsetRead(topicPartition(), ListOffsetsRequest.MAX_TIMESTAMP,
+                                    logStartOffset, leaderEpochCache, localMaxSupplier);
+                            return new OffsetResultHolder(Optional.empty(), Optional.of(asyncOffsetReadFutureHolder));
+                        } else {
+                            return new OffsetResultHolder(localMaxSupplier.get());
+                        }
                     } else {
                         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
                         if (remoteLogEnabled() && !isEmpty()) {

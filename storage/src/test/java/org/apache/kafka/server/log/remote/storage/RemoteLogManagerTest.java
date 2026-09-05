@@ -34,6 +34,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RemoteLogInputStream;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -1828,6 +1829,230 @@ public class RemoteLogManagerTest {
         // the indexes needs to be fetched from the remote storage
         localLogOffsetState.set(oneSegmentBaseOffset101);
         assertEquals(Optional.of(expectedRemoteResult), remoteLogManager.findOffsetByTimestamp(tp, timestamp + 1, 0L, cache));
+    }
+
+    /**
+     * Sets up a RemoteLogManager with a mocked RLMM and a mocked lookupTimestamp so that each
+     * test can inject whatever segments they need via {@code listRemoteLogSegments(topicIdPartition)}.
+     *
+     * The provided {@code topicIdPartition} must already be registered in the RLM (via
+     * onLeadershipChange) so that topicIdByPartitionMap is populated.
+     */
+    private RemoteLogManager buildRlmForMaxTimestamp(TopicIdPartition tpId,
+                                                     List<RemoteLogSegmentMetadata> remoteSegments,
+                                                     FileRecords.TimestampAndOffset lookupResult) throws Exception {
+        RemoteLogManager rlm = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
+                partition -> Optional.of(mockLog),
+                (topicPartition, offset) -> currentLogStartOffset.set(offset),
+                brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
+            }
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+            @Override
+            Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata,
+                                                                     long timestamp,
+                                                                     long startingOffset) {
+                return Optional.ofNullable(lookupResult);
+            }
+        };
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(tpId)))
+                .thenReturn(remoteSegments.iterator());
+        rlm.onLeadershipChange(Set.of(), Set.of(mockPartition(tpId)),
+                Map.of(tpId.topicPartition().topic(), tpId.topicId()));
+        return rlm;
+    }
+
+    @Test
+    void testFindOffsetByMaxTimestampNoRemoteSegments() throws Exception {
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("sample", 0));
+        when(mockLog.logSegments()).thenReturn(List.of());
+        when(mockLog.logEndOffset()).thenReturn(0L);
+
+        try (RemoteLogManager rlm = buildRlmForMaxTimestamp(tpId, List.of(), null)) {
+            Optional<FileRecords.TimestampAndOffset> result = rlm.findOffsetByTimestamp(
+                    tpId.topicPartition(), ListOffsetsRequest.MAX_TIMESTAMP, 0L, null);
+            assertEquals(Optional.empty(), result);
+        }
+    }
+
+    @Test
+    void testFindOffsetByMaxTimestampSingleRemoteSegment() throws Exception {
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("sample", 0));
+        long maxTs = 1000L;
+        long startOffset = 0L;
+        long endOffset = 99L;
+
+        RemoteLogSegmentMetadata seg = mock(RemoteLogSegmentMetadata.class);
+        when(seg.state()).thenReturn(RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(seg.maxTimestampMs()).thenReturn(maxTs);
+        when(seg.startOffset()).thenReturn(startOffset);
+        when(seg.endOffset()).thenReturn(endOffset);
+
+        // No local segments — segment is purely remote.
+        when(mockLog.logSegments()).thenReturn(List.of());
+        when(mockLog.logEndOffset()).thenReturn(100L);
+
+        FileRecords.TimestampAndOffset expected = new FileRecords.TimestampAndOffset(maxTs, 50L, Optional.of(1));
+        try (RemoteLogManager rlm = buildRlmForMaxTimestamp(tpId, List.of(seg), expected)) {
+            Optional<FileRecords.TimestampAndOffset> result = rlm.findOffsetByTimestamp(
+                    tpId.topicPartition(), ListOffsetsRequest.MAX_TIMESTAMP, startOffset, null);
+            assertEquals(Optional.of(expected), result);
+        }
+    }
+
+    @Test
+    void testFindOffsetByMaxTimestampPicksSegmentWithHighestMaxTimestamp() throws Exception {
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("sample", 0));
+
+        RemoteLogSegmentMetadata low = mock(RemoteLogSegmentMetadata.class);
+        when(low.state()).thenReturn(RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(low.maxTimestampMs()).thenReturn(500L);
+        when(low.startOffset()).thenReturn(0L);
+        when(low.endOffset()).thenReturn(49L);
+
+        RemoteLogSegmentMetadata high = mock(RemoteLogSegmentMetadata.class);
+        when(high.state()).thenReturn(RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(high.maxTimestampMs()).thenReturn(1000L);
+        when(high.startOffset()).thenReturn(50L);
+        when(high.endOffset()).thenReturn(99L);
+
+        when(mockLog.logSegments()).thenReturn(List.of());
+        when(mockLog.logEndOffset()).thenReturn(100L);
+
+        FileRecords.TimestampAndOffset expected = new FileRecords.TimestampAndOffset(1000L, 75L, Optional.of(1));
+        try (RemoteLogManager rlm = buildRlmForMaxTimestamp(tpId, List.of(low, high), expected)) {
+            Optional<FileRecords.TimestampAndOffset> result = rlm.findOffsetByTimestamp(
+                    tpId.topicPartition(), ListOffsetsRequest.MAX_TIMESTAMP, 0L, null);
+            assertEquals(Optional.of(expected), result);
+        }
+    }
+
+    @Test
+    void testFindOffsetByMaxTimestampWithSameMaxTimestampMs() throws Exception {
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("sample", 0));
+        long sameTs = 1000L;
+
+        RemoteLogSegmentMetadata earlier = mock(RemoteLogSegmentMetadata.class);
+        when(earlier.state()).thenReturn(RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(earlier.maxTimestampMs()).thenReturn(sameTs);
+        when(earlier.startOffset()).thenReturn(0L);
+        when(earlier.endOffset()).thenReturn(49L);
+
+        RemoteLogSegmentMetadata later = mock(RemoteLogSegmentMetadata.class);
+        when(later.state()).thenReturn(RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(later.maxTimestampMs()).thenReturn(sameTs);
+        when(later.startOffset()).thenReturn(50L);
+        when(later.endOffset()).thenReturn(99L);
+
+        when(mockLog.logSegments()).thenReturn(List.of());
+        when(mockLog.logEndOffset()).thenReturn(100L);
+
+        FileRecords.TimestampAndOffset expectedFromLater = new FileRecords.TimestampAndOffset(sameTs, 75L, Optional.of(1));
+        RemoteLogManager rlm = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
+                partition -> Optional.of(mockLog),
+                (topicPartition, offset) -> currentLogStartOffset.set(offset),
+                brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
+            }
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+            @Override
+            Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata,
+                                                                     long timestamp, long startingOffset) {
+                // Assert that the segment with the higher endOffset was chosen.
+                assertEquals(50L, rlsMetadata.startOffset());
+                return Optional.of(expectedFromLater);
+            }
+        };
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(tpId)))
+                .thenReturn(List.of(earlier, later).iterator());
+        rlm.onLeadershipChange(Set.of(), Set.of(mockPartition(tpId)),
+                Map.of(tpId.topicPartition().topic(), tpId.topicId()));
+
+        try (RemoteLogManager ignored = rlm) {
+            Optional<FileRecords.TimestampAndOffset> result = rlm.findOffsetByTimestamp(
+                    tpId.topicPartition(), ListOffsetsRequest.MAX_TIMESTAMP, 0L, null);
+            assertEquals(Optional.of(expectedFromLater), result);
+        }
+    }
+
+    @Test
+    void testFindOffsetByMaxTimestampSkipsNotReadySegments() throws Exception {
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("sample", 0));
+
+        // Only segment is not yet fully copied — should be skipped.
+        RemoteLogSegmentMetadata notReady = mock(RemoteLogSegmentMetadata.class);
+        when(notReady.state()).thenReturn(RemoteLogSegmentState.COPY_SEGMENT_STARTED);
+        when(notReady.maxTimestampMs()).thenReturn(9999L);
+        when(notReady.startOffset()).thenReturn(0L);
+        when(notReady.endOffset()).thenReturn(99L);
+
+        when(mockLog.logSegments()).thenReturn(List.of());
+        when(mockLog.logEndOffset()).thenReturn(100L);
+
+        try (RemoteLogManager rlm = buildRlmForMaxTimestamp(tpId, List.of(notReady), null)) {
+            Optional<FileRecords.TimestampAndOffset> result = rlm.findOffsetByTimestamp(
+                    tpId.topicPartition(), ListOffsetsRequest.MAX_TIMESTAMP, 0L, null);
+            assertEquals(Optional.empty(), result);
+        }
+    }
+
+    @Test
+    void testFindOffsetByMaxTimestampUsesLocalCopyWhenMaxTsSegIsInOverlap() throws Exception {
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("sample", 0));
+        long maxTs = 1000L;
+        long remoteStartOffset = 50L;
+
+        RemoteLogSegmentMetadata seg = mock(RemoteLogSegmentMetadata.class);
+        when(seg.state()).thenReturn(RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(seg.maxTimestampMs()).thenReturn(maxTs);
+        when(seg.startOffset()).thenReturn(remoteStartOffset);
+        when(seg.endOffset()).thenReturn(99L);
+
+        // Local log starts at offset 50 — so segment is in the overlap region.
+        FileRecords.TimestampAndOffset localResult = new FileRecords.TimestampAndOffset(maxTs, 60L, Optional.of(2));
+        LogSegment localSeg = mockLogSegment(remoteStartOffset, maxTs, localResult);
+
+        when(mockLog.logSegments()).thenReturn(List.of(localSeg));
+        when(mockLog.logEndOffset()).thenReturn(100L);
+
+        // lookupTimestamp must NOT be called since we prefer local.
+        try (RemoteLogManager rlm = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
+                partition -> Optional.of(mockLog),
+                (topicPartition, offset) -> currentLogStartOffset.set(offset),
+                brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
+            }
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+            @Override
+            Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata,
+                                                                     long timestamp, long startingOffset) {
+                throw new AssertionError("Should have used local copy instead of fetching from remote");
+            }
+        }) {
+            when(remoteLogMetadataManager.listRemoteLogSegments(eq(tpId)))
+                    .thenReturn(List.of(seg).iterator());
+            rlm.onLeadershipChange(Set.of(), Set.of(mockPartition(tpId)),
+                    Map.of(tpId.topicPartition().topic(), tpId.topicId()));
+
+            Optional<FileRecords.TimestampAndOffset> result = rlm.findOffsetByTimestamp(
+                    tpId.topicPartition(), ListOffsetsRequest.MAX_TIMESTAMP, remoteStartOffset, null);
+            assertEquals(Optional.of(localResult), result);
+        }
     }
 
     private LogSegment mockLogSegment(long baseOffset,
