@@ -72,4 +72,100 @@ public class GlobComponentTest {
         assertFalse(foobarOrFoobaz.matches("foo"));
         assertFalse(foobarOrFoobaz.matches("baz"));
     }
+
+    // ---------- CHARACTER CLASS TESTS ----------
+
+    @Test
+    public void testSimpleCharacterClass() {
+        GlobComponent g = new GlobComponent("[abc]");
+        assertTrue(g.matches("a"));
+        assertTrue(g.matches("b"));
+        assertTrue(g.matches("c"));
+        assertFalse(g.matches("d"));
+    }
+
+    @Test
+    public void testNegatedCharacterClass() {
+        GlobComponent g = new GlobComponent("[!abc]");
+        GlobComponent g2 = new GlobComponent("[^abc]");
+        assertTrue(g.matches("d"));
+        assertTrue(g2.matches("d"));
+        assertFalse(g.matches("a"));
+        assertFalse(g2.matches("a"));
+    }
+
+    @Test
+    public void testLeadingRightBracketInClass() {
+        GlobComponent g = new GlobComponent("[]]");
+        assertTrue(g.matches("]"));
+        assertFalse(g.matches("a"));
+    }
+
+    @Test
+    public void testLiteralLeftBracketInClass() {
+        GlobComponent g = new GlobComponent("[[]");
+        assertTrue(g.matches("["));
+        assertFalse(g.matches("a"));
+    }
+
+    @Test
+    public void testRangeCharacterClass() {
+        GlobComponent g = new GlobComponent("[a-c]");
+        assertTrue(g.matches("a"));
+        assertTrue(g.matches("b"));
+        assertTrue(g.matches("c"));
+        assertFalse(g.matches("d"));
+    }
+
+    @Test
+    public void testDashLiteralAtEnd() {
+        GlobComponent g = new GlobComponent("[ab-]");
+        assertTrue(g.matches("-"));
+        assertTrue(g.matches("a"));
+        assertFalse(g.matches("c"));
+    }
+
+    @Test
+    public void testSingleBackslashInCharacterClass() {
+        GlobComponent g = new GlobComponent("[\\\\]");
+        assertTrue(g.matches("\\"));
+        assertFalse(g.matches("a"));
+    }
+
+    @Test
+    public void testEscapedLeftBracketInCharacterClass() {
+        GlobComponent g = new GlobComponent("[\\[]");
+        assertTrue(g.matches("["));
+        assertFalse(g.matches("\\"));
+    }
+
+    @Test
+    public void testBackslashDoesNotCreateRegexEscape() {
+        GlobComponent g = new GlobComponent("[\\d]");
+
+        // Should match literal 'd'
+        assertTrue(g.matches("d"));
+
+        // Should NOT match digit (ensures \d is not interpreted as regex digit class)
+        assertFalse(g.matches("5"));
+    }
+
+    @Test
+    public void testUnterminatedCharacterClass() {
+        GlobComponent g = new GlobComponent("[abc");
+        assertTrue(g.literal());
+        assertFalse(g.matches("a"));
+    }
+
+    @Test
+    public void testEmptyCharacterClass() {
+        GlobComponent g = new GlobComponent("[]");
+        assertTrue(g.literal());
+    }
+
+    @Test
+    public void testOnlyNegationCharacterClass() {
+        GlobComponent g = new GlobComponent("[!]");
+        assertTrue(g.literal());
+    }
 }
