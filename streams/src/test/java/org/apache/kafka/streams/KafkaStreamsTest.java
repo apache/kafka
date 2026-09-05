@@ -717,6 +717,22 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldNotAddThreadToGlobalOnlyTopology() {
+        prepareStreams();
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.globalTable("global-topic");
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+            streams.start();
+
+            assertThat(streams.threads.size(), equalTo(0));
+            assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
+            assertThat(streams.threads.size(), equalTo(0));
+        }
+    }
+
+    @Test
     public void shouldNotAddThreadWhenCreated() {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
