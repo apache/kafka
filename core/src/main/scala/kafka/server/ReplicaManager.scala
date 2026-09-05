@@ -2338,8 +2338,8 @@ class ReplicaManager(val config: KafkaConfig,
 
       case _: HostedPartition.None[Partition] =>
         if (delta.image().topicsById().containsKey(topicId)) {
-          stateChangeLogger.error(s"Expected partition $tp with topic id " +
-            s"$topicId to exist, but it was missing. Creating...")
+          stateChangeLogger.info(s"Partition $tp (ID: $topicId) not found locally; " +
+            "initializing new replica...")
         } else {
           stateChangeLogger.info(s"Creating new partition $tp with topic id " +
             s"$topicId.")
