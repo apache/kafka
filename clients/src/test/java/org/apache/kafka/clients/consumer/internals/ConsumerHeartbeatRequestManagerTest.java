@@ -16,8 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
@@ -25,13 +30,16 @@ import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.Loc
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager.HeartbeatState;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -46,6 +54,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.test.MockSelector;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,6 +66,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -323,7 +333,96 @@ public class ConsumerHeartbeatRequestManagerTest
 
         assertTrue(result > 0,
             "maximumTimeToWait must be > 0 when the coordinator is unavailable to avoid a busy-spin; got " + result);
-        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
+    }
+
+    /**
+     * While bootstrap DNS resolution is still in progress the coordinator is unknown,
+     * and a member that wants to join has a zero heartbeat interval, since the interval is only
+     * learned from the first heartbeat response. maximumTimeToWait() must wait a retry backoff
+     * rather than the (zero) heartbeat interval; returning 0 busy-spins the application and
+     * network threads.
+     */
+    @Test
+    public void testMaximumTimeToWaitWhenJoiningAndCoordinatorUnknownDoesNotSpin() {
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(result > 0, "maximumTimeToWait must be > 0 while the member is joining and the coordinator is unknown to avoid a busy-spin; got " + result);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
+    }
+
+    @Test
+    public void testMaximumTimeToWaitDoesNotSpinDuringRealBootstrapDnsResolution() throws Exception {
+        long bootstrapResolveTimeoutMs = 1000;
+
+        BootstrapConfiguration bootstrapConfiguration = BootstrapConfiguration.enabled(
+            List.of("unresolvable.invalid:9092"),
+            ClientDnsLookup.USE_ALL_DNS_IPS,
+            bootstrapResolveTimeoutMs,
+            DEFAULT_RETRY_BACKOFF_MS
+        );
+
+        ConsumerConfig config = new ConsumerConfig(Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.GROUP_ID_CONFIG, DEFAULT_GROUP_ID,
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "unresolvable.invalid:9092",
+            ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS),
+            ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS),
+            ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MAX_MS)
+        ));
+
+        ConsumerMetadata consumerMetadata = new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners());
+
+        MockSelector selector = new MockSelector(time);
+        NetworkClient networkClient = new NetworkClient(selector, consumerMetadata, "test-client",
+            Integer.MAX_VALUE, 50, 1000, 64 * 1024, 64 * 1024, 1000, 5000, 30000,
+            time, false, new ApiVersions(), logContext,
+            MetadataRecoveryStrategy.NONE, bootstrapConfiguration, false);
+
+        CoordinatorRequestManager realCoordinatorRequestManager = new CoordinatorRequestManager(
+            logContext, DEFAULT_RETRY_BACKOFF_MS, DEFAULT_RETRY_BACKOFF_MAX_MS, DEFAULT_GROUP_ID);
+
+        // The member wants to join, but its heartbeat interval is still zero (unknown until the
+        // first heartbeat response).
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        ConsumerHeartbeatRequestManager realHeartbeatRequestManager = createHeartbeatRequestManager(
+            realCoordinatorRequestManager,
+            membershipManager,
+            heartbeatState,
+            heartbeatRequestState,
+            backgroundEventHandler);
+
+        try (NetworkClientDelegate networkClientDelegate = new NetworkClientDelegate(time, config, logContext, networkClient,
+                consumerMetadata, mock(BackgroundEventHandler.class), false, mock(AsyncConsumerMetrics.class))
+        ) {
+            long deadline = time.milliseconds() + bootstrapResolveTimeoutMs + 3000;
+            boolean sawBootstrapException = false;
+
+            while (time.milliseconds() < deadline) {
+                // Drives the real NetworkClient's ensureBootstrapped()/async DNS resolution forward;
+                // the coordinator never becomes known since there is no real broker to respond.
+                networkClientDelegate.poll(50, time.milliseconds());
+
+                long waitMs = realHeartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+                assertTrue(waitMs > 0, "maximumTimeToWait must be > 0 while real bootstrap DNS resolution is pending; got " + waitMs);
+
+                Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
+                if (metadataError.isPresent()) {
+                    assertInstanceOf(BootstrapResolutionException.class, metadataError.get());
+                    sawBootstrapException = true;
+                    break;
+                }
+            }
+            assertTrue(sawBootstrapException, "Expected a real BootstrapResolutionException within " + (bootstrapResolveTimeoutMs + 3000) + "ms");
+        }
     }
 
     @Test
