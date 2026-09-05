@@ -93,43 +93,6 @@ public class ClientState {
         this.clientTags = unmodifiableMap(clientTags);
     }
 
-    // For testing only
-    public ClientState(final Set<TaskId> previousActiveTasks,
-                       final Set<TaskId> previousStandbyTasks,
-                       final Map<TaskId, Long> taskLagTotals,
-                       final Map<String, String> clientTags,
-                       final int capacity) {
-        this(previousActiveTasks, previousStandbyTasks, taskLagTotals, clientTags, capacity, null);
-    }
-
-    // For testing only
-    public ClientState(final Set<TaskId> previousActiveTasks,
-                       final Set<TaskId> previousStandbyTasks,
-                       final Map<TaskId, Long> taskLagTotals,
-                       final Map<String, String> clientTags,
-                       final int capacity,
-                       final ProcessId processId) {
-        this.previousStandbyTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
-        this.previousActiveTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
-        taskOffsetSums = Map.of();
-        this.taskLagTotals = unmodifiableMap(taskLagTotals);
-        this.capacity = capacity;
-        this.clientTags = unmodifiableMap(clientTags);
-        this.processId = processId;
-    }
-
-    // For testing only
-    public ClientState(final ClientState clientState) {
-        this(
-            new HashSet<>(clientState.previousActiveTasks.taskIds()),
-            new HashSet<>(clientState.previousStandbyTasks.taskIds()),
-            clientState.taskLagTotals,
-            clientState.clientTags,
-            clientState.capacity,
-            clientState.processId
-        );
-    }
-
     public int capacity() {
         return capacity;
     }
