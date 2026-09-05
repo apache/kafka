@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -53,6 +51,7 @@ class MappingKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
      * and timestamp {@code -1}.
      *
      * @see PlainToHeadersStoreAdapter
+     * @see PlainToHeadersWindowStoreAdapter
      */
     static <K> KeyValueIterator<K, byte[]> plainToHeaders(final KeyValueIterator<K, byte[]> inner) {
         return new MappingKeyValueIteratorAdapter<>(inner, HeadersBytesStore::convertFromPlainToHeaderFormat);
@@ -60,22 +59,14 @@ class MappingKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
 
     /**
      * Ensures backward compatibility between {@link TimestampedKeyValueStoreWithHeaders}
-     * and {@link TimestampedKeyValueStore}.
+     * and {@link TimestampedKeyValueStore}, and between {@link SessionStoreWithHeaders}
+     * and {@link SessionStore}: both read paths only need empty headers prepended.
      *
      * @see TimestampedToHeadersStoreAdapter
-     */
-    static <K> KeyValueIterator<K, byte[]> timestampedToHeaders(final KeyValueIterator<K, byte[]> inner) {
-        return new MappingKeyValueIteratorAdapter<>(inner, HeadersBytesStore::convertToHeaderFormat);
-    }
-
-    /**
-     * Ensures backward compatibility between {@link SessionStoreWithHeaders}
-     * and {@link SessionStore}.
-     *
+     * @see TimestampedToHeadersWindowStoreAdapter
      * @see SessionToHeadersStoreAdapter
      */
-    static KeyValueIterator<Windowed<Bytes>, byte[]> sessionToHeaders(
-        final KeyValueIterator<Windowed<Bytes>, byte[]> inner) {
+    static <K> KeyValueIterator<K, byte[]> timestampedToHeaders(final KeyValueIterator<K, byte[]> inner) {
         return new MappingKeyValueIteratorAdapter<>(inner, HeadersBytesStore::convertToHeaderFormat);
     }
 

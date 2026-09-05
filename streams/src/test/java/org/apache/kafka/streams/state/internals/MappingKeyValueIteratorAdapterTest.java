@@ -88,12 +88,12 @@ public class MappingKeyValueIteratorAdapterTest {
     }
 
     @Test
-    public void sessionToHeadersShouldConvertValueOnNext() {
+    public void timestampedToHeadersShouldConvertValueForSessionKeys() {
         when(sessionInner.hasNext()).thenReturn(true);
         when(sessionInner.next()).thenReturn(KeyValue.pair(SESSION_KEY, RAW_VALUE));
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> adapter =
-            MappingKeyValueIteratorAdapter.sessionToHeaders(sessionInner);
+            MappingKeyValueIteratorAdapter.timestampedToHeaders(sessionInner);
 
         assertTrue(adapter.hasNext());
         final KeyValue<Windowed<Bytes>, byte[]> result = adapter.next();

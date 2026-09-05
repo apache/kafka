@@ -260,7 +260,7 @@ public class SessionToHeadersStoreAdapterTest {
 
         assertTrue(result.isSuccess(), "Expected WindowRangeQuery to succeed");
         // Assert on the converted value, not just the iterator type: this proves
-        // the sessionToHeaders conversion (empty headers prepended) is wired here.
+        // the timestampedToHeaders conversion (empty headers prepended) is wired here.
         assertAddsEmptyHeaders(result.getResult());
     }
 
