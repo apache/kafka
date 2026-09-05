@@ -65,9 +65,9 @@ import org.apache.kafka.server.quota.{ClientQuotaEntity, ClientQuotaManager}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection._
@@ -1146,6 +1146,82 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // If readDynamicBrokerConfigsFromSnapshot works correctly, the reporter should maintain its state.
     val reporterAfterRestart = TestNumReplicaFetcherMetricsReporter.waitForReporters(1).head
     reporterAfterRestart.verifyState(reconfigureCount = 0, numFetcher = 2)
+  }
+
+  @ParameterizedTest(name = "snapshot={0}")
+  @ValueSource(strings = Array("none", "stale", "current"))
+  def testRestoreDynamicConfigFromMetadataLog(snapshotState: String): Unit = {
+    val staticProps = defaultStaticConfig(numServers)
+    staticProps.put(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, "1")
+    val broker = createBroker(KafkaConfig.fromProps(staticProps)).asInstanceOf[BrokerServer]
+    servers += broker
+    TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
+    assertFalse(broker.raftManager.raftLog.latestSnapshotId().isPresent)
+
+    if (snapshotState == "stale")
+      writeMetadataSnapshot(broker)
+
+    Seq(2, 4).foreach { value =>
+      val props = new Properties
+      props.put(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, value.toString)
+      reconfigureServers(props, perBrokerConfig = false,
+        (ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, value.toString))
+      assertEquals(value, broker.config.numRecoveryThreadsPerDataDir)
+    }
+
+    if (snapshotState == "current")
+      writeMetadataSnapshot(broker)
+
+    broker.shutdown()
+    broker.awaitShutdown()
+    val restartedBroker = createBroker(KafkaConfig.fromProps(staticProps)).asInstanceOf[BrokerServer]
+    servers(servers.size - 1) = restartedBroker
+
+    assertEquals(4, restartedBroker.config.numRecoveryThreadsPerDataDir)
+    assertEquals("4", restartedBroker.config.dynamicConfig.currentDynamicDefaultConfigs(
+      ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG))
+    assertEquals("4", configEntry(describeConfig(adminClients.head, Seq(restartedBroker)),
+      ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG).value)
+    val defaultResource = new ConfigResource(ConfigResource.Type.BROKER, "")
+    val defaultConfig = adminClients.head.describeConfigs(util.Set.of(defaultResource)).all.get.get(defaultResource)
+    assertEquals("4", configEntry(defaultConfig, ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG).value)
+  }
+
+  @Test
+  def testRemoveDynamicConfigWhileBrokerIsStopped(): Unit = {
+    val staticProps = defaultStaticConfig(numServers)
+    staticProps.put(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, "1")
+    val broker = createBroker(KafkaConfig.fromProps(staticProps)).asInstanceOf[BrokerServer]
+    servers += broker
+    TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
+    assertFalse(broker.raftManager.raftLog.latestSnapshotId().isPresent)
+
+    val props = new Properties
+    props.put(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, "2")
+    reconfigureServers(props, perBrokerConfig = false,
+      (ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, "2"))
+    broker.shutdown()
+    broker.awaitShutdown()
+
+    val resource = new ConfigResource(ConfigResource.Type.BROKER, "")
+    val delete = new AlterConfigOp(
+      new ConfigEntry(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, null),
+      OpType.DELETE
+    )
+    adminClients.head.incrementalAlterConfigs(util.Map.of(resource, util.List.of(delete))).all.get
+    broker.startup()
+
+    assertEquals(1, broker.config.numRecoveryThreadsPerDataDir)
+    assertFalse(broker.config.dynamicConfig.currentDynamicDefaultConfigs.contains(
+      ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG))
+    assertEquals("1", configEntry(describeConfig(adminClients.head, Seq(broker)),
+      ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG).value)
+  }
+
+  private def writeMetadataSnapshot(broker: BrokerServer): Unit = {
+    TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
+    broker.sharedServer.snapshotEmitter.maybeEmit(broker.metadataCache.getImage)
+    assertTrue(broker.raftManager.raftLog.latestSnapshotId().isPresent)
   }
 
   private def awaitInitialPositions(consumer: Consumer[_, _]): Unit = {
