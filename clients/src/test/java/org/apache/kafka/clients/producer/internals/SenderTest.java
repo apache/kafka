@@ -1533,6 +1533,95 @@ public class SenderTest {
     }
 
     @Test
+    public void testEpochBumpWhenOutOfOrderBatchesRetriedAndFirstBatchExpires() throws Exception {
+        // KAFKA-15591: Tests the situation where a producer sends a sequence of requests to a newly created
+        // partition before the creation of the partition has entirely completed. The first request arrives
+        // before the partition is ready and fails with NOT_LEADER_OR_FOLLOWER without reaching the log.
+        // The next two requests arrive after the partition creation is complete, but the sequence numbers
+        // do not start at zero so the requests fail with OUT_OF_ORDER_SEQUENCE_NUMBER. The first request
+        // could still fill the sequence gap, but it expires before being retried. Once the first request
+        // expires, the producer bumps the epoch, renumbers the remaining requests from sequence 0 and
+        // sends them again.
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
+
+        // Send the first ProduceRequest with sequence 0. It is created 1000ms before the others so that it expires
+        // first (deliveryTimeoutMs is 1500).
+        Future<RecordMetadata> request1 = appendToAccumulator(tp0);
+        sender.runOnce();
+
+        time.sleep(1000L);
+
+        // Send the second and third ProduceRequests with sequences 1 and 2.
+        Future<RecordMetadata> request2 = appendToAccumulator(tp0);
+        sender.runOnce();
+        Future<RecordMetadata> request3 = appendToAccumulator(tp0);
+        sender.runOnce();
+        assertEquals(3, client.inFlightRequestCount());
+
+        // The first request fails because the partition completion has not completed on the leader broker yet.
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1L);
+        sender.runOnce(); // receive response 0
+
+        // The partition creation completes afterwards, so the request with sequence 0 does not reach the partition
+        // and the broker rejects the in-flight second and third requests. They are retried without an epoch bump
+        // since the retry of the first request could still fill the gap in the expected sequence.
+        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.runOnce(); // receive response 1
+        sendIdempotentProducerResponse(2, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.runOnce(); // receive response 2
+
+        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
+        assertFalse(request3.isDone());
+
+        // The first request is retried once the retry backoff elapses, but the delivery timeout expires while
+        // the retry is in-flight. Its sequence range will never be filled, so the partition has an unresolved
+        // sequence.
+        time.sleep(50L);
+        sender.runOnce(); // resend the first request (sequence 0)
+        time.sleep(450L);
+        sender.runOnce(); // resend the second request (sequence 1)
+        assertFutureFailure(request1, TimeoutException.class);
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+
+        // The response for the first expired request arrives and is ignored.
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1L);
+        sender.runOnce();
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+
+        // The retry of the second request is rejected again. This causes the producer to realise that the gap
+        // in the sequence will never be filled, so it bumps the epoch and renumbers the request sequences starting at 0.
+        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.runOnce(); // receive the rejection
+        sender.runOnce(); // bump the epoch, renumber the remaining batches and resend
+
+        assertEquals((short) 1, transactionManager.producerIdAndEpoch().epoch);
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+
+        // The remaining requests are delivered with the new epoch, starting at sequence 0.
+        sendIdempotentProducerResponse(1, 0, tp0, Errors.NONE, 0L, -1L);
+        sender.runOnce();
+        assertTrue(request2.isDone());
+        assertEquals(0, request2.get().offset());
+
+        sender.runOnce(); // send the third request with the new epoch
+        sendIdempotentProducerResponse(1, 1, tp0, Errors.NONE, 1L, -1L);
+        sender.runOnce();
+        assertTrue(request3.isDone());
+        assertEquals(1, request3.get().offset());
+        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+    }
+
+    @Test
     public void testUnresolvedSequencesAreNotFatal() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
