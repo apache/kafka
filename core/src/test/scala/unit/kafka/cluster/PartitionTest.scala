@@ -3494,6 +3494,74 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
+  def testLeaderEpochCacheIsRetainedWhenCurrentIsReplacedWithFutureLog(): Unit = {
+    // Moving a partition to another log directory on the leader must not drop leader epoch history.
+    // An epoch which has no records behind it exists only in the current log's epoch cache, since
+    // the future log's cache is populated from the record batches copied into it.
+    val leaderEpoch = 5
+    makeLeaderAndReplaceCurrentWithFutureLog(leaderEpoch)
+
+    assertEquals(Optional.of(leaderEpoch), partition.log.get.latestEpoch,
+      "Leader epoch history was lost when the current log was replaced with the future log")
+    val epochEndOffset =
+      partition.lastOffsetForLeaderEpoch(Optional.of(leaderEpoch), leaderEpoch, fetchOnlyFromLeader = true)
+    assertEquals(Errors.NONE.code, epochEndOffset.errorCode)
+    assertEquals(leaderEpoch, epochEndOffset.leaderEpoch)
+    assertEquals(0L, epochEndOffset.endOffset)
+  }
+
+  @Test
+  def testFollowerFetchIsServedAfterCurrentIsReplacedWithFutureLog(): Unit = {
+    // A follower keeps reporting the epoch it last fetched. If the leader can no longer resolve that
+    // epoch after the log directory move, it answers OffsetOutOfRangeException. The follower then
+    // resets to the same offset without truncating anything, so its next fetch is identical and the
+    // pair loops until records are appended.
+    val leaderEpoch = 5
+    makeLeaderAndReplaceCurrentWithFutureLog(leaderEpoch)
+
+    val logReadInfo = fetchFollower(
+      partition,
+      replicaId = remoteReplicaId,
+      fetchOffset = 0L,
+      leaderEpoch = Some(leaderEpoch),
+      lastFetchedEpoch = Some(leaderEpoch)
+    )
+    assertEquals(Optional.empty, logReadInfo.divergingEpoch)
+    assertEquals(0L, logReadInfo.logEndOffset)
+  }
+
+  /**
+   * Makes the local replica the leader of an empty partition at the given epoch and then moves the
+   * partition to the second log directory. The future log is empty and therefore already caught up
+   * with the equally empty current log, so the replacement happens right away.
+   */
+  private def makeLeaderAndReplaceCurrentWithFutureLog(leaderEpoch: Int): Unit = {
+    logManager.maybeUpdatePreferredLogDir(topicPartition, logDir1.getAbsolutePath)
+    partition.createLogIfNotExists(isNew = true, isFutureReplica = false, offsetCheckpoints, topicId = topicId)
+
+    val replicas = Array(brokerId, remoteReplicaId)
+    addBrokerEpochToMockMetadataCache(metadataCache, replicas)
+    val partitionRegistration = new PartitionRegistration.Builder()
+      .setLeader(brokerId)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(replicas)
+      .setReplicas(replicas)
+      .setDirectories(DirectoryId.unassignedArray(replicas.length))
+      .setPartitionEpoch(1)
+      .build()
+    assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, None))
+
+    // No records are ever appended, so the epoch is only known through the epoch cache.
+    assertEquals(Optional.of(leaderEpoch), partition.log.get.latestEpoch)
+
+    logManager.maybeUpdatePreferredLogDir(topicPartition, logDir2.getAbsolutePath)
+    assertTrue(partition.maybeCreateFutureReplica(logDir2.getAbsolutePath, offsetCheckpoints))
+    assertTrue(partition.maybeReplaceCurrentWithFutureReplica())
+    assertEquals(logDir2.getAbsolutePath, partition.log.get.parentDir)
+  }
+
+  @Test
   def testMaybeStartTransactionVerification(): Unit = {
     val leaderEpoch = 5
     val replicas = Array(brokerId, brokerId + 1)
