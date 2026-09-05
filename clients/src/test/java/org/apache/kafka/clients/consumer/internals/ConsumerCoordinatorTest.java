@@ -1360,13 +1360,55 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testPatternSubscriptionDeletedTopicDoesNotBlockRebalanceAutoCommit() {
+        try (ConsumerCoordinator coordinator = buildCoordinator(
+                rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
+            subscriptions.setRebalanceListener(rebalanceListener, rebalanceConsumer);
+            subscriptions.subscribe(Pattern.compile("test.*"));
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of(
+                topic1, 1,
+                topic2, 1
+            )));
+            coordinator.maybeUpdateSubscriptionMetadata();
+            assertEquals(Set.of(topic1, topic2), subscriptions.subscription());
+
+            client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+            coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+            partitionAssignor.prepare(singletonMap(consumerId, Arrays.asList(t1p, t2p)));
+            client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+            client.prepareResponse(syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE));
+            coordinator.poll(time.timer(Long.MAX_VALUE));
+            subscriptions.seek(t1p, 10);
+            subscriptions.seek(t2p, 20);
+
+            MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, Map.of(topic1, 1));
+            client.updateMetadata(deletedMetadataResponse);
+            coordinator.maybeUpdateSubscriptionMetadata();
+            client.prepareMetadataUpdate(deletedMetadataResponse);
+
+            // Deleted topic2 must not be included in the rebalance auto-commit.
+            prepareOffsetCommitRequest(singletonMap(t1p, 10L), Errors.NONE);
+            partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
+            client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
+            client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+            // A short timer would expire if UNKNOWN_TOPIC_OR_PARTITION were retried until rebalance.timeout.ms.
+            coordinator.poll(time.timer(1000L));
+
+            assertEquals(singleton(topic1), subscriptions.subscription());
+            assertFalse(coordinator.rejoinNeededOrPending());
+        }
+    }
+
+    @Test
     public void testOnJoinPrepareWithOffsetCommitShouldSuccessAfterRetry() {
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.empty(), false)) {
             int generationId = 42;
             String memberId = "consumer-42";
 
             Timer pollTimer = time.timer(100L);
-            client.prepareResponse(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
+            client.prepareResponse(offsetCommitResponse(singletonMap(t1p, Errors.COORDINATOR_LOAD_IN_PROGRESS)));
             boolean res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
             assertFalse(res);
 
@@ -1375,6 +1417,54 @@ public abstract class ConsumerCoordinatorTest {
             res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
             assertTrue(res);
 
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.coordinatorUnknown());
+        }
+    }
+
+    @Test
+    public void testOnJoinPrepareContinuesWhenOffsetCommitUnknownTopicOrPartition() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.empty(), false)) {
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            Timer pollTimer = time.timer(100L);
+            client.prepareResponse(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
+            boolean res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+            assertTrue(res, "onJoinPrepare should continue joining when a committed partition no longer exists");
+
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.coordinatorUnknown());
+        }
+    }
+
+    @Test
+    public void testOnJoinPrepareSkipsAutoCommitForUnsubscribedTopics() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.empty(), false)) {
+            subscriptions.subscribe(Set.of());
+            assertTrue(subscriptions.subscription().isEmpty());
+
+            boolean res = coordinator.onJoinPrepare(time.timer(100L), 42, "consumer-42");
+            assertTrue(res);
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(client.hasPendingResponses());
+        }
+    }
+
+    @Test
+    public void testOnJoinPrepareAutoCommitOmitsTopicsMissingFromMetadata() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.empty(), false)) {
+            subscriptions.assignFromSubscribed(Set.of(t1p, t2p));
+            subscriptions.seek(t1p, 100);
+            subscriptions.seek(t2p, 200);
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of(topic1, 1)));
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+
+            boolean res = coordinator.onJoinPrepare(time.timer(1000L), 42, "consumer-42");
+            assertTrue(res);
             assertFalse(client.hasPendingResponses());
             assertFalse(client.hasInFlightRequests());
             assertFalse(coordinator.coordinatorUnknown());
