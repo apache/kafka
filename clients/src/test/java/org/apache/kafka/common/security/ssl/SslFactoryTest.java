@@ -44,6 +44,7 @@ import java.security.KeyStore;
 import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -359,6 +360,31 @@ public abstract class SslFactoryTest {
         sslConfig = new TestSecurityConfig(props);
         sslFactory.reconfigure(sslConfig.values());
         assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
+    }
+
+    @Test
+    public void testPemReconfigurationWithInvalidKeyPreservesExistingFactory() throws Exception {
+        Properties props = new Properties();
+        props.putAll(sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(null)
+                .usePem(true)
+                .build());
+        TestSecurityConfig sslConfig = new TestSecurityConfig(props);
+
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
+        sslFactory.configure(sslConfig.values());
+        SslEngineFactory sslEngineFactory = sslFactory.sslEngineFactory();
+        assertNotNull(sslEngineFactory, "SslEngineFactory not created");
+
+        // Attempt reconfiguration with a PEM key that no KeyFactory can parse
+        String bogusKey = "-----BEGIN PRIVATE KEY-----\n"
+                + Base64.getEncoder().encodeToString("not a valid key".getBytes()) + "\n"
+                + "-----END PRIVATE KEY-----";
+        props.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, new Password(bogusKey));
+        TestSecurityConfig badConfig = new TestSecurityConfig(props);
+
+        assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(badConfig.values()));
+        assertSame(sslEngineFactory, sslFactory.sslEngineFactory());
     }
 
     @Test
