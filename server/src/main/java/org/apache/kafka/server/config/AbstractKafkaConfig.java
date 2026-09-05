@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
@@ -649,6 +650,45 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         }
 
         return millis < 0 ? Long.valueOf(-1) : millis;
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to logs. The individual properties
+     * are listed here since the names are slightly different in each config class.
+     */
+    public Map<String, Object> extractLogConfigMap() {
+        Map<String, Object> logProps = new HashMap<>();
+        logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, logSegmentBytes());
+        logProps.put(TopicConfig.SEGMENT_MS_CONFIG, logRollTimeMillis());
+        logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, logRollTimeJitterMillis());
+        logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, logIndexSizeMaxBytes());
+        logProps.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, logFlushIntervalMessages());
+        logProps.put(TopicConfig.FLUSH_MS_CONFIG, logFlushIntervalMs());
+        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, logRetentionBytes());
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, logRetentionTimeMillis());
+        logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG));
+        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, logIndexIntervalBytes());
+        logProps.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, logCleanerDeleteRetentionMs());
+        logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, logCleanerMinCompactionLagMs());
+        logProps.put(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, logCleanerMaxCompactionLagMs());
+        logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, logDeleteDelayMs());
+        logProps.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, logCleanerMinCleanRatio());
+        logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, logCleanupPolicy());
+        logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas());
+        logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, getString(ServerConfigs.COMPRESSION_TYPE_CONFIG));
+        logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, getInt(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG));
+        logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, getInt(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG));
+        logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, getInt(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG));
+        logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG));
+        logProps.put(TopicConfig.PREALLOCATE_CONFIG, logPreAllocateEnable());
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, logMessageTimestampType().name);
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, logMessageTimestampBeforeMaxMs());
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs());
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP));
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP));
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, getLong(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP));
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, getLong(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP));
+        return logProps;
     }
 
     /**
