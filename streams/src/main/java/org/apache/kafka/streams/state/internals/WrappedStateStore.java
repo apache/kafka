@@ -66,6 +66,20 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         }
     }
 
+    /**
+     * A headers-aware store whose values are whole list blobs rather than single values. Such a store is
+     * also {@link #isHeadersAware(StateStore) headers-aware}, so this has to be tested first.
+     */
+    public static boolean isHeadersAwareListValue(final StateStore stateStore) {
+        if (stateStore instanceof HeadersAwareListValueStore) {
+            return true;
+        } else if (stateStore instanceof WrappedStateStore) {
+            return isHeadersAwareListValue(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
+        } else {
+            return false;
+        }
+    }
+
     private final S wrapped;
 
     public WrappedStateStore(final S wrapped) {
