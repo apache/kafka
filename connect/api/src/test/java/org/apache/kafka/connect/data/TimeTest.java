@@ -72,8 +72,8 @@ public class TimeTest {
 
     @Test
     public void testToLogical() {
-        assertEquals(EPOCH.getTime(), Time.toLogical(Time.SCHEMA, 0));
-        assertEquals(EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime(), Time.toLogical(Time.SCHEMA, 10000));
+        assertEquals(Time.toLogical(Time.SCHEMA, 0), EPOCH.getTime());
+        assertEquals(Time.toLogical(Time.SCHEMA, 10000), EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime());
     }
 
     @Test

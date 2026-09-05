@@ -157,8 +157,8 @@ public class ErrorHandlingIntegrationTest {
             String k = new String(rec.key());
             String v = new String(rec.value());
             log.debug("Consumed record (key='{}', value='{}') from topic {}", k, v, rec.topic());
-            assertEquals(k, "key-" + i, "Unexpected key");
-            assertEquals(v, "value-" + i, "Unexpected value");
+            assertEquals("key-" + i, k, "Unexpected key");
+            assertEquals("value-" + i, v,"Unexpected value");
             i++;
         }
 
@@ -236,8 +236,8 @@ public class ErrorHandlingIntegrationTest {
             String k = new String(rec.key());
             String v = new String(rec.value());
             log.debug("Consumed record (key='{}', value='{}') from topic {}", k, v, rec.topic());
-            assertEquals(k, "key-" + i, "Unexpected key");
-            assertEquals(v, "value-" + i, "Unexpected value");
+            assertEquals("key-" + i, k,"Unexpected key");
+            assertEquals("value-" + i, v, "Unexpected value");
             i++;
         }
 
