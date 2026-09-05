@@ -536,7 +536,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.server.AssignmentsManager"/>
             <Class name="org.apache.kafka.connect.file.FileStreamSourceTask"/>
             <Class name="org.apache.kafka.streams.processor.internals.DefaultStateUpdater$StateUpdaterThread"/>
-            <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
             <Class name="org.apache.kafka.streams.state.internals.AbstractDualSchemaRocksDBSegmentedBytesStore"/>
             <Class name="org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore"/>
@@ -559,6 +558,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- KAFKA-20404: numIterations is owned by the StreamThread itself; the only cross-thread reader is currentNumIterations(), which is test-only and invoked from the same thread that drives runOnce(). -->
+        <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
+        <Field name="numIterations"/>
+        <Bug pattern="AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE"/>
+    </Match>
+
+    <Match>
         <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.4.
         These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
          -->
@@ -575,7 +581,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.image.publisher.SnapshotGenerator$Builder"/>
             <Class name="org.apache.kafka.connect.file.FileStreamSourceTask"/>
             <Class name="org.apache.kafka.streams.processor.internals.DefaultStateUpdater$StateUpdaterThread"/>
-            <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
             <Class name="org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer"/>
             <Class name="org.apache.kafka.connect.runtime.WorkerSinkTask"/>
@@ -595,6 +600,18 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore"/>
             <Class name="org.apache.kafka.streams.state.internals.InMemorySessionStore"/>
             <Class name="org.apache.kafka.streams.state.internals.InMemoryWindowStore"/>
+        </Or>
+        <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
+    </Match>
+
+    <Match>
+        <!-- KAFKA-20404: These long fields are bookkeeping internal to the StreamThread's run loop; all writes and reads happen on the StreamThread itself, so a non-volatile 64-bit access cannot be torn or observed cross-thread. -->
+        <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
+        <Or>
+            <Field name="now"/>
+            <Field name="lastPollMs"/>
+            <Field name="lastLogSummaryMs"/>
+            <Field name="totalCommittedSinceLastSummary"/>
         </Or>
         <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
     </Match>
@@ -667,7 +684,16 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="kafka.server.ReplicaManager"/>
             <Class name="org.apache.kafka.trogdor.coordinator.NodeManager$NodeHeartbeat"/>
             <Class name="org.apache.kafka.connect.runtime.distributed.DistributedHerder$RebalanceListener"/>
-            <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
+        </Or>
+        <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+    </Match>
+
+    <Match>
+        <!-- KAFKA-20404: Both fields are mutated and observed exclusively from within the StreamThread's run loop, so a stale-write across threads is not possible in practice. -->
+        <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
+        <Or>
+            <Field name="numIterations"/>
+            <Field name="streamsGroupReady"/>
         </Or>
         <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
     </Match>
