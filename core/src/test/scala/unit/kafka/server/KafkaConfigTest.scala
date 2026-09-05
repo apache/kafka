@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.util
@@ -1660,6 +1661,32 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(util.List.of(dataDir1, dataDir2), config.logDirs)
+  }
+
+  @Test
+  def testRelativeLogDirWithRelativeOrAbsoluteCordon(): Unit = {
+    val relativeLogDir = "relative/path/to/data/dir"
+
+    val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, relativeLogDir)
+    props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, relativeLogDir)
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
+
+    val config = KafkaConfig.fromProps(props)
+    val absoluteLogDir = new File(relativeLogDir).getAbsolutePath
+    assertEquals(util.List.of(relativeLogDir), config.logDirs())
+    assertEquals(util.List.of(absoluteLogDir), config.absoluteLogDirs())
+    assertEquals(util.List.of(relativeLogDir), config.cordonedLogDirs())
+    assertEquals(util.List.of(absoluteLogDir), config.absoluteCordonedLogDirs())
+
+    props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, absoluteLogDir)
+    val configWithAbsoluteCordon = KafkaConfig.fromProps(props)
+    assertEquals(util.List.of(relativeLogDir), configWithAbsoluteCordon.logDirs())
+    assertEquals(util.List.of(absoluteLogDir), configWithAbsoluteCordon.cordonedLogDirs())
+    assertEquals(util.List.of(absoluteLogDir), configWithAbsoluteCordon.absoluteCordonedLogDirs())
   }
 
   @Test
