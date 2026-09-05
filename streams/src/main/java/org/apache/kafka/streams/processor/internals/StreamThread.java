@@ -1844,11 +1844,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         durationForPartitions.put(partition, durationTime);
     }
 
-    // This method is added for usage in tests where mocking the underlying native call is not possible.
-    public boolean isThreadAlive() {
-        return isAlive();
-    }
-
     // Call method when a topology is resumed
     public void signalResume() {
         taskManager.signalResume();
@@ -1926,15 +1921,24 @@ public class StreamThread extends Thread implements ProcessingThread {
      * (e.g., in testing), hence the state is set only the first time
      *
      * @param operation the group membership operation to apply on shutdown. Must be one of LEAVE_GROUP or REMAIN_IN_GROUP.
+     * @return true if this call initiated the shutdown, i.e., transitioned the thread out of an
+     *         alive state; false if the thread was already shutting down or dead, in which case
+     *         the group membership operation of the earlier shutdown request is kept
      */
-    public void shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
+    public boolean shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
+        if (oldState == null) {
+            // Shutdown was already requested by another caller (a concurrent removal, thread
+            // replacement, or client close); that caller owns this thread's death.
+            return false;
+        }
         leaveGroupRequested.set(operation);
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);
         }
+        return true;
     }
 
     private void completeShutdown(final boolean cleanRun) {

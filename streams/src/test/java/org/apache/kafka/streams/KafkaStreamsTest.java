@@ -93,8 +93,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -317,7 +320,7 @@ public class KafkaStreamsTest {
 
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.PENDING_SHUTDOWN, StreamThread.State.RUNNING);
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.DEAD, StreamThread.State.PENDING_SHUTDOWN);
-            return null;
+            return true;
         };
         doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.DEFAULT);
         doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
@@ -787,7 +790,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         when(streamThreadOne.groupInstanceID()).thenReturn(Optional.empty());
         when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
-        when(streamThreadOne.isThreadAlive()).thenReturn(true);
+        when(streamThreadOne.shutdown(any())).thenReturn(true);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
@@ -796,6 +799,98 @@ public class KafkaStreamsTest {
                 "Kafka Streams client did not reach state RUNNING");
             assertEquals(Optional.of("processId-StreamThread-" + 1), streams.removeStreamThread());
             assertEquals(oldSize - 1, streams.threads.size());
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    public void shouldNotBlockOtherThreadChangesWhileRemovalWaitsForShutdown() throws Exception {
+        // `removeStreamThread` used to wait for the removed thread to reach DEAD while holding
+        // `changeThreadCount`. A thread that hit an uncaught exception and was being replaced
+        // acquired the same lock in `replaceStreamThread -> addStreamThread`, so it never
+        // finished shutting down and the removal waited for it forever. Any other thread-count
+        // change must therefore stay possible while a removal is waiting; a second removal is
+        // used here because it takes the same lock and additionally shows that it picks a
+        // different thread rather than the one already shutting down.
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        when(streamThreadOne.groupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadTwo.groupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadTwo.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        // The real `shutdown()` moves the thread to PENDING_SHUTDOWN synchronously, which is what
+        // keeps the second removal from picking the same thread.
+        doAnswer(invocation -> {
+            state1.set(StreamThread.State.PENDING_SHUTDOWN);
+            return true;
+        }).when(streamThreadOne).shutdown(any());
+        doAnswer(invocation -> {
+            state2.set(StreamThread.State.PENDING_SHUTDOWN);
+            return true;
+        }).when(streamThreadTwo).shutdown(any());
+
+        final CountDownLatch removalIsWaiting = new CountDownLatch(1);
+        final CountDownLatch allowShutdownToComplete = new CountDownLatch(1);
+        when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenAnswer(invocation -> {
+            removalIsWaiting.countDown();
+            // Bounded so that a regression fails the assertions below instead of leaving the
+            // second removal blocked on the lock for the rest of the JVM's life.
+            allowShutdownToComplete.await(30, TimeUnit.SECONDS);
+            return true;
+        });
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+                "Kafka Streams client did not reach state RUNNING");
+
+            final ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                final Callable<Optional<String>> removeThread = streams::removeStreamThread;
+                final Future<Optional<String>> firstRemoval = executor.submit(removeThread);
+                assertTrue(removalIsWaiting.await(10, TimeUnit.SECONDS),
+                    "removeStreamThread did not reach the wait for the removed thread's shutdown");
+
+                final Future<Optional<String>> secondRemoval = executor.submit(removeThread);
+                try {
+                    assertEquals(Optional.of("processId-StreamThread-2"), secondRemoval.get(10, TimeUnit.SECONDS));
+                } catch (final java.util.concurrent.TimeoutException e) {
+                    fail("removeStreamThread held changeThreadCount while waiting for a thread to shut down");
+                }
+
+                allowShutdownToComplete.countDown();
+                assertEquals(Optional.of("processId-StreamThread-1"), firstRemoval.get(10, TimeUnit.SECONDS));
+            } finally {
+                allowShutdownToComplete.countDown();
+                executor.shutdownNow();
+            }
+        }
+    }
+
+    @Test
+    public void shouldSkipThreadWhoseShutdownWasAlreadyRequestedWhenRemovingThread() throws Exception {
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        when(streamThreadTwo.groupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadTwo.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        when(streamThreadOne.shutdown(any())).thenReturn(false);
+        doAnswer(invocation -> {
+            state2.set(StreamThread.State.PENDING_SHUTDOWN);
+            return true;
+        }).when(streamThreadTwo).shutdown(any());
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+                "Kafka Streams client did not reach state RUNNING");
+            assertEquals(Optional.of("processId-StreamThread-2"), streams.removeStreamThread());
         }
     }
 

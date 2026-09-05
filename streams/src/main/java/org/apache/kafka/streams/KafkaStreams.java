@@ -44,6 +44,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -497,12 +498,21 @@ public class KafkaStreams implements AutoCloseable {
                     " The streams client is going to shut down now. ", throwable);
             closeToError();
         }
+
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
+
         // Use DEFAULT so the consumer layer decides: classic protocol maps to REMAIN_IN_GROUP
         // (avoiding an unnecessary rebalance before the replacement thread joins), while Streams
         // protocol adapts to static vs dynamic membership.
-        deadThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
-        addStreamThread();
+        if (deadThread.shutdown(GroupMembershipOperation.DEFAULT)) {
+            addStreamThread();
+        } else {
+            // A concurrent removeStreamThread (or client close) already requested this thread's
+            // shutdown and owns its death. Spawning a replacement would silently undo that
+            // operation, so let the thread die without compensation.
+            log.debug("Not spawning a replacement for {} since its shutdown was already requested elsewhere", deadThread.getName());
+        }
+
         if (throwable instanceof RuntimeException) {
             throw (RuntimeException) throwable;
         } else if (throwable instanceof Error) {
@@ -1158,7 +1168,7 @@ public class KafkaStreams implements AutoCloseable {
                     return Optional.of(streamThread.getName());
                 } else {
                     log.warn("Terminating the new thread because the Kafka Streams client is in state {}", state);
-                    streamThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+                    streamThread.shutdown(GroupMembershipOperation.LEAVE_GROUP);
                     threads.remove(streamThread);
                     final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                     log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
@@ -1216,48 +1226,97 @@ public class KafkaStreams implements AutoCloseable {
     private Optional<String> removeStreamThread(final long timeoutMs) throws TimeoutException {
         final long startMs = time.milliseconds();
 
-        if (isRunningOrRebalancing()) {
-            synchronized (changeThreadCount) {
-                // make a copy of threads to avoid holding lock
-                for (final StreamThread streamThread : new ArrayList<>(threads)) {
-                    final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
-                    if (streamThread.isThreadAlive() && (callingThreadIsNotCurrentStreamThread || numLiveStreamThreads() == 1)) {
-                        log.info("Removing StreamThread {}", streamThread.getName());
-                        streamThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
-                        if (callingThreadIsNotCurrentStreamThread) {
-                            final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
-                            if (remainingTimeMs <= 0 || !streamThread.waitOnThreadState(StreamThread.State.DEAD, remainingTimeMs)) {
-                                log.warn("{} did not shutdown in the allotted time.", streamThread.getName());
-                                // Don't remove from threads until shutdown is complete. We will trim it from the
-                                // list once it reaches DEAD, and if for some reason it's hanging indefinitely in the
-                                // shutdown then we should just consider this thread.id to be burned
-                            } else {
-                                log.info("Successfully removed {} in {}ms", streamThread.getName(), time.milliseconds() - startMs);
-                                threads.remove(streamThread);
-                                queryableStoreProvider.removeStoreProviderForThread(streamThread.getName());
-                            }
-                        } else {
-                            log.info("{} is the last remaining thread and must remove itself, therefore we cannot wait "
-                                + "for it to complete shutdown as this will result in deadlock.", streamThread.getName());
-                        }
+        if (!isRunningOrRebalancing()) {
+            log.warn("Cannot remove a stream thread when Kafka Streams client is in state {}", state());
+            return Optional.empty();
+        }
 
-                        final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
-                        log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
-                        resizeThreadCache(cacheSizePerThread);
-                        resizeMaxUncommittedBytes(maxUncommittedBytesPerThread(numLiveStreamThreads()));
-                        final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
-                        if (remainingTimeMs <= 0) {
-                            throw new TimeoutException("Thread " + streamThread.getName() + " did not stop in the allotted time");
-                        }
-                        return Optional.of(streamThread.getName());
+        // Phase 1: choose a thread and signal its shutdown under the lock. We must not block
+        // on that thread's terminal state while holding `changeThreadCount`: if the thread
+        // being removed is the one that concurrently entered the REPLACE_THREAD
+        // uncaught-exception handler, its `replaceStreamThread -> addStreamThread` path is
+        // already blocked on this same lock, so it can never reach DEAD (only
+        // `completeShutdown` sets that state) and the wait below would never return.
+        final StreamThread threadToRemove;
+        synchronized (changeThreadCount) {
+            StreamThread candidate = null;
+            // Copy the threads list to avoid holding its intrinsic lock during iteration.
+            //
+            // Filtering on the Kafka Streams state rather than `java.lang.Thread#isAlive`
+            // matters now that the lock is released during the wait below: `shutdown()` moves
+            // a thread to PENDING_SHUTDOWN synchronously, while the underlying Thread stays
+            // alive until `run()` returns, so two concurrent removals would otherwise choose
+            // the same thread, both report it as removed, and leave the thread count too high.
+            //
+            // Threads in CREATED are skipped deliberately: `addStreamThread` publishes a thread
+            // to `threads` before starting it, and a thread that never ran cannot reach DEAD.
+            for (final StreamThread streamThread : new ArrayList<>(threads)) {
+                final boolean isNotCurrentThread = !streamThread.getName().equals(Thread.currentThread().getName());
+                if (streamThread.state().isAlive() && (isNotCurrentThread || numLiveStreamThreads() == 1)) {
+                    // shutdown() returns false if the thread moved to PENDING_SHUTDOWN between the
+                    // isAlive() check above and this call, which means its uncaught-exception
+                    // handler won the race and will spawn a replacement: that thread's death is
+                    // already compensated and must not count as this removal, so keep scanning.
+                    if (streamThread.shutdown(GroupMembershipOperation.LEAVE_GROUP)) {
+                        log.info("Removing StreamThread {}", streamThread.getName());
+                        candidate = streamThread;
+                        break;
                     }
                 }
             }
-            log.warn("There are no threads eligible for removal");
-        } else {
-            log.warn("Cannot remove a stream thread when Kafka Streams client is in state {}", state());
+            threadToRemove = candidate;
         }
-        return Optional.empty();
+
+        if (threadToRemove == null) {
+            log.warn("There are no threads eligible for removal");
+            return Optional.empty();
+        }
+
+        final boolean callingThreadIsNotCurrentStreamThread =
+            !threadToRemove.getName().equals(Thread.currentThread().getName());
+
+        // Phase 2: wait for the thread to reach DEAD without holding `changeThreadCount`, so
+        // that a concurrent add or thread replacement can make progress in the meantime.
+        final boolean reachedDead;
+        if (callingThreadIsNotCurrentStreamThread) {
+            final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
+            reachedDead = remainingTimeMs > 0
+                && threadToRemove.waitOnThreadState(StreamThread.State.DEAD, remainingTimeMs);
+        } else {
+            log.info("{} is the last remaining thread and must remove itself, therefore we cannot wait "
+                + "for it to complete shutdown as this will result in deadlock.", threadToRemove.getName());
+            reachedDead = false;
+        }
+
+        // Phase 3: bookkeeping under the lock, so that the threads-list update is serialized
+        // against concurrent add and remove callers. The cache sizes are recomputed from
+        // `numLiveStreamThreads()`, which already excludes the PENDING_SHUTDOWN thread we
+        // signalled in phase 1; that is also why releasing the lock during the wait cannot make
+        // a concurrent `addStreamThread` size the caches against a stale thread count.
+        synchronized (changeThreadCount) {
+            if (callingThreadIsNotCurrentStreamThread) {
+                if (reachedDead) {
+                    log.info("Successfully removed {} in {}ms", threadToRemove.getName(), time.milliseconds() - startMs);
+                    threads.remove(threadToRemove);
+                    queryableStoreProvider.removeStoreProviderForThread(threadToRemove.getName());
+                } else {
+                    log.warn("{} did not shutdown in the allotted time.", threadToRemove.getName());
+                    // Don't remove from threads until shutdown is complete. We will trim it from the
+                    // list once it reaches DEAD, and if for some reason it's hanging indefinitely in the
+                    // shutdown then we should just consider this thread.id to be burned
+                }
+            }
+            final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
+            log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
+            resizeThreadCache(cacheSizePerThread);
+            resizeMaxUncommittedBytes(maxUncommittedBytesPerThread(numLiveStreamThreads()));
+        }
+
+        final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
+        if (remainingTimeMs <= 0) {
+            throw new TimeoutException("Thread " + threadToRemove.getName() + " did not stop in the allotted time");
+        }
+        return Optional.of(threadToRemove.getName());
     }
 
     private int calculateMetricsRecordingLevel() {
