@@ -100,7 +100,7 @@ import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, Server
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.{ClientMetricsTestUtils, KafkaYammerMetrics}
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
-import org.apache.kafka.server.quota.{ClientQuotaManager, ClientRequestQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicaQuota, ReplicationQuotaManager, ThrottleCallback}
+import org.apache.kafka.server.quota.{ClientQuotaManager, ClientRequestQuotaManager, ControllerMutationQuotaManager, ReplicaQuota, ReplicationQuotaManager, ThrottleCallback}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.share.context.{FinalContext, ShareSessionContext}
 import org.apache.kafka.server.share.session.{ShareSession, ShareSessionKey}
@@ -983,19 +983,12 @@ class KafkaApisTest extends Logging {
     val capturedRequest: ArgumentCaptor[RequestContext] = ArgumentCaptor.forClass(classOf[RequestContext])
     if (enableAutoTopicCreation) {
 
-      when(clientControllerQuotaManager.newPermissiveQuotaFor(
-        ArgumentMatchers.eq(request.session),
-        ArgumentMatchers.eq(request.header.clientId())
-      )).thenReturn(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA)
-
       when(autoTopicCreationManager.createTopics(
         ArgumentMatchers.eq(util.Set.of(topicName)),
-        ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA)
       )).thenCallRealMethod()
 
       when(autoTopicCreationManager.createTopics(
         ArgumentMatchers.eq(util.Set.of(topicName)),
-        ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA),
         capturedRequest.capture())).thenReturn(
         util.List.of(new MetadataResponseTopic()
         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
@@ -4401,7 +4394,7 @@ class KafkaApisTest extends Logging {
     val responseTopics = response.topicMetadata().asScala.map { metadata => metadata.topic() }
 
     // verify we don't create topic when getAllTopicMetadata
-    verify(autoTopicCreationManager, never).createTopics(any(), any(), any())
+    verify(autoTopicCreationManager, never).createTopics(any(), any())
     assertEquals(List("remaining-topic"), responseTopics)
     assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
   }
