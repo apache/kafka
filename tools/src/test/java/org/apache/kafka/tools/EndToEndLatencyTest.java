@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,13 +35,10 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -170,20 +166,8 @@ public class EndToEndLatencyTest {
     }
 
     private void assertInitializeInvalidOptionsExitCodeAndMsg(String[] args, String expectedMsg) {
-        AtomicReference<Integer> exitStatus = new AtomicReference<>();
-        AtomicReference<String> exitMessage = new AtomicReference<>();
-        Exit.setExitProcedure((exitCode, message) -> {
-            exitStatus.set(exitCode);
-            exitMessage.set(message);
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> new EndToEndLatency.EndToEndLatencyCommandOptions(args));
-            assertEquals(Integer.valueOf(1), exitStatus.get());
-            assertEquals(expectedMsg, exitMessage.get());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> EndToEndLatency.execute(args));
+        assertTrue(e.getMessage().contains(expectedMsg));
     }
 
     @Test
@@ -326,27 +310,13 @@ public class EndToEndLatencyTest {
     }
 
     @Test
-    public void shouldAcceptValidNamedArgs() {
-        assertInitializeValidOptionsDoesNotExit(ArgsBuilder.defaults().build());
+    public void shouldPassWithNamedArgs() {
+        assertDoesNotThrow(() -> new EndToEndLatency.EndToEndLatencyCommandOptions(ArgsBuilder.defaults().build()));
     }
 
     @Test
     public void shouldAcceptMinusOneForRecordHeaderValueSize() {
-        assertInitializeValidOptionsDoesNotExit(ArgsBuilder.defaults().withMinusOne("--record-header-size").build());
-    }
-
-    private void assertInitializeValidOptionsDoesNotExit(String[] args) {
-        AtomicReference<Integer> exitStatus = new AtomicReference<>();
-        Exit.setExitProcedure((status, __) -> {
-            exitStatus.set(status);
-            throw new RuntimeException();
-        });
-        try {
-            assertDoesNotThrow(() -> new EndToEndLatency.EndToEndLatencyCommandOptions(args));
-            assertNull(exitStatus.get());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertDoesNotThrow(() -> new EndToEndLatency.EndToEndLatencyCommandOptions(ArgsBuilder.defaults().withMinusOne("--record-header-size").build()));
     }
 
 }

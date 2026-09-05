@@ -18,7 +18,9 @@
 package org.apache.kafka.tools.reassign;
 
 import org.apache.kafka.server.util.CommandDefaultOptions;
+import org.apache.kafka.server.util.CommandLineUtils;
 
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
@@ -118,6 +120,10 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         preserveThrottlesOpt = parser.accepts("preserve-throttles", "Do not modify broker or topic throttles.");
         disallowReplicationFactorChangeOpt = parser.accepts("disallow-replication-factor-change", "Denies the ability to change a partition's replication factor as part of this reassignment through adding validation against it.");
 
-        options = parser.parse(args);
+        try {
+            options = parser.parse(args);
+        } catch (OptionException e) {
+            CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
+        }
     }
 }

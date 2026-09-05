@@ -72,19 +72,35 @@ public class AclCommand {
     private static final String NL = System.lineSeparator();
 
     public static void main(String[] args) {
-        AclCommandOptions opts = new AclCommandOptions(args);
-        try (Admin admin = Admin.create(adminConfigs(opts))) {
-            if (opts.options.has(opts.addOpt)) {
-                addAcls(admin, opts);
-            } else if (opts.options.has(opts.removeOpt)) {
-                removeAcls(admin, opts);
-            } else if (opts.options.has(opts.listOpt)) {
-                listAcls(admin, opts);
+        Exit.exit(mainNoExit(args));
+    }
+
+    // Visible for testing
+    static int mainNoExit(String[] args) {
+        try {
+            AclCommandOptions opts = new AclCommandOptions(args);
+            try (Admin admin = Admin.create(adminConfigs(opts))) {
+                if (opts.options.has(opts.addOpt)) {
+                    addAcls(admin, opts);
+                } else if (opts.options.has(opts.removeOpt)) {
+                    removeAcls(admin, opts);
+                } else if (opts.options.has(opts.listOpt)) {
+                    listAcls(admin, opts);
+                }
             }
+            return 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.out.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 1;
         } catch (Throwable e) {
             System.out.println("Error while executing ACL command: " + e.getMessage());
             System.out.println(Utils.stackTrace(e));
-            Exit.exit(1);
+            return 1;
         }
     }
 
@@ -212,14 +228,14 @@ public class AclCommand {
     private static Map<ResourcePattern, Set<AccessControlEntry>> getResourceToAcls(AclCommandOptions opts) {
         PatternType patternType = opts.options.valueOf(opts.resourcePatternType);
         if (!patternType.isSpecific()) {
-            CommandLineUtils.printUsageAndExit(opts.parser, "A '--resource-pattern-type' value of '" + patternType + "' is not valid when adding acls.");
+            CommandLineUtils.printUsageAndThrow(opts.parser, "A '--resource-pattern-type' value of '" + patternType + "' is not valid when adding acls.");
         }
         Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcl = getResourceFilterToAcls(opts).entrySet().stream()
                 .collect(Collectors.toMap(entry -> new ResourcePattern(entry.getKey().resourceType(), entry.getKey().name(), entry.getKey().patternType()),
                                           Map.Entry::getValue));
 
         if (resourceToAcl.values().stream().anyMatch(Set::isEmpty)) {
-            CommandLineUtils.printUsageAndExit(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.");
+            CommandLineUtils.printUsageAndThrow(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.");
         }
         return resourceToAcl;
     }
@@ -375,7 +391,7 @@ public class AclCommand {
             opts.options.valuesOf(opts.userPrincipalOpt).forEach(user -> resourceFilters.add(new ResourcePatternFilter(ResourceType.USER, user.trim(), patternType)));
         }
         if (resourceFilters.isEmpty() && dieIfNoResourceFound) {
-            CommandLineUtils.printUsageAndExit(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>");
+            CommandLineUtils.printUsageAndThrow(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>");
         }
         return resourceFilters;
     }
@@ -402,7 +418,7 @@ public class AclCommand {
             }
             if (!unsupportedOps.isEmpty()) {
                 String msg = String.format("ResourceType %s only supports operations %s", resource.resourceType(), validOps);
-                CommandLineUtils.printUsageAndExit(opts.parser, msg);
+                CommandLineUtils.printUsageAndThrow(opts.parser, msg);
             }
         }
     }
@@ -536,7 +552,7 @@ public class AclCommand {
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
             }
             checkArgs();
         }
@@ -545,17 +561,17 @@ public class AclCommand {
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to manage acls on kafka.");
 
             if (options.has(bootstrapServerOpt) && options.has(bootstrapControllerOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Only one of --bootstrap-server or --bootstrap-controller must be specified");
+                CommandLineUtils.printUsageAndThrow(parser, "Only one of --bootstrap-server or --bootstrap-controller must be specified");
             }
             if (!options.has(bootstrapServerOpt) && !options.has(bootstrapControllerOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "One of --bootstrap-server or --bootstrap-controller must be specified");
+                CommandLineUtils.printUsageAndThrow(parser, "One of --bootstrap-server or --bootstrap-controller must be specified");
             }
             List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = List.of(addOpt, removeOpt, listOpt);
             long mutuallyExclusiveOptionsCount = mutuallyExclusiveOptions.stream()
                     .filter(abstractOptionSpec -> options.has(abstractOptionSpec))
                     .count();
             if (mutuallyExclusiveOptionsCount != 1) {
-                CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --add, --remove. ");
+                CommandLineUtils.printUsageAndThrow(parser, "Command must include exactly one action: --list, --add, --remove. ");
             }
             CommandLineUtils.checkInvalidArgs(parser, options, listOpt, producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostsOpt, denyPrincipalsOpt);
 
@@ -564,16 +580,16 @@ public class AclCommand {
             CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, operationsOpt, denyPrincipalsOpt, denyHostsOpt);
 
             if (options.has(listPrincipalsOpt) && !options.has(listOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "The --principal option is only available if --list is set");
+                CommandLineUtils.printUsageAndThrow(parser, "The --principal option is only available if --list is set");
             }
             if (options.has(producerOpt) && !options.has(topicOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "With --producer you must specify a --topic");
+                CommandLineUtils.printUsageAndThrow(parser, "With --producer you must specify a --topic");
             }
             if (options.has(idempotentOpt) && !options.has(producerOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "The --idempotent option is only available if --producer is set");
+                CommandLineUtils.printUsageAndThrow(parser, "The --idempotent option is only available if --producer is set");
             }
             if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt) || (!options.has(producerOpt) && (options.has(clusterOpt) || options.has(transactionalIdOpt))))) {
-                CommandLineUtils.printUsageAndExit(parser, "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified.");
+                CommandLineUtils.printUsageAndThrow(parser, "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified.");
             }
         }
     }

@@ -42,6 +42,7 @@ import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumerPerformanceTest {
@@ -95,9 +96,9 @@ public class ConsumerPerformanceTest {
             "--topic", "test"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() ->
-                new ConsumerPerformance.ConsumerPerfOptions(args));
-        assertTrue(err.contains("Missing required argument \"[bootstrap-server]\""));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("Missing required argument \"[bootstrap-server]\""));
     }
 
     @Test
@@ -107,9 +108,9 @@ public class ConsumerPerformanceTest {
             "--topic", "test"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() ->
-                new ConsumerPerformance.ConsumerPerfOptions(args));
-        assertTrue(err.contains("Exactly one of the following arguments is required:"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("Exactly one of the following arguments is required:"));
     }
 
     @Test
@@ -133,9 +134,9 @@ public class ConsumerPerformanceTest {
             "--num-records", "20"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() ->
-                new ConsumerPerformance.ConsumerPerfOptions(args));
-        assertTrue(err.contains("Exactly one of the following arguments is required"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("Exactly one of the following arguments is required"));
     }
 
     @Test
@@ -147,9 +148,9 @@ public class ConsumerPerformanceTest {
             "--new-consumer"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
-
-        assertTrue(err.contains("new-consumer is not a recognized option"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("new-consumer is not a recognized option"));
     }
 
     @Test
@@ -176,9 +177,9 @@ public class ConsumerPerformanceTest {
             "--num-records", "10"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
-
-        assertTrue(err.contains("Exactly one of the following arguments is required: [topic], [include]"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("Exactly one of the following arguments is required: [topic], [include]"));
     }
 
     @Test
@@ -188,9 +189,9 @@ public class ConsumerPerformanceTest {
             "--num-records", "10"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
-
-        assertTrue(err.contains("Exactly one of the following arguments is required: [topic], [include]"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("Exactly one of the following arguments is required: [topic], [include]"));
     }
 
     @Test
@@ -272,9 +273,9 @@ public class ConsumerPerformanceTest {
             "--command-config", "some-path"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() ->
-                new ConsumerPerformance.ConsumerPerfOptions(args));
-        assertTrue(err.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains(String.format("Option \"%s\" can't be used with option \"%s\"",
                 "[consumer.config]", "[command-config]")));
     }
 

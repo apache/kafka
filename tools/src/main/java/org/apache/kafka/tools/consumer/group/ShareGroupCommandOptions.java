@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 import static org.apache.kafka.tools.ToolsUtils.minus;
@@ -168,7 +169,11 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
             resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt);
         allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
 
-        options = parser.parse(args);
+        try {
+            options = parser.parse(args);
+        } catch (OptionException e) {
+            CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
+        }
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
@@ -179,50 +184,50 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
 
         if (options.has(describeOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
             List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
             }
             if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     "Option " + describeOpt + " does not take a value for " + stateOpt);
         }
 
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     String.format("Option %s takes the options %s or %s.", deleteOpt, groupOpt, allGroupsOpt));
             if (options.has(allGroupsOpt) && options.has(groupOpt))
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     String.format("Option %s takes either %s or %s, not both.", deleteOpt, groupOpt, allGroupsOpt));
             if (options.has(allTopicsOpt) || options.has(topicOpt))
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     String.format("Option %s does not take the options %s or %s.", deleteOpt, topicOpt, allTopicsOpt));
         }
 
         if (options.has(deleteOffsetsOpt)) {
             if (!options.has(groupOpt) || !options.has(topicOpt))
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     "Option " + deleteOffsetsOpt + " takes the following options: " + allDeleteOffsetsOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
         }
 
         if (options.has(resetOffsetsOpt)) {
             if (options.has(dryRunOpt) && options.has(executeOpt))
-                CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
+                CommandLineUtils.printUsageAndThrow(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
 
             if (!options.has(dryRunOpt) && !options.has(executeOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " takes the option: " + executeOpt + " or " + dryRunOpt);
+                CommandLineUtils.printUsageAndThrow(parser, "Option " + resetOffsetsOpt + " takes the option: " + executeOpt + " or " + dryRunOpt);
             }
 
             if (!options.has(groupOpt))
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     "Option " + resetOffsetsOpt + " takes the option: " + groupOpt);
 
             if (!options.has(topicOpt) && !options.has(allTopicsOpt) && !options.has(resetFromFileOpt)) {
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     "Option " + resetOffsetsOpt + " takes one of these options: " + allResetOffsetsScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
             }
 
@@ -231,7 +236,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
             CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetsScopeOpts, resetFromFileOpt));
 
             if (!options.has(resetToOffsetOpt) && !options.has(resetToEarliestOpt) && !options.has(resetToLatestOpt) && !options.has(resetToDatetimeOpt) && !options.has(resetToCurrentOpt) && !options.has(resetFromFileOpt)) {
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     "Option " + resetOffsetsOpt + " takes one of these options: " + allResetOffsetsScenarioOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
             }
 

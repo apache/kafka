@@ -39,16 +39,6 @@ import joptsimple.OptionSpec;
  */
 public class CommandLineUtils {
     /**
-     * Check if there are no options or `--help` option from command line.
-     *
-     * @param commandOpts Acceptable options for a command
-     * @return true on matching the help check condition
-     */
-    public static boolean isPrintHelpNeeded(CommandDefaultOptions commandOpts) {
-        return commandOpts.args.length == 0 || commandOpts.options.has(commandOpts.helpOpt);
-    }
-
-    /**
      * Check if there is `--version` option from command line.
      *
      * @param commandOpts Acceptable options for a command
@@ -67,11 +57,17 @@ public class CommandLineUtils {
      * @param message     Message to display on successful check
      */
     public static void maybePrintHelpOrVersion(CommandDefaultOptions commandOpts, String message) {
-        if (isPrintHelpNeeded(commandOpts)) {
-            printUsageAndExit(commandOpts.parser, message);
+        if (commandOpts.options.has(commandOpts.helpOpt)) {
+            // Explicit --help is a success exit.
+            printUsage(commandOpts.parser);
+            throw new HelpOrVersionException(message);
+        }
+        if (commandOpts.args.length == 0) {
+            // No args is treated as a usage error.
+            printUsageAndThrow(commandOpts.parser, message);
         }
         if (isPrintVersionNeeded(commandOpts)) {
-            printVersionAndExit();
+            printVersionAndThrow();
         }
     }
 
@@ -81,7 +77,7 @@ public class CommandLineUtils {
     public static void checkRequiredArgs(OptionParser parser, OptionSet options, OptionSpec<?>... requiredList) {
         for (OptionSpec<?> arg : requiredList) {
             if (!options.has(arg)) {
-                printUsageAndExit(parser, String.format("Missing required argument \"%s\"", arg));
+                printUsageAndThrow(parser, String.format("Missing required argument \"%s\"", arg));
             }
         }
     }
@@ -96,7 +92,7 @@ public class CommandLineUtils {
         if (options.has(usedOption)) {
             for (OptionSpec<?> arg : invalidOptions) {
                 if (options.has(arg)) {
-                    printUsageAndExit(parser, String.format("Option \"%s\" can't be used with option \"%s\"", usedOption, arg));
+                    printUsageAndThrow(parser, String.format("Option \"%s\" can't be used with option \"%s\"", usedOption, arg));
                 }
             }
         }
@@ -125,16 +121,11 @@ public class CommandLineUtils {
         if (usedOptions.stream().filter(options::has).count() == usedOptions.size()) {
             for (OptionSpec<?> arg : invalidOptions) {
                 if (options.has(arg)) {
-                    printUsageAndExit(parser, String.format("Option combination \"%s\" can't be used with option \"%s\"%s",
+                    printUsageAndThrow(parser, String.format("Option combination \"%s\" can't be used with option \"%s\"%s",
                             usedOptions, arg, trailingAdditionalMessage.orElse("")));
                 }
             }
         }
-    }
-
-    public static void printErrorAndExit(String message) {
-        System.err.println(message);
-        Exit.exit(1, message);
     }
 
     /**
@@ -153,7 +144,7 @@ public class CommandLineUtils {
         }
 
         if (presentCount != 1) {
-            printUsageAndExit(parser, "Exactly one of the following arguments is required: " +
+            printUsageAndThrow(parser, "Exactly one of the following arguments is required: " +
                     Arrays.stream(optionSpecs)
                             .map(Object::toString)
                             .collect(Collectors.joining(", ")));
@@ -170,9 +161,59 @@ public class CommandLineUtils {
         Exit.exit(1, message);
     }
 
+    /**
+     * Prints the parser usage to {@code System.out}. Callers are responsible for
+     * printing any accompanying error message.
+     */
+    public static void printUsage(OptionParser parser) {
+        try {
+            parser.printHelpOn(System.out);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Prints the parser usage to {@code System.out}, then throws
+     * {@link IllegalArgumentException} with the given message. The exception's message is
+     * intended to be rendered by the caller (typically {@code main}) when translating the
+     * exception into a non-zero exit code.
+     */
+    public static void printUsageAndThrow(OptionParser parser, String message) {
+        printUsage(parser);
+        throw new IllegalArgumentException(message);
+    }
+
     public static void printVersionAndExit() {
         System.out.println(AppInfoParser.getVersion());
         Exit.exit(0);
+    }
+
+    /**
+     * Prints the version to {@code System.out} and throws {@link HelpOrVersionException}.
+     * Callers (typically {@code main}) are responsible for translating the exception into
+     * a zero exit code.
+     */
+    public static void printVersionAndThrow() {
+        System.out.println(AppInfoParser.getVersion());
+        throw new HelpOrVersionException();
+    }
+
+    /**
+     * Thrown by {@link #printVersionAndThrow()} and {@link #maybePrintHelpOrVersion} when
+     * the user requests {@code --help} or {@code --version}. Tool entry points should catch
+     * this and exit with status {@code 0}. {@code --help} carries the tool description as
+     * the exception message; {@code --version} carries no message.
+     */
+    public static class HelpOrVersionException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        public HelpOrVersionException() {
+        }
+
+        public HelpOrVersionException(String message) {
+            super(message);
+        }
     }
 
     /**
@@ -273,7 +314,7 @@ public class CommandLineUtils {
                 options.has(bootstrapControllers) ?
                         Optional.of(options.valueOf(bootstrapControllers)) : Optional.empty());
         } catch (InitializeBootstrapException e) {
-            printUsageAndExit(parser, e.getMessage());
+            printUsageAndThrow(parser, e.getMessage());
         }
     }
 }

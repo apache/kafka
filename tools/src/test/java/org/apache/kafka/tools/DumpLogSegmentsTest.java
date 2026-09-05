@@ -51,7 +51,6 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
@@ -107,9 +106,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
@@ -129,7 +126,6 @@ import static org.apache.kafka.tools.ToolsTestUtils.captureStandardErr;
 import static org.apache.kafka.tools.ToolsTestUtils.captureStandardOut;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -579,31 +575,88 @@ public class DumpLogSegmentsTest {
 
         Files.setPosixFilePermissions(Paths.get(logFilePath), PosixFilePermissions.fromString("-w-------"));
 
-        RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", logFilePath}));
-        assertInstanceOf(AccessDeniedException.class, thrown.getCause());
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--remote-log-metadata-decoder", "--files", logFilePath})));
+        assertTrue(errOutput.contains("AccessDeniedException"));
     }
 
     @Test
     public void testDumpRemoteLogMetadataNoFilesFlag() {
-        Exit.setExitProcedure((statusCode, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-        try {
-            IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
-                () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder"}));
-            assertEquals("Missing required argument \"[files]\"", thrown.getMessage());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--remote-log-metadata-decoder"})));
+        assertTrue(errOutput.contains("Missing required argument \"[files]\""));
     }
 
     @Test
     public void testDumpRemoteLogMetadataNoSuchFileException() {
         String noSuchFileLogPath = "/tmp/nosuchfile/00000000000000000000.log";
-        RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", noSuchFileLogPath}));
-        assertInstanceOf(NoSuchFileException.class, thrown.getCause());
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--remote-log-metadata-decoder", "--files", noSuchFileLogPath})));
+        assertTrue(errOutput.contains("NoSuchFileException"));
+    }
+
+    @Test
+    public void testMainNoExitReturnsZeroOnSuccess() throws Exception {
+        log = createTestLog();
+        assertEquals(0, DumpLogSegments.mainNoExit(new String[] {"--files", logFilePath}));
+    }
+
+    @Test
+    public void testMainNoExitReturnsOneOnNonConsecutiveOffsets() throws Exception {
+        File logFile = new File(logFilePath);
+        try (FileRecords fileRecords = FileRecords.open(logFile, true)) {
+            fileRecords.append(MemoryRecords.withRecords(0L, Compression.NONE, 0,
+                new SimpleRecord("a".getBytes())));
+            fileRecords.append(MemoryRecords.withRecords(2L, Compression.NONE, 0,
+                new SimpleRecord("b".getBytes())));
+            fileRecords.flush();
+        }
+
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--deep-iteration", "--files", logFilePath})));
+        assertTrue(errOutput.contains("Non-consecutive offsets"));
+        assertTrue(errOutput.contains("Errors found in log segments"));
+    }
+
+    @Test
+    public void testMainNoExitReturnsOneOnIndexMismatch() throws Exception {
+        log = createTestLog();
+        addSimpleRecords(log, new ArrayList<>());
+
+        // Close the log to release the memory-mapped index file before modifying it
+        Utils.closeQuietly(log, "UnifiedLog");
+        log = null;
+
+        // Corrupt the first index entry's relative offset
+        // to a value that won't match any batch offset in the log
+        File indexFile = new File(indexFilePath);
+        byte[] indexBytes = Files.readAllBytes(indexFile.toPath());
+        ByteBuffer.wrap(indexBytes).putInt(0, Integer.MAX_VALUE);
+        Files.write(indexFile.toPath(), indexBytes);
+
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--verify-index-only", "--files", indexFilePath})));
+        assertTrue(errOutput.contains("Mismatches in"));
+        assertTrue(errOutput.contains("Errors found in log segments"));
+    }
+
+    @Test
+    public void testMainNoExitIgnoresUnknownFile() throws Exception {
+        log = createTestLog();
+        File unknownFile = new File(logDir, "unknown.xyz");
+        assertTrue(unknownFile.createNewFile());
+
+        String[] args = {"--files", logFilePath + "," + unknownFile.getAbsolutePath()};
+        String errOutput = captureStandardErr(
+            () -> assertEquals(0, DumpLogSegments.mainNoExit(args)));
+        assertTrue(errOutput.contains("Ignoring unknown file"));
+        String output = captureStandardOut(() -> DumpLogSegments.mainNoExit(args));
+        assertTrue(output.contains("Dumping " + logFilePath));
     }
 
     @Test
@@ -1377,13 +1430,7 @@ public class DumpLogSegmentsTest {
     }
 
     private String runDumpLogSegments(String[] args) {
-        return captureStandardOut(() -> {
-            try {
-                DumpLogSegments.main(args);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        return captureStandardOut(() -> DumpLogSegments.mainNoExit(args));
     }
 
     private Optional<Long> optionalLong(String value) {
@@ -1488,6 +1535,20 @@ public class DumpLogSegmentsTest {
     }
 
     @Test
+    public void testDumpTxnIndexCorrupt() throws Exception {
+        File txnIndexFile = new File(logDir, segmentName + ".txnindex");
+        // Write enough bytes with an invalid version to pass the iterator's hasNext() size check.
+        byte[] corruptBytes = new byte[64];
+        Arrays.fill(corruptBytes, (byte) 1);
+        Files.write(txnIndexFile.toPath(), corruptBytes);
+
+        String[] args = new String[]{"--files", txnIndexFile.getAbsolutePath()};
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(args)));
+        assertTrue(errOutput.contains("Unexpected aborted transaction version"));
+    }
+
+    @Test
     public void testDumpProducerIdSnapshot() throws Exception {
         File snapshotFile = new File(logDir, segmentName + ".snapshot");
         Map<Long, ProducerStateEntry> entries = new HashMap<>();
@@ -1539,14 +1600,10 @@ public class DumpLogSegmentsTest {
         File snapshotFile = new File(logDir, segmentName + ".snapshot");
         Files.write(snapshotFile.toPath(), new byte[]{0, 1, 2, 3, 4, 5});
 
-        String errOutput = captureStandardErr(() -> {
-            try {
-                DumpLogSegments.main(new String[]{"--files", snapshotFile.getAbsolutePath()});
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
-        assertFalse(errOutput.isEmpty(), "Expected error output for corrupt snapshot");
+        String[] args = new String[]{"--files", snapshotFile.getAbsolutePath()};
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(args)));
+        assertTrue(errOutput.contains("Snapshot failed schema validation"));
     }
 
     @Test
@@ -1586,13 +1643,14 @@ public class DumpLogSegmentsTest {
     }
 
     @Test
-    public void testInvalidDecoderClass() {
-        RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> runDumpLogSegments(new String[]{
-                "--value-decoder-class", "org.apache.kafka.tools.api.NonExistentDecoder",
-                "--files", logFilePath
-            }));
-        assertTrue(thrown.getMessage().contains("Failed to load decoder class"), thrown.getMessage());
+    public void testInvalidDecoderClass() throws Exception {
+        String[] args = new String[]{
+            "--value-decoder-class", "org.apache.kafka.tools.api.NonExistentDecoder",
+            "--files", logFilePath
+        };
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(args)));
+        assertTrue(errOutput.contains("Failed to load decoder class"), errOutput);
     }
 
     @Test

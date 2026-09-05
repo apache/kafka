@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.server.util.CommandLineUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,9 +54,16 @@ public class ConsoleShareConsumer {
     static int messageCount = 0;
 
     public static void main(String[] args) throws Exception {
-        ConsoleShareConsumerOptions opts = new ConsoleShareConsumerOptions(args);
         try {
+            ConsoleShareConsumerOptions opts = new ConsoleShareConsumerOptions(args);
             run(opts);
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            Exit.exit(1);
         } catch (AuthenticationException ae) {
             LOG.error("Authentication failed: terminating consumer process", ae);
             Exit.exit(1);

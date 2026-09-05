@@ -65,9 +65,19 @@ public class ClientMetricsCommand {
         try {
             execute(args);
             return 0;
-        } catch (Throwable e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
-            System.err.println(Utils.stackTrace(e));
+            return 1;
+        } catch (ExecutionException e) {
+            printException(Objects.requireNonNullElse(e.getCause(), e));
+            return 1;
+        } catch (Throwable e) {
+            printException(e);
             return 1;
         }
     }
@@ -78,7 +88,6 @@ public class ClientMetricsCommand {
         Properties config = opts.commandConfig();
         config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServer());
 
-        int exitCode = 0;
         try (ClientMetricsService service = new ClientMetricsService(config)) {
             if (opts.hasAlterOption()) {
                 service.alterClientMetrics(opts);
@@ -89,15 +98,6 @@ public class ClientMetricsCommand {
             } else if (opts.hasListOption()) {
                 service.listClientMetrics();
             }
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            printException(Objects.requireNonNullElse(cause, e));
-            exitCode = 1;
-        } catch (Throwable t) {
-            printException(t);
-            exitCode = 1;
-        } finally {
-            Exit.exit(exitCode);
         }
     }
 
@@ -272,7 +272,7 @@ public class ClientMetricsCommand {
             try {
                 options = parser.parse(args);
             } catch (OptionException oe) {
-                CommandLineUtils.printUsageAndExit(parser, oe.getMessage());
+                CommandLineUtils.printUsageAndThrow(parser, oe.getMessage());
             }
 
             checkArgs();
@@ -352,14 +352,14 @@ public class ClientMetricsCommand {
 
         public void checkArgs() {
             if (args.length == 0)
-                CommandLineUtils.printUsageAndExit(parser, "This tool helps to manipulate and describe client metrics configurations.");
+                CommandLineUtils.printUsageAndThrow(parser, "This tool helps to manipulate and describe client metrics configurations.");
 
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to manipulate and describe client metrics configurations.");
 
             // should have exactly one action
             long actions = Stream.of(alterOpt, deleteOpt, describeOpt, listOpt).filter(options::has).count();
             if (actions != 1)
-                CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --alter, --delete, --describe or --list.");
+                CommandLineUtils.printUsageAndThrow(parser, "Command must include exactly one action: --alter, --delete, --describe or --list.");
 
             // check required args
             if (!has(bootstrapServerOpt))
