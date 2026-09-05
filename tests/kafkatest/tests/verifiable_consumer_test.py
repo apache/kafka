@@ -53,7 +53,7 @@ class VerifiableConsumerTest(KafkaTest):
         return super(VerifiableConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
 
     def setup_consumer(self, topic, static_membership=False, enable_autocommit=False,
-                       assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor", group_remote_assignor="range", **kwargs) -> VerifiableConsumer:
+                       assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor", group_remote_assignor="range", **kwargs):
         return VerifiableConsumer(self.test_context, self.num_consumers, self.kafka,
                                   topic, self.group_id, static_membership=static_membership,
                                   assignment_strategy=assignment_strategy, enable_autocommit=enable_autocommit,

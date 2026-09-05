@@ -44,7 +44,7 @@ class ConsumerEventHandler(object):
     def __init__(self, node, verify_offsets, idx, state=ConsumerState.Dead,
                  revoked_count=0, assigned_count=0, assignment=None,
                  position=None, committed=None, total_consumed=0,
-                 shutdown_complete=False):
+                 shutdown_complete=False, startup_complete=False):
         self.node = node
         self.verify_offsets = verify_offsets
         self.idx = idx
@@ -56,6 +56,7 @@ class ConsumerEventHandler(object):
         self.committed = committed if committed is not None else {}
         self.total_consumed = total_consumed
         self.shutdown_complete = shutdown_complete
+        self.startup_complete = startup_complete
 
     def handle_shutdown_complete(self, node=None, logger=None):
         self.state = ConsumerState.Dead
@@ -68,6 +69,7 @@ class ConsumerEventHandler(object):
 
     def handle_startup_complete(self, node, logger):
         self.state = ConsumerState.Started
+        self.startup_complete = True
         logger.debug("Started %s" % node.account.hostname)
 
     def handle_offsets_committed(self, event, node, logger):
@@ -271,16 +273,18 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         for node in self.nodes:
             node.version = version
 
-    def start(self, wait_for_startup: bool = True, **kwargs) -> None:
+    def start(self, **kwargs):
         super().start(**kwargs)
-
-        if not wait_for_startup:
-            return
-
         timeout_sec = kwargs.get("timeout_sec", 120)
-        wait_until(lambda: len(self.started_nodes()) == len(self.nodes),
+        wait_until(lambda: len(self.startup_complete_nodes()) == len(self.nodes),
                    timeout_sec=timeout_sec,
                    err_msg="Verifiable consumer didn't finish startup in %d seconds" % timeout_sec)
+
+    def start_node(self, node, **kwargs):
+        with self.lock:
+            if maybe_already_started_node := self.event_handlers.get(node):
+                maybe_already_started_node.startup_complete = False
+        super().start_node(node, **kwargs)
 
     def java_class_name(self):
         return "VerifiableConsumer"
@@ -296,7 +300,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                                      position=existing_handler.position,
                                      committed=existing_handler.committed,
                                      total_consumed=existing_handler.total_consumed,
-                                     shutdown_complete=existing_handler.shutdown_complete)
+                                     shutdown_complete=existing_handler.shutdown_complete,
+                                     startup_complete=existing_handler.startup_complete,
+                                     )
             else:
                 return handler_class(node, self.verify_offsets, idx)
         existing_handler = self.event_handlers[node] if node in self.event_handlers else None
@@ -532,10 +538,10 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             return max(handler.revoked_count for handler in self.event_handlers.values()
                        if handler.idx <= keep_alive)
 
-    def started_nodes(self):
+    def startup_complete_nodes(self):
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()
-                    if handler.state is not None and handler.state != ConsumerState.Dead]
+                    if handler.startup_complete]
 
     def joined_nodes(self):
         with self.lock:
