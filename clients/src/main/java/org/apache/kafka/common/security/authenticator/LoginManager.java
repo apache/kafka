@@ -23,7 +23,9 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
+import org.apache.kafka.common.security.kerberos.KerberosLogin;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerRefreshingLogin;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
@@ -61,8 +63,8 @@ public class LoginManager {
     private LoginManager(JaasContext jaasContext, String saslMechanism, Map<String, ?> configs,
                  LoginMetadata<?> loginMetadata) throws LoginException {
         this.loginMetadata = loginMetadata;
-        this.login = Utils.newInstance(loginMetadata.loginClass);
-        loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
+        this.login = createLogin(loginMetadata.loginClass);
+        loginCallbackHandler = createLoginCallbackHandler(loginMetadata.loginCallbackClass);
         try {
             loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
             login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
@@ -225,6 +227,25 @@ public class LoginManager {
         if (clazz == null)
             clazz = defaultClass;
         return clazz;
+    }
+
+    private static Login createLogin(Class<? extends Login> loginClass) {
+        if (loginClass == DefaultLogin.class)
+            return new DefaultLogin();
+        if (loginClass == KerberosLogin.class)
+            return new KerberosLogin();
+        if (loginClass == OAuthBearerRefreshingLogin.class)
+            return new OAuthBearerRefreshingLogin();
+        return Utils.newInstance(loginClass);
+    }
+
+    private static AuthenticateCallbackHandler createLoginCallbackHandler(
+            Class<? extends AuthenticateCallbackHandler> loginCallbackClass) {
+        if (loginCallbackClass == AbstractLogin.DefaultLoginCallbackHandler.class)
+            return new AbstractLogin.DefaultLoginCallbackHandler();
+        if (loginCallbackClass == OAuthBearerUnsecuredLoginCallbackHandler.class)
+            return new OAuthBearerUnsecuredLoginCallbackHandler();
+        return Utils.newInstance(loginCallbackClass);
     }
 
     private static class LoginMetadata<T> {
