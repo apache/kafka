@@ -66,6 +66,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcess
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalResourcesNaming;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
@@ -125,6 +126,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
     private static final String TRANSFORMVALUES_NAME = "KTABLE-TRANSFORMVALUES-";
+
+    private static final String PROCESSFIXEDKEY_NAME = "KTABLE-PROCESSFIXEDKEY-";
 
     private static final String FK_JOIN = "KTABLE-FK-JOIN-";
     private static final String FK_JOIN_STATE_STORE_NAME = FK_JOIN + "SUBSCRIPTION-STATE-STORE-";
@@ -396,12 +399,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return doMapValues(mapper, named, materializedInternal);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                               final String... stateStoreNames) {
         return doTransformValues(transformerSupplier, null, NamedInternal.empty(), stateStoreNames);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                               final Named named,
@@ -410,6 +415,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return doTransformValues(transformerSupplier, null, new NamedInternal(named), stateStoreNames);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
@@ -417,6 +423,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return transformValues(transformerSupplier, materialized, NamedInternal.empty(), stateStoreNames);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
@@ -429,7 +436,39 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return doTransformValues(transformerSupplier, materializedInternal, new NamedInternal(named), stateStoreNames);
     }
 
-    @SuppressWarnings("resource")
+    @Override
+    public <VOut> KTable<K, VOut> processFixedKey(final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
+                                                  final String... stateStoreNames) {
+        return doProcessFixedKey(processorSupplier, null, NamedInternal.empty(), stateStoreNames);
+    }
+
+    @Override
+    public <VOut> KTable<K, VOut> processFixedKey(final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
+                                                  final Named named,
+                                                  final String... stateStoreNames) {
+        Objects.requireNonNull(named, "named can't be null");
+        return doProcessFixedKey(processorSupplier, null, new NamedInternal(named), stateStoreNames);
+    }
+
+    @Override
+    public <VOut> KTable<K, VOut> processFixedKey(final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
+                                                  final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized,
+                                                  final String... stateStoreNames) {
+        return processFixedKey(processorSupplier, materialized, NamedInternal.empty(), stateStoreNames);
+    }
+
+    @Override
+    public <VOut> KTable<K, VOut> processFixedKey(final FixedKeyProcessorSupplier<? super K, ? super V, VOut> processorSupplier,
+                                                  final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized,
+                                                  final Named named,
+                                                  final String... stateStoreNames) {
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        Objects.requireNonNull(named, "named can't be null");
+        final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        return doProcessFixedKey(processorSupplier, materializedInternal, new NamedInternal(named), stateStoreNames);
+    }
+
+    @SuppressWarnings({"resource", "deprecation"})
     private <VR> KTable<K, VR> doTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                                  final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
                                                  final NamedInternal namedInternal,
@@ -493,6 +532,74 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             subTopologySourceNodes,
             queryableStoreName,
             processorSupplier,
+            tableNode,
+            builder);
+    }
+
+    @SuppressWarnings("resource")
+    private <VOut> KTable<K, VOut> doProcessFixedKey(final FixedKeyProcessorSupplier<? super K, ? super V, VOut> supplier,
+                                                     final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal,
+                                                     final NamedInternal namedInternal,
+                                                     final String... stateStoreNames) {
+        Objects.requireNonNull(stateStoreNames, "stateStoreNames");
+        final Serde<K> keySerde;
+        final Serde<VOut> valueSerde;
+        final String queryableStoreName;
+        final Set<StoreBuilder<?>> storeBuilder;
+
+        if (materializedInternal != null) {
+            // don't inherit parent value serde, since this operation may change the value type, more specifically:
+            // we preserve the key following the order of 1) materialized, 2) parent, 3) null
+            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            // we preserve the value following the order of 1) materialized, 2) null
+            valueSerde = materializedInternal.valueSerde();
+            queryableStoreName = materializedInternal.queryableStoreName();
+            // only materialize if materialized is specified and it has queryable name
+            if (queryableStoreName != null) {
+                final StoreFactory storeFactory = new KeyValueStoreMaterializer<>(materializedInternal);
+                storeBuilder = Set.of(new FactoryWrappingStoreBuilder<>(storeFactory));
+            } else {
+                storeBuilder = null;
+            }
+        } else {
+            keySerde = this.keySerde;
+            valueSerde = null;
+            queryableStoreName = null;
+            storeBuilder = null;
+        }
+
+        final String name = namedInternal.orElseGenerateWithPrefix(builder, PROCESSFIXEDKEY_NAME);
+
+        final KTableProcessorSupplier<K, V, K, VOut> tableProcessorSupplier = new KTableProcessFixedKey<>(
+            this,
+            supplier,
+            queryableStoreName);
+
+        final ProcessorParameters<K, VOut, ?, ?> processorParameters =
+            unsafeCastProcessorParametersToCompletelyDifferentType(
+                new ProcessorParameters<>(
+                    new StoreDelegatingProcessorSupplier<>(
+                        tableProcessorSupplier,
+                        storeBuilder),
+                    name
+                ));
+
+        final GraphNode tableNode = new ProcessorToStateConnectorNode<>(
+            name,
+            processorParameters,
+            stateStoreNames
+        );
+        maybeSetOutputVersioned(tableNode, materializedInternal);
+
+        builder.addGraphNode(this.graphNode, tableNode);
+
+        return new KTableImpl<>(
+            name,
+            keySerde,
+            valueSerde,
+            subTopologySourceNodes,
+            queryableStoreName,
+            tableProcessorSupplier,
             tableNode,
             builder);
     }

@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
@@ -52,6 +53,7 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -1549,7 +1551,7 @@ public class KStreamImplTest {
 
     @Test
     public void shouldNotAllowBadProcessSupplierOnProcessValues() {
-        final org.apache.kafka.streams.processor.api.FixedKeyProcessor<String, String, Void> processor =
+        final FixedKeyProcessor<String, String, Void> processor =
             fixedKeyProcessorSupplier.get();
         final IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
@@ -1560,7 +1562,7 @@ public class KStreamImplTest {
 
     @Test
     public void shouldNotAllowBadProcessSupplierOnProcessValuesWithStores() {
-        final org.apache.kafka.streams.processor.api.FixedKeyProcessor<String, String, Void> processor =
+        final FixedKeyProcessor<String, String, Void> processor =
             fixedKeyProcessorSupplier.get();
         final IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
@@ -1571,7 +1573,7 @@ public class KStreamImplTest {
 
     @Test
     public void shouldNotAllowBadProcessSupplierOnProcessValuesWithNamed() {
-        final org.apache.kafka.streams.processor.api.FixedKeyProcessor<String, String, Void> processor =
+        final FixedKeyProcessor<String, String, Void> processor =
             fixedKeyProcessorSupplier.get();
         final IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
@@ -1582,7 +1584,7 @@ public class KStreamImplTest {
 
     @Test
     public void shouldNotAllowBadProcessSupplierOnProcessValuesWithNamedAndStores() {
-        final org.apache.kafka.streams.processor.api.FixedKeyProcessor<String, String, Void> processor =
+        final FixedKeyProcessor<String, String, Void> processor =
             fixedKeyProcessorSupplier.get();
         final IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
@@ -2040,6 +2042,242 @@ public class KStreamImplTest {
 
             assertEquals(outputTopic.readRecordsToList(), outputExpectRecords);
         }
+    }
+
+    @Test
+    public void shouldNotAllowBadProcessSupplierOnProcessFixedKey() {
+        final FixedKeyProcessor<String, String, Void> processor =
+            fixedKeyProcessorSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> testStream.processFixedKey(() -> processor)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadProcessSupplierOnProcessFixedKeyWithStores() {
+        final FixedKeyProcessor<String, String, Void> processor =
+            fixedKeyProcessorSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> testStream.processFixedKey(() -> processor, "storeName")
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadProcessSupplierOnProcessFixedKeyWithNamed() {
+        final FixedKeyProcessor<String, String, Void> processor =
+            fixedKeyProcessorSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> testStream.processFixedKey(() -> processor, Named.as("processor"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadProcessSupplierOnProcessFixedKeyWithNamedAndStores() {
+        final FixedKeyProcessor<String, String, Void> processor =
+            fixedKeyProcessorSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> testStream.processFixedKey(() -> processor, Named.as("processor"), "storeName")
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowNullProcessFixedKeySupplierOnProcessFixedKey() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processFixedKey((FixedKeyProcessorSupplier<? super String, ? super String, Void>) null));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullProcessFixedKeySupplierOnProcessFixedKeyWithStores() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processFixedKey((FixedKeyProcessorSupplier<? super String, ? super String, Void>) null,
+                "storeName"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStoreNamesOnProcessFixedKey() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processFixedKey(fixedKeyProcessorSupplier, (String[]) null));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStoreNameOnProcessFixedKey() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processFixedKey(fixedKeyProcessorSupplier, (String) null));
+        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStoreNamesOnProcessFixedKeyWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processFixedKey(fixedKeyProcessorSupplier, Named.as("processor"), (String[]) null));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStoreNameOnProcessFixedKeyWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processFixedKey(fixedKeyProcessorSupplier, Named.as("processor"), (String) null));
+        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullNamedOnProcessFixedKey() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processFixedKey(fixedKeyProcessorSupplier, (Named) null));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullNamedOnProcessFixedKeyWithStores() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processFixedKey(fixedKeyProcessorSupplier, (Named) null, "storeName"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+    }
+
+    @Test
+    public void shouldProcessFixedKey() {
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String input = "input";
+        final String output = "output";
+
+        builder.stream(input, consumed)
+               .processFixedKey(() -> new ContextualFixedKeyProcessor<String, String, Integer>() {
+                   @Override
+                   public void process(final FixedKeyRecord<String, String> record) {
+                       context().forward(record.withValue(record.value().length()));
+                   }
+               }, Named.as("fkp"))
+               .to(output, Produced.valueSerde(Serdes.Integer()));
+
+        final String topologyDescription = builder.build().describe().toString();
+
+        assertThat(
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                        "   Sub-topology: 0\n" +
+                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+                        "      --> fkp\n" +
+                        "    Processor: fkp (stores: [])\n" +
+                        "      --> KSTREAM-SINK-0000000001\n" +
+                        "      <-- KSTREAM-SOURCE-0000000000\n" +
+                        "    Sink: KSTREAM-SINK-0000000001 (topic: output)\n" +
+                        "      <-- fkp\n\n")
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    input,
+                    new StringSerializer(),
+                    new StringSerializer()
+                );
+            final TestOutputTopic<String, Integer> outputTopic =
+                driver.createOutputTopic(
+                    output,
+                    new StringDeserializer(),
+                    new IntegerDeserializer()
+                );
+
+            inputTopic.pipeInput("A", "0", 5L);
+            inputTopic.pipeInput("B", "00", 100L);
+            inputTopic.pipeInput("C", "000", 0L);
+            inputTopic.pipeInput("D", "0000", 0L);
+            inputTopic.pipeInput("A", "00000", 10L);
+            inputTopic.pipeInput("A", "000000", 8L);
+
+            final List<TestRecord<String, Integer>> outputExpectRecords = new ArrayList<>();
+            outputExpectRecords.add(new TestRecord<>("A", 1, Instant.ofEpochMilli(5L)));
+            outputExpectRecords.add(new TestRecord<>("B", 2, Instant.ofEpochMilli(100L)));
+            outputExpectRecords.add(new TestRecord<>("C", 3, Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>("D", 4, Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>("A", 5, Instant.ofEpochMilli(10L)));
+            outputExpectRecords.add(new TestRecord<>("A", 6, Instant.ofEpochMilli(8L)));
+
+            assertEquals(outputTopic.readRecordsToList(), outputExpectRecords);
+        }
+    }
+
+    /**
+     * Verifies that {@code processFixedKey()} always marks the node as a value-changing operation
+     * (KIP-1128). Unlike the deprecated {@code processValues()}, this flag is unconditional,
+     * ensuring correct topology optimisation (merge repartition topics) without a feature flag.
+     *
+     * <p>The key invariant: when {@code processFixedKey} sits between a key-changing op
+     * ({@code selectKey}) and a stateful op (e.g. {@code count}), the value-changing flag causes
+     * {@code getKeyChangingParentNode} to return {@code null} for each downstream repartition
+     * node — meaning neither repartition topic is placed in the shared "key-changing parent"
+     * group, so the two repartition topics are kept separate (correct behaviour). Without the
+     * flag, both repartition topics would share the {@code selectKey} as their parent and be
+     * incorrectly merged into one topic by the topology optimiser.
+     */
+    @Test
+    public void shouldAlwaysMarkValueChangingOperationForProcessFixedKey() {
+        // Two branches fan out from the same selectKey node.
+        // Each branch applies a processFixedKey (value-changing) and then aggregates.
+        // With OPTIMIZE, processFixedKey's value-changing flag prevents the optimiser from
+        // merging the two downstream repartition topics into one shared topic.
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+
+        final KStream<String, String> afterSelectKey = streamsBuilder
+            .stream("input", Consumed.with(Serdes.String(), Serdes.String()))
+            .selectKey((k, v) -> v);     // key-changing: sets repartitionRequired = true
+
+        afterSelectKey
+            .processFixedKey(() -> new ContextualFixedKeyProcessor<String, String, String>() {
+                @Override
+                public void process(final FixedKeyRecord<String, String> record) {
+                    context().forward(record.withValue("A:" + record.value()));
+                }
+            }, Named.as("pfk-a"))
+            .groupByKey()
+            .count(Materialized.as("count-a-store"));
+
+        afterSelectKey
+            .processFixedKey(() -> new ContextualFixedKeyProcessor<String, String, String>() {
+                @Override
+                public void process(final FixedKeyRecord<String, String> record) {
+                    context().forward(record.withValue("B:" + record.value()));
+                }
+            }, Named.as("pfk-b"))
+            .groupByKey()
+            .count(Materialized.as("count-b-store"));
+
+        final Properties optimizedProps = StreamsTestUtils.getStreamsConfig();
+        optimizedProps.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+
+        final String topologyDescription = streamsBuilder.build(optimizedProps).describe().toString();
+
+        // Both processFixedKey nodes must appear in the topology
+        assertThat(topologyDescription, containsString("pfk-a"));
+        assertThat(topologyDescription, containsString("pfk-b"));
+        // Because processFixedKey always marks as value-changing, the optimiser keeps
+        // each branch's repartition topic separate (two Source repartition lines expected)
+        final long repartitionSourceCount = topologyDescription.lines()
+            .filter(line -> line.contains("repartition") && line.trim().startsWith("Source:"))
+            .count();
+        assertThat(repartitionSourceCount, is(2L));
     }
 
     @Test
