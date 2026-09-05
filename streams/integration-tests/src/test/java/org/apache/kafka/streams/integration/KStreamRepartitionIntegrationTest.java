@@ -37,6 +37,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
@@ -83,6 +84,7 @@ import static org.apache.kafka.streams.KafkaStreams.State.RUNNING;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -786,6 +788,49 @@ public class KStreamRepartitionIntegrationTest {
 
         assertTrue(topicExists(repartitionTopicName));
         assertEquals(2, getNumberOfPartitionsForTopic(repartitionTopicName));
+    }
+
+    @ParameterizedTest
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldNotRepartitionWhenMarkedAsPartitioned(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
+        final String keyChangedName = "new-key";
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+            )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+               .selectKey((k, v) -> k + ":" + v, Named.as(keyChangedName))
+               .markAsPartitioned()
+               .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+               .count()
+               .toStream()
+               .to(outputTopic);
+
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
+
+        validateReceivedMessages(
+            new StringDeserializer(),
+            new LongDeserializer(),
+            Arrays.asList(
+                new KeyValue<>("1:A", 1L),
+                new KeyValue<>("2:B", 1L)
+            )
+        );
+
+        final String topology = builder.build().describe().toString();
+        final String repartitionTopicName = toRepartitionTopicName(keyChangedName);
+
+        assertFalse(topicExists(repartitionTopicName));
+        assertEquals(0, countOccurrencesInTopology(topology, "Sink: .*" + keyChangedName + "-repartition.*"));
+        assertEquals(1, countOccurrencesInTopology(topology, "<-- " + keyChangedName + "\n"));
     }
 
     private int getNumberOfPartitionsForTopic(final String topic) throws Exception {

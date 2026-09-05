@@ -529,6 +529,21 @@ public interface KStream<K, V> {
     KStream<K, V> repartition(final Repartitioned<K, V> repartitioned);
 
     /**
+     * Mark the {@code KStream} as partitioned to signal the stream is partitioned as intended,
+     * and does not require further repartitioning in downstream for preceding key-changing operations.
+     *
+     * <p><em>
+     *     Note that {@link KStream#markAsPartitioned()} SHOULD NOT be used with interactive query(IQ) or {@link KStream#join}.
+     *     For reasons that when repartitions happen, records are physically shuffled by a composite key defined in the stateful operation.
+     *     However, if the repartitions were cancelled, records stayed in their original partition by its original key. IQ or joins
+     *     assumes and uses the composite key instead of the original key.
+     * </em></p>
+     *
+     * @return a new, mutated {@code KStream} that will not repartition in subsequent operations.
+     */
+    KStream<K, V> markAsPartitioned();
+
+    /**
      * Materialize this stream to a topic.
      * The topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).

@@ -23,17 +23,22 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Repartitioned;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -53,8 +58,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.TreeMap;
 
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -172,5 +180,67 @@ public class KStreamRepartitionTest {
 
     private String repartitionOutputTopic(final Properties props, final String repartitionOperationName) {
         return props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + repartitionOperationName + "-repartition";
+    }
+
+    @Test
+    public void canMarkAsPartitionedWhenKeyNotChanging() {
+        final KStream<Integer, String> notMarked = builder.<Integer, String>stream(inputTopic).mapValues(v -> v + ":" + v);
+        final String topologyNotMarked = builder.build().describe().toString();
+        notMarked.markAsPartitioned();
+        final String topologyMarked = builder.build().describe().toString();
+        assertEquals(topologyNotMarked, topologyMarked);
+    }
+
+    @Test
+    public void canMarkAsPartitionedWhenKeyChanging() {
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .selectKey((k, v) -> k + ":" +  v)
+            .markAsPartitioned()
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .count(Materialized.as("test-count-store"));
+        final Topology topology = builder.build();
+        assertThat(topology.describe().toString(), not(containsString("repartition")));
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+            final TestInputTopic<Integer, String> testInputTopic = driver.createInputTopic(inputTopic, Serdes.Integer().serializer(), Serdes.String().serializer());
+
+            final int expectedCount = 2;
+            for (int i = 0; i < expectedCount; i++) {
+                testInputTopic.pipeInput(123, "foo", Instant.ofEpochMilli(10 + i));
+            }
+
+            for (final String name : driver.producedTopicNames()) {
+                assertThat(name, not(containsString("repartition")));
+            }
+
+            assertEquals((long) expectedCount, driver.getKeyValueStore("test-count-store").get("123:foo"));
+        }
+    }
+
+    @Test
+    public void shouldOnlyMarkAsPartitionedOnBranch() {
+        final KStream<String, String> notMarkedLeft = builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .map((k, v) -> KeyValue.pair(k + ":" +  v, v));
+        final KStream<String, String> right = builder.stream("test-right-on-new-key", Consumed.with(Serdes.String(), Serdes.String()));
+
+        // Branch with mark as partitioned to count
+        final String countName = "test-count";
+        notMarkedLeft
+            .markAsPartitioned()
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()).withName(countName))
+            .count(Materialized.as("test-count-store"));
+        
+        // Branch without mark as partitioned to join
+        final String joinName = "test-join";
+        notMarkedLeft.join(
+            right, 
+            (l, r) -> l + "-" + r, 
+            JoinWindows.of(Duration.ofSeconds(10)), 
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName(joinName)
+        );
+
+        final String topology = builder.build().describe().toString();
+        assertThat(topology, not(containsString(countName + "-repartition")));
+        assertThat(topology, containsString(joinName + "-left-repartition"));
     }
 }

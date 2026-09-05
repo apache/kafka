@@ -550,6 +550,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    public KStream<K, V> markAsPartitioned() {
+        if (!repartitionRequired) { 
+            return this;
+        }
+        return new KStreamImpl<>(
+            name,
+            keySerde,
+            valueSerde,
+            subTopologySourceNodes,
+            false,
+            graphNode,
+            builder
+        );
+    }
+
+    @Override
     public void to(final String topic) {
         to(new StaticTopicNameExtractor<>(topic), Produced.with(keySerde, valueSerde, null));
     }
