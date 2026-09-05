@@ -92,10 +92,10 @@ public final class ScramDelta {
                     userMap.put(userNameEntry.getKey(), userNameEntry.getValue().get());
                 } else {
                     userMap.remove(userNameEntry.getKey());
-                    if (userMap.isEmpty()) {
-                        newMechanisms.remove(mechanismChangeEntry.getKey());
-                    }
                 }
+            }
+            if (userMap.isEmpty()) {
+                newMechanisms.remove(mechanismChangeEntry.getKey());
             }
         }
         return new ScramImage(newMechanisms);
