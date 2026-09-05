@@ -235,6 +235,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldNotCommitAndThrowOnCloseDirty() {
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).close();
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -253,6 +254,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldNotThrowFromStateManagerCloseInCloseDirty() {
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         doThrow(new RuntimeException("KABOOM!")).when(stateManager).close();
 
         task = createStandbyTask();
@@ -264,6 +266,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldSuspendAndCommitBeforeCloseClean() {
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         doNothing().when(stateManager).close();
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -293,6 +296,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldThrowOnCloseCleanError() {
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         doThrow(new RuntimeException("KABOOM!")).when(stateManager).close();
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -350,6 +354,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldCloseStateManagerOnTaskCreated() {
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         doNothing().when(stateManager).close();
 
         final MetricName metricName = setupCloseTaskMetric();
@@ -392,6 +397,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldNotWipeStateDirOnDirtyCloseWithEosAndTransactionalStateStores() {
+        when(stateManager.hasRegisteredStores()).thenReturn(true);
         doNothing().when(stateManager).close();
         when(stateManager.hasCorruptedStores()).thenReturn(false);
 

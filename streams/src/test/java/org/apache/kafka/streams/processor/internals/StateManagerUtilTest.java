@@ -251,7 +251,22 @@ public class StateManagerUtilTest {
         verify(stateDirectory, never()).lock(taskId);
         verify(stateManager, never()).close();
         verify(stateManager, never()).baseDir();
-        verify(stateDirectory, never()).unlock(taskId);
+        // The lock is still released in case registration failed after this thread acquired it.
+        verify(stateDirectory).unlock(taskId);
+    }
+
+    @Test
+    public void shouldReleaseHeldLockWhenNoRegisteredStoresToClose() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.hasRegisteredStores()).thenReturn(false);
+
+        // registerStateStores() locks the state directory before registering any store, so an
+        // initialization failure can leave the lock held with an empty store set. Closing must
+        // not strand that lock, otherwise the task directory can never be re-locked or cleaned up.
+        StateManagerUtil.closeStateManager(
+                logger, "logPrefix:", false, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
+
+        verify(stateDirectory).unlock(taskId);
     }
 
     @Test

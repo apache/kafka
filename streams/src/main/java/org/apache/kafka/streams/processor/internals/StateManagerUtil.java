@@ -178,6 +178,10 @@ final class StateManagerUtil {
         // to wipe the state store, since that deletes the on-disk task directory.
         if (!wipeStateStore && !stateMgr.hasRegisteredStores()) {
             log.trace("No registered state stores to close for {} task {}; skipping lock acquisition", taskType, id);
+            // registerStateStores() locks the state directory before registering any store, so an
+            // initialization failure can leave this thread holding the lock with no stores registered.
+            // Releasing here is a no-op unless the current thread is the cached owner.
+            stateDirectory.unlock(id);
             return;
         }
 
