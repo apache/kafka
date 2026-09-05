@@ -586,9 +586,9 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
         }
     }
 
-    protected void commitSourceTask() {
+    protected void commitSourceTask(Map<Map<String, Object>, Map<String, Object>> offsets) {
         try {
-            this.task.commit();
+            this.task.commit(offsets);
         } catch (Throwable t) {
             log.error("{} Exception thrown while calling task.commit()", this, t);
         }

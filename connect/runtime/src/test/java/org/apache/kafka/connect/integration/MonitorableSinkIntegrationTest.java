@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
@@ -40,6 +41,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLA
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -68,7 +70,10 @@ public class MonitorableSinkIntegrationTest {
     @BeforeEach
     public void setup() throws InterruptedException {
         // setup Connect cluster with defaults
-        connect = new EmbeddedConnectStandalone.Builder().build();
+        final int offsetCommitIntervalMs = 100;
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Integer.toString(offsetCommitIntervalMs));
+        connect = new EmbeddedConnectStandalone.Builder().workerProps(workerProps).build();
 
         // start Connect cluster
         connect.start();
@@ -95,6 +100,7 @@ public class MonitorableSinkIntegrationTest {
 
         // set expected records to successfully reach the task
         connectorHandle.taskHandle(TASK_ID).expectedRecords(NUM_RECORDS_PRODUCED);
+        connectorHandle.taskHandle(TASK_ID).expectedCommits(NUM_RECORDS_PRODUCED);
 
         connect.configureConnector(CONNECTOR_NAME, props);
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
@@ -119,6 +125,7 @@ public class MonitorableSinkIntegrationTest {
 
         // wait for records to reach the task
         connectorHandle.taskHandle(TASK_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
+        connectorHandle.taskHandle(TASK_ID).awaitCommits(CONSUME_MAX_DURATION_MS);
 
         // check task metric
         metrics = connect.connectMetrics().metrics().metrics();
