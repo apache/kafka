@@ -44,6 +44,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -583,6 +584,27 @@ public class MeteredWindowStoreTest {
         }
 
         assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+    }
+
+    @Test
+    public void shouldTrackOldestOpenIteratorWhenDifferentIteratorTypesOpenedInSameMillisecond() {
+        when(innerStoreMock.all()).thenReturn(KeyValueIterators.emptyIterator());
+        when(innerStoreMock.fetch(KEY_BYTES, 1, 1)).thenReturn(KeyValueIterators.emptyWindowStoreIterator());
+        store.init(context, store);
+
+        final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+
+        final long openTimestamp = mockTime.milliseconds();
+        // all() and fetch() return different MeteredIterator implementations that share one openIterators set
+        final KeyValueIterator<Windowed<String>, String> windowedIterator = store.all();
+        final WindowStoreIterator<String> timeRangeIterator = store.fetch(KEY, ofEpochMilli(1), ofEpochMilli(1));
+
+        windowedIterator.close();
+
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(openTimestamp));
+
+        timeRangeIterator.close();
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
     }
 
     @SuppressWarnings("unchecked")
