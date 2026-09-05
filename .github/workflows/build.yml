@@ -176,6 +176,46 @@ jobs:
       - name: Verify license file
         run: python committer-tools/verify_license.py --skip-build
 
+  api-checker:
+    needs: [configure, validate]
+    if: ${{ ! needs.configure.outputs.is-draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: API Checker Java 25
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: ${{ needs.configure.outputs.sha }}
+
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: 25
+          gradle-cache-read-only: ${{ !inputs.is-trunk }}
+          gradle-cache-write-only: ${{ inputs.is-trunk }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+
+      - name: Run API checker checks
+        run: |
+          ./gradlew --no-build-cache --continue --no-scan \
+            :api-checker:core:check \
+            :api-checker:gradle-plugins:check \
+            :api-checker:maven-plugin:check
+
+      - name: Archive API checker reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-checker-reports-java-25
+          path: |
+            api-checker/**/build/reports/**
+            api-checker/**/build/test-results/**/*.xml
+          compression-level: 9
+          if-no-files-found: ignore
+
   test:
     needs: [configure, validate, load-catalog]
     if: ${{ ! needs.configure.outputs.is-draft }}
@@ -368,7 +408,7 @@ jobs:
 
   checks-complete:
     name: "CI checks completed"
-    needs: [configure, validate, test]
+    needs: [configure, validate, test, api-checker]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -383,7 +423,7 @@ jobs:
           exit 1
       - name: Check Dependency Outcomes
         run: |
-          if [[ "${{ needs.validate.result }}" == "success" && "${{ needs.test.result }}" == "success" ]]; then
+          if [[ "${{ needs.validate.result }}" == "success" && "${{ needs.test.result }}" == "success" && "${{ needs.api-checker.result }}" == "success" ]]; then
             echo "Required jobs completed successfully!"
             exit 0
           else
