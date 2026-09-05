@@ -500,6 +500,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
         warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role. $extraMessage")
       }
     }
+    def warnIfDynamicQuotasInStaticConfig(): Unit = {
+      QuotaConfig.DYNAMIC_ONLY_BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
+        if (originals.containsKey(configName)) {
+          warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
+        }
+      }
+    }
     if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
@@ -606,6 +613,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
     require(principalBuilderClass != null, s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass),
       s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must implement KafkaPrincipalSerde")
+
+    warnIfDynamicQuotasInStaticConfig()
   }
 
   /**
