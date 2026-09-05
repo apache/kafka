@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * The assignment configurations for a streams group.
@@ -52,20 +53,18 @@ public record AssignmentConfigsImpl(
     }
 
     /**
-     * Converts the raw assignment configs computed for the group into the typed configs passed to the assignor.
+     * Converts the raw assignment configs recorded for the group into the typed configs passed to the assignor.
      */
     public static AssignmentConfigsImpl fromMap(Map<String, String> configs) {
-        // The map is empty when it was replayed from a group metadata record written before the last assignment
-        // configs were persisted.
-        if (configs.isEmpty()) {
-            return DEFAULT;
-        }
-        // The rack-aware assignment tags are only recorded when any are configured, so an absent value means the
-        // configuration is at its default.
-        String rackAwareAssignmentTags = configs.getOrDefault(
-            RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT);
+        // Configs are only recorded when set, so every absent key means the configuration is at its default.
+        String numStandbyReplicasConfig = configs.get(NUM_STANDBY_REPLICAS_CONFIG);
+        int numStandbyReplicas = numStandbyReplicasConfig != null
+            ? Integer.parseInt(numStandbyReplicasConfig)
+            : GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT;
+        String rackAwareAssignmentTags = configs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+            GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT);
         return new AssignmentConfigsImpl(
-            Integer.parseInt(configs.get(NUM_STANDBY_REPLICAS_CONFIG)),
+            numStandbyReplicas,
             parseRackAwareAssignmentTags(rackAwareAssignmentTags)
         );
     }
@@ -76,6 +75,19 @@ public record AssignmentConfigsImpl(
      */
     private static List<String> parseRackAwareAssignmentTags(String rackAwareAssignmentTags) {
         return rackAwareAssignmentTags.isEmpty() ? List.of() : List.of(rackAwareAssignmentTags.split(","));
+    }
+
+    /**
+     * Converts the typed configs into the raw configs recorded for the group; the inverse of {@link #fromMap(Map)}.
+     */
+    public static Map<String, String> toMap(AssignmentConfigs assignmentConfigs) {
+        // The rack-aware assignment tags are only recorded when any are configured, matching what fromMap expects.
+        Map<String, String> configs = new TreeMap<>();
+        configs.put(NUM_STANDBY_REPLICAS_CONFIG, Integer.toString(assignmentConfigs.numStandbyReplicas()));
+        if (!assignmentConfigs.rackAwareAssignmentTags().isEmpty()) {
+            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", assignmentConfigs.rackAwareAssignmentTags()));
+        }
+        return configs;
     }
 
     /**
