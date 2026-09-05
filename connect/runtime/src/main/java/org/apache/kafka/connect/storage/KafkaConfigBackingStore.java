@@ -544,10 +544,26 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         log.debug("Removing connector configuration for connector '{}'", connector);
         try {
             Timer timer = time.timer(READ_WRITE_TOTAL_TIMEOUT_MS);
-            List<ProducerKeyValue> keyValues = List.of(
-                    new ProducerKeyValue(CONNECTOR_KEY(connector), null),
-                    new ProducerKeyValue(TARGET_STATE_KEY(connector), null)
-            );
+            List<ProducerKeyValue> keyValues = new ArrayList<>();
+            
+            // Tombstone connector config and target state
+            keyValues.add(new ProducerKeyValue(CONNECTOR_KEY(connector), null));
+            keyValues.add(new ProducerKeyValue(TARGET_STATE_KEY(connector), null));
+            
+            // KAFKA-17676: Also tombstone all task configs to prevent orphaned records
+            // This ensures clean deletion and prevents issues when connector is recreated
+            Integer taskCount = connectorTaskCounts.get(connector);
+            if (taskCount != null) {
+                for (int i = 0; i < taskCount; i++) {
+                    ConnectorTaskId taskId = new ConnectorTaskId(connector, i);
+                    log.debug("Tombstoning task configuration for task '{}'", taskId);
+                    keyValues.add(new ProducerKeyValue(TASK_KEY(taskId), null));
+                }
+            }
+            
+            // Also tombstone the commit record to clean up completely
+            keyValues.add(new ProducerKeyValue(COMMIT_TASKS_KEY(connector), null));
+            
             sendPrivileged(keyValues, timer);
 
             configLog.readToEnd().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
