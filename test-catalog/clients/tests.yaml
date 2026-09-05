@@ -4875,7 +4875,10 @@ org.apache.kafka.common.requests.RequestResponseTest:
 org.apache.kafka.common.requests.RequestUtilsTest:
 - testIsFatalException
 org.apache.kafka.common.requests.StreamsGroupHeartbeatRequestTest:
+- testBuildClearsOwnedWarmupTasksForVersion0
 - testBuildClearsTaskOffsetsForVersion0
+- testBuildDoesNotReportOwnedWarmupTasksWhenAssignmentIsNotBeingReported
+- testBuildKeepsOwnedWarmupTasksForVersion1
 - testBuildKeepsTaskOffsetsForVersion1
 org.apache.kafka.common.requests.StreamsGroupHeartbeatResponseTest:
 - testAcceptableRecoveryLagFieldVersionCompatibility
