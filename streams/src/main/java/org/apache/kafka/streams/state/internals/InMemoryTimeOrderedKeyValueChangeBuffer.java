@@ -52,11 +52,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -87,7 +85,8 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     private final Map<Bytes, BufferKey> index = new HashMap<>();
     private final TreeMap<BufferKey, BufferValue> sortedMap = new TreeMap<>();
 
-    private final Set<Bytes> dirtyKeys = new HashSet<>();
+    // Dirty key -> record context of its row, captured before eviction so tombstones stay self-describing.
+    private final Map<Bytes, ProcessorRecordContext> dirtyKeys = new HashMap<>();
     private final String storeName;
     private final boolean loggingEnabled;
 
@@ -269,13 +268,13 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         if (loggingEnabled) {
             // counting on this getting called before the record collector's flush
-            for (final Bytes key : dirtyKeys) {
-
+            for (final Map.Entry<Bytes, ProcessorRecordContext> entry : dirtyKeys.entrySet()) {
+                final Bytes key = entry.getKey();
                 final BufferKey bufferKey = index.get(key);
 
                 if (bufferKey == null) {
-                    // The record was evicted from the buffer. Send a tombstone.
-                    logTombstone(key);
+                    // The record was evicted from the buffer. Send a tombstone with the evicted row's timestamp/headers.
+                    logTombstone(key, entry.getValue());
                 } else {
                     final BufferValue value = sortedMap.get(bufferKey);
 
@@ -338,14 +337,17 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         }
     }
 
-    private void logTombstone(final Bytes key) {
+    private void logTombstone(final Bytes key, final ProcessorRecordContext recordContext) {
+        // Fall back to no timestamp/headers if the context is missing.
+        final Headers headers = recordContext == null ? null : recordContext.headers();
+        final Long timestamp = recordContext == null ? null : recordContext.timestamp();
         ((RecordCollector.Supplier) context).recordCollector().send(
             changelogTopic,
             key,
             null,
-            null,
+            headers,
             partition,
-            null,
+            timestamp,
             KEY_SERIALIZER,
             VALUE_SERIALIZER,
             null,
@@ -508,7 +510,8 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                 index.remove(next.getKey().key());
 
                 if (loggingEnabled) {
-                    dirtyKeys.add(next.getKey().key());
+                    // Keep the evicted row's context for the tombstone.
+                    dirtyKeys.put(next.getKey().key(), bufferValue.context());
                 }
 
                 memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
@@ -730,7 +733,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             new BufferValue(serializedPriorValue, oldValue, newValue, recordContext)
         );
         if (loggingEnabled) {
-            dirtyKeys.add(serializedKey);
+            dirtyKeys.put(serializedKey, recordContext);
         }
         updateBufferMetrics();
         return true;
