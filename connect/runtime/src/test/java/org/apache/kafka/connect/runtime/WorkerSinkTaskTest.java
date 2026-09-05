@@ -471,6 +471,43 @@ public class WorkerSinkTaskTest {
     }
 
     @Test
+    public void testPreCommitFailureClearsPendingMessageBatch() {
+        createTask(initialState);
+        expectTaskGetTopic();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(expectConsumerPoll(0));
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        doNothing()
+                .doThrow(new RetriableException("put failed"))
+                .doNothing()
+                .when(sinkTask).put(anyList());
+
+        workerTask.iteration(); // Initial assignment
+        workerTask.iteration(); // The first delivery is retriable and remains in messageBatch
+
+        when(sinkTask.preCommit(anyMap())).thenThrow(new RetriableException("flush failed"));
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // Rewind before polling the same record again
+
+        final ArgumentCaptor<Collection<SinkRecord>> records = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(3)).put(records.capture());
+        assertEquals(0, records.getAllValues().get(2).size(),
+                "A failed pre-commit must discard the stale batch before the next poll");
+        assertEquals(Map.of(
+                        TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET),
+                        TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET)),
+                workerTask.currentOffsets(),
+                "A failed pre-commit must retain the last committed offsets");
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     public void testPollRedeliveryWithConsumerRebalance() {
         createTask(initialState);
