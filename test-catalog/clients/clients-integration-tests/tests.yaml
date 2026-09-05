@@ -24,6 +24,7 @@ org.apache.kafka.clients.MetadataVersionIntegrationTest:
 org.apache.kafka.clients.MetricsDuringTopicCreationDeletionTest:
 - testMetricsDuringTopicCreateDelete
 org.apache.kafka.clients.admin.AddPartitionsTest:
+- testCreatePartitions
 - testIncrementPartitions
 - testManualAssignmentOfReplicas
 - testMissingPartitionsInCreatePartitions
@@ -40,12 +41,19 @@ org.apache.kafka.clients.admin.AdminFenceProducersTest:
 - testFenceBeforeProducerCommit
 - testFenceProducerTimeoutMs
 org.apache.kafka.clients.admin.AdminMetadataTest:
+- testCreateExistingTopicsThrowTopicExistsException
+- testDeleteTopicsWithIds
+- testDeleteTopicsWithOptionTimeoutMs
 - testDescribeCluster
+- testDescribeConfigsForTopic
+- testDescribeLogDirs
 - testDescribeNonExistingTopic
+- testDescribeReplicaLogDirs
 - testDescribeTopicsWithIds
 - testDescribeTopicsWithNames
 - testDescribeTopicsWithOptionPartitionSizeLimitPerResponse
 - testDescribeTopicsWithOptionTimeoutMs
+- testIncludeDocumentation
 - testListNodes
 - testListNodesWithFencedBroker
 - testListTopicsWithOptionListInternal
