@@ -1676,6 +1676,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         val responseData = new InitProducerIdResponseData()
           .setProducerId(result.producerId)
           .setProducerEpoch(result.producerEpoch)
+          .setOngoingTxnProducerId(result.ongoingTxnProducerId)
+          .setOngoingTxnProducerEpoch(result.ongoingTxnProducerEpoch)
           .setThrottleTimeMs(requestThrottleMs)
           .setErrorCode(finalError.code)
         val responseBody = new InitProducerIdResponse(responseData)
