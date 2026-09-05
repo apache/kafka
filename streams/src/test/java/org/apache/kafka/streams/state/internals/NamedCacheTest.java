@@ -194,6 +194,23 @@ public class NamedCacheTest {
     }
 
     @Test
+    public void shouldNotDirtyEntryWhenReentrantPutDoesNotChangeRecord() {
+        final Bytes key = Bytes.wrap(new byte[]{0});
+        final byte[] value = new byte[]{10};
+        final List<ThreadCache.DirtyEntry> flushed = new ArrayList<>();
+        cache.setListener(entries -> {
+            flushed.addAll(entries);
+            cache.put(key, new LRUCacheEntry(value, headers, true, 0, 0, 0, "", rawKey, rawValue));
+        });
+        cache.put(key, new LRUCacheEntry(value, headers, true, 0, 0, 0, "", rawKey, rawValue));
+
+        cache.flush();
+        cache.flush();
+
+        assertEquals(1, flushed.size());
+    }
+
+    @Test
     public void shouldBeReentrantAndNotBreakLRU() {
         final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, new RecordHeaders(), true, 0, 0, 0, "", rawKey, rawValue);
         final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
