@@ -427,6 +427,7 @@ if __name__ == "__main__":
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
         logger.debug(f"::group::Found {len(quarantined_table)} quarantined tests")
+        quarantined_table.sort()
         for row in quarantined_table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
