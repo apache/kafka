@@ -21,6 +21,8 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -181,6 +183,18 @@ public class HeadersStoreUpgradeIntegrationTest {
         }
     }
 
+    private void closeAndLeaveGroupBeforeRestart() {
+        closeAndLeaveGroupBeforeRestart(null);
+    }
+
+    private void closeAndLeaveGroupBeforeRestart(final Duration timeout) {
+        // Leave the group so the immediate restart with the same application id
+        // does not wait for the previous member's session timeout.
+        kafkaStreams.close(
+            CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP)
+                .withTimeout(timeout));
+    }
+
     @Test
     public void shouldMigrateInMemoryTimestampedKeyValueStoreToTimestampedKeyValueStoreWithHeadersUsingPapi() throws Exception {
         shouldMigrateTimestampedKeyValueStoreToTimestampedKeyValueStoreWithHeadersUsingPapi(false);
@@ -205,7 +219,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processKeyValueAndVerifyTimestampedValue("key2", "value2", 22L);
         processKeyValueAndVerifyTimestampedValue("key3", "value3", 33L);
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         buildAndStart(
@@ -245,7 +259,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processKeyValueAndVerifyTimestampedValue("key2", "value2", 22L);
         processKeyValueAndVerifyTimestampedValue("key3", "value3", 33L);
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         buildAndStart(
@@ -300,7 +314,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processKeyValueAndVerifyValue("key3", "value3");
         final long lastUpdateKeyThree = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         buildAndStart(
@@ -340,7 +354,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processKeyValueAndVerifyValue("key2", "value2");
         processKeyValueAndVerifyValue("key3", "value3");
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         buildAndStart(
@@ -638,7 +652,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processPlainWindowedKeyValueAndVerify("key2", "value2", baseTime + 200);
         processPlainWindowedKeyValueAndVerify("key3", "value3", baseTime + 300);
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         // Restart with TimestampedWindowStoreWithHeaders
@@ -681,7 +695,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processPlainWindowedKeyValueAndVerify("key2", "value2", baseTime + 200);
         processPlainWindowedKeyValueAndVerify("key3", "value3", baseTime + 300);
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         // Restart with headers-aware builder but non-headers supplier (proxy/adapter mode)
@@ -741,7 +755,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processWindowedKeyValueAndVerifyTimestamped("key2", "value2", baseTime + 200);
         processWindowedKeyValueAndVerifyTimestamped("key3", "value3", baseTime + 300);
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         buildAndStart(
@@ -783,7 +797,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processWindowedKeyValueAndVerifyTimestamped("key2", "value2", baseTime + 200);
         processWindowedKeyValueAndVerifyTimestamped("key3", "value3", baseTime + 300);
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         // Restart with headers-aware builder but non-headers supplier (proxy/adapter mode)
@@ -1343,7 +1357,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             "Store was not populated with expected data"
         );
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
     }
 
     private long setupWindowStoreWithHeaders(final Properties props) throws Exception {
@@ -1387,7 +1401,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processKeyValueWithTimestampAndHeadersAndVerify("key1", "value1", 11L, headers, headers);
         processKeyValueWithTimestampAndHeadersAndVerify("key2", "value2", 22L, headers, headers);
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
     }
 
     // ==================== Session Store Tests ====================
@@ -1423,7 +1437,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processSessionKeyValueAndVerify("key2", "value2", baseTime + 200);
         processSessionKeyValueAndVerify("key3", "value3", baseTime + 300);
 
-        kafkaStreams.close(Duration.ofSeconds(5L));
+        closeAndLeaveGroupBeforeRestart(Duration.ofSeconds(5L));
         kafkaStreams = null;
 
         // Phase 2: Restart with SessionStoreWithHeaders (headers-aware supplier)
@@ -1476,7 +1490,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         processSessionKeyValueAndVerify("key2", "value2", baseTime + 200);
         processSessionKeyValueAndVerify("key3", "value3", baseTime + 300);
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         // Phase 2: Restart with headers-aware builder but non-headers supplier (proxy/adapter mode)
@@ -1759,7 +1773,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             "Store was not populated with expected data"
         );
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
     }
 
     // ==================== Session Store Processors ====================
