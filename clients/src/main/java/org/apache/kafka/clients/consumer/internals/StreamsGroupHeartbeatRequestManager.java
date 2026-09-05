@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -659,6 +660,21 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private void onSuccessResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
         final StreamsGroupHeartbeatResponseData data = response.data();
+
+        final List<String> unknownStatuses = unknownStatuses(data.status());
+        if (!unknownStatuses.isEmpty()) {
+            final String errorMessage = String.format(
+                "The group coordinator returned status %s in the Streams group heartbeat response, which this client "
+                    + "cannot interpret; it knows the status codes %s. A status code must not be sent to a client that "
+                    + "cannot interpret it, so this is a bug on the group coordinator.",
+                unknownStatuses,
+                StreamsGroupHeartbeatResponse.Status.knownCodes()
+            );
+            logger.error(errorMessage);
+            handleFatalFailure(new KafkaException(errorMessage));
+            return;
+        }
+
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
@@ -693,6 +709,17 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         maybeLogStatuses(data.status());
 
         membershipManager.onHeartbeatSuccess(response);
+    }
+
+    private static List<String> unknownStatuses(final List<StreamsGroupHeartbeatResponseData.Status> statuses) {
+        if (statuses == null) {
+            return List.of();
+        }
+        return statuses.stream()
+            .filter(status -> !StreamsGroupHeartbeatResponse.Status.isKnownCode(status.statusCode()))
+            .sorted(Comparator.comparing(StreamsGroupHeartbeatResponseData.Status::statusCode))
+            .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
+            .collect(Collectors.toList());
     }
 
     private void maybeLogStatuses(final List<StreamsGroupHeartbeatResponseData.Status> statuses) {
