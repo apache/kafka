@@ -53,6 +53,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
@@ -1906,6 +1908,28 @@ public class StreamsConfigTest {
         props.put(TRANSACTIONAL_STATE_STORES_CONFIG, true);
         streamsConfig = new StreamsConfig(props);
         assertTrue(streamsConfig.getBoolean(TRANSACTIONAL_STATE_STORES_CONFIG));
+    }
+
+    /**
+     * Validates config/streams.properties file to avoid getting out of sync with StreamsConfig.
+     */
+    @Test
+    public void testValidateConfigPropertiesFile() {
+        final Properties fileProps = new Properties();
+
+        try (InputStream inputStream = new FileInputStream(System.getProperty("user.dir") + "/../config/streams.properties")) {
+            fileProps.load(inputStream);
+        } catch (final Exception e) {
+            fail("Failed to load config/streams.properties file: " + e.getMessage());
+        }
+
+        final StreamsConfig config = new StreamsConfig(fileProps);
+
+        for (final String key : config.originals().keySet()) {
+            if (!StreamsConfig.configDef().configKeys().containsKey(key)) {
+                fail("Invalid configuration key: " + key);
+            }
+        }
     }
 
     static class MisconfiguredSerde implements Serde<Object> {
