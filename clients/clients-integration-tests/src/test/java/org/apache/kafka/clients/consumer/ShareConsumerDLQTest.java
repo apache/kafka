@@ -583,6 +583,8 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Raised max.message.bytes did not propagate on the DLQ topic");
         }
 
+        waitForDlqTopicConfigRefresh();
+
         try (Producer<byte[], byte[]> producer = createProducer()) {
             for (int i = 0; i < recordCount; i++) {
                 producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
@@ -884,6 +886,8 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         assertTrue(dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId) >= 1,
             "Expected at least one DLQ produce request to have been enqueued");
     }
+
+    protected void waitForDlqTopicConfigRefresh() throws InterruptedException {}
 
     // Verifies the DLQ topic was auto-created by the broker and has the DLQ-enable topic config set.
     private void verifyDlqTopicCreated(String dlqTopic) throws Exception {
