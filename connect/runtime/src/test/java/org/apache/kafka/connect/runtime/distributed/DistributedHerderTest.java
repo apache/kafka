@@ -80,6 +80,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -134,8 +135,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.AdditionalMatchers.leq;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
@@ -143,6 +146,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -806,6 +810,171 @@ public class DistributedHerderTest {
                 ),
                 stages
         );
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsets() {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        when(herder.connectorType(anyMap())).thenReturn(ConnectorType.SOURCE);
+        expectRebalance(1, List.of(), List.of(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        when(statusBackingStore.connectors()).thenReturn(Set.of());
+        expectMemberPoll();
+
+        // Initial rebalance where this member becomes the leader
+        herder.tick();
+
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+                Map.of(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue"));
+        String offsetsStatus = "The offsets for this connector have been set successfully";
+
+        // The worker writes the offsets asynchronously and completes the callback once they're durable
+        ArgumentCaptor<Callback<Message>> offsetsCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            offsetsCallback.getValue().onCompletion(null, new Message(offsetsStatus));
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), eq(initialOffsets), eq(true), offsetsCallback.capture());
+
+        doNothing().when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
+
+        expectMemberEnsureActive();
+        List<String> stages = expectRecordStages(putConnectorCallback);
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, null, initialOffsets, false, putConnectorCallback);
+        // Runs the initial herder request, which issues an asynchronous request for connector validation
+        herder.tick();
+        // Validation is complete; this tick performs the precondition checks and the offsets write, which in turn
+        // queues a third request for the config write
+        herder.tick();
+        // ...and this tick is that third request
+        herder.tick();
+
+        // The whole point of the feature: offsets must be durable before the config record makes the connector
+        // startable, otherwise it could begin running from the wrong position
+        InOrder inOrder = inOrder(worker, configBackingStore);
+        inOrder.verify(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), eq(initialOffsets), eq(true), any());
+        inOrder.verify(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
+
+        ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, List.of(), ConnectorType.SOURCE)
+                .withOffsetsStatus(offsetsStatus);
+        verify(putConnectorCallback).onCompletion(isNull(), eq(new Herder.Created<>(true, info)));
+
+        // Distinct because the mocked worker completes the offsets callback synchronously, while the "setting initial
+        // offsets" stage is still open, so that stage is reported both to the in-progress request and to the config
+        // write request queued from within it. The real worker completes on another thread once the stage has closed.
+        assertEquals(
+                List.of(
+                        "ensuring membership in the cluster",
+                        "setting initial offsets for connector " + CONN2,
+                        "writing a config for connector " + CONN2 + " to the config topic"
+                ),
+                stages.stream().distinct().toList()
+        );
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsNullOffsetValue() {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, List.of(), List.of(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        when(statusBackingStore.connectors()).thenReturn(Set.of());
+        expectMemberPoll();
+
+        herder.tick();
+
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        expectMemberEnsureActive();
+        expectRecordStages(putConnectorCallback);
+
+        // A null offset means "delete this partition's offset" when altering, but is meaningless on create: the wipe
+        // has already removed every partition. Rejected up front so that nothing destructive has happened yet.
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets = new HashMap<>();
+        initialOffsets.put(Map.of("partitionKey", "partitionValue"), null);
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, null, initialOffsets, false, putConnectorCallback);
+        herder.tick();
+        herder.tick();
+
+        ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
+        verify(putConnectorCallback).onCompletion(error.capture(), isNull());
+        assertInstanceOf(BadRequestException.class, error.getValue());
+
+        // Neither the offsets nor the config may be touched by a request that failed validation
+        verify(worker, never()).modifyConnectorOffsets(anyString(), anyMap(), anyMap(), anyBoolean(), any());
+        verify(configBackingStore, never()).putConnectorConfig(anyString(), anyMap(), any());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsConfigWriteFails() {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, List.of(), List.of(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        when(statusBackingStore.connectors()).thenReturn(Set.of());
+        expectMemberPoll();
+
+        herder.tick();
+
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+                Map.of(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue"));
+
+        ArgumentCaptor<Callback<Message>> offsetsCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            offsetsCallback.getValue().onCompletion(null, new Message("The offsets for this connector have been set successfully"));
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), eq(initialOffsets), eq(true), offsetsCallback.capture());
+
+        // The offsets land, but the config write then fails
+        doThrow(new ConnectException("Test exception")).when(configBackingStore)
+                .putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
+
+        // If the config write fails, the offsets written in the previous step are wiped as cleanup
+        ArgumentCaptor<Callback<Message>> wipeCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            wipeCallback.getValue().onCompletion(null, new Message("The offsets for this connector have been reset successfully"));
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), isNull(), wipeCallback.capture());
+
+        expectMemberEnsureActive();
+        expectRecordStages(putConnectorCallback);
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, null, initialOffsets, false, putConnectorCallback);
+        herder.tick();
+        herder.tick();
+        herder.tick();
+
+        // The offsets that were just written must be wiped back out, so a failed create leaves nothing behind
+        InOrder inOrder = inOrder(worker, configBackingStore);
+        inOrder.verify(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), eq(initialOffsets), eq(true), any());
+        inOrder.verify(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
+        inOrder.verify(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), isNull(), any());
+
+        // The caller sees the original config-write failure, not the outcome of the cleanup
+        ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
+        verify(putConnectorCallback).onCompletion(error.capture(), isNull());
+        assertInstanceOf(ConnectException.class, error.getValue());
     }
 
     @Test

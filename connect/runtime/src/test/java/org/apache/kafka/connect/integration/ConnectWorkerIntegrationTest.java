@@ -753,6 +753,95 @@ public class ConnectWorkerIntegrationTest {
     }
 
     @Test
+    public void testCreateSourceConnectorWithInitialOffsets() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+        // Configure the connector to produce a maximum of 10 messages
+        props.put("max.messages", "10");
+        props.put(TASKS_MAX_CONFIG, "1");
+
+        // Create the connector already positioned at offset 5. The TestableSourceConnector produces messages with
+        // sequence numbers starting after the supplied offset, so it should produce only the last 5 of its 10 messages.
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            props,
+            null,
+            List.of(new ConnectorOffset(Map.of("task.id", CONNECTOR_NAME + "-0"), Map.of("saved", 5L)))
+        );
+        String response = connect.configureConnector(createConnectorRequest);
+        // The creation response must carry offsets_status because initial_offsets was supplied
+        assertTrue(response.contains("offsets_status"),
+            "Create response should include offsets_status when initial_offsets is supplied: " + response);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+
+        // Verify that only 5 messages were produced, i.e. the connector started from the supplied initial offset
+        // rather than from the beginning. We consume 5 first to ensure at least 5 are available before counting all.
+        long timeoutMs = TimeUnit.SECONDS.toMillis(10);
+        connect.kafka().consume(5, timeoutMs, TOPIC_NAME);
+        assertEquals(5, connect.kafka().consumeAll(timeoutMs, TOPIC_NAME).count());
+    }
+
+    @Test
+    public void testCreateSinkConnectorWithInitialOffsets() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        // Create topic and produce 10 messages
+        connect.kafka().createTopic(TOPIC_NAME);
+        for (int i = 0; i < 10; i++) {
+            connect.kafka().produce(TOPIC_NAME, "Message " + i);
+        }
+
+        Map<String, String> props = defaultSinkConnectorProps(TOPIC_NAME);
+        props.put(TASKS_MAX_CONFIG, "1");
+
+        // This will cause the connector task to fail if it encounters a record with offset < 5
+        TaskHandle taskHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME).taskHandle(CONNECTOR_NAME + "-0",
+            sinkRecord -> {
+                if (sinkRecord.kafkaOffset() < 5L) {
+                    throw new ConnectException("Unexpected record encountered: " + sinkRecord);
+                }
+            });
+        // We produced 10 records and create the connector already positioned at offset 5, so we expect only the last 5 to be consumed
+        taskHandle.expectedRecords(5);
+
+        Map<String, Object> partition = new HashMap<>();
+        partition.put(SinkUtils.KAFKA_TOPIC_KEY, TOPIC_NAME);
+        partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            props,
+            null,
+            List.of(new ConnectorOffset(partition, Map.of(SinkUtils.KAFKA_OFFSET_KEY, 5)))
+        );
+        connect.configureConnector(createConnectorRequest);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+
+        taskHandle.awaitRecords(TimeUnit.SECONDS.toMillis(10));
+
+        // Confirm that the task is still running (i.e. it didn't fail due to encountering any records with offset < 5)
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+    }
+
+    @Test
     public void testPatchConnectorConfig() throws Exception {
         connect = connectBuilder.build();
         // start the clusters

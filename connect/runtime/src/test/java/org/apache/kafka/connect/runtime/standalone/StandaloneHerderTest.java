@@ -68,6 +68,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -94,12 +95,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -264,6 +268,56 @@ public class StandaloneHerderTest {
             connectorInfo.result()
         );
         verify(loaderSwap).close();
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsets() throws Exception {
+        initialize(true);
+        Map<String, String> config = connectorConfig(SourceSink.SOURCE);
+        expectConfigValidation(SourceSink.SOURCE, config);
+        expectAdd(SourceSink.SOURCE);
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+            Map.of(Map.of("filename", "test.txt"), Map.of("position", 4096L));
+        String offsetsStatus = "The offsets for this connector have been set successfully";
+
+        // The worker writes the offsets asynchronously and completes the callback once they're durable
+        doAnswer(invocation -> {
+            invocation.getArgument(4, Callback.class).onCompletion(null, new Message(offsetsStatus));
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), eq(initialOffsets), eq(true), any());
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, null, initialOffsets, false, createCallback);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
+
+        // The offsets must be written before the connector is started, otherwise a running connector could read from
+        // the wrong position before its initial offsets land
+        InOrder inOrder = inOrder(worker);
+        inOrder.verify(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), eq(initialOffsets), eq(true), any());
+        inOrder.verify(worker).startConnector(eq(CONNECTOR_NAME), eq(config), any(), eq(herder), eq(TargetState.STARTED), any());
+
+        assertEquals(createdInfo(SourceSink.SOURCE).withOffsetsStatus(offsetsStatus), connectorInfo.result());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsNullOffsetValue() {
+        initialize(false);
+        Map<String, String> config = connectorConfig(SourceSink.SOURCE);
+        expectConfigValidation(SourceSink.SOURCE, config);
+
+        // A null offset value is meaningless on create (the wipe has already removed every partition) and is rejected
+        // before anything destructive happens
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets = new HashMap<>();
+        initialOffsets.put(Map.of("filename", "test.txt"), null);
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, null, initialOffsets, false, createCallback);
+
+        ExecutionException e = assertThrows(ExecutionException.class,
+            () -> createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
+        assertInstanceOf(BadRequestException.class, e.getCause());
+
+        // Neither the offsets nor the config may be touched by a request that failed validation
+        verify(worker, never()).modifyConnectorOffsets(anyString(), anyMap(), anyMap(), anyBoolean(), any());
     }
 
     @Test
