@@ -357,6 +357,37 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
+    public void shouldAssignTasksToClientWithPreviousWarmupTasks() {
+        // Task 8 is not owned as an active task by anybody, and member3 holds it as a warm-up task, i.e. it has
+        // already been restoring the task's state. member3 must get the task even though member4 carries fewer tasks
+        // and would win a purely load-based assignment.
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
+            mkMap(mkEntry("test-subtopology", Set.of(0, 1, 2))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
+            mkMap(mkEntry("test-subtopology", Set.of(3, 4, 5))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3",
+            mkMap(mkEntry("test-subtopology", Set.of(6, 7))), Map.of(),
+            mkMap(mkEntry("test-subtopology", Set.of(8))));
+        final MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadata("process4",
+            mkMap(mkEntry("test-subtopology", Set.of(9))), Map.of());
+        Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4));
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(12, true, List.of("test-subtopology"))
+        );
+
+        final MemberAssignment testMember3 = result.members().get("member3");
+        assertNotNull(testMember3);
+        assertEquals(Set.of(6, 7, 8), testMember3.activeTasks().get("test-subtopology"));
+        final MemberAssignment testMember4 = result.members().get("member4");
+        assertNotNull(testMember4);
+        assertEquals(Set.of(9, 10, 11), testMember4.activeTasks().get("test-subtopology"));
+    }
+
+    @Test
     public void shouldNotAssignStandbyTasksToClientWithPreviousStandbyTasksAndCurrentActiveTasks() {
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))));
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(1))));
@@ -1661,6 +1692,15 @@ public class StickyTaskAssignorTest {
         final Map<String, Set<Integer>> prevActiveTasks,
         final Map<String, Set<Integer>> prevStandbyTasks
     ) {
+        return createMemberMetadata(processId, prevActiveTasks, prevStandbyTasks, Map.of());
+    }
+
+    private MemberMetadataAndStateImpl createMemberMetadata(
+        final String processId,
+        final Map<String, Set<Integer>> prevActiveTasks,
+        final Map<String, Set<Integer>> prevStandbyTasks,
+        final Map<String, Set<Integer>> prevWarmupTasks
+    ) {
         return new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
@@ -1668,7 +1708,7 @@ public class StickyTaskAssignorTest {
             Map.of(),
             prevActiveTasks,
             prevStandbyTasks,
-            Map.of(),
+            prevWarmupTasks,
             Map.of(),
             Map.of());
     }
