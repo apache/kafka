@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 
@@ -148,7 +149,10 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
                     continue;
                 }
                 Map<String, T> origKey = serializedToOriginal.get(rawEntry.getKey());
-                SchemaAndValue deserializedSchemaAndValue = valueConverter.toConnectData(namespace, rawEntry.getValue() != null ? rawEntry.getValue().array() : null);
+                // ByteBuffer.array() ignores position/limit/arrayOffset and
+                // throws for direct buffers; deserialize the buffer's logical
+                // remaining bytes instead.
+                SchemaAndValue deserializedSchemaAndValue = valueConverter.toConnectData(namespace, rawEntry.getValue() != null ? Utils.toArray(rawEntry.getValue()) : null);
                 Object deserializedValue = deserializedSchemaAndValue.value();
                 OffsetUtils.validateFormat(deserializedValue);
 
