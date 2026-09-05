@@ -3730,7 +3730,15 @@ public abstract class ConsumerCoordinatorTest {
             // Imitating heartbeat thread that clears generation data.
             coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "Clear generation data.");
 
-            assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+            // This member uses static membership, so member ID should not be reset.
+            assertEquals(
+                new AbstractCoordinator.Generation(
+                    AbstractCoordinator.Generation.NO_GENERATION.generationId,
+                    memberId,
+                    null
+                ),
+                coordinator.generation()
+            );
 
             client.respond(syncGroupResponse(partitions, Errors.NONE));
 
