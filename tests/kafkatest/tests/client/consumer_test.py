@@ -69,7 +69,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 self.await_all_members(consumer)
                 self.await_consumed_messages(consumer)
 
-    def setup_consumer(self, topic, **kwargs):
+    def setup_consumer(self, topic, **kwargs) -> VerifiableConsumer:
         # collect verifiable consumer events since this makes debugging much easier
         consumer = super(OffsetValidationTest, self).setup_consumer(topic, **kwargs)
         self.mark_for_collect(consumer, 'verifiable_consumer_stdout')
@@ -309,7 +309,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
         - the same group.instance.id.
         - Let normal consumers and fencing consumers start at the same time, and expect only unique consumers left.
         """
-        partition = TopicPartition(self.TOPIC, 0)
 
         producer = self.setup_producer(self.TOPIC)
 
@@ -328,9 +327,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.await_all_members_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_sec=120)
 
             num_rebalances = consumer.num_rebalances()
-            conflict_consumer.start()
             if group_protocol == consumer_group.classic_group_protocol:
                 # Classic protocol: conflicting members should join, and the initial ones with conflicting instance id should fail.
+                conflict_consumer.start()
                 self.await_members(conflict_consumer, num_conflict_consumers)
                 self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
 
@@ -339,6 +338,12 @@ class OffsetValidationTest(VerifiableConsumerTest):
                        err_msg="Timed out waiting for the fenced consumers to stop")
             else:
                 # Consumer protocol: Existing members should remain active and new conflicting ones should not be able to join.
+                conflict_consumer.start(wait_for_startup=False)
+
+                # Conflict consumers will terminate due to a fatal UnreleasedInstanceIdException error.
+                # Wait for termination to complete to prevent conflict consumers from immediately re-joining the group while existing nodes are shutting down.
+                self.await_conflict_consumers_fenced(conflict_consumer)
+
                 self.await_consumed_messages(consumer)
                 assert num_rebalances == consumer.num_rebalances(), "Static consumers attempt to join with instance id in use should not cause a rebalance"
                 try:
@@ -349,9 +354,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
                     raise
                 assert len(conflict_consumer.joined_nodes()) == 0
 
-                # Conflict consumers will terminate due to a fatal UnreleasedInstanceIdException error.
-                # Wait for termination to complete to prevent conflict consumers from immediately re-joining the group while existing nodes are shutting down.
-                self.await_conflict_consumers_fenced(conflict_consumer)
 
                 # Stop existing nodes, so conflicting ones should be able to join.
                 consumer.stop_all()
@@ -374,7 +376,11 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         else:
             consumer.start()
-            conflict_consumer.start()
+
+            if group_protocol == consumer_group.consumer_group_protocol:
+                conflict_consumer.start(wait_for_startup=False)
+            else:
+                conflict_consumer.start()
 
             wait_until(lambda: len(consumer.joined_nodes()) + len(conflict_consumer.joined_nodes()) == len(consumer.nodes),
                        timeout_sec=60,

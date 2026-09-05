@@ -271,9 +271,13 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         for node in self.nodes:
             node.version = version
 
-    def start(self, **kwargs):
+    def start(self, wait_for_startup: bool = True, **kwargs) -> None:
         super().start(**kwargs)
-        timeout_sec=kwargs.get("timeout_sec", 120)
+
+        if not wait_for_startup:
+            return
+
+        timeout_sec = kwargs.get("timeout_sec", 120)
         wait_until(lambda: len(self.started_nodes()) == len(self.nodes),
                    timeout_sec=timeout_sec,
                    err_msg="Verifiable consumer didn't finish startup in %d seconds" % timeout_sec)
