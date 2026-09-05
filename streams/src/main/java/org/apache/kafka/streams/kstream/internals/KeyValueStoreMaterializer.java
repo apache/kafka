@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilderWithHeaders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +52,12 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
-        if (supplier instanceof VersionedBytesStoreSupplier) {
+        if (supplier instanceof VersionedBytesStoreSupplier && supplier instanceof HeadersBytesStoreSupplier) {
+            builder = Stores.versionedKeyValueStoreBuilderWithHeaders(
+                    (VersionedBytesStoreSupplier) supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
+        } else if (supplier instanceof VersionedBytesStoreSupplier) {
             builder = Stores.versionedKeyValueStoreBuilder(
                     (VersionedBytesStoreSupplier) supplier,
                     materialized.keySerde(),
@@ -75,7 +81,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
         }
 
         if (materialized.cachingEnabled()) {
-            if (builder instanceof VersionedKeyValueStoreBuilder) {
+            if (builder instanceof VersionedKeyValueStoreBuilder || builder instanceof VersionedKeyValueStoreBuilderWithHeaders) {
                 LOG.info("Not enabling caching for store '{}' as versioned stores do not support caching.", supplier.name());
             } else {
                 builder.withCachingEnabled();
