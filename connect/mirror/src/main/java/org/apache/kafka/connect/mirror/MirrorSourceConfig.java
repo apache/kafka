@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 public class MirrorSourceConfig extends MirrorConnectorConfig {
@@ -116,6 +117,14 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final String OFFSET_SYNCS_TARGET_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-producer";
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
     public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
+
+    public static final String DATA_LOSS_AND_TOPIC_RESET_DETECTION_ENABLED = "data.loss.and.topic.reset.detection" + ENABLED_SUFFIX;
+    private static final String DATA_LOSS_AND_TOPIC_RESET_DETECTION_ENABLED_DOC = "Whether to fail the task with a " +
+            "DataLossException or TopicResetException when the source consumer's requested offset is no longer " +
+            "available (e.g. due to retention-based log truncation or the source topic being deleted and recreated), " +
+            "instead of MirrorMaker 2's default behavior of silently resuming from the earliest available offset. " +
+            "When enabled, the source consumer is configured with " + AUTO_OFFSET_RESET_CONFIG + "=none.";
+    public static final boolean DATA_LOSS_AND_TOPIC_RESET_DETECTION_ENABLED_DEFAULT = false;
 
     public MirrorSourceConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, props);
@@ -223,6 +232,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     List<String> metricNamesFormats() {
         return getList(METRIC_NAMES_FORMAT);
+    }
+
+    boolean dataLossAndTopicResetDetectionEnabled() {
+        return getBoolean(DATA_LOSS_AND_TOPIC_RESET_DETECTION_ENABLED);
     }
 
     private static ConfigDef defineSourceConfig(ConfigDef baseConfig) {
@@ -348,6 +361,13 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         ConfigDef.ValidList.in(false, METRIC_NAMES_LEGACY, METRIC_NAMES_NEW),
                         ConfigDef.Importance.LOW,
                         METRIC_NAMES_FORMAT_DOC
+                )
+                .define(
+                        DATA_LOSS_AND_TOPIC_RESET_DETECTION_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        DATA_LOSS_AND_TOPIC_RESET_DETECTION_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        DATA_LOSS_AND_TOPIC_RESET_DETECTION_ENABLED_DOC
                 );
     }
 
