@@ -2518,6 +2518,68 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testRetriableAddPartitionsToTxnTimesOut() throws Exception {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+        assertFalse(responseFuture.isDone());
+
+        // Keep feeding retriable errors. The Sender sleeps retryBackoffMs (100 ms) on each
+        // retry, so after enough iterations MockTime will exceed transactionTimeoutMs (1121 ms)
+        // and maybeReenqueueOrTimeout will fire an abortable TimeoutException.
+        int maxRetries = (int) (transactionTimeoutMs / DEFAULT_RETRY_BACKOFF_MS) + 5;
+        for (int i = 0; i < maxRetries; i++) {
+            prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, tp0, epoch, producerId);
+        }
+
+        long startMs = time.milliseconds();
+        for (int i = 0; i < maxRetries && !transactionManager.hasError(); i++) {
+            sender.runOnce();
+        }
+
+        assertTrue(transactionManager.hasError());
+        assertInstanceOf(TimeoutException.class, transactionManager.lastError());
+        assertTrue(time.milliseconds() - startMs >= transactionTimeoutMs,
+            "Expected MockTime to advance past transactionTimeoutMs (" + transactionTimeoutMs + " ms)");
+
+        runUntil(responseFuture::isDone);
+        assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, responseFuture::get).getCause());
+    }
+
+    @Test
+    public void testCoordinatorNotAvailableAddPartitionsToTxnTimesOut() throws Exception {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+        assertFalse(responseFuture.isDone());
+
+        int maxRetries = (int) (transactionTimeoutMs / DEFAULT_RETRY_BACKOFF_MS) + 5;
+        for (int i = 0; i < maxRetries; i++) {
+            prepareAddPartitionsToTxnResponse(Errors.COORDINATOR_NOT_AVAILABLE, tp0, epoch, producerId);
+            prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+        }
+
+        long startMs = time.milliseconds();
+        for (int i = 0; i < maxRetries * 2 && !transactionManager.hasError(); i++) {
+            sender.runOnce();
+        }
+
+        assertTrue(transactionManager.hasError());
+        assertInstanceOf(TimeoutException.class, transactionManager.lastError());
+        assertTrue(time.milliseconds() - startMs >= transactionTimeoutMs,
+            "Expected MockTime to advance past transactionTimeoutMs (" + transactionTimeoutMs + " ms)");
+
+        runUntil(responseFuture::isDone);
+        assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, responseFuture::get).getCause());
+    }
+
+    @Test
     public void testHandlingOfUnknownTopicPartitionErrorOnTxnOffsetCommit() {
         testRetriableErrorInTxnOffsetCommit(Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
