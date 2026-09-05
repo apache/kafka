@@ -1510,46 +1510,51 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
-            maybeFatalException.ifPresent(metadata::fatalError);
-            metadata.failedUpdate(now);
-            inProgress = null;
+            try {
+                maybeFatalException.ifPresent(metadata::fatalError);
+                metadata.failedUpdate(now);
+            } finally {
+                inProgress = null;
+            }
         }
 
         @Override
         public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
-            // If any partition has leader with missing listeners, log up to ten of these partitions
-            // for diagnosing broker configuration issues.
-            // This could be a transient issue if listeners were added dynamically to brokers.
-            List<TopicPartition> missingListenerPartitions = response.topicMetadata().stream().flatMap(topicMetadata ->
-                topicMetadata.partitionMetadata().stream()
-                    .filter(partitionMetadata -> partitionMetadata.error == Errors.LISTENER_NOT_FOUND)
-                    .map(partitionMetadata -> new TopicPartition(topicMetadata.topic(), partitionMetadata.partition())))
-                .collect(Collectors.toList());
-            if (!missingListenerPartitions.isEmpty()) {
-                int count = missingListenerPartitions.size();
-                log.warn("{} partitions have leader brokers without a matching listener, including {}",
-                        count, missingListenerPartitions.subList(0, Math.min(10, count)));
+            try {
+                // If any partition has leader with missing listeners, log up to ten of these partitions
+                // for diagnosing broker configuration issues.
+                // This could be a transient issue if listeners were added dynamically to brokers.
+                List<TopicPartition> missingListenerPartitions = response.topicMetadata().stream().flatMap(topicMetadata ->
+                                topicMetadata.partitionMetadata().stream()
+                                        .filter(partitionMetadata -> partitionMetadata.error == Errors.LISTENER_NOT_FOUND)
+                                        .map(partitionMetadata -> new TopicPartition(topicMetadata.topic(), partitionMetadata.partition())))
+                        .collect(Collectors.toList());
+                if (!missingListenerPartitions.isEmpty()) {
+                    int count = missingListenerPartitions.size();
+                    log.warn("{} partitions have leader brokers without a matching listener, including {}",
+                            count, missingListenerPartitions.subList(0, Math.min(10, count)));
+                }
+
+                // Check if any topic's metadata failed to get updated
+                Map<String, Errors> errors = response.errors();
+                if (!errors.isEmpty())
+                    log.warn("The metadata response from the cluster reported a recoverable issue with correlation id {} : {}", requestHeader.correlationId(), errors);
+
+                if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && response.topLevelError() == Errors.REBOOTSTRAP_REQUIRED) {
+                    log.info("Rebootstrap requested by server.");
+                    initiateRebootstrap();
+                } else if (response.brokers().isEmpty()) {
+                    // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
+                    // we should retry later.
+                    log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
+                    this.metadata.failedUpdate(now);
+                } else {
+                    this.metadata.update(inProgress.requestVersion, response, inProgress.isPartialUpdate, now);
+                    metadataAttemptStartMs = Optional.empty();
+                }
+            } finally {
+                inProgress = null;
             }
-
-            // Check if any topic's metadata failed to get updated
-            Map<String, Errors> errors = response.errors();
-            if (!errors.isEmpty())
-                log.warn("The metadata response from the cluster reported a recoverable issue with correlation id {} : {}", requestHeader.correlationId(), errors);
-
-            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && response.topLevelError() == Errors.REBOOTSTRAP_REQUIRED) {
-                log.info("Rebootstrap requested by server.");
-                initiateRebootstrap();
-            } else if (response.brokers().isEmpty()) {
-                // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
-                // we should retry later.
-                log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
-                this.metadata.failedUpdate(now);
-            } else {
-                this.metadata.update(inProgress.requestVersion, response, inProgress.isPartialUpdate, now);
-                metadataAttemptStartMs = Optional.empty();
-            }
-
-            inProgress = null;
         }
 
         @Override
