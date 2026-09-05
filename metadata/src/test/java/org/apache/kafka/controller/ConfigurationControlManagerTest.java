@@ -125,6 +125,7 @@ public class ConfigurationControlManagerTest {
 
     static final ConfigResource BROKER0 = new ConfigResource(BROKER, "0");
     static final ConfigResource MYTOPIC = new ConfigResource(TOPIC, "mytopic");
+    static final ConfigResource CONTROLLER1 = new ConfigResource(ConfigResource.Type.CONTROLLER, "1");
 
     static class TestExistenceChecker implements Consumer<ConfigResource> {
         static final TestExistenceChecker INSTANCE = new TestExistenceChecker();
@@ -762,5 +763,55 @@ public class ConfigurationControlManagerTest {
         assertFalse(manager.isCordonedLogDirsInvalid(cr, "", true));
         assertTrue(manager.isCordonedLogDirsInvalid(cr, null, false));
         assertFalse(manager.isCordonedLogDirsInvalid(cr, null, true));
+    }
+
+    @Test
+    public void testIncrementalAlterControllerConfigs() {
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
+            setKafkaConfigSchema(SCHEMA).
+            build();
+
+        ControllerResult<Map<ConfigResource, ApiError>> result = manager.
+            incrementalAlterConfigs(toMap(entry(CONTROLLER1, toMap(
+                entry("listener.name.CONTROLLER.ssl.keystore.location", entry(SET, "/tmp/keystore.jks")),
+                entry("listener.name.CONTROLLER.ssl.keystore.password", entry(SET, "secret"))))),
+                true,
+                false);
+
+        ApiError error = result.response().get(CONTROLLER1);
+        if (error.isFailure()) {
+            System.out.println("Error: " + error.message());
+        }
+        assertEquals(2, result.records().size());
+        assertEquals(ApiError.NONE, error);
+
+        ConfigResource controllerDefault = new ConfigResource(ConfigResource.Type.CONTROLLER, "");
+        result = manager.incrementalAlterConfigs(toMap(entry(controllerDefault, toMap(
+            entry("ssl.truststore.location", entry(SET, "/tmp/truststore.jks"))))),
+            true,
+            false);
+
+        assertEquals(1, result.records().size());
+        assertEquals(ApiError.NONE, result.response().get(controllerDefault));
+
+        result = manager.incrementalAlterConfigs(toMap(entry(CONTROLLER1, toMap(
+            entry("some.invalid.config", entry(SET, "value"))))),
+            true,
+            false);
+
+        assertEquals(0, result.records().size());
+        assertEquals(Errors.INVALID_CONFIG, result.response().get(CONTROLLER1).error());
+        assertTrue(result.response().get(CONTROLLER1).message().contains("Invalid config key"));
+
+        ConfigResource invalidController = new ConfigResource(ConfigResource.Type.CONTROLLER, "not-a-number");
+        result = manager.incrementalAlterConfigs(toMap(entry(invalidController, toMap(
+            entry("ssl.keystore.location", entry(SET, "/tmp/keystore.jks"))))),
+            true,
+            false);
+
+        assertEquals(0, result.records().size());
+        assertEquals(Errors.INVALID_CONFIG, result.response().get(invalidController).error());
+        assertTrue(result.response().get(invalidController).message().contains("valid node ID"));
     }
 }

@@ -30,7 +30,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.requests.RequestHeader
@@ -126,6 +126,7 @@ class KafkaRaftManager[T](
   }
 
   override val raftLog: RaftLog = buildMetadataLog()
+  private var raftClientChannelBuilder: ChannelBuilder = _
   private val netChannel = buildNetworkChannel()
   private val expirationTimer = new SystemTimer("raft-expiration-executor")
   private val expirationService = new TimingWheelExpirationService(expirationTimer)
@@ -161,6 +162,8 @@ class KafkaRaftManager[T](
   ): CompletionStage[ApiMessage] = {
     clientDriver.handleRequest(context, header, request, createdTimeMs)
   }
+
+  def clientChannelBuilder: ChannelBuilder = raftClientChannelBuilder
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
     new KafkaRaftClient(
@@ -217,6 +220,7 @@ class KafkaRaftManager[T](
       time,
       logContext
     )
+    raftClientChannelBuilder = channelBuilder
 
     val metricGroupPrefix = "raft-channel"
     val collectPerConnectionMetrics = false

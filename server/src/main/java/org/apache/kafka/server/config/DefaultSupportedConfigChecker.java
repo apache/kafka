@@ -38,6 +38,8 @@ import java.util.function.Predicate;
  *   are user-defined at runtime and cannot be pre-enumerated. They also include
  *   plugin-defined configs (e.g., custom authorizer or quota callback configs) with
  *   arbitrary names. For these reasons BROKER configs are not filtered by name.
+ * - CONTROLLER: All config names are accepted. the SSL keys used for the CONTROLLER listener
+ *   are prefixed with the listener name (e.g., listener.name.controller.ssl.keystore.location).
  * - CLIENT_METRICS: Configurations defined in ClientMetricsConfigs
  * - GROUP: Configurations defined in GroupConfig
  *
@@ -63,6 +65,7 @@ public final class DefaultSupportedConfigChecker implements SupportedConfigCheck
         this.validConfigsByType = Map.of(
             ConfigResource.Type.TOPIC, new SetContainsPredicate(LogConfig.configNames()),
             ConfigResource.Type.BROKER, ignore -> true,
+            ConfigResource.Type.CONTROLLER, ignore -> true,
             ConfigResource.Type.CLIENT_METRICS, new SetContainsPredicate(ClientMetricsConfigs.configNames()),
             ConfigResource.Type.GROUP, new SetContainsPredicate(GroupConfig.configNames())
         );
