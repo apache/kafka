@@ -478,7 +478,7 @@ public class KafkaRaftClientPreVoteTest {
         // invalid voter id is rejected
         context.deliverRequest(
             context.voteRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 epoch,
                 otherNodeKey,
                 ReplicaKey.of(10, Uuid.randomUuid()),
@@ -493,7 +493,7 @@ public class KafkaRaftClientPreVoteTest {
         // invalid voter directory id is rejected
         context.deliverRequest(
             context.voteRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 epoch,
                 otherNodeKey,
                 ReplicaKey.of(0, Uuid.randomUuid()),

@@ -885,7 +885,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
 
         FetchSnapshotRequestData voter1FetchSnapshotRequest = fetchSnapshotRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 voter1,
                 context.metadataPartition,
                 epoch,
@@ -895,7 +895,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         FetchSnapshotRequestData voter2FetchSnapshotRequest = fetchSnapshotRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 voter2,
                 context.metadataPartition,
                 epoch,
@@ -905,7 +905,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         FetchSnapshotRequestData observerFetchSnapshotRequest = fetchSnapshotRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 observer3,
                 context.metadataPartition,
                 epoch,
@@ -1999,7 +1999,7 @@ public final class KafkaRaftClientSnapshotTest {
         // valid cluster id is accepted
         context.deliverRequest(
             fetchSnapshotRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 otherNode,
                 context.metadataPartition,
                 epoch,

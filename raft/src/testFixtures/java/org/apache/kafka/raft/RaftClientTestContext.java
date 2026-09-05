@@ -69,6 +69,7 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+import org.apache.kafka.server.util.DeferredValue;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
@@ -128,7 +129,7 @@ public final class RaftClientTestContext {
     private int appendLingerMs;
 
     private final QuorumStateStore quorumStateStore;
-    final String clusterId;
+    final DeferredValue<String> clusterId;
     private final OptionalInt localId;
     public final Uuid localDirectoryId;
     public final KRaftVersion kraftVersion;
@@ -171,7 +172,6 @@ public final class RaftClientTestContext {
         private final MockableRandom random = new MockableRandom(1L);
         private final LogContext logContext = new LogContext();
         private final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
-        private final String clusterId = Uuid.randomUuid().toString();
         private final OptionalInt localId;
         private KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_0;
         private final Uuid localDirectoryId;
@@ -187,6 +187,7 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
+        private DeferredValue<String> clusterId = DeferredValue.completed(Uuid.randomUuid().toString());
         private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
         private int fetchMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_MAX_BYTES;
 
@@ -396,6 +397,11 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withEmptyClusterId() {
+            this.clusterId = DeferredValue.incomplete(null);
+            return this;
+        }
+
         Builder withFetchSnapshotMaxBytes(int fetchSnapshotMaxSizeBytes) {
             this.fetchSnapshotMaxBytes = fetchSnapshotMaxSizeBytes;
             return this;
@@ -524,7 +530,7 @@ public final class RaftClientTestContext {
 
     @SuppressWarnings("ParameterNumber")
     private RaftClientTestContext(
-        String clusterId,
+        DeferredValue<String> clusterId,
         OptionalInt localId,
         Uuid localDirectoryId,
         KRaftVersion kraftVersion,
@@ -1366,7 +1372,7 @@ public final class RaftClientTestContext {
     RaftRequest.Outbound assertSentAddVoterRequest(
         ReplicaKey replicaKey,
         Endpoints endpoints
-    ) {
+    ) throws Exception {
         final var sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.ADD_RAFT_VOTER));
         assertEquals(1, sentRequests.size());
 
@@ -1374,7 +1380,7 @@ public final class RaftClientTestContext {
         assertInstanceOf(AddRaftVoterRequestData.class, request.data());
 
         final var addRaftVoterRequestData = (AddRaftVoterRequestData) request.data();
-        assertEquals(clusterId, addRaftVoterRequestData.clusterId());
+        assertEquals(clusterId.getOrThrow(), addRaftVoterRequestData.clusterId());
         assertEquals(replicaKey.id(), addRaftVoterRequestData.voterId());
         assertEquals(replicaKey.directoryId().get(), addRaftVoterRequestData.voterDirectoryId());
         assertEquals(endpoints, Endpoints.fromAddVoterRequest(addRaftVoterRequestData.listeners()));
@@ -1402,7 +1408,7 @@ public final class RaftClientTestContext {
 
     RaftRequest.Outbound assertSentRemoveVoterRequest(
         ReplicaKey replicaKey
-    ) {
+    ) throws Exception {
         final var sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.REMOVE_RAFT_VOTER));
         assertEquals(1, sentRequests.size());
 
@@ -1410,7 +1416,7 @@ public final class RaftClientTestContext {
         assertInstanceOf(RemoveRaftVoterRequestData.class, request.data());
 
         final var removeRaftVoterRequestData = (RemoveRaftVoterRequestData) request.data();
-        assertEquals(clusterId, removeRaftVoterRequestData.clusterId());
+        assertEquals(clusterId.getOrThrow(), removeRaftVoterRequestData.clusterId());
         assertEquals(replicaKey.id(), removeRaftVoterRequestData.voterId());
         assertEquals(replicaKey.directoryId().get(), removeRaftVoterRequestData.voterDirectoryId());
 
@@ -1447,7 +1453,7 @@ public final class RaftClientTestContext {
         assertInstanceOf(UpdateRaftVoterRequestData.class, request.data());
 
         UpdateRaftVoterRequestData updateVoterRequest = (UpdateRaftVoterRequestData) request.data();
-        assertEquals(clusterId, updateVoterRequest.clusterId());
+        assertEquals(clusterId.getNow(), updateVoterRequest.clusterId());
         assertEquals(epoch, updateVoterRequest.currentLeaderEpoch());
         assertEquals(replicaKey.id(), updateVoterRequest.voterId());
         assertEquals(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID), updateVoterRequest.voterDirectoryId());
@@ -1598,7 +1604,7 @@ public final class RaftClientTestContext {
         List<ReplicaKey> preferredCandidates
     ) {
         return endEpochRequest(
-            clusterId,
+            clusterId.getNow(),
             epoch,
             leaderId,
             preferredCandidates
@@ -1621,7 +1627,7 @@ public final class RaftClientTestContext {
     }
 
     BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
-        return beginEpochRequest(clusterId, epoch, leaderId);
+        return beginEpochRequest(clusterId.getNow(), epoch, leaderId);
     }
 
     BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId, Endpoints endpoints) {
@@ -1629,7 +1635,7 @@ public final class RaftClientTestContext {
             ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
             ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID);
 
-        return beginEpochRequest(clusterId, epoch, leaderId, endpoints, localReplicaKey);
+        return beginEpochRequest(clusterId.getNow(), epoch, leaderId, endpoints, localReplicaKey);
     }
 
     BeginQuorumEpochRequestData beginEpochRequest(String clusterId, int epoch, int leaderId) {
@@ -1692,7 +1698,7 @@ public final class RaftClientTestContext {
         long lastEpochOffset
     ) {
         return voteRequest(
-            clusterId,
+            clusterId.getNow(),
             epoch,
             candidateKey,
             lastEpoch,
@@ -1708,7 +1714,7 @@ public final class RaftClientTestContext {
         long lastEpochOffset
     ) {
         return voteRequest(
-            clusterId,
+            clusterId.getNow(),
             epoch,
             candidateKey,
             lastEpoch,
@@ -1898,7 +1904,7 @@ public final class RaftClientTestContext {
     ) {
         return fetchRequest(
             epoch,
-            clusterId,
+            clusterId.getNow(),
             replicaKey,
             fetchOffset,
             lastFetchedEpoch,
@@ -2053,7 +2059,7 @@ public final class RaftClientTestContext {
         Endpoints endpoints
     ) {
         return addVoterRequest(
-            clusterId,
+            clusterId.getNow(),
             timeoutMs,
             voter,
             endpoints
@@ -2076,7 +2082,7 @@ public final class RaftClientTestContext {
     }
 
     RemoveRaftVoterRequestData removeVoterRequest(ReplicaKey voter) {
-        return removeVoterRequest(clusterId, voter);
+        return removeVoterRequest(clusterId.getNow(), voter);
     }
 
     RemoveRaftVoterRequestData removeVoterRequest(String cluster, ReplicaKey voter) {
@@ -2088,7 +2094,7 @@ public final class RaftClientTestContext {
         SupportedVersionRange supportedVersions,
         Endpoints endpoints
     ) {
-        return updateVoterRequest(clusterId, voter, currentEpoch(), supportedVersions, endpoints);
+        return updateVoterRequest(clusterId.getNow(), voter, currentEpoch(), supportedVersions, endpoints);
     }
 
     UpdateRaftVoterRequestData updateVoterRequest(
