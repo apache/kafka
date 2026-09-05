@@ -734,7 +734,7 @@ public class HighAvailabilityTaskAssignorTest {
                                                                           final boolean enableRackAwareTaskAssignor,
                                                                           final int maxSkew) {
         final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
-        final ClientState client1 = clientState(singleton(TASK_0_0), Set.of(), singletonMap(TASK_0_0, 0L), 1,
+        final ClientState client1 = clientState(Set.of(TASK_0_0), Set.of(), Map.of(TASK_0_0, 0L), 1,
             PID_1
         );
         final Map<ProcessId, ClientState> clientStates = Map.of(PID_1, client1);
@@ -768,10 +768,10 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldComputeNewAssignmentIfThereAreUnassignedStandbyTasks(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor, final int maxSkew) {
         final Set<TaskId> allTasks = Set.of(TASK_0_0);
         final Set<TaskId> statefulTasks = Set.of(TASK_0_0);
-        final ClientState client1 = clientState(singleton(TASK_0_0), Set.of(), singletonMap(TASK_0_0, 0L), 1,
+        final ClientState client1 = clientState(Set.of(TASK_0_0), Set.of(), Map.of(TASK_0_0, 0L), 1,
             PID_1
         );
-        final ClientState client2 = clientState(Set.of(), Set.of(), singletonMap(TASK_0_0, 0L), 1,
+        final ClientState client2 = clientState(Set.of(), Set.of(), Map.of(TASK_0_0, 0L), 1,
             PID_2
         );
         final Map<ProcessId, ClientState> clientStates = mkMap(mkEntry(PID_1, client1), mkEntry(PID_2, client2));
@@ -803,10 +803,10 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldComputeNewAssignmentIfActiveTasksWasNotOnCaughtUpClient(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor, final int maxSkew) {
         final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = Set.of(TASK_0_0);
-        final ClientState client1 = clientState(singleton(TASK_0_0), Set.of(), singletonMap(TASK_0_0, 500L), 1,
+        final ClientState client1 = clientState(Set.of(TASK_0_0), Set.of(), Map.of(TASK_0_0, 500L), 1,
             PID_1
         );
-        final ClientState client2 = clientState(singleton(TASK_0_1), Set.of(), singletonMap(TASK_0_0, 0L), 1,
+        final ClientState client2 = clientState(Set.of(TASK_0_1), Set.of(), Map.of(TASK_0_0, 0L), 1,
             PID_2
         );
         final Map<ProcessId, ClientState> clientStates = mkMap(
@@ -841,13 +841,13 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignToMostCaughtUpIfActiveTasksWasNotOnCaughtUpClient(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor, final int maxSkew) {
         final Set<TaskId> allTasks = Set.of(TASK_0_0);
         final Set<TaskId> statefulTasks = Set.of(TASK_0_0);
-        final ClientState client1 = clientState(Set.of(), Set.of(), singletonMap(TASK_0_0, Long.MAX_VALUE), 1,
+        final ClientState client1 = clientState(Set.of(), Set.of(), Map.of(TASK_0_0, Long.MAX_VALUE), 1,
             PID_1
         );
-        final ClientState client2 = clientState(Set.of(), Set.of(), singletonMap(TASK_0_0, 1000L), 1,
+        final ClientState client2 = clientState(Set.of(), Set.of(), Map.of(TASK_0_0, 1000L), 1,
             PID_2
         );
-        final ClientState client3 = clientState(Set.of(), Set.of(), singletonMap(TASK_0_0, 500L), 1,
+        final ClientState client3 = clientState(Set.of(), Set.of(), Map.of(TASK_0_0, 500L), 1,
             PID_3
         );
         final Map<ProcessId, ClientState> clientStates = mkMap(

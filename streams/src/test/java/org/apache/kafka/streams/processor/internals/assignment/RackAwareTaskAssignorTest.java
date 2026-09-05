@@ -499,7 +499,7 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1);
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_1, TASK_1_1));
 
@@ -537,9 +537,9 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState3 = clientState(Set.of(), Set.of(), emptyMap(), 1);
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), Map.of(), 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_1, TASK_1_1));
         clientState2.assignActive(TASK_1_0);
@@ -679,9 +679,9 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState3 = clientState(Set.of(), Set.of(), emptyMap(), 1);
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), Map.of(), 1);
 
         clientState2.assignActive(TASK_1_0);
         clientState3.assignActive(TASK_0_0);
@@ -731,9 +731,9 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState3 = clientState(Set.of(), Set.of(), emptyMap(), 1);
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), Map.of(), 1);
 
         clientState2.assignActiveTasks(Set.of(TASK_0_1, TASK_1_0));
         clientState3.assignActive(TASK_0_0);
@@ -783,8 +783,8 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1);
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActive(TASK_0_1);
@@ -833,8 +833,8 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1);
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActive(TASK_0_1);
@@ -865,8 +865,8 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1);
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActiveTasks(Set.of(TASK_0_1, TASK_1_1));
@@ -899,8 +899,8 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1);
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1);
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1);
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1);
 
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActive(TASK_0_1);
@@ -932,13 +932,13 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_1
         );
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_2
         );
-        final ClientState clientState3 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_3
         );
 
@@ -976,22 +976,22 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_1
         );
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_2
         );
-        final ClientState clientState3 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_3
         );
-        final ClientState clientState4 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState4 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_4
         );
-        final ClientState clientState5 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState5 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_6
         );
-        final ClientState clientState6 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState6 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_7
         );
 
@@ -1053,22 +1053,22 @@ public class RackAwareTaskAssignorTest {
             time
         );
 
-        final ClientState clientState1 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState1 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_1
         );
-        final ClientState clientState2 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState2 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_2
         );
-        final ClientState clientState3 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState3 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_3
         );
-        final ClientState clientState4 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState4 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_4
         );
-        final ClientState clientState5 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState5 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_6
         );
-        final ClientState clientState6 = clientState(Set.of(), Set.of(), emptyMap(), 1,
+        final ClientState clientState6 = clientState(Set.of(), Set.of(), Map.of(), 1,
             PID_7
         );
 
