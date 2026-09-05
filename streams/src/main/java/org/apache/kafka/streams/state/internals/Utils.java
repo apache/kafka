@@ -43,7 +43,7 @@ public class Utils {
             return null;
         }
 
-        // If the header is empty, simply return it
+        // If the header is empty, return empty headers without lazy wrapping
         if (hasEmptyHeaders(valueWithHeaders)) {
             return new RecordHeaders();
         }
@@ -256,7 +256,7 @@ public class Utils {
     public static Headers readHeaders(final ByteBuffer buffer) {
         final int headersSize = ByteUtils.readVarint(buffer);
         final byte[] rawHeaders = readBytes(buffer, headersSize);
-        return HeadersDeserializer.deserialize(rawHeaders);
+        return (headersSize == 0) ? new RecordHeaders() : new LazyHeaders(rawHeaders);
     }
 
     /**

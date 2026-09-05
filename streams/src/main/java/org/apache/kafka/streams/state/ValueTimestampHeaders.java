@@ -20,6 +20,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -110,12 +111,18 @@ public final class ValueTimestampHeaders<V> {
         final ValueTimestampHeaders<?> that = (ValueTimestampHeaders<?>) o;
         return timestamp == that.timestamp
             && Objects.equals(value, that.value)
-            && Objects.equals(this.headers, that.headers);
+            && headersEqual(this.headers, that.headers);
+    }
+
+    private static boolean headersEqual(final Headers a, final Headers b) {
+        if (a == b) return true;
+        if (a == null || b == null) return false;
+        return Arrays.equals(a.toArray(), b.toArray());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, timestamp, headers);
+        return Objects.hash(value, timestamp, Arrays.hashCode(headers.toArray()));
     }
 
     @Override
