@@ -571,13 +571,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             storeBuilder = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(
                 storeName,
                 keySerde,
-                valueSerde)
+                valueSerde,
+                suppressedInternal.bufferConfig().headersEnabled())
                 .withLoggingEnabled(topicConfig);
         } else {
             storeBuilder = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(
                 storeName,
                 keySerde,
-                valueSerde)
+                valueSerde,
+                suppressedInternal.bufferConfig().headersEnabled())
                 .withLoggingDisabled();
         }
 
