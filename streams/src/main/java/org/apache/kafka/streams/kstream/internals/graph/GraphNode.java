@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
@@ -42,6 +43,7 @@ public abstract class GraphNode {
     // explicitly materialized (as either a versioned or an unversioned store) and therefore
     // whether the output is to be considered versioned or not depends on its parent(s)
     private Optional<Boolean> outputVersioned = Optional.empty();
+    private Serde<?> valueSerde = null;
 
     public GraphNode(final String nodeName) {
         this.nodeName = nodeName;
@@ -141,6 +143,14 @@ public abstract class GraphNode {
 
     public void setOutputVersioned(final boolean outputVersioned) {
         this.outputVersioned = Optional.of(outputVersioned);
+    }
+
+    public void setValueSerde(final Serde<?> valueSerde) {
+        this.valueSerde = valueSerde;
+    }
+
+    public Serde<?> valueSerde() {
+        return valueSerde;
     }
 
     @Override
