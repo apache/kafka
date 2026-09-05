@@ -561,6 +561,9 @@ public class BatchAccumulator<T> implements Closeable {
         // Buffer that was allocated by the MemoryPool (pool). This may not be the buffer used in
         // the MemoryRecords (data) object.
         private final ByteBuffer initialBuffer;
+        // Snapshot at construction: MemoryRecords may share the pooled buffer, which can be
+        // overwritten after release().
+        private final long appendTimestamp;
 
         private CompletedBatch(
             long baseOffset,
@@ -577,6 +580,7 @@ public class BatchAccumulator<T> implements Closeable {
             this.initialBuffer = initialBuffer;
 
             validateConstruction();
+            this.appendTimestamp = data.firstBatch().maxTimestamp();
         }
 
         private CompletedBatch(
@@ -594,6 +598,7 @@ public class BatchAccumulator<T> implements Closeable {
             this.initialBuffer = initialBuffer;
 
             validateConstruction();
+            this.appendTimestamp = data.firstBatch().maxTimestamp();
         }
 
         private void validateConstruction() {
@@ -615,10 +620,7 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         public long appendTimestamp() {
-            // 1. firstBatch is not null because data has one and only one batch
-            // 2. maxTimestamp is the append time of the batch. This needs to be changed
-            //    to return the LastContainedLogTimestamp of the SnapshotHeaderRecord
-            return data.firstBatch().maxTimestamp();
+            return appendTimestamp;
         }
 
         public boolean drainable(long drainOffset) {
