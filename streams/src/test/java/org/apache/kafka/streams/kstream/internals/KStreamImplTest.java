@@ -33,6 +33,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Deduplicated;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -1120,6 +1121,38 @@ public class KStreamImplTest {
                     (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
                     Named.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullIntervalOnDeduplicateByKey() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.deduplicateByKey(null));
+        assertThat(exception.getMessage(), equalTo("deduplicationInterval cannot be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullIntervalOnDeduplicateByKeyValue() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.deduplicateByKeyValue((k, v) -> k, null, Deduplicated.<String, String, String>idSerde(Serdes.String())));
+        assertThat(exception.getMessage(), equalTo("deduplicationInterval cannot be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullIdSelectorOnDeduplicateByKeyValue() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.deduplicateByKeyValue(null, Duration.ofMillis(100), Deduplicated.<String, String, String>idSerde(Serdes.String())));
+        assertThat(exception.getMessage(), equalTo("idSelector cannot be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullDeduplicated() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.deduplicateByKey(Duration.ofMillis(100), null));
+        assertThat(exception.getMessage(), equalTo("deduplicated cannot be null"));
     }
 
     @SuppressWarnings({"rawtypes", "deprecation"})  // specifically testing the deprecated variant
