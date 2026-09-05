@@ -380,9 +380,10 @@ public class DescribeConsumerGroupTest {
                     protocolConsumerGroupExecutors.add(consumerGroupClosable(groupProtocol, group, topic, Map.of()));
                 }
 
-                int expectedNumLines = DESCRIBE_TYPES.size() * 2;
-
                 for (List<String> describeType : DESCRIBE_TYPES) {
+                    int expectedNumLines = describeType.contains("--state")
+                        ? DESCRIBE_TYPES.size() + 1
+                        : DESCRIBE_TYPES.size() * 2;
                     List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe"));
                     cgcArgs.addAll(groups);
                     cgcArgs.addAll(describeType);
@@ -420,8 +421,10 @@ public class DescribeConsumerGroupTest {
                     groups.add(group);
                     protocolConsumerGroupExecutors.add(consumerGroupClosable(groupProtocol, group, topic, Map.of()));
                 }
-                int expectedNumLines = DESCRIBE_TYPES.size() * 2;
                 for (List<String> describeType : DESCRIBE_TYPES) {
+                    int expectedNumLines = describeType.contains("--state")
+                        ? DESCRIBE_TYPES.size() + 1
+                        : DESCRIBE_TYPES.size() * 2;
                     List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--all-groups"));
                     cgcArgs.addAll(describeType);
                     try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))) {
@@ -440,6 +443,39 @@ public class DescribeConsumerGroupTest {
                 }
                 // remove previous consumer groups, so we can have a clean cluster for next consumer group protocol test.
                 deleteConsumerGroups(groups);
+                deleteTopic(topic);
+            }
+        }
+    }
+
+    @ClusterTest
+    public void testDescribeStatePrintsHeaderOnceForMultipleGroups(ClusterInstance clusterInstance) throws Exception {
+        this.clusterInstance = clusterInstance;
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name() + ".header-once";
+            createTopic(topic);
+            String group1 = GROUP_PREFIX + groupProtocol.name() + ".header-once.g1";
+            String group2 = GROUP_PREFIX + groupProtocol.name() + ".header-once.g2";
+            try (AutoCloseable executor1 = consumerGroupClosable(groupProtocol, group1, topic, Map.of());
+                 AutoCloseable executor2 = consumerGroupClosable(groupProtocol, group2, topic, Map.of())) {
+                String[] cgcArgs = new String[]{
+                    "--bootstrap-server", clusterInstance.bootstrapServers(),
+                    "--describe", "--group", group1, "--group", group2, "--state"
+                };
+                try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs)) {
+                    TestUtils.waitForCondition(() -> {
+                        Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                        if (!res.getValue().isEmpty()) {
+                            return false;
+                        }
+                        long nonBlankLines = Arrays.stream(res.getKey().split("\n"))
+                            .filter(line -> !line.isBlank())
+                            .count();
+                        return countStateHeaderLines(res.getKey(), false) == 1 && nonBlankLines == 3;
+                    }, "Expected a single state header and two data rows for multiple --group --state.");
+                }
+            } finally {
+                deleteConsumerGroups(List.of(group1, group2));
                 deleteTopic(topic);
             }
         }
@@ -1288,6 +1324,13 @@ public class DescribeConsumerGroupTest {
             List.of("GROUP", "COORDINATOR", "(ID)", "ASSIGNMENT-STRATEGY", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS") :
             List.of("GROUP", "COORDINATOR", "(ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
         return Arrays.stream(output.trim().split("\\s+")).toList().equals(expectedKeys);
+    }
+
+    private long countStateHeaderLines(String output, boolean verbose) {
+        return Arrays.stream(output.split("\n"))
+            .filter(line -> !line.isBlank())
+            .filter(line -> checkStateArgsHeaderOutput(line, verbose))
+            .count();
     }
 
     private void sendRecords(String topic, int partition, int recordsCount) {
