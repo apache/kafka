@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Map;
 
@@ -28,7 +29,7 @@ public interface ConfigurationValidator {
         public void validate(ConfigResource resource) { }
 
         @Override
-        public void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs) { }
+        public void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs, MetadataVersion metadataVersion, boolean forwarded) { }
     };
 
     /**
@@ -44,6 +45,8 @@ public interface ConfigurationValidator {
      * @param resource               The configuration resource.
      * @param newConfigs             The new configuration.
      * @param existingConfigs        The existing configuration.
+     * @param metadataVersion        The cluster's current finalized metadata version.
+     * @param forwarded              True if the request was forwarded by a broker.
      */
-    void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs);
+    void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs, MetadataVersion metadataVersion, boolean forwarded);
 }

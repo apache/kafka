@@ -23,17 +23,18 @@ import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, GROUP, TOPIC}
-import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidConfigurationException, InvalidRequestException}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
+import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, GroupAuthorizationException, InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.message.{AlterConfigsRequestData, AlterConfigsResponseData, IncrementalAlterConfigsRequestData, IncrementalAlterConfigsResponseData}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
+import org.apache.kafka.common.protocol.Errors.{INVALID_CONFIG, INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.ConfigRepository
 import org.apache.kafka.server.config.AbstractKafkaConfig
 import org.apache.kafka.server.logger.RuntimeLoggerManager
@@ -64,15 +65,16 @@ import scala.jdk.CollectionConverters._
  *
  * Configuration processing is split into two parts.
  * - The first step, called "preprocessing," handles setting KIP-412 log levels, validating
- * BROKER configurations. We also filter out some other things here like UNKNOWN resource
+ * BROKER and GROUP configurations. We also filter out some other things here like UNKNOWN resource
  * types, etc.
  * - The second step is "persistence," and handles storing the configurations durably to our
  * metadata store.
  *
  * The active controller performs its own configuration validation step in
  * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
- * TOPIC resources, since we already validated changes to BROKER resources on the
- * forwarding broker. The controller is also responsible for enforcing the configured
+ * TOPIC resources, since we already validated changes to BROKER resources (and, from
+ * metadata version 4.5-IV0 on, GROUP resources) on the forwarding broker. The controller
+ * is also responsible for enforcing the configured
  * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
 class ConfigAdminManager(nodeId: Int,
@@ -145,12 +147,19 @@ class ConfigAdminManager(nodeId: Int,
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
               validateBrokerConfigChange(resource, configResource)
-            case TOPIC | CLIENT_METRICS | GROUP =>
+            case GROUP =>
+              if (!authorize(ResourceType.GROUP, resource.resourceName())) {
+                throw new GroupAuthorizationException(Errors.GROUP_AUTHORIZATION_FAILED.message())
+              }
+              validateGroupConfigChange(resource, configResource)
+            case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
             case _ =>
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
           }
         } catch {
+          case e: ConfigException =>
+            results.put(resource, new ApiError(INVALID_CONFIG, e.getMessage))
           case t: Throwable =>
             val err = ApiError.fromThrowable(t)
             error(s"Error preprocessing incrementalAlterConfigs request on $configResource", t)
@@ -168,14 +177,7 @@ class ConfigAdminManager(nodeId: Int,
     val perBrokerConfig = configResource.name().nonEmpty
     val persistentProps = configRepository.config(configResource)
     val configProps = conf.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
-    val alterConfigOps = resource.configs().asScala.map {
-      config =>
-        val opType = AlterConfigOp.OpType.forId(config.configOperation())
-        if (opType == null) {
-          throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
-        }
-        new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
-    }.toSeq
+    val alterConfigOps = toAlterConfigOps(resource)
     prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
     try {
       validateBrokerConfigChange(configProps, configResource)
@@ -200,6 +202,29 @@ class ConfigAdminManager(nodeId: Int,
       case e: Throwable => throw new InvalidRequestException(e.getMessage)
     }
  }
+
+  private def toAlterConfigOps(resource: IAlterConfigsResource): Seq[AlterConfigOp] = {
+    resource.configs().asScala.map {
+      config =>
+        val opType = AlterConfigOp.OpType.forId(config.configOperation())
+        if (opType == null) {
+          throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
+        }
+        new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
+    }.toSeq
+  }
+
+  private def validateGroupConfigChange(
+    resource: IAlterConfigsResource,
+    configResource: ConfigResource
+  ): Unit = {
+    validateGroupResourceName(resource.resourceName())
+    val configProps = new Properties()
+    configProps.putAll(configRepository.config(configResource))
+    val alterConfigOps = toAlterConfigOps(resource)
+    prepareIncrementalConfigs(alterConfigOps, configProps, GroupConfig.CONFIG_DEF.configKeys.asScala)
+    GroupConfig.validate(configProps.asScala.asJava, conf.groupCoordinatorConfig, conf.shareGroupConfig)
+  }
 
   /**
    * Preprocess a legacy configuration operation on the broker.
@@ -250,7 +275,12 @@ class ConfigAdminManager(nodeId: Int,
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
               validateBrokerConfigChange(resource, configResource)
-            case TOPIC | CLIENT_METRICS | GROUP =>
+            case GROUP =>
+              if (!authorize(ResourceType.GROUP, resource.resourceName())) {
+                throw new GroupAuthorizationException(Errors.GROUP_AUTHORIZATION_FAILED.message())
+              }
+              validateGroupConfigChange(resource)
+            case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
             case _ =>
               // Since legacy AlterConfigs does not support BROKER_LOGGER, any attempt to use it
@@ -258,6 +288,8 @@ class ConfigAdminManager(nodeId: Int,
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
           }
         } catch {
+          case e: ConfigException =>
+            results.put(resource, new ApiError(INVALID_CONFIG, e.getMessage))
           case t: Throwable =>
             val err = ApiError.fromThrowable(t)
             error(s"Error preprocessing alterConfigs request on ${configResource}: ${err}")
@@ -279,6 +311,17 @@ class ConfigAdminManager(nodeId: Int,
     validateBrokerConfigChange(props, configResource)
   }
 
+  private def validateGroupConfigChange(resource: LAlterConfigsResource): Unit = {
+    validateGroupResourceName(resource.resourceName())
+    // Legacy AlterConfigs replaces the entire group config, so the request holds the complete
+    // new configuration and can be validated as-is.
+    val configProps = new Properties()
+    resource.configs().forEach {
+      config => configProps.setProperty(config.name(), config.value())
+    }
+    GroupConfig.validate(configProps.asScala.asJava, conf.groupCoordinatorConfig, conf.shareGroupConfig)
+  }
+
   def validateResourceNameIsCurrentNodeId(name: String): Unit = {
     val id = try name.toInt catch {
       case _: NumberFormatException =>
@@ -292,6 +335,15 @@ class ConfigAdminManager(nodeId: Int,
 
 object ConfigAdminManager {
   val log: Logger = LoggerFactory.getLogger(classOf[ConfigAdminManager])
+
+  /**
+   * Validate that a GROUP resource name is not empty; there is no default group configuration.
+   */
+  def validateGroupResourceName(resourceName: String): Unit = {
+    if (resourceName.isEmpty) {
+      throw new InvalidRequestException("Default group resources are not allowed.")
+    }
+  }
 
   /**
    * Copy the incremental configs request data without any already-processed elements.

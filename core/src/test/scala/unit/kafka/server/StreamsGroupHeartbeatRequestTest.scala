@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
@@ -26,9 +26,10 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, 
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.api.streams.assignor.{GroupAssignment, GroupSpec, MemberAssignment, TaskAssignor, TopologyDescriber}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
-import org.apache.kafka.server.common.Feature
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertThrows, assertTrue}
 
+import java.util
 import java.util.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
@@ -1040,6 +1041,133 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not unset within the timeout period.")
     } finally {
       admin.close()
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    metadataVersion = MetadataVersion.IBP_4_5_IV0,
+    serverProperties = Array(
+      // Registered on the broker only, not on the controller.
+      // The class name has to be spelled out because annotation values must be compile-time constants.
+      new ClusterConfigProperty(
+        id = 0,
+        key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+        value = "kafka.server.CustomStreamsTaskAssignor"
+      )
+    )
+  )
+  def testAlterStreamsAssignorNameGroupConfigIsValidatedOnTheBroker(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // An assignor registered only on the broker is accepted, since the broker validates the name.
+      val customAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME),
+        AlterConfigOp.OpType.SET
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(customAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() ==
+          CustomStreamsTaskAssignor.NAME
+      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not updated to the expected value within the timeout period.")
+
+      // Conversely, an assignor not registered on the broker is rejected.
+      val stickyAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky"),
+        AlterConfigOp.OpType.SET
+      )
+      val executionException = assertThrows(classOf[ExecutionException], () =>
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(stickyAlterOp).asJavaCollection).asJava
+        ).all().get()
+      )
+      assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+        s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+      assertTrue(executionException.getCause.getMessage.contains("'sticky' is not a registered task assignor"),
+        s"Unexpected error message: ${executionException.getCause.getMessage}")
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    metadataVersion = MetadataVersion.IBP_4_5_IV0,
+    serverProperties = Array(
+      // Registered on the broker only, not on the controller.
+      // The class name has to be spelled out because annotation values must be compile-time constants.
+      new ClusterConfigProperty(
+        id = 0,
+        key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+        value = "kafka.server.CustomStreamsTaskAssignor"
+      )
+    )
+  )
+  def testAlterGroupConfigSentDirectlyToTheControllerIsValidatedOnTheController(): Unit = {
+    val admin = cluster.admin()
+    // Requests sent directly to the controller are not forwarded by a broker, so the controller validates them.
+    val controllerAdmin = cluster.admin(util.Map.of[String, AnyRef](), true)
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      def alterGroupConfig(admin: Admin, configName: String, value: String): Unit = {
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(
+            new AlterConfigOp(new ConfigEntry(configName, value), AlterConfigOp.OpType.SET)
+          ).asJavaCollection).asJava
+        ).all().get()
+      }
+
+      def assertRejected(expectedMessage: String)(alter: => Unit): Unit = {
+        val executionException = assertThrows(classOf[ExecutionException], () => alter)
+        assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+          s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+        assertTrue(executionException.getCause.getMessage.contains(expectedMessage),
+          s"Unexpected error message: ${executionException.getCause.getMessage}")
+      }
+
+      // The controller only knows its own assignors, so an assignor registered on the broker alone is rejected...
+      assertRejected(s"'${CustomStreamsTaskAssignor.NAME}' is not a registered task assignor") {
+        alterGroupConfig(controllerAdmin, GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME)
+      }
+      // ...and so is an out-of-range value.
+      assertRejected("must be in the range") {
+        alterGroupConfig(controllerAdmin, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10")
+      }
+      // A valid change is accepted.
+      alterGroupConfig(controllerAdmin, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+
+      // Once the group selects an assignor registered on the brokers only, the controller rejects any change
+      // sent directly to it, since it validates the complete group config against its own assignors.
+      alterGroupConfig(admin, GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME)
+      assertRejected(s"'${CustomStreamsTaskAssignor.NAME}' is not a registered task assignor") {
+        alterGroupConfig(controllerAdmin, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "55000")
+      }
+    } finally {
+      admin.close()
+      controllerAdmin.close()
     }
   }
 

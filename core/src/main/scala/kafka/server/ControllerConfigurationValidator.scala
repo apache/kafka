@@ -24,6 +24,7 @@ import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -38,6 +39,13 @@ import scala.collection.mutable
  * in {@link kafka.server.ConfigAdminManager#preprocess()} before sending the change to
  * the controller. Therefore, the validation here is just a kind of sanity check, which
  * should never fail under normal conditions.
+ *
+ * For changes to GROUP resources, the forwarding broker performs validation in
+ * {@link kafka.server.ConfigAdminManager#preprocess()} before sending the change to
+ * the controller, starting from metadata version 4.5-IV0. The validation here is only
+ * run for requests that did not come through such a broker. It uses the controller's own
+ * group coordinator configs, so custom task assignors must also be configured on the
+ * controllers to be accepted here.
  *
  * This validator does not handle changes to BROKER_LOGGER resources. Despite being bundled
  * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
@@ -66,14 +74,6 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
       if (brokerId < 0) {
         throw new InvalidRequestException("Invalid negative broker ID.")
       }
-    }
-  }
-
-  private def validateGroupName(
-    name: String
-  ): Unit = {
-    if (name.isEmpty) {
-      throw new InvalidRequestException("Default group resources are not allowed.")
     }
   }
 
@@ -120,7 +120,9 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
   override def validate(
     resource: ConfigResource,
     newConfigs: util.Map[String, String],
-    oldConfigs: util.Map[String, String]
+    oldConfigs: util.Map[String, String],
+    metadataVersion: MetadataVersion,
+    forwarded: Boolean
   ): Unit = {
     resource.`type`() match {
       case TOPIC =>
@@ -133,9 +135,14 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
         val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "client metrics")
         ClientMetricsConfigs.validate(resource.name(), filteredConfigs)
       case GROUP =>
-        validateGroupName(resource.name())
-        val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "group")
-        GroupConfig.validate(filteredConfigs, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
+        ConfigAdminManager.validateGroupResourceName(resource.name())
+        // From IBP_4_5_IV0 on, the forwarding broker has already validated the change, so only
+        // validate here when the request did not come through such a broker.
+        val validatedOnBroker = forwarded && metadataVersion.isAtLeast(MetadataVersion.IBP_4_5_IV0)
+        if (!validatedOnBroker) {
+          val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "group")
+          GroupConfig.validate(filteredConfigs, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
+        }
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

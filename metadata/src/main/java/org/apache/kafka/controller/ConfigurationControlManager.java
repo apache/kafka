@@ -404,7 +404,7 @@ public class ConfigurationControlManager {
             // in the list passed to the policy in order to maintain backwards compatibility
         }
         try {
-            validator.validate(configResource, allConfigs, existingConfigsMap);
+            validator.validate(configResource, allConfigs, existingConfigsMap, featureControl.metadataVersionOrThrow(), forwarded);
             if (!newlyCreatedResource) {
                 existenceChecker.accept(configResource);
             }

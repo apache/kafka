@@ -22,7 +22,7 @@ import java.util.Collections
 
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC, UNKNOWN}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, GROUP, TOPIC, UNKNOWN}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
@@ -40,6 +40,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, NONE}
 import org.apache.kafka.common.requests.ApiError
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.MockConfigRepository
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Assertions, Test}
@@ -415,6 +416,93 @@ class ConfigAdminManagerTest {
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
           unknown))),
         (_, _) => true))
+  }
+
+  def groupIncremental(configName: String, value: String, opType: OpType): IAlterConfigsResource =
+    new IAlterConfigsResource().
+      setResourceName("group").
+      setResourceType(GROUP.id).
+      setConfigs(new IAlterableConfigCollection(
+        util.Arrays.asList(new IAlterableConfig().setName(configName).
+          setValue(value).
+          setConfigOperation(opType.id()))))
+
+  @Test
+  def testPreprocessIncrementalWithGroupConfig(): Unit = {
+    val manager = newConfigAdminManager(1)
+    // A valid GROUP config change passes broker validation and is left in the request to be forwarded.
+    val valid = groupIncremental(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000", OpType.SET)
+    assertEquals(Collections.emptyMap(),
+      manager.preprocess(new IncrementalAlterConfigsRequestData().
+        setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
+          valid))),
+        (_, _) => true))
+
+    // An invalid GROUP config change is rejected by the broker instead of being forwarded.
+    val invalid = groupIncremental(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10", OpType.SET)
+    assertEquals(Collections.singletonMap(invalid,
+      new ApiError(Errors.INVALID_CONFIG,
+        "consumer.session.timeout.ms must be in the range 45000 to 60000 inclusive.")),
+      manager.preprocess(new IncrementalAlterConfigsRequestData().
+        setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
+          invalid))),
+        (_, _) => true))
+  }
+
+  @Test
+  def testPreprocessIncrementalWithUnauthorizedGroupConfig(): Unit = {
+    val manager = newConfigAdminManager(1)
+    // Authorization is checked before validation, so the caller learns nothing about the change.
+    val invalid = groupIncremental(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10", OpType.SET)
+    assertEquals(Collections.singletonMap(invalid,
+      new ApiError(Errors.GROUP_AUTHORIZATION_FAILED, null)),
+      manager.preprocess(new IncrementalAlterConfigsRequestData().
+        setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
+          invalid))),
+        (_, _) => false))
+  }
+
+  def groupLegacy(configName: String, value: String): LAlterConfigsResource =
+    new LAlterConfigsResource().
+      setResourceName("group").
+      setResourceType(GROUP.id).
+      setConfigs(new LAlterableConfigCollection(
+        util.Arrays.asList(new LAlterableConfig().setName(configName).
+          setValue(value))))
+
+  @Test
+  def testPreprocessLegacyWithGroupConfig(): Unit = {
+    val manager = newConfigAdminManager(1)
+    // A valid GROUP config change passes broker validation and is left in the request to be forwarded.
+    val valid = groupLegacy(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    assertEquals(Collections.emptyMap(),
+      manager.preprocess(new AlterConfigsRequestData().
+        setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
+          valid))),
+        (_, _) => true))
+
+    // An invalid GROUP config change is rejected by the broker instead of being forwarded.
+    val invalid = groupLegacy(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10")
+    assertEquals(Collections.singletonMap(invalid,
+      new ApiError(Errors.INVALID_CONFIG,
+        "consumer.session.timeout.ms must be in the range 45000 to 60000 inclusive.")),
+      manager.preprocess(new AlterConfigsRequestData().
+        setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
+          invalid))),
+        (_, _) => true))
+  }
+
+  @Test
+  def testPreprocessLegacyWithUnauthorizedGroupConfig(): Unit = {
+    val manager = newConfigAdminManager(1)
+    // Authorization is checked before validation, so the caller learns nothing about the change.
+    val invalid = groupLegacy(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10")
+    assertEquals(Collections.singletonMap(invalid,
+      new ApiError(Errors.GROUP_AUTHORIZATION_FAILED, null)),
+      manager.preprocess(new AlterConfigsRequestData().
+        setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
+          invalid))),
+        (_, _) => false))
   }
 
   @Test

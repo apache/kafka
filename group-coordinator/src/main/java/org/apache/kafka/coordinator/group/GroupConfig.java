@@ -479,7 +479,8 @@ public final class GroupConfig extends AbstractConfig {
 
     /**
      * Check that the given properties contain only valid group config names and that
-     * all values can be parsed and are valid.
+     * all values can be parsed and are valid. Called on the forwarding broker from metadata
+     * version 4.5-IV0 on, and on the controller for requests that did not come through such a broker.
      *
      * @param newGroupConfig         The new unparsed group config overrides.
      * @param groupCoordinatorConfig The group coordinator config.
