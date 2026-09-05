@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsParti
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData}
+import org.apache.kafka.common.message.ProduceResponseData.{BatchIndexAndErrorMessage, PartitionProduceResponse}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -40,7 +41,6 @@ import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.internals.Exit
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -80,6 +80,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, Future, RejectedExecutionException, TimeUnit}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import java.util.function.Consumer
+import java.util.stream.Collectors
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.FunctionConverters.enrichAsJavaConsumer
@@ -640,7 +641,7 @@ class ReplicaManager(val config: KafkaConfig,
                     internalTopicsAllowed: Boolean,
                     origin: AppendOrigin,
                     entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
-                    responseCallback: util.Map[TopicIdPartition, PartitionResponse] => Unit,
+                    responseCallback: util.Map[TopicIdPartition, PartitionProduceResponse] => Unit,
                     recordValidationStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.noCaching,
                     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
@@ -699,7 +700,7 @@ class ReplicaManager(val config: KafkaConfig,
                           internalTopicsAllowed: Boolean,
                           transactionalId: String,
                           entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
-                          responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
+                          responseCallback: Map[TopicIdPartition, PartitionProduceResponse] => Unit,
                           recordValidationStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                           requestLocal: RequestLocal = RequestLocal.noCaching,
                           transactionSupportedOperation: TransactionSupportedOperation): Unit = {
@@ -760,7 +761,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       val preAppendPartitionResponses = buildProducePartitionStatus(errorResults).map { case (k, status) => k -> status.responseStatus }
 
-      def newResponseCallback(responses: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+      def newResponseCallback(responses: util.Map[TopicIdPartition, PartitionProduceResponse]): Unit = {
         responseCallback(preAppendPartitionResponses ++ responses.asScala)
       }
 
@@ -838,14 +839,19 @@ class ReplicaManager(val config: KafkaConfig,
     results.map { case (topicIdPartition, result) =>
       topicIdPartition -> new ProducePartitionStatus(
         result.logAppendSummary.lastOffset + 1, // required offset
-        new PartitionResponse(
-          result.error,
-          result.logAppendSummary.firstOffset,
-          result.logAppendSummary.logAppendTime,
-          result.logAppendSummary.logStartOffset,
-          result.logAppendSummary.recordErrors,
-          result.errorMessage
-        )
+        new PartitionProduceResponse()
+          .setIndex(topicIdPartition.partition)
+          .setErrorCode(result.error.code)
+          .setErrorMessage(result.errorMessage)
+          .setBaseOffset(result.logAppendSummary.firstOffset)
+          .setLogAppendTimeMs(result.logAppendSummary.logAppendTime)
+          .setLogStartOffset(result.logAppendSummary.logStartOffset)
+          .setRecordErrors(result.logAppendSummary.recordErrors
+            .stream()
+            .map(e => new BatchIndexAndErrorMessage()
+              .setBatchIndex(e.batchIndex)
+              .setBatchIndexErrorMessage(e.message))
+            .collect(Collectors.toList()))
       )
     }
   }
@@ -881,7 +887,7 @@ class ReplicaManager(val config: KafkaConfig,
     entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
     initialAppendResults: Map[TopicIdPartition, LogAppendResult],
     initialProduceStatus: Map[TopicIdPartition, ProducePartitionStatus],
-    responseCallback: util.Map[TopicIdPartition, PartitionResponse] => Unit,
+    responseCallback: util.Map[TopicIdPartition, PartitionProduceResponse] => Unit,
   ): Unit = {
     if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, initialAppendResults)) {
       // Create delayed produce operation
@@ -911,7 +917,7 @@ class ReplicaManager(val config: KafkaConfig,
       delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys.asJava)
     } else {
       // we can respond immediately
-      val produceResponseStatus = new util.HashMap[TopicIdPartition, PartitionResponse]
+      val produceResponseStatus = new util.HashMap[TopicIdPartition, PartitionProduceResponse]
       initialProduceStatus.foreach { case (k, status) => produceResponseStatus.put(k, status.responseStatus) }
       responseCallback(produceResponseStatus)
     }
@@ -919,16 +925,17 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def sendInvalidRequiredAcksResponse(
     entries: Map[TopicIdPartition, MemoryRecords],
-    responseCallback: util.Map[TopicIdPartition, PartitionResponse] => Unit): Unit = {
+    responseCallback: util.Map[TopicIdPartition, PartitionProduceResponse] => Unit): Unit = {
     // If required.acks is outside accepted range, something is wrong with the client
     // Just return an error and don't handle the request at all
-    val responseStatus = new util.HashMap[TopicIdPartition, PartitionResponse]
+    val responseStatus = new util.HashMap[TopicIdPartition, PartitionProduceResponse]
     entries.foreach { case(topicIdPartition, _) =>
-        responseStatus.put(topicIdPartition, new PartitionResponse(
-          Errors.INVALID_REQUIRED_ACKS,
-          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset,
-          RecordBatch.NO_TIMESTAMP,
-          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset)
+        responseStatus.put(topicIdPartition, new PartitionProduceResponse()
+          .setIndex(topicIdPartition.partition())
+          .setBaseOffset(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset)
+          .setLogStartOffset(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset)
+          .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+          .setErrorCode(Errors.INVALID_REQUIRED_ACKS.code())
         )
     }
     responseCallback(responseStatus)

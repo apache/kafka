@@ -2619,21 +2619,35 @@ public class RequestResponseTest {
 
     @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponse() {
-        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        Uuid topicId = Uuid.fromString("0AQorYD4we9TvBGX5JkYAB");
-        responseData.put(new TopicIdPartition(topicId, 0, "test"), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100));
-        return new ProduceResponse(responseData, 0);
+        return new ProduceResponse(Map.of(
+            new TopicIdPartition(Uuid.fromString("0AQorYD4we9TvBGX5JkYAB"), 0, "test"),
+            new ProduceResponseData.PartitionProduceResponse()
+                .setIndex(0)
+                .setBaseOffset(10000)
+                .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                .setLogStartOffset(100)
+                .setErrorCode(Errors.NONE.code())),
+            List.of(),
+            0);
     }
 
-    @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponseWithErrorMessage() {
-        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        Uuid topicId = Uuid.fromString("0AQorYD4we9TvBGX5JkYAB");
-        responseData.put(new TopicIdPartition(topicId, 0, "test"), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100, singletonList(new ProduceResponse.RecordError(0, "error message")),
-                "global error message"));
-        return new ProduceResponse(responseData, 0);
+        return new ProduceResponse(Map.of(
+            new TopicIdPartition(Uuid.fromString("0AQorYD4we9TvBGX5JkYAB"), 0, "test"),
+            new ProduceResponseData.PartitionProduceResponse()
+                .setIndex(0)
+                .setBaseOffset(10000)
+                .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                .setLogStartOffset(100)
+                .setErrorCode(Errors.NONE.code())
+                .setRecordErrors(List.of(
+                    new ProduceResponseData.BatchIndexAndErrorMessage()
+                        .setBatchIndex(0)
+                        .setBatchIndexErrorMessage("error message")
+                ))
+                .setErrorMessage("global error message")),
+            List.of(),
+            0);
     }
 
     private SaslHandshakeRequest createSaslHandshakeRequest(short version) {

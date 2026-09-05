@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
-import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch;
+import org.apache.kafka.common.message.ProduceResponseData.NodeEndpoint;
+import org.apache.kafka.common.message.ProduceResponseData.PartitionProduceResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
@@ -29,7 +29,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * This wrapper supports both v0 and v8 of ProduceResponse.
@@ -65,42 +64,11 @@ public class ProduceResponse extends AbstractResponse {
         this.data = produceResponseData;
     }
 
-    /**
-     * Constructor for Version 0
-     * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
-     * in KAFKA-10730
-     * @param responses Produced data grouped by topic-partition
-     */
-    @Deprecated
-    public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses) {
-        this(responses, DEFAULT_THROTTLE_TIME, List.of());
+    public ProduceResponse(Map<TopicIdPartition, PartitionProduceResponse> responses, List<NodeEndpoint> nodeEndpoints, int throttleTimeMs) {
+        this(toData(responses, nodeEndpoints, throttleTimeMs));
     }
 
-    /**
-     * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
-     * in KAFKA-10730
-     * @param responses Produced data grouped by topic-partition
-     * @param throttleTimeMs Time in milliseconds the response was throttled
-     */
-    @Deprecated
-    public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs) {
-        this(toData(responses, throttleTimeMs, List.of()));
-    }
-
-    /**
-     * Constructor for the latest version
-     * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
-     * in KAFKA-10730
-     * @param responses Produced data grouped by topic-partition
-     * @param throttleTimeMs Time in milliseconds the response was throttled
-     * @param nodeEndpoints List of node endpoints
-     */
-    @Deprecated
-    public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
-        this(toData(responses, throttleTimeMs, nodeEndpoints));
-    }
-
-    private static ProduceResponseData toData(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
+    private static ProduceResponseData toData(Map<TopicIdPartition, PartitionProduceResponse> responses, List<NodeEndpoint> nodeEndpoints, int throttleTimeMs) {
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
         responses.forEach((tp, response) -> {
             ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic(), tp.topicId());
@@ -108,28 +76,9 @@ public class ProduceResponse extends AbstractResponse {
                 tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic()).setTopicId(tp.topicId());
                 data.responses().add(tpr);
             }
-            tpr.partitionResponses()
-                .add(new ProduceResponseData.PartitionProduceResponse()
-                    .setIndex(tp.partition())
-                    .setBaseOffset(response.baseOffset)
-                    .setLogStartOffset(response.logStartOffset)
-                    .setLogAppendTimeMs(response.logAppendTime)
-                    .setErrorMessage(response.errorMessage)
-                    .setErrorCode(response.error.code())
-                    .setCurrentLeader(response.currentLeader != null ? response.currentLeader : new LeaderIdAndEpoch())
-                    .setRecordErrors(response.recordErrors
-                        .stream()
-                        .map(e -> new ProduceResponseData.BatchIndexAndErrorMessage()
-                            .setBatchIndex(e.batchIndex)
-                            .setBatchIndexErrorMessage(e.message))
-                        .collect(Collectors.toList())));
+            tpr.partitionResponses().add(response);
         });
-        nodeEndpoints.forEach(endpoint -> data.nodeEndpoints()
-                .add(new ProduceResponseData.NodeEndpoint()
-                        .setNodeId(endpoint.id())
-                        .setHost(endpoint.host())
-                        .setPort(endpoint.port())
-                        .setRack(endpoint.rack())));
+        nodeEndpoints.forEach(endpoint -> data.nodeEndpoints().add(endpoint));
         return data;
     }
 

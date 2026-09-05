@@ -70,6 +70,7 @@ import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.EndTxnRequest;
@@ -2448,9 +2449,17 @@ public class SenderTest {
             assertTrue(inflightBatch.isInflight(), "Batch should be marked inflight after being sent");
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
-            Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-            responseMap.put(tpId, new ProduceResponse.PartitionResponse(Errors.MESSAGE_TOO_LARGE));
-            client.respond(new ProduceResponse(responseMap));
+            Map<TopicIdPartition, ProduceResponseData.PartitionProduceResponse> responseMap = new HashMap<>();
+            responseMap.put(
+                tpId,
+                new ProduceResponseData.PartitionProduceResponse()
+                    .setIndex(tpId.partition())
+                    .setBaseOffset(ProduceResponse.INVALID_OFFSET)
+                    .setLogStartOffset(ProduceResponse.INVALID_OFFSET)
+                    .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                    .setErrorCode(Errors.MESSAGE_TOO_LARGE.code())
+            );
+            client.respond(new ProduceResponse(responseMap, List.of(), AbstractResponse.DEFAULT_THROTTLE_TIME));
             sender.runOnce(); // split and reenqueue
             assertFalse(inflightBatch.isInflight(), "Batch should be marked as not inflight after being split and re-enqueued");
             assertEquals(2, txnManager.sequenceNumber(tpId.topicPartition()), "The next sequence should be 2");
@@ -2467,9 +2476,17 @@ public class SenderTest {
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
-            responseMap.put(tpId, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
+            responseMap.put(
+                tpId,
+                new ProduceResponseData.PartitionProduceResponse()
+                    .setIndex(tpId.partition())
+                    .setBaseOffset(0)
+                    .setLogStartOffset(0)
+                    .setLogAppendTimeMs(0)
+                    .setErrorCode(Errors.NONE.code())
+            );
             client.respond(produceRequestMatcher(tpId.topicPartition(), producerIdAndEpoch, 0, txnManager.isTransactional()),
-                    new ProduceResponse(responseMap));
+                    new ProduceResponse(responseMap, List.of(), AbstractResponse.DEFAULT_THROTTLE_TIME));
 
             sender.runOnce(); // receive
             assertTrue(f1.isDone(), "The future should have been done.");
@@ -2484,9 +2501,17 @@ public class SenderTest {
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
-            responseMap.put(tpId, new ProduceResponse.PartitionResponse(Errors.NONE, 1L, 0L, 0L));
+            responseMap.put(
+                tpId,
+                new ProduceResponseData.PartitionProduceResponse()
+                    .setIndex(tpId.partition())
+                    .setBaseOffset(1)
+                    .setLogStartOffset(0)
+                    .setLogAppendTimeMs(0)
+                    .setErrorCode(Errors.NONE.code())
+            );
             client.respond(produceRequestMatcher(tpId.topicPartition(), producerIdAndEpoch, 1, txnManager.isTransactional()),
-                    new ProduceResponse(responseMap));
+                    new ProduceResponse(responseMap, List.of(), AbstractResponse.DEFAULT_THROTTLE_TIME));
 
             sender.runOnce(); // receive
             assertTrue(f2.isDone(), "The future should have been done.");
@@ -2539,9 +2564,16 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size(), "Expect one in-flight batch in accumulator");
 
-        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-        responseMap.put(new TopicIdPartition(TOPIC_ID, tp0), new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
-        client.respond(new ProduceResponse(responseMap));
+        Map<TopicIdPartition, ProduceResponseData.PartitionProduceResponse> responseMap = Map.of(
+            new TopicIdPartition(TOPIC_ID, tp0),
+            new ProduceResponseData.PartitionProduceResponse()
+                .setIndex(tp0.partition())
+                .setBaseOffset(0)
+                .setLogStartOffset(0)
+                .setLogAppendTimeMs(0)
+                .setErrorCode(Errors.NONE.code())
+        );
+        client.respond(new ProduceResponse(responseMap, List.of(), AbstractResponse.DEFAULT_THROTTLE_TIME));
 
         time.sleep(deliveryTimeoutMs);
         sender.runOnce();  // receive first response
@@ -2719,9 +2751,16 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size(), "Expect one in-flight batch in accumulator");
 
-        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-        responseMap.put(new TopicIdPartition(TOPIC_ID, tp0), new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
-        client.respond(new ProduceResponse(responseMap));
+        Map<TopicIdPartition, ProduceResponseData.PartitionProduceResponse> responseMap = Map.of(
+            new TopicIdPartition(TOPIC_ID, tp0),
+            new ProduceResponseData.PartitionProduceResponse()
+                .setIndex(tp0.partition())
+                .setBaseOffset(0)
+                .setLogStartOffset(0)
+                .setLogAppendTimeMs(0)
+                .setErrorCode(Errors.NONE.code())
+        );
+        client.respond(new ProduceResponse(responseMap, List.of(), AbstractResponse.DEFAULT_THROTTLE_TIME));
 
         // Successfully expire both batches.
         time.sleep(deliveryTimeoutMs);
@@ -3757,12 +3796,18 @@ public class SenderTest {
                 null, MAX_BLOCK_TIMEOUT, time.milliseconds(), TestUtils.singletonCluster()).future;
     }
 
-    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset, String errorMessage) {
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset,
-                RecordBatch.NO_TIMESTAMP, logStartOffset, Collections.emptyList(), errorMessage);
-        Map<TopicIdPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(new TopicIdPartition(TOPIC_ID, tp), resp);
-        return new ProduceResponse(partResp, throttleTimeMs);
+        return new ProduceResponse(Map.of(
+            new TopicIdPartition(TOPIC_ID, tp),
+            new ProduceResponseData.PartitionProduceResponse()
+                .setIndex(tp.partition())
+                .setBaseOffset(offset)
+                .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                .setLogStartOffset(logStartOffset)
+                .setErrorCode(error.code())
+                .setErrorMessage(errorMessage)),
+            List.of(),
+            throttleTimeMs);
     }
 
     private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {

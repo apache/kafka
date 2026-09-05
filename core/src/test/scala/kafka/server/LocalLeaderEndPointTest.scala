@@ -25,11 +25,11 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.message.ProduceResponseData.PartitionProduceResponse
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.KRaftMetadataCache
@@ -134,23 +134,23 @@ class LocalLeaderEndPointTest extends Logging {
   @Test
   def testFetchLatestOffset(): Unit = {
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
     assertEquals(new OffsetAndEpoch(3L, 0), endPoint.fetchLatestOffset(topicPartition, 0))
     bumpLeaderEpoch()
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
     assertEquals(new OffsetAndEpoch(6L, 1), endPoint.fetchLatestOffset(topicPartition, 7))
   }
 
   @Test
   def testFetchEarliestOffset(): Unit = {
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, 0))
 
     bumpLeaderEpoch()
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
     replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 3), _ => ())
     assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestOffset(topicPartition, 7))
   }
@@ -158,12 +158,12 @@ class LocalLeaderEndPointTest extends Logging {
   @Test
   def testFetchEarliestLocalOffset(): Unit = {
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestLocalOffset(topicPartition, 0))
 
     bumpLeaderEpoch()
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
     replicaManager.logManager.getLog(topicPartition).ifPresent(_.updateLocalLogStartOffset(3))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, 7))
     assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestLocalOffset(topicPartition, 7))
@@ -172,7 +172,7 @@ class LocalLeaderEndPointTest extends Logging {
   @Test
   def testFetchEpochEndOffsets(): Unit = {
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
 
     var result = endPoint.fetchEpochEndOffsets(JMap.of(
       topicPartition, new OffsetForLeaderPartition()
@@ -196,7 +196,7 @@ class LocalLeaderEndPointTest extends Logging {
     assertEquals(2, replicaManager.getPartitionOrException(topicPartition).getLeaderEpoch)
 
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
 
     result = endPoint.fetchEpochEndOffsets(JMap.of(
       topicPartition, new OffsetForLeaderPartition()
@@ -252,7 +252,7 @@ class LocalLeaderEndPointTest extends Logging {
   def testEarliestPendingUploadOffsetWhenNoSegmentsUploaded(): Unit = {
     // Append some records; no remote upload happened yet
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
 
     val expected = endPoint.fetchEarliestOffset(topicPartition, 0)
     val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
@@ -262,7 +262,7 @@ class LocalLeaderEndPointTest extends Logging {
   @Test
   def testEarliestPendingUploadOffsetWhenLocalStartGreaterThanStart(): Unit = {
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
 
     // Bump epoch and advance local log start offset without changing log start offset
     bumpLeaderEpoch()
@@ -275,7 +275,7 @@ class LocalLeaderEndPointTest extends Logging {
   @Test
   def testEarliestPendingUploadOffsetWhenHighestRemoteOffsetKnown(): Unit = {
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
 
     // Highest remote is 1 => earliest pending should be max(1+1, logStart)
     val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
@@ -292,7 +292,7 @@ class LocalLeaderEndPointTest extends Logging {
   def testEarliestPendingUploadOffsetWhenLocalStartGreaterThanStartWithKnownRemoteOffset(): Unit = {
     // Append records to create initial log state
     appendRecords(replicaManager, topicIdPartition, records)
-      .onFire(response => assertEquals(Errors.NONE, response.error))
+      .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
 
     val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
 
@@ -316,7 +316,7 @@ class LocalLeaderEndPointTest extends Logging {
     // Append 12 records (offsets 0-11)
     for (_ <- 1 to 4) {
       appendRecords(replicaManager, topicIdPartition, records)
-        .onFire(response => assertEquals(Errors.NONE, response.error))
+        .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
     }
 
     // Delete records to advance logStartOffset to 10
@@ -343,7 +343,7 @@ class LocalLeaderEndPointTest extends Logging {
     // Append 18 records (offsets 0-17)
     for (_ <- 1 to 6) {
       appendRecords(replicaManager, topicIdPartition, records)
-        .onFire(response => assertEquals(Errors.NONE, response.error))
+        .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
     }
 
     // Delete records to advance logStartOffset to 10
@@ -370,7 +370,7 @@ class LocalLeaderEndPointTest extends Logging {
     // Append 12 records (offsets 0-11)
     for (_ <- 1 to 4) {
       appendRecords(replicaManager, topicIdPartition, records)
-        .onFire(response => assertEquals(Errors.NONE, response.error))
+        .onFire(response => assertEquals(Errors.NONE.code, response.errorCode))
     }
 
     // Delete records to advance both logStartOffset and localLogStartOffset to 10
@@ -431,9 +431,9 @@ class LocalLeaderEndPointTest extends Logging {
                             partition: TopicIdPartition,
                             records: MemoryRecords,
                             origin: AppendOrigin = AppendOrigin.CLIENT,
-                            requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
-    val result = new CallbackResult[PartitionResponse]()
-    def appendCallback(responses: JMap[TopicIdPartition, PartitionResponse]): Unit = {
+                            requiredAcks: Short = -1): CallbackResult[PartitionProduceResponse] = {
+    val result = new CallbackResult[PartitionProduceResponse]()
+    def appendCallback(responses: JMap[TopicIdPartition, PartitionProduceResponse]): Unit = {
       val response = responses.get(partition)
       assertNotNull(response)
       result.fire(response)

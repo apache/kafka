@@ -25,12 +25,12 @@ import kafka.utils.Logging
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
+import org.apache.kafka.common.message.ProduceResponseData.PartitionProduceResponse
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.record.internal.{FileRecords, MemoryRecords, MemoryRecordsBuilder, Record, SimpleRecord}
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition}
@@ -256,7 +256,7 @@ class TransactionStateManager(brokerId: Int,
     expiredForPartition: Iterable[TransactionalIdCoordinatorEpochAndMetadata],
     tombstoneRecords: MemoryRecords
   ): Unit = {
-    def removeFromCacheCallback(responses: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+    def removeFromCacheCallback(responses: util.Map[TopicIdPartition, PartitionProduceResponse]): Unit = {
       responses.forEach { (topicPartition, response) =>
         inReadLock[Exception](stateLock, () => {
           transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
@@ -267,11 +267,11 @@ class TransactionStateManager(brokerId: Int,
                 if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
                   && txnMetadata.pendingState.filter(s => s == TransactionState.DEAD).isPresent
                   && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
-                  && response.error == Errors.NONE) {
+                  && response.errorCode == Errors.NONE.code) {
                   txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
                 } else {
                   warn(s"Failed to remove expired transactionalId: $transactionalId" +
-                    s" from cache. Tombstone append error code: ${response.error}," +
+                    s" from cache. Tombstone append error code: ${response.errorCode}," +
                     s" pendingState: ${txnMetadata.pendingState}, producerEpoch: ${txnMetadata.producerEpoch}," +
                     s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
                     s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
@@ -663,7 +663,7 @@ class TransactionStateManager(brokerId: Int,
     val recordsPerPartition = Map(transactionStateTopicIdPartition -> records)
 
     // set the callback function to update transaction status in cache after log append completed
-    def updateCacheCallback(responseStatus: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+    def updateCacheCallback(responseStatus: util.Map[TopicIdPartition, PartitionProduceResponse]): Unit = {
       // the append response should only contain the topics partition
       if (responseStatus.size != 1 || !responseStatus.containsKey(transactionStateTopicIdPartition))
         throw new IllegalStateException("Append status %s should only have one partition %s"
@@ -671,13 +671,13 @@ class TransactionStateManager(brokerId: Int,
 
       val status = responseStatus.get(transactionStateTopicIdPartition)
 
-      var responseError = if (status.error == Errors.NONE) {
+      var responseError = if (status.errorCode == Errors.NONE.code) {
         Errors.NONE
       } else {
-        debug(s"Appending $transactionalId's new metadata $newMetadata failed due to ${status.error.exceptionName}")
+        debug(s"Appending $transactionalId's new metadata $newMetadata failed due to ${Errors.forCode(status.errorCode).exceptionName}")
 
         // transform the log append error code to the corresponding coordinator error code
-        status.error match {
+        Errors.forCode(status.errorCode) match {
           case Errors.UNKNOWN_TOPIC_OR_PARTITION
                | Errors.NOT_ENOUGH_REPLICAS
                | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND
