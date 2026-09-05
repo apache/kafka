@@ -106,7 +106,7 @@ public class ListConsumerGroupTest {
 
                 TestUtils.waitForCondition(() -> {
                     foundGroups.set(new HashSet<>(service.listConsumerGroups()));
-                    return expectedGroups.equals(foundGroups.get());
+                    return Objects.equals(expectedGroups, foundGroups.get());
                 }, () -> "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
             }
 
