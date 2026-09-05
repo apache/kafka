@@ -2506,7 +2506,6 @@ public class QuorumStateTest {
     /**
      * Test transitions from Resigned
      */
-    // KAFKA-18379 to fill in the rest of the cases
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void testResignedToFollowerInSameEpoch(KRaftVersion kraftVersion) {
@@ -2520,8 +2519,7 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         assertTrue(state.isResigned());
         assertThrows(IllegalStateException.class, () -> state.transitionToFollower(epoch, localId, voters.listeners(localId)));
-        // KAFKA-18379 will fix this
-        state.transitionToFollower(epoch, node1, voters.listeners(node1));
+        assertThrows(IllegalStateException.class, () -> state.transitionToFollower(epoch, node1, voters.listeners(node1)));
     }
 
     @ParameterizedTest
