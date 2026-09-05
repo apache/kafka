@@ -1391,6 +1391,43 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
+    public void shouldNotAddGlobalStoreAsTaskLocalStateStore() {
+        // A global store must appear only in globalStateStores(), never as a task-local store. See KAFKA-13009.
+        final String globalStoreName = "global-store";
+        final StoreBuilder<?> storeBuilder =
+            new MockKeyValueStoreBuilder(globalStoreName, false).withLoggingDisabled();
+        builder.setApplicationId("X");
+        builder.addGlobalStore(
+            "globalSource",
+            null,
+            null,
+            null,
+            "global-topic",
+            "global-processor",
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(storeBuilder)),
+            false
+        );
+        builder.rewriteTopology(new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "X"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
+        ))));
+
+        final ProcessorTopology globalTopology = builder.buildGlobalStateTopology();
+        assertTrue(globalTopology.stateStores().isEmpty());
+        assertEquals(1, globalTopology.globalStateStores().size());
+        assertEquals(globalStoreName, globalTopology.globalStateStores().get(0).name());
+
+        int globalGroupId = -1;
+        for (final Map.Entry<Integer, Set<String>> group : builder.nodeGroups().entrySet()) {
+            if (group.getValue().contains("global-processor")) {
+                globalGroupId = group.getKey();
+            }
+        }
+        assertTrue(globalGroupId >= 0);
+        assertTrue(builder.buildSubtopology(globalGroupId).stateStores().isEmpty());
+    }
+
+    @Test
     public void shouldWrapProcessorSupplier() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
         props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, ProcessorSkippingWrapper.class);
