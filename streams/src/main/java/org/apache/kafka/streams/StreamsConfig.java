@@ -1933,7 +1933,15 @@ public class StreamsConfig extends AbstractConfig {
         // add group id, client id with stream client id prefix, and group instance id
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
-        final String groupInstanceId = (String) consumerProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        final String groupInstanceId = (String) parseType(
+            ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
+            consumerProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG),
+            Type.STRING
+        );
+        new ConfigDef.NonEmptyString().ensureValid(
+            ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
+            groupInstanceId
+        );
         // Suffix each thread consumer with thread.id to enforce uniqueness of group.instance.id.
         if (groupInstanceId != null) {
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId + "-" + threadIdx);
