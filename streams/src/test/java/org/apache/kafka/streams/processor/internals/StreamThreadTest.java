@@ -4583,6 +4583,22 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void testGetTopicPartitionInfoFillsMissingPartitionsFromCounts() {
+        assertEquals(
+            Map.of(
+                t1p1, new PartitionInfo(topic1, 1, null, new Node[0], new Node[0]),
+                t1p2, new PartitionInfo(topic1, 2, null, new Node[0], new Node[0]),
+                new TopicPartition(topic1, 0), new PartitionInfo(topic1, 0, null, new Node[0], new Node[0]),
+                new TopicPartition(topic1, 3), new PartitionInfo(topic1, 3, null, new Node[0], new Node[0])
+            ),
+            StreamThread.getTopicPartitionInfo(
+                Map.of(new HostInfo("localhost", 9092), Set.of(t1p1, t1p2)),
+                Map.of(topic1, 4)
+            )
+        );
+    }
+
+    @Test
     public void shouldRemoveMetricsDelegatingReporterOnShutdown() throws InterruptedException {
         thread = createStreamThread(CLIENT_ID, false);
 

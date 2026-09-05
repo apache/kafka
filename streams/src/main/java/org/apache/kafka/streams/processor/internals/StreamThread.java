@@ -1612,7 +1612,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsMetadataState.onChange(
                     activeHostInfoMap,
                     standbyHostInfoMap,
-                    getTopicPartitionInfo(activeHostInfoMap)
+                    getTopicPartitionInfo(activeHostInfoMap, streamsRebalanceData.get().topicPartitionCounts())
             );
         }
     }
@@ -1646,6 +1646,19 @@ public class StreamThread extends Thread implements ProcessingThread {
 
 
     static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
+        return getTopicPartitionInfo(partitionsByHost, Map.of());
+    }
+
+    /**
+     * Builds a {@link TopicPartition} to {@link PartitionInfo} map used for Interactive Query hashing.
+     * Host maps only list currently assigned, queryable partitions. {@code topicPartitionCounts}
+     * supplies the full partition count so hashing is not affected by in-flight or otherwise
+     * unadvertised partitions.
+     */
+    static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(
+        final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
+        final Map<String, Integer> topicPartitionCounts
+    ) {
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         for (final Set<TopicPartition> value : partitionsByHost.values()) {
             for (final TopicPartition topicPartition : value) {
@@ -1659,6 +1672,24 @@ public class StreamThread extends Thread implements ProcessingThread {
                         new Node[0]
                     )
                 );
+            }
+        }
+        if (topicPartitionCounts != null) {
+            for (final Map.Entry<String, Integer> entry : topicPartitionCounts.entrySet()) {
+                final int partitionCount = entry.getValue();
+                for (int partition = 0; partition < partitionCount; partition++) {
+                    final TopicPartition topicPartition = new TopicPartition(entry.getKey(), partition);
+                    topicToPartitionInfo.putIfAbsent(
+                        topicPartition,
+                        new PartitionInfo(
+                            topicPartition.topic(),
+                            topicPartition.partition(),
+                            null,
+                            new Node[0],
+                            new Node[0]
+                        )
+                    );
+                }
             }
         }
         return topicToPartitionInfo;

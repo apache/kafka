@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 public class EndpointToPartitionsManager {
 
@@ -81,6 +83,47 @@ public class EndpointToPartitionsManager {
         endpointToPartitions.setActivePartitions(activeTopicPartitions);
         endpointToPartitions.setStandbyPartitions(standbyTopicPartitions);
         return endpointToPartitions;
+    }
+
+    /**
+     * Collects partition counts for every source and repartition source topic in the configured topology.
+     * These counts are independent of the current task assignment, so Interactive Query hashing stays
+     * correct while a task is pending revocation or assigned to a member with no {@code application.server}.
+     *
+     * @param streamsGroup  The streams group.
+     * @param metadataImage The current metadata image.
+     * @return A list of topic partition counts, sorted by topic name. Empty if the topology is not configured.
+     */
+    public static List<StreamsGroupHeartbeatResponseData.TopicPartitionCount> topicPartitionCounts(
+        final StreamsGroup streamsGroup,
+        final CoordinatorMetadataImage metadataImage
+    ) {
+        Optional<SortedMap<String, ConfiguredSubtopology>> maybeSubtopologies =
+            streamsGroup.configuredTopology().flatMap(ConfiguredTopology::subtopologies);
+        if (maybeSubtopologies.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Integer> counts = new TreeMap<>();
+        for (ConfiguredSubtopology subtopology : maybeSubtopologies.get().values()) {
+            for (String topic : subtopology.sourceTopics()) {
+                metadataImage.topicMetadata(topic)
+                    .ifPresent(topicMetadata -> counts.put(topic, topicMetadata.partitionCount()));
+            }
+            for (Map.Entry<String, ConfiguredInternalTopic> entry : subtopology.repartitionSourceTopics().entrySet()) {
+                int partitionCount = metadataImage.topicMetadata(entry.getKey())
+                    .map(CoordinatorMetadataImage.TopicMetadata::partitionCount)
+                    .orElse(entry.getValue().numberOfPartitions());
+                if (partitionCount > 0) {
+                    counts.put(entry.getKey(), partitionCount);
+                }
+            }
+        }
+        List<StreamsGroupHeartbeatResponseData.TopicPartitionCount> result = new ArrayList<>(counts.size());
+        counts.forEach((topic, partitionCount) ->
+            result.add(new StreamsGroupHeartbeatResponseData.TopicPartitionCount()
+                .setTopic(topic)
+                .setPartitionCount(partitionCount)));
+        return result;
     }
 
     private static List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions(final Map<String, Set<Integer>> tasks,
