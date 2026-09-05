@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
@@ -29,7 +30,7 @@ import org.slf4j.Logger;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class StreamsRebalanceListener implements ConsumerRebalanceListener {
+public class StreamsRebalanceListener implements RebalanceListener {
 
     private final Time time;
     private final TaskManager taskManager;
@@ -50,7 +51,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
     }
 
     @Override
-    public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+    public void onPartitionsAssigned(final Collection<TopicPartition> partitions, final RebalanceConsumer consumer) {
         // NB: all task management is already handled by:
         // org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.onAssignment
         if (assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
@@ -81,7 +82,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
     }
 
     @Override
-    public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
+    public void onPartitionsRevoked(final Collection<TopicPartition> partitions, final RebalanceConsumer consumer) {
         log.debug("Current state {}: revoked partitions {} because of consumer rebalance.\n" +
                       "\tcurrently assigned active tasks: {}\n" +
                       "\tcurrently assigned standby tasks: {}\n",
@@ -103,7 +104,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
     }
 
     @Override
-    public void onPartitionsLost(final Collection<TopicPartition> partitions) {
+    public void onPartitionsLost(final Collection<TopicPartition> partitions, final RebalanceConsumer consumer) {
         log.info("at state {}: partitions {} lost due to missed rebalance.\n" +
                      "\tlost active tasks: {}\n" +
                      "\tlost assigned standby tasks: {}\n",
