@@ -14,6 +14,7 @@
 
 package kafka.server
 
+import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl._
@@ -28,7 +29,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
 import org.apache.kafka.common.message._
-import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
+import org.apache.kafka.common.metrics.{KafkaMetric, Metrics, Quota, Sensor}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record.internal._
@@ -42,7 +44,7 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
-import org.apache.kafka.server.quota.QuotaType
+import org.apache.kafka.server.quota.{ClientRequestQuotaManager, QuotaType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -65,6 +67,13 @@ class RequestQuotaTest extends BaseRequestTest {
   private val smallQuotaProducerClientId = "small-quota-producer-client"
   private val smallQuotaConsumerClientId = "small-quota-consumer-client"
   private var leaderNode: KafkaBroker = _
+
+  private case class RequestQuotaTarget(
+    socketServer: SocketServer,
+    listenerName: ListenerName,
+    quotaManager: ClientRequestQuotaManager,
+    metrics: Metrics
+  )
 
   // Run tests concurrently since a throttle could be up to 1 second because quota percentage allocated is very low
   case class Task(apiKey: ApiKeys, future: Future[_])
@@ -123,6 +132,8 @@ class RequestQuotaTest extends BaseRequestTest {
       assertEquals(Quota.upperBound(1), produceQuotaManager.quota("some-user", smallQuotaProducerClientId), s"Produce quota override not set")
       val consumeQuotaManager = brokers.head.dataPlaneRequestProcessor.quotas.fetch
       assertEquals(Quota.upperBound(1), consumeQuotaManager.quota("some-user", smallQuotaConsumerClientId), s"Consume quota override not set")
+      assertEquals(Quota.upperBound(0.01), controllerServer.quotaManagers.request.quota("some-user", "some-client"),
+        s"Controller default request quota not set")
     }
   }
 
@@ -158,6 +169,15 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
+  @Test
+  def testControllerResponseThrottleTime(): Unit = {
+    val target = controllerRequestQuotaTarget
+    for (apiKey <- RequestQuotaTest.ControllerActionsWithThrottle) {
+      submitTest(apiKey, () => checkRequestThrottleTime(apiKey, target, s"controller-$apiKey"))
+    }
+
+    waitAndCheckResults()
+  }
 
   @Test
   def testShareFetchUsesSameFetchSensor(): Unit = {
@@ -245,24 +265,26 @@ class RequestQuotaTest extends BaseRequestTest {
 
   def session(user: String): Session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), null)
 
-  private def throttleTimeMetricValue(clientId: String): Double = {
-    throttleTimeMetricValueForQuotaType(clientId, QuotaType.REQUEST)
+  private def throttleTimeMetricValue(clientId: String, target: RequestQuotaTarget = brokerRequestQuotaTarget): Double = {
+    throttleTimeMetricValueForQuotaType(clientId, QuotaType.REQUEST, target)
   }
 
-  private def throttleTimeMetricValueForQuotaType(clientId: String, quotaType: QuotaType): Double = {
-    val metricName = leaderNode.metrics.metricName("throttle-time", quotaType.toString,
+  private def throttleTimeMetricValueForQuotaType(
+    clientId: String,
+    quotaType: QuotaType,
+    target: RequestQuotaTarget = brokerRequestQuotaTarget
+  ): Double = {
+    val metricName = target.metrics.metricName("throttle-time", quotaType.toString,
       "", "user", "", "client-id", clientId)
-    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
-      clientId).throttleTimeSensor
-    metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
+    val sensor = target.quotaManager.getOrCreateQuotaSensors(session("ANONYMOUS"), clientId).throttleTimeSensor
+    metricValue(target.metrics.metrics.get(metricName), sensor)
   }
 
-  private def requestTimeMetricValue(clientId: String): Double = {
-    val metricName = leaderNode.metrics.metricName("request-time", QuotaType.REQUEST.toString,
+  private def requestTimeMetricValue(clientId: String, target: RequestQuotaTarget): Double = {
+    val metricName = target.metrics.metricName("request-time", QuotaType.REQUEST.toString,
       "", "user", "", "client-id", clientId)
-    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
-      clientId).quotaSensor
-    metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
+    val sensor = target.quotaManager.getOrCreateQuotaSensors(session("ANONYMOUS"), clientId).quotaSensor
+    metricValue(target.metrics.metrics.get(metricName), sensor)
   }
 
   private def exemptRequestMetricValue: Double = {
@@ -677,7 +699,9 @@ class RequestQuotaTest extends BaseRequestTest {
           new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
 
         case ApiKeys.ALLOCATE_PRODUCER_IDS =>
-          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
+          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData()
+            .setBrokerId(leaderNode.config.brokerId)
+            .setBrokerEpoch(leaderNode.lifecycleManager.brokerEpoch))
 
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
           new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData())
@@ -778,12 +802,12 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  case class Client(clientId: String, apiKey: ApiKeys) {
+  private case class Client(clientId: String, apiKey: ApiKeys, target: RequestQuotaTarget = brokerRequestQuotaTarget) {
     var correlationId: Int = 0
     def runUntil(until: AbstractResponse => Boolean): Boolean = {
       val startMs = System.currentTimeMillis
       var done = false
-      val socket = connect()
+      val socket = connect(target.socketServer, target.listenerName)
       try {
         while (!done && System.currentTimeMillis < startMs + 10000) {
           correlationId += 1
@@ -798,13 +822,26 @@ class RequestQuotaTest extends BaseRequestTest {
     }
 
     override def toString: String = {
-      val requestTime = requestTimeMetricValue(clientId)
-      val throttleTime = throttleTimeMetricValue(clientId)
-      val produceThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.PRODUCE)
-      val consumeThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.FETCH)
+      val requestTime = requestTimeMetricValue(clientId, target)
+      val throttleTime = throttleTimeMetricValue(clientId, target)
+      val produceThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.PRODUCE, target)
+      val consumeThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.FETCH, target)
       s"Client $clientId apiKey $apiKey requests $correlationId requestTime $requestTime " +
       s"throttleTime $throttleTime produceThrottleTime $produceThrottleTime consumeThrottleTime $consumeThrottleTime"
     }
+  }
+
+  private def brokerRequestQuotaTarget: RequestQuotaTarget = {
+    RequestQuotaTarget(anySocketServer, listenerName, leaderNode.quotaManagers.request, leaderNode.metrics)
+  }
+
+  private def controllerRequestQuotaTarget: RequestQuotaTarget = {
+    RequestQuotaTarget(
+      controllerSocketServer,
+      new ListenerName(controllerServer.config.controllerListenerNames.get(0)),
+      controllerServer.quotaManagers.request,
+      controllerServer.metrics
+    )
   }
 
   private def submitTest(apiKey: ApiKeys, test: () => Unit): Unit = {
@@ -828,14 +865,18 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def checkRequestThrottleTime(apiKey: ApiKeys): Unit = {
+  private def checkRequestThrottleTime(
+    apiKey: ApiKeys,
+    target: RequestQuotaTarget = brokerRequestQuotaTarget,
+    clientId: String = ""
+  ): Unit = {
     // Request until throttled using client-id with default small quota
-    val clientId = apiKey.toString
-    val client = Client(clientId, apiKey)
+    val effectiveClientId = if (clientId.isEmpty) apiKey.toString else clientId
+    val client = Client(effectiveClientId, apiKey, target)
     val throttled = client.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(throttled, s"Response not throttled: $client")
-    assertTrue(throttleTimeMetricValue(clientId) > 0 , s"Throttle time metrics not updated: $client")
+    assertTrue(throttleTimeMetricValue(effectiveClientId, target) > 0, s"Throttle time metrics not updated: $client")
   }
 
   private def checkSmallQuotaProducerRequestThrottleTime(): Unit = {
@@ -907,6 +948,7 @@ class RequestQuotaTest extends BaseRequestTest {
 }
 
 object RequestQuotaTest {
+  val ControllerActionsWithThrottle = Set(ApiKeys.ALLOCATE_PRODUCER_IDS, ApiKeys.UPDATE_FEATURES)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
   val Envelope = Set(ApiKeys.ENVELOPE)
   val ShareGroupState = Set(ApiKeys.INITIALIZE_SHARE_GROUP_STATE, ApiKeys.READ_SHARE_GROUP_STATE, ApiKeys.WRITE_SHARE_GROUP_STATE,
