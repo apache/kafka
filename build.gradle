@@ -389,12 +389,13 @@ subprojects {
 
     publishing {
       repositories {
-        // To test locally, invoke gradlew with `-PmavenUrl=file:///some/local/path`
         maven {
           url = mavenUrl
-          credentials {
-            username = mavenUsername
-            password = mavenPassword
+          if (!mavenUrl || !'file'.equalsIgnoreCase(uri(mavenUrl).scheme)) {
+            credentials {
+              username = mavenUsername
+              password = mavenPassword
+            }
           }
         }
       }
