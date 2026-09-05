@@ -17,12 +17,14 @@
 package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,9 +32,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.net.ssl.SSLEngine;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class DefaultSslEngineFactoryTest {
 
@@ -208,6 +215,43 @@ public class DefaultSslEngineFactoryTest {
 
     protected DefaultSslEngineFactory sslEngineFactory() {
         return new DefaultSslEngineFactory();
+    }
+
+    @Test
+    public void testNamedGroupsAreAppliedToClientAndServerSslEngines() throws Exception {
+        assumeTrue(Runtime.version().feature() >= 20);
+        String[] namedGroups = {"secp256r1", "secp384r1"};
+        configs.put(SslConfigs.SSL_NAMED_GROUPS_CONFIG, Arrays.asList(namedGroups));
+        configs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        factory.configure(configs);
+
+        assertArrayEquals(namedGroups, namedGroups(factory.createClientSslEngine("localhost", 0, "HTTPS")));
+        SSLEngine serverSslEngine = factory.createServerSslEngine("localhost", 0);
+        assertArrayEquals(namedGroups, namedGroups(serverSslEngine));
+        assertTrue(serverSslEngine.getNeedClientAuth());
+    }
+
+    @Test
+    public void testUnsetNamedGroupsUseSslProviderDefaults() throws Exception {
+        assumeTrue(Runtime.version().feature() >= 20);
+        factory.configure(configs);
+
+        String[] providerDefaults = namedGroups(factory.sslContext().createSSLEngine("localhost", 0));
+        assertArrayEquals(providerDefaults, namedGroups(factory.createClientSslEngine("localhost", 0, "HTTPS")));
+    }
+
+    @Test
+    public void testEmptyNamedGroupsDisableNamedGroups() throws Exception {
+        assumeTrue(Runtime.version().feature() >= 20);
+        configs.put(SslConfigs.SSL_NAMED_GROUPS_CONFIG, List.of());
+        factory.configure(configs);
+
+        assertArrayEquals(new String[0], namedGroups(factory.createClientSslEngine("localhost", 0, "HTTPS")));
+    }
+
+    private String[] namedGroups(SSLEngine sslEngine) throws Exception {
+        Method getNamedGroups = sslEngine.getSSLParameters().getClass().getMethod("getNamedGroups");
+        return (String[]) getNamedGroups.invoke(sslEngine.getSSLParameters());
     }
 
     @Test
