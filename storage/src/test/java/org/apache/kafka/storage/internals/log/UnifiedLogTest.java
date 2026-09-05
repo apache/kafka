@@ -32,6 +32,7 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
@@ -5582,7 +5583,7 @@ public class UnifiedLogTest {
         if (transactionVerificationEnabled) {
             // TV2 behavior: Create verification state that supports epoch bumps
             // Should reject non-zero sequences when there's no existing producer state
-            assertThrows(OutOfOrderSequenceException.class, () ->
+            assertThrows(UnknownProducerIdException.class, () ->
                     log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(),
                             verificationGuard, TransactionVersion.TV_0.featureLevel()));
         } else {
