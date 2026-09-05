@@ -165,6 +165,10 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
         return indexWrapper.file();
     }
 
+    public int maxIndexSize() {
+        return maxIndexSize;
+    }
+
     @SuppressWarnings("unchecked")
     public T get() throws IOException {
         IndexWrapper wrapper = indexWrapper;

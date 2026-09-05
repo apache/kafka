@@ -482,7 +482,7 @@ public abstract class AbstractIndex implements Closeable {
      * Round a number to the greatest exact multiple of the given factor less than the given number.
      * E.g. roundDownToExactMultiple(67, 8) == 64
      */
-    private static int roundDownToExactMultiple(int number, int factor) {
+    static int roundDownToExactMultiple(int number, int factor) {
         return factor * (number / factor);
     }
 

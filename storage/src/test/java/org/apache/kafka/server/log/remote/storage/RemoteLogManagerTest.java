@@ -1154,7 +1154,7 @@ public class RemoteLogManagerTest {
         OffsetIndex olderIdx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, olderSegmentStartOffset, ""), olderSegmentStartOffset, 1000).get();
         TimeIndex olderTimeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, olderSegmentStartOffset, ""), olderSegmentStartOffset, 1500).get();
         File olderTxnFile = UnifiedLog.transactionIndexFile(tempDir, olderSegmentStartOffset, "");
-        oldestTxnFile.createNewFile();
+        olderTxnFile.createNewFile();
         TransactionIndex olderTxnIndex = new TransactionIndex(olderSegmentStartOffset, olderTxnFile);
         when(olderSegment.timeIndex()).thenReturn(olderTimeIdx);
         when(olderSegment.offsetIndex()).thenReturn(olderIdx);
@@ -1703,6 +1703,8 @@ public class RemoteLogManagerTest {
                             metadata.startOffset(), maxEntries * 8);
                     TimeIndex timeIdx = new TimeIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.TIME_INDEX_FILE_SUFFIX),
                             metadata.startOffset(), maxEntries * 12);
+                    timeIdx.close();
+                    offsetIdx.close();
                     return switch (indexType) {
                         case OFFSET -> Files.newInputStream(offsetIdx.file().toPath());
                         case TIMESTAMP -> Files.newInputStream(timeIdx.file().toPath());
