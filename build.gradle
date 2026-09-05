@@ -2711,6 +2711,8 @@ project(':tools') {
     implementation project(':share-coordinator')
     implementation project(':raft')
     implementation libs.argparse4j
+    implementation libs.protobuf
+    implementation libs.protobufJavaUtil
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
     implementation libs.joptSimple

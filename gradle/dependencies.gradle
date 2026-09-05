@@ -230,6 +230,7 @@ libs += [
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
   opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
   protobuf: "com.google.protobuf:protobuf-java:$versions.protobuf",
+  protobufJavaUtil: "com.google.protobuf:protobuf-java-util:$versions.protobuf",
   re2j: "com.google.re2j:re2j:$versions.re2j",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
   scalaLibrary: "org.scala-lang:scala-library:$versions.scala",

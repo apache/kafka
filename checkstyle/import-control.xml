@@ -340,6 +340,7 @@
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.coordinator.common.runtime" />
+      <allow pkg="com.google.protobuf" />
       <subpackage name="group">
         <allow pkg="kafka.api"/>
         <allow pkg="kafka.security"/>
