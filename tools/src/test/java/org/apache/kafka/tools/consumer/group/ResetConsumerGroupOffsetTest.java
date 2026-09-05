@@ -17,7 +17,9 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListStreamsGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -26,17 +28,24 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.ToolsTestUtils;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -49,6 +58,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -145,7 +155,7 @@ public class ResetConsumerGroupOffsetTest {
         try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
             assertTrue(resetOffsets.isEmpty());
-            assertTrue(committedOffsets(cluster, topic, group).isEmpty());
+            assertTrue(committedConsumerGroupOffsets(cluster, topic, group).isEmpty());
         }
     }
 
@@ -195,7 +205,7 @@ public class ResetConsumerGroupOffsetTest {
             for (String group : groups) {
                 try (AutoCloseable consumerGroupCloseable =
                              consumerGroupClosable(cluster, 1, topic, group, groupProtocol)) {
-                    awaitConsumerProgress(cluster, topic, group, 100L);
+                    awaitConsumerGroupProgress(cluster, topic, group, 100L);
                 }
             }
 
@@ -205,6 +215,52 @@ public class ResetConsumerGroupOffsetTest {
                     50, true, List.of(topic));
             resetAndAssertOffsets(cluster, addTo(args, "--execute"),
                     50, false, List.of(topic));
+        }
+    }
+
+    @ClusterTest(
+            brokers = 3,
+            serverProperties = {
+                @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+            }
+    )
+    public void testResetOffsetsStreamsGroupsReportError(ClusterInstance cluster) throws Exception {
+        String topic = generateRandomTopic();
+        String group = "streams-group";
+        String[] args = buildArgsForGroup(cluster, group, "--topic", topic, "--to-offset", "5", "--execute");
+        Properties streamsConfig = new Properties();
+        streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, group);
+        streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG,
+                org.apache.kafka.streams.GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+
+        produceMessages(cluster, topic, 10);
+        StreamsBuilder builder = new StreamsBuilder();
+        KStream<String, String> stream = builder.stream(topic);
+        stream.foreach((key, value) -> { });
+        try (KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfig);
+             Admin admin = cluster.admin();
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+            streams.start();
+            awaitStreamsGroupProgress(cluster, topic, group, 10L);
+
+            String output = ToolsTestUtils.grabConsoleOutput(service::resetOffsets);
+            Map<String, Map<TopicPartition, OffsetAndMetadata>> result = service.resetOffsets();
+            Map<TopicPartition, Long> streamsGroupOffsets = this.committedStreamsGroupOffsets(cluster, topic, group);
+            Map<TopicPartition, Long> expectedStreamsGroupOffsets = Map.of(
+                    new TopicPartition(topic, 0), 10L
+            );
+
+            assertTrue(output.contains("Group '" + group + "' is a streams group."));
+            assertEquals(expectedStreamsGroupOffsets, streamsGroupOffsets);
+            assertTrue(result.containsKey(group));
+            assertTrue(result.get(group).isEmpty());
+
+            admin.deleteTopics(Set.of(topic)).all().get();
         }
     }
 
@@ -219,7 +275,7 @@ public class ResetConsumerGroupOffsetTest {
                 String group = generateRandomGroupId();
                 try (AutoCloseable consumerGroupCloseable =
                              consumerGroupClosable(cluster, 1, topic, group, groupProtocol)) {
-                    awaitConsumerProgress(cluster, topic, group, 100L);
+                    awaitConsumerGroupProgress(cluster, topic, group, 100L);
                 }
             }
             resetAndAssertOffsets(cluster, args, 50, true, List.of(topic));
@@ -245,7 +301,7 @@ public class ResetConsumerGroupOffsetTest {
                 for (String group : groups) {
                     try (AutoCloseable consumerGroupCloseable =
                                  consumerGroupClosable(cluster, 3, topic, group, groupProtocol)) {
-                        awaitConsumerProgress(cluster, topic, group, 100);
+                        awaitConsumerGroupProgress(cluster, topic, group, 100);
                     }
                 }
             }
@@ -278,7 +334,7 @@ public class ResetConsumerGroupOffsetTest {
 
             try (AutoCloseable consumerGroupCloseable =
                          consumerGroupClosable(cluster, 1, topic, group, groupProtocol)) {
-                awaitConsumerProgress(cluster, topic, group, 100L);
+                awaitConsumerGroupProgress(cluster, topic, group, 100L);
             }
 
             resetAndAssertOffsets(cluster, topic, args, 0);
@@ -302,7 +358,7 @@ public class ResetConsumerGroupOffsetTest {
 
             try (AutoCloseable consumerGroupCloseable =
                          consumerGroupClosable(cluster, 1, topic, group, groupProtocol)) {
-                awaitConsumerProgress(cluster, topic, group, 100L);
+                awaitConsumerGroupProgress(cluster, topic, group, 100L);
             }
 
             resetAndAssertOffsets(cluster, topic, args, 50);
@@ -474,7 +530,7 @@ public class ResetConsumerGroupOffsetTest {
                 admin.createTopics(Set.of(new NewTopic(topic, 2, (short) 1))).all().get();
 
                 produceConsumeAndShutdown(cluster, topic, group, 2, groupProtocol);
-                Map<TopicPartition, Long> priorCommittedOffsets = committedOffsets(cluster, topic, group);
+                Map<TopicPartition, Long> priorCommittedOffsets = committedConsumerGroupOffsets(cluster, topic, group);
                 TopicPartition tp0 = new TopicPartition(topic, 0);
                 TopicPartition tp1 = new TopicPartition(topic, 1);
                 Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
@@ -514,8 +570,8 @@ public class ResetConsumerGroupOffsetTest {
                 expMap.put(tp1, 0L);
                 expMap.put(tp2, 0L);
                 assertEquals(expMap, allResetOffsets);
-                assertEquals(Map.of(tp1, 0L), committedOffsets(cluster, topic1, group));
-                assertEquals(Map.of(tp2, 0L), committedOffsets(cluster, topic2, group));
+                assertEquals(Map.of(tp1, 0L), committedConsumerGroupOffsets(cluster, topic1, group));
+                assertEquals(Map.of(tp2, 0L), committedConsumerGroupOffsets(cluster, topic2, group));
 
                 admin.deleteTopics(List.of(topic1, topic2)).all().get();
             }
@@ -542,9 +598,9 @@ public class ResetConsumerGroupOffsetTest {
                 produceConsumeAndShutdown(cluster, topic2, group, 2, groupProtocol);
 
                 Map<TopicPartition, Long> priorCommittedOffsets1 =
-                        committedOffsets(cluster, topic1, group);
+                        committedConsumerGroupOffsets(cluster, topic1, group);
                 Map<TopicPartition, Long> priorCommittedOffsets2 =
-                        committedOffsets(cluster, topic2, group);
+                        committedConsumerGroupOffsets(cluster, topic2, group);
 
                 TopicPartition tp1 = new TopicPartition(topic1, 1);
                 TopicPartition tp2 = new TopicPartition(topic2, 1);
@@ -554,9 +610,9 @@ public class ResetConsumerGroupOffsetTest {
                 expMap.put(tp2, 0L);
                 assertEquals(expMap, allResetOffsets);
                 priorCommittedOffsets1.put(tp1, 0L);
-                assertEquals(priorCommittedOffsets1, committedOffsets(cluster, topic1, group));
+                assertEquals(priorCommittedOffsets1, committedConsumerGroupOffsets(cluster, topic1, group));
                 priorCommittedOffsets2.put(tp2, 0L);
-                assertEquals(priorCommittedOffsets2, committedOffsets(cluster, topic2, group));
+                assertEquals(priorCommittedOffsets2, committedConsumerGroupOffsets(cluster, topic2, group));
 
                 admin.deleteTopics(List.of(topic1, topic2)).all().get();
             }
@@ -723,12 +779,29 @@ public class ResetConsumerGroupOffsetTest {
         return GROUP_PREFIX + TestUtils.randomString(10);
     }
 
-    private Map<TopicPartition, Long> committedOffsets(ClusterInstance cluster,
-                                                       String topic,
-                                                       String group) {
+    private Map<TopicPartition, Long> committedConsumerGroupOffsets(ClusterInstance cluster,
+                                                                    String topic,
+                                                                    String group) {
         try (Admin admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
-            return admin.listConsumerGroupOffsets(group)
-                    .all().get()
+            return this.committedOffsets(topic, group, () -> admin.listConsumerGroupOffsets(group).all());
+        }
+    }
+
+    private Map<TopicPartition, Long> committedStreamsGroupOffsets(ClusterInstance cluster,
+                                                                    String topic,
+                                                                    String group) {
+        try (Admin admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
+            Map<String, ListStreamsGroupOffsetsSpec> groupSpecs = Map.of(group, new ListStreamsGroupOffsetsSpec());
+            return this.committedOffsets(topic, group, () -> admin.listStreamsGroupOffsets(groupSpecs).all());
+        }
+    }
+
+    private Map<TopicPartition, Long> committedOffsets(String topic,
+                                                       String group,
+                                                       Supplier<KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>>> offsetsResultSupplier) {
+        try {
+            return offsetsResultSupplier.get()
+                    .get()
                     .get(group).entrySet()
                     .stream()
                     .filter(e -> e.getKey().topic().equals(topic))
@@ -784,10 +857,10 @@ public class ResetConsumerGroupOffsetTest {
                     resetOffsets(service);
             for (final String topic : topics) {
                 resetOffsetsResultByGroup.forEach((group, partitionInfo) -> {
-                    Map<TopicPartition, Long> priorOffsets = committedOffsets(cluster, topic, group);
+                    Map<TopicPartition, Long> priorOffsets = committedConsumerGroupOffsets(cluster, topic, group);
                     assertEquals(topicToExpectedOffsets.get(topic), partitionToOffsets(topic, partitionInfo));
                     assertEquals(dryRun ? priorOffsets : topicToExpectedOffsets.get(topic),
-                            committedOffsets(cluster, topic, group));
+                            committedConsumerGroupOffsets(cluster, topic, group));
                 });
             }
         }
@@ -828,7 +901,7 @@ public class ResetConsumerGroupOffsetTest {
         produceMessages(cluster, topic, 100);
         try (AutoCloseable consumerGroupCloseable =
                      consumerGroupClosable(cluster, numConsumers, topic, group, groupProtocol)) {
-            awaitConsumerProgress(cluster, topic, group, 100);
+            awaitConsumerGroupProgress(cluster, topic, group, 100);
         }
     }
 
@@ -868,29 +941,47 @@ public class ResetConsumerGroupOffsetTest {
         return configs;
     }
 
-    private void awaitConsumerProgress(ClusterInstance cluster,
-                                       String topic,
-                                       String group,
-                                       long count) throws Exception {
+    private void awaitConsumerGroupProgress(ClusterInstance cluster,
+                                            String topic,
+                                            String group,
+                                            long count) throws Exception {
         try (Admin admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
-            Supplier<Long> offsets = () -> {
-                try {
-                    return admin.listConsumerGroupOffsets(group)
-                            .all().get().get(group)
-                            .entrySet()
-                            .stream()
-                            .filter(e -> e.getKey().topic().equals(topic))
-                            .mapToLong(e -> e.getValue().offset())
-                            .sum();
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
-                }
-            };
-            TestUtils.waitForCondition(() -> offsets.get() == count,
-                    "Expected that consumer group has consumed all messages from topic/partition. " +
-                            "Expected offset: " + count +
-                            ". Actual offset: " + offsets.get());
+            awaitProgress(topic, group, count, () -> admin.listConsumerGroupOffsets(group).all());
         }
+    }
+
+    private void awaitStreamsGroupProgress(ClusterInstance cluster,
+                                            String topic,
+                                            String group,
+                                            long count) throws Exception {
+        try (Admin admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
+            Map<String, ListStreamsGroupOffsetsSpec> groupSpecs = Map.of(group, new ListStreamsGroupOffsetsSpec());
+            awaitProgress(topic, group, count, () -> admin.listStreamsGroupOffsets(groupSpecs).all());
+        }
+    }
+
+    private void awaitProgress(String topic,
+                               String group,
+                               long count,
+                               Supplier<KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>>> offsetsResultSupplier) throws Exception {
+        Supplier<Long> offsets = () -> {
+            try {
+                return offsetsResultSupplier.get()
+                        .get()
+                        .get(group)
+                        .entrySet()
+                        .stream()
+                        .filter(e -> e.getKey().topic().equals(topic))
+                        .mapToLong(e -> e.getValue().offset())
+                        .sum();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        };
+        TestUtils.waitForCondition(() -> offsets.get() == count,
+                "Expected that group has consumed all messages from topic/partition. " +
+                        "Expected offset: " + count +
+                        ". Actual offset: " + offsets.get());
     }
 
     private void awaitConsumerGroupInactive(ConsumerGroupCommand.ConsumerGroupService service,
@@ -910,7 +1001,7 @@ public class ResetConsumerGroupOffsetTest {
 
         allResetOffsets.forEach((group, offsetsInfo) -> offsetsInfo.forEach((tp, offsetMetadata) -> {
             assertEquals(expectedOffsets.get(tp), offsetMetadata.offset());
-            assertEquals(expectedOffsets, committedOffsets(cluster, topic, group));
+            assertEquals(expectedOffsets, committedConsumerGroupOffsets(cluster, topic, group));
         }));
     }
 
