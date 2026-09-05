@@ -38,6 +38,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Comparator.comparing;
 import static java.util.Comparator.comparingLong;
@@ -89,7 +90,7 @@ public class ClientState {
         taskLagTotals = new TreeMap<>();
         this.capacity = capacity;
         this.processId = processId;
-        this.clientTags = new TreeMap<>(clientTags);
+        this.clientTags = unmodifiableMap(clientTags);
     }
 
     public int capacity() {
