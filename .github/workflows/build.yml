@@ -38,6 +38,7 @@ jobs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
       test-catalog-days: ${{ steps.configure-outputs.outputs.days }}
       sha: ${{ steps.configure-outputs.outputs.sha }}
+      doc-change-only:  ${{ steps.filter.outputs.code-change == 'false' }}
     steps:
       - name: Env
         run: printenv
@@ -59,9 +60,30 @@ jobs:
             echo "days=7" >> "$GITHUB_OUTPUT"
             echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Filter changed files
+        id: filter
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            code-change:
+              - '**'
+              - '!**/*.md'
+              - '!**/*.html'
+              - '!**/*.js'
+              - '!**/*.css'
+              - '!**/*.png'
+              - '!**/*.jpg'
+              - '!**/*.bat'
+              - '!**/*.txt'
 
   load-catalog:
     needs: [configure]
+    if: ${{ needs.configure.outputs.doc-change-only != 'true' }}
     runs-on: ubuntu-latest
     name: Load Test Catalog
     steps:
@@ -178,7 +200,7 @@ jobs:
 
   test:
     needs: [configure, validate, load-catalog]
-    if: ${{ ! needs.configure.outputs.is-draft }}
+    if: ${{ !needs.configure.outputs.is-draft && needs.configure.outputs.doc-change-only != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -383,7 +405,7 @@ jobs:
           exit 1
       - name: Check Dependency Outcomes
         run: |
-          if [[ "${{ needs.validate.result }}" == "success" && "${{ needs.test.result }}" == "success" ]]; then
+          if [[ "${{ needs.validate.result }}" == "success" && ("${{ needs.configure.outputs.doc-change-only }}" == "true" || "${{ needs.test.result }}" == "success") ]]; then
             echo "Required jobs completed successfully!"
             exit 0
           else
