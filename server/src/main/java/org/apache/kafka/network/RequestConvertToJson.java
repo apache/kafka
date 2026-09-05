@@ -813,7 +813,7 @@ public class RequestConvertToJson {
         node.set("securityProtocol", new TextNode(context.securityProtocol.toString()));
         node.set("principal", new TextNode(session.principal.toString()));
         node.set("listener", new TextNode(context.listenerName.value()));
-        node.set("clientInformation", clientInfoNode(context.clientInformation));
+        node.set("clientInformation", clientInfoNode(context.clientInformation()));
         if (temporaryMemoryBytes > 0) {
             node.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes));
         }
