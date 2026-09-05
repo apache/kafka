@@ -347,4 +347,4 @@ More details in the [Connect](/40/documentation.html#upgrade_400_notable_connect
   </tr>
 </table>
 
-Note: Starting with Kafka 4.0, the `--zookeeper` option in AdminClient commands has been removed. Users must use the `--bootstrap-server` option to interact with the Kafka cluster. This change aligns with the transition to KRaft mode. 
+Note: Starting with Kafka 4.0, the `--zookeeper` option in AdminClient commands has been removed. Users must instead use a bootstrap option supported by the command, such as `--bootstrap-server` or, where available, `--bootstrap-controller`, to interact with the Kafka cluster. This change aligns with the transition to KRaft mode.
