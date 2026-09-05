@@ -24,7 +24,6 @@ import org.apache.kafka.clients.admin.UserScramCredentialUpsertion;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -38,7 +37,6 @@ import org.junit.jupiter.api.function.Executable;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -113,19 +111,13 @@ public class ConsumerGroupCommandSaslAuthenticationTest {
         createScramCredential(SCRAM_USER, SCRAM_PASSWORD);
         try (
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
-            KafkaConsumer<byte[], byte[]> consumer = createScramConsumer(groupProtocol)
+            AutoCloseable consumerExecutor = ConsumerGroupCommandTestUtils.buildConsumers(
+                1,
+                false,
+                TOPIC,
+                () -> createScramConsumer(groupProtocol)
+            )
         ) {
-            consumer.subscribe(List.of(TOPIC));
-
-            TestUtils.waitForCondition(() -> {
-                try {
-                    consumer.poll(Duration.ofMillis(1000));
-                    return true;
-                } catch (SaslAuthenticationException ignored) {
-                    return false;
-                }
-            }, "failed to poll data with authentication");
-
             TestUtils.waitForCondition(
                 () -> consumerGroupService.listConsumerGroups().size() == 1,
                 "failed to find consumer group after successful poll"
