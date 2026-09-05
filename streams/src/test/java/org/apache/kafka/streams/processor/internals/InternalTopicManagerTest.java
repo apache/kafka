@@ -57,6 +57,7 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -133,6 +134,42 @@ public class InternalTopicManagerTest {
     @AfterEach
     public void shutdown() {
         mockAdminClient.close();
+    }
+
+    @Test
+    public void shouldNotBackOffPerTopicWhenCreatingATopicBatch() {
+        final Map<String, InternalTopicConfig> topicConfigs = new HashMap<>();
+        for (int i = 0; i < 25; i++) {
+            final String topicName = "batch-topic-" + i;
+            topicConfigs.put(topicName, setupRepartitionTopicConfig(topicName, 1));
+        }
+
+        final long before = time.milliseconds();
+        internalTopicManager.makeReady(topicConfigs);
+
+        // Every create succeeds immediately, so makeReady must not back off at all.
+        assertEquals(0L, time.milliseconds() - before);
+    }
+
+    @Test
+    @Timeout(30)
+    public void shouldBackOffBetweenRoundsWhenTopicIsMarkedForDeletion() {
+        mockAdminClient.addTopic(
+            false,
+            topic1,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+            null);
+        mockAdminClient.markTopicForDeletion(topic1);
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        final long before = time.milliseconds();
+        // The clock has no auto-tick, so only the round backoff can advance it toward the
+        // deadline: reaching the timeout at all proves the round backs off instead of spinning.
+        assertThrows(
+            TimeoutException.class,
+            () -> internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig))
+        );
+        assertEquals(50L, time.milliseconds() - before);
     }
 
     @Test
