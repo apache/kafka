@@ -245,28 +245,34 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * <p>Similarly, we may have to unblock the application thread to send a {@link AsyncPollEvent} to make sure
      * our poll timer will not expire while we are polling.
      *
-     * <p>When the member is {@link MemberState#UNSUBSCRIBED} (for example, with manual assignment),
-     * this returns {@code Long.MAX_VALUE} to indicate there is no next heartbeat to wait for,
-     * allowing the application thread to block for the full user-specified poll timeout rather than
-     * spinning in a busy loop.
+     * <p>When the member is {@link MemberState#UNSUBSCRIBED} or in the terminal {@link MemberState#FATAL} state, 
+     * this returns {@code Long.MAX_VALUE} to indicate there is no next heartbeat to wait for, allowing the application 
+     * thread to block for the full user-specified poll timeout rather than spinning in a busy loop.
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
+        MemberState state = membershipManager().state();
+        // No heartbeat can be sent in these states: UNSUBSCRIBED has nothing to heartbeat for,
+        // and FATAL is terminal. The fatal error has already been propagated to the
+        // application thread, so there is no need to wake it before its poll timeout expires.
+        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
             return Long.MAX_VALUE;
         }
         if (pollTimer.isExpired()) {
             return 0L;
         }
         // Mirror the guard in poll(). A heartbeat is only sent when the coordinator is known and the
-        // member is in a state that heartbeats. When the coordinator is unavailable (e.g. after a
-        // re-authentication failure, or while bootstrap DNS resolution is still in progress) or the
-        // member should skip heartbeats (FATAL/FENCED/STALE/UNSUBSCRIBED), poll() returns EMPTY, so
-        // falling through to the timer-based branches below would return 0 (the heartbeat timer is left
-        // permanently expired) and busy-spin both the application and network threads. Wait a retry
-        // backoff rather than the heartbeat interval, because the interval is zero until the first
-        // heartbeat response is received, which would also busy-spin.
+        // member is in a state that heartbeats. Otherwise, the timer-based branches below may return 0
+        // (the heartbeat timer remains permanently expired), causing both the application and network
+        // threads to busy-spin.
+        // This covers cases where the member wants to heartbeat but cannot make progress yet, such as:
+        // - The coordinator is unavailable (for example, during bootstrap DNS resolution or after a
+        //   re-authentication failure).
+        // - The member is FENCED and waiting for the application thread to run assignment-release
+        //   callbacks before rejoining.
+        // Return retryBackoffMs rather than the heartbeat interval, since the interval remains 0 until
+        // the first heartbeat response is received, which would also lead to busy-spinning.
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
             return heartbeatRequestState.retryBackoffMs();
         }

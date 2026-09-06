@@ -357,6 +357,27 @@ public class ConsumerHeartbeatRequestManagerTest
     }
 
     @Test
+    public void testMaximumTimeToWaitWhenFatalReturnsMaxValue() {
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        when(membershipManager.state()).thenReturn(MemberState.FATAL);
+
+        assertEquals(Long.MAX_VALUE, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()),
+            "maximumTimeToWait should return Long.MAX_VALUE in the terminal FATAL state");
+    }
+
+    @Test
+    public void testMaximumTimeToWaitWhenFencedWaitsRetryBackoff() {
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        when(membershipManager.state()).thenReturn(MemberState.FENCED);
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(result > 0, "maximumTimeToWait must be > 0 while the member is fenced to avoid a busy-spin; got " + result);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
+    }
+
+    @Test
     public void testMaximumTimeToWaitDoesNotSpinDuringRealBootstrapDnsResolution() throws Exception {
         long bootstrapResolveTimeoutMs = 1000;
 

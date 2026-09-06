@@ -164,7 +164,7 @@ public class ShareHeartbeatRequestManagerTest
     @Test
     public void testMaximumTimeToWaitWhenHeartbeatShouldBeSkippedDoesNotSpin() {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
-        when(membershipManager.state()).thenReturn(MemberState.FATAL);
+        when(membershipManager.state()).thenReturn(MemberState.FENCED);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         when(heartbeatRequestState.timeToNextHeartbeatMs(anyLong())).thenReturn(0L);
 
@@ -173,6 +173,15 @@ public class ShareHeartbeatRequestManagerTest
         assertTrue(result > 0,
             "maximumTimeToWait must be > 0 while heartbeats are skipped to avoid a busy-spin; got " + result);
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
+    }
+
+    @Test
+    public void testMaximumTimeToWaitWhenFatalReturnsMaxValue() {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+        when(membershipManager.state()).thenReturn(MemberState.FATAL);
+
+        assertEquals(Long.MAX_VALUE, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()),
+            "maximumTimeToWait should return Long.MAX_VALUE in the terminal FATAL state");
     }
 
     /**
