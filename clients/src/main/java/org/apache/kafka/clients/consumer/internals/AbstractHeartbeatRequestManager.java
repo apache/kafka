@@ -269,8 +269,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         // This covers cases where the member wants to heartbeat but cannot make progress yet, such as:
         // - The coordinator is unavailable (for example, during bootstrap DNS resolution or after a
         //   re-authentication failure).
-        // - The member is FENCED and waiting for the application thread to run assignment-release
-        //   callbacks before rejoining.
+        // - The member is FENCED (or STALE with the poll timer already reset) and waiting for the
+        //   application thread to run assignment-release callbacks before rejoining.
         // Return retryBackoffMs rather than the heartbeat interval, since the interval remains 0 until
         // the first heartbeat response is received, which would also lead to busy-spinning.
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
