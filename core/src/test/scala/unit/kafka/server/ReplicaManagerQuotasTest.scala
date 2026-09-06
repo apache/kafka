@@ -37,7 +37,7 @@ import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchPartitionStatus, LogConfig, LogDirFailureChannel, LogManager, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
-import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
 import org.mockito.Mockito.{mock, when}
 import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 
@@ -168,16 +168,21 @@ class ReplicaManagerQuotasTest {
       when(replicaManager.getPartitionOrException(any[TopicPartition]))
         .thenReturn(partition)
 
-      when(replicaManager.shouldLeaderThrottle(any[ReplicaQuota], any[Partition], anyInt))
-        .thenReturn(!isReplicaInSync)
-      when(partition.getReplica(1)).thenReturn(None)
+      val replicaId = 1
+      when(partition.isReplicaInSync(replicaId)).thenReturn(isReplicaInSync)
 
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
+      val quota = mockQuota()
+      // Force the quota conditions to be active so this test isolates the ISR check:
+      // in-sync replicas should complete, while out-of-sync replicas should be throttled.
+      when(quota.isThrottled(tp.topicPartition)).thenReturn(true)
+      when(quota.isQuotaExceeded).thenReturn(true)
+
       val fetchPartitionStatus = new FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
-        1,
+        replicaId,
         1,
         600,
         1,
@@ -190,7 +195,7 @@ class ReplicaManagerQuotasTest {
         fetchParams,
         createFetchPartitionStatusMap(tp, fetchPartitionStatus),
         replicaManager,
-        null,
+        quota,
         null
       ) {
         override def forceComplete(): Boolean = true

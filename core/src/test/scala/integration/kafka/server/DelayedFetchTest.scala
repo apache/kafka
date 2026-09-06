@@ -261,14 +261,14 @@ class DelayedFetchTest {
     val readPartitionInfo = new util.LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData]
     readPartitionInfo.put(topicIdPartition, fetchPartitionData)
 
-    val logReadResults = new util.LinkedHashMap[TopicIdPartition, LogReadResult]
-    logReadResults.put(topicIdPartition, buildReadResult(error))
+    val fetchPartitionDataMap = new util.LinkedHashMap[TopicIdPartition, FetchPartitionData]
+    fetchPartitionDataMap.put(topicIdPartition, buildReadResult(error).toFetchPartitionData(false))
 
     when(replicaManager.readFromLogByPurgatory(
       fetchParams,
       readPartitionInfo,
       replicaQuota
-    )).thenReturn(logReadResults)
+    )).thenReturn(fetchPartitionDataMap)
   }
 
   private def buildReadResult(error: Errors): LogReadResult = {

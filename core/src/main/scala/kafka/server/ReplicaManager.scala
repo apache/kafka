@@ -1751,17 +1751,18 @@ class ReplicaManager(val config: KafkaConfig,
     params: FetchParams,
     readPartitionInfo: util.LinkedHashMap[TopicIdPartition, PartitionData],
     quota: ReplicaQuota,
-  ): util.LinkedHashMap[TopicIdPartition, LogReadResult] = {
-    val logReadResultMap = new util.LinkedHashMap[TopicIdPartition, LogReadResult]
+  ): util.LinkedHashMap[TopicIdPartition, FetchPartitionData] = {
+    val fetchPartitionData = new util.LinkedHashMap[TopicIdPartition, FetchPartitionData]
     readFromLog(
       params,
       readPartitionInfo.asScala.toSeq,
       quota,
       readFromPurgatory = true
     ).foreach { case (topicIdPartition, logReadResult) =>
-      logReadResultMap.put(topicIdPartition, logReadResult)
+      val isReassignmentFetch = params.isFromFollower && isAddingReplica(topicIdPartition.topicPartition, params.replicaId)
+      fetchPartitionData.put(topicIdPartition, logReadResult.toFetchPartitionData(isReassignmentFetch))
     }
-    logReadResultMap
+    fetchPartitionData
   }
 
   /**
@@ -1775,7 +1776,7 @@ class ReplicaManager(val config: KafkaConfig,
     val traceEnabled = isTraceEnabled
 
     def checkFetchDataInfo(partition: Partition, givenFetchedDataInfo: FetchDataInfo) = {
-      if (params.isFromFollower && shouldLeaderThrottle(quota, partition, params.replicaId)) {
+      if (params.isFromFollower && ReplicaManagerAdapter.shouldLeaderThrottle(quota, partition, params.replicaId)) {
         // If the partition is being throttled, simply return an empty set.
         new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
       } else if (givenFetchedDataInfo.firstEntryIncomplete) {
@@ -2027,14 +2028,6 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
     }
-  }
-
-  /**
-   *  To avoid ISR thrashing, we only throttle a replica on the leader if it's in the throttled replica list,
-   *  the quota is exceeded and the replica is not in sync.
-   */
-  def shouldLeaderThrottle(quota: ReplicaQuota, partition: TopicPartitionLog, replicaId: Int): Boolean = {
-    !partition.isReplicaInSync(replicaId) && quota.isThrottled(partition.topicPartition) && quota.isQuotaExceeded
   }
 
   def getLogConfig(topicPartition: TopicPartition): Option[LogConfig] = localLog(topicPartition).map(_.config)

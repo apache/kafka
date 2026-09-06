@@ -22,7 +22,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.quota.ReplicaQuota;
 import org.apache.kafka.server.storage.log.FetchParams;
-import org.apache.kafka.storage.internals.log.LogReadResult;
+import org.apache.kafka.server.storage.log.FetchPartitionData;
 
 import java.util.LinkedHashMap;
 
@@ -30,6 +30,21 @@ import java.util.LinkedHashMap;
  * Interface to decouple {@link DelayedFetch} from ReplicaManager.
  */
 public interface ReplicaManagerAdapter {
+
+    /**
+     * Whether the leader should throttle the given replica for the partition.
+     * To avoid ISR thrashing, we only throttle a replica on the leader if it's in the throttled replica list,
+     * the quota is exceeded and the replica is not in sync.
+     *
+     * @param quota The replica quota
+     * @param partition The topic partition log
+     * @param replicaId The replica ID
+     * @return Whether the leader should throttle the replica
+     */
+    static boolean shouldLeaderThrottle(ReplicaQuota quota, TopicPartitionLog partition, int replicaId) {
+        return !partition.isReplicaInSync(replicaId) && quota.isThrottled(partition.topicPartition()) && quota.isQuotaExceeded();
+    }
+
     /**
      * Get the partition for the provided topic partition.
      *
@@ -39,35 +54,16 @@ public interface ReplicaManagerAdapter {
     TopicPartitionLog getPartitionOrException(TopicPartition topicPartition);
 
     /**
-     * Whether the leader should throttle the given replica for the partition.
-     *
-     * @param quota The replica quota
-     * @param partition The topic partition log
-     * @param replicaId The replica ID
-     * @return Whether the leader should throttle the replica
-     */
-    boolean shouldLeaderThrottle(ReplicaQuota quota, TopicPartitionLog partition, int replicaId);
-
-    /**
      * Read from the log when completing delayed fetches from purgatory.
      *
      * @param params The fetch parameters
      * @param readPartitionInfo The partitions to read
      * @param quota The replica quota
-     * @return The log read results for each partition
+     * @return The fetch partition data for each partition
      */
-    LinkedHashMap<TopicIdPartition, LogReadResult> readFromLogByPurgatory(
+    LinkedHashMap<TopicIdPartition, FetchPartitionData> readFromLogByPurgatory(
         FetchParams params,
         LinkedHashMap<TopicIdPartition, PartitionData> readPartitionInfo,
         ReplicaQuota quota
     );
-
-    /**
-     * Whether the replica is being added to the topic partition.
-     *
-     * @param topicPartition The topic partition
-     * @param replicaId The replica ID
-     * @return Whether the replica is being added
-     */
-    boolean isAddingReplica(TopicPartition topicPartition, int replicaId);
 }

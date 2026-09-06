@@ -33,7 +33,6 @@ import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.FetchPartitionStatus;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
-import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import com.yammer.metrics.core.Meter;
 
@@ -146,14 +145,14 @@ public class DelayedFetch extends DelayedOperation {
                             // or the partition has just rolled a new segment.
                             LOG.debug("Satisfying fetch {} immediately since it is fetching older segments.", this);
                             // We will not force complete the fetch request if a replica should be throttled.
-                            if (!params.isFromFollower() || !replicaManager.shouldLeaderThrottle(quota, partition, params.replicaId)) {
+                            if (!params.isFromFollower() || !ReplicaManagerAdapter.shouldLeaderThrottle(quota, partition, params.replicaId)) {
                                 return forceComplete();
                             }
                         } else if (fetchOffset.onSameSegment(endOffset)) {
                             // We take the partition fetch size as upper bound when accumulating the bytes
                             // (skip if a throttled partition).
                             int bytesAvailable = Math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo().maxBytes);
-                            if (!params.isFromFollower() || !replicaManager.shouldLeaderThrottle(quota, partition, params.replicaId)) {
+                            if (!params.isFromFollower() || !ReplicaManagerAdapter.shouldLeaderThrottle(quota, partition, params.replicaId)) {
                                 accumulatedSize += bytesAvailable;
                             }
                         }
@@ -238,20 +237,11 @@ public class DelayedFetch extends DelayedOperation {
         LinkedHashMap<TopicIdPartition, PartitionData> fetchInfos = new LinkedHashMap<>();
         fetchPartitionStatus.forEach((topicIdPartition, status) -> fetchInfos.put(topicIdPartition, status.fetchInfo()));
 
-        LinkedHashMap<TopicIdPartition, LogReadResult> logReadResults = replicaManager.readFromLogByPurgatory(
+        responseCallback.accept(replicaManager.readFromLogByPurgatory(
             params,
             fetchInfos,
             quota
-        );
-
-        LinkedHashMap<TopicIdPartition, FetchPartitionData> fetchPartitionData = new LinkedHashMap<>();
-        logReadResults.forEach((topicIdPartition, result) -> {
-            boolean isReassignmentFetch = params.isFromFollower()
-                && replicaManager.isAddingReplica(topicIdPartition.topicPartition(), params.replicaId);
-            fetchPartitionData.put(topicIdPartition, result.toFetchPartitionData(isReassignmentFetch));
-        });
-
-        responseCallback.accept(fetchPartitionData);
+        ));
     }
 
 }
