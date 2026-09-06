@@ -916,7 +916,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.init(context, buffer);
         putRecord(buffer, context, 2L, 0L, "asdf", "2093j");
         putRecord(buffer, context, 1L, 1L, "zxcv", "3gon4i");
-        putRecord(buffer, context, 0L, 2L, "deleteme", "deadbeef");
+        // Buffer "deleteme" with headers so we can assert the tombstone preserves the row's timestamp + headers.
+        final RecordHeaders deletemeHeaders =
+            new RecordHeaders(new Header[] {new RecordHeader("h", new byte[] {(byte) 42})});
+        final ProcessorRecordContext deletemeContext =
+            new ProcessorRecordContext(2L, 0, 0, "topic", deletemeHeaders);
+        context.setRecordContext(deletemeContext);
+        buffer.put(0L, new Record<>("deleteme", new Change<>("deadbeef", null), 0L), deletemeContext);
 
         // replace "deleteme" with a tombstone
         buffer.evictWhile(() -> buffer.minTimestamp() < 1, kv -> { });
@@ -956,10 +962,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(collected, is(asList(
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
                                  0,   // Producer will assign
-                                 null,
+                                 2L,  // the evicted row's timestamp is carried onto the tombstone
                                  "deleteme",
                                  null,
-                                 new RecordHeaders()
+                                 deletemeHeaders // the evicted row's headers are carried onto the tombstone
             ),
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
                                  0,
