@@ -842,6 +842,7 @@ public class KafkaConfigBackingStoreTest {
         deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(3), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(2));
+        deserialized.put(CONFIGS_SERIALIZED.get(4), CONNECTOR_CONFIG_STRUCTS.get(0));
         logOffset = offset;
         expectStart(existingRecords, deserialized);
         when(configLog.partitionCount()).thenReturn(1);
@@ -866,6 +867,69 @@ public class KafkaConfigBackingStoreTest {
         // where there are still zombie instances of the tasks for this long-deleted connector
         // running somewhere on the cluster
         assertEquals(2, (int) configState.taskCountRecord(CONNECTOR_1_NAME));
+
+        // A connector created after startup must not inherit the recovery marker from the
+        // compacted records of a connector that was deleted before this worker started.
+        capturedConsumedCallback.getValue().onCompletion(
+                null,
+                new ConsumerRecord<>(
+                        TOPIC,
+                        0,
+                        offset,
+                        0L,
+                        TimestampType.CREATE_TIME,
+                        0,
+                        0,
+                        CONNECTOR_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(4),
+                        new RecordHeaders(),
+                        Optional.empty()
+                )
+        );
+        configState = configStorage.snapshot();
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_1_NAME));
+        assertEquals(Set.of(), configState.inconsistentConnectors());
+        verify(configUpdateListener).onConnectorConfigUpdate(CONNECTOR_1_NAME);
+    }
+
+    @Test
+    public void testMarkCompactedConnectorConfigUpdateInconsistent() {
+        // After compaction, an active connector's latest config record may appear after its last
+        // committed task configs. Do not apply the ambiguous task configs, since they may instead
+        // belong to a deleted connector with the same name, but mark the connector for recovery.
+        int offset = 0;
+        List<ConsumerRecord<String, byte[]>> existingRecords = List.of(
+            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(3), new RecordHeaders(), Optional.empty()));
+        LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
+        deserialized.put(CONFIGS_SERIALIZED.get(0), TASK_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(1));
+        deserialized.put(CONFIGS_SERIALIZED.get(2), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(3), CONNECTOR_CONFIG_STRUCTS.get(0));
+        logOffset = offset;
+        expectStart(existingRecords, deserialized);
+        when(configLog.partitionCount()).thenReturn(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(Set.of(CONNECTOR_1_NAME), configState.connectors());
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_1_NAME));
+        assertEquals(0, configState.taskCount(CONNECTOR_1_NAME));
+        assertNull(configState.rawTaskConfig(TASK_IDS.get(0)));
+        assertNull(configState.rawTaskConfig(TASK_IDS.get(1)));
+        assertEquals(Set.of(CONNECTOR_1_NAME), configState.inconsistentConnectors());
+
+        configStorage.stop();
+        verify(configLog).stop();
     }
 
     @Test
