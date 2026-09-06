@@ -30,6 +30,7 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderRecoveryState}
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.partition.AlterPartitionManager
+import org.apache.kafka.server.purgatory.DelayedFetch
 import org.apache.kafka.server.quota.ReplicaQuota
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
@@ -186,11 +187,11 @@ class ReplicaManagerQuotasTest {
       )
 
       new DelayedFetch(
-        params = fetchParams,
-        fetchPartitionStatus = createFetchPartitionStatusMap(tp, fetchPartitionStatus),
-        replicaManager = replicaManager,
-        quota = null,
-        responseCallback = null
+        fetchParams,
+        createFetchPartitionStatusMap(tp, fetchPartitionStatus),
+        replicaManager,
+        null,
+        null
       ) {
         override def forceComplete(): Boolean = true
       }
@@ -237,11 +238,11 @@ class ReplicaManagerQuotasTest {
       )
 
       new DelayedFetch(
-        params = fetchParams,
-        fetchPartitionStatus = createFetchPartitionStatusMap(tidp, fetchPartitionStatus),
-        replicaManager = replicaManager,
-        quota = null,
-        responseCallback = null
+        fetchParams,
+        createFetchPartitionStatusMap(tidp, fetchPartitionStatus),
+        replicaManager,
+        null,
+        null
       ) {
         override def forceComplete(): Boolean = true
       }

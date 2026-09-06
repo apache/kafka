@@ -59,7 +59,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.partition.{AlterPartitionManager, PartitionListener}
 import org.apache.kafka.server.purgatory.DelayedProduce.PartitionStatusValidator.Result
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, TopicPartitionOperationKey}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedFetch, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, ReplicaManagerAdapter, TopicPartitionOperationKey}
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchKey, DelayedShareFetchPartitionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
@@ -172,7 +172,7 @@ class ReplicaManager(val config: KafkaConfig,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
                      val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
                      val defaultActionQueue: ActionQueue = new DelayedActionQueue
-                     ) extends Logging {
+                     ) extends Logging with ReplicaManagerAdapter {
   // Changing the package or class name may cause incompatibility with existing code and metrics configuration
   private val metricsPackage = "kafka.server"
   private val metricsClassName = "ReplicaManager"
@@ -1726,11 +1726,11 @@ class ReplicaManager(val config: KafkaConfig,
         // If there is not enough data to respond and there is no remote data, we will let the fetch request
         // wait for new data.
         val delayedFetch = new DelayedFetch(
-          params = params,
-          fetchPartitionStatus = fetchPartitionStatus,
-          replicaManager = this,
-          quota = quota,
-          responseCallback = responseCallback
+          params,
+          fetchPartitionStatus,
+          this,
+          quota,
+          (fetchPartitionData: util.LinkedHashMap[TopicIdPartition, FetchPartitionData]) => responseCallback(fetchPartitionData.asScala.toSeq)
         )
 
         // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
@@ -1745,6 +1745,23 @@ class ReplicaManager(val config: KafkaConfig,
         delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys)
       }
     }
+  }
+
+  def readFromLogByPurgatory(
+    params: FetchParams,
+    readPartitionInfo: util.LinkedHashMap[TopicIdPartition, PartitionData],
+    quota: ReplicaQuota,
+  ): util.LinkedHashMap[TopicIdPartition, LogReadResult] = {
+    val logReadResultMap = new util.LinkedHashMap[TopicIdPartition, LogReadResult]
+    readFromLog(
+      params,
+      readPartitionInfo.asScala.toSeq,
+      quota,
+      readFromPurgatory = true
+    ).foreach { case (topicIdPartition, logReadResult) =>
+      logReadResultMap.put(topicIdPartition, logReadResult)
+    }
+    logReadResultMap
   }
 
   /**
@@ -2016,9 +2033,8 @@ class ReplicaManager(val config: KafkaConfig,
    *  To avoid ISR thrashing, we only throttle a replica on the leader if it's in the throttled replica list,
    *  the quota is exceeded and the replica is not in sync.
    */
-  def shouldLeaderThrottle(quota: ReplicaQuota, partition: Partition, replicaId: Int): Boolean = {
-    val isReplicaInSync = partition.inSyncReplicaIds.contains(replicaId)
-    !isReplicaInSync && quota.isThrottled(partition.topicPartition) && quota.isQuotaExceeded
+  def shouldLeaderThrottle(quota: ReplicaQuota, partition: TopicPartitionLog, replicaId: Int): Boolean = {
+    !partition.isReplicaInSync(replicaId) && quota.isThrottled(partition.topicPartition) && quota.isQuotaExceeded
   }
 
   def getLogConfig(topicPartition: TopicPartition): Option[LogConfig] = localLog(topicPartition).map(_.config)

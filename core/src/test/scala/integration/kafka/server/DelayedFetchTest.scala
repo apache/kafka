@@ -18,6 +18,7 @@ package kafka.server
 
 import java.util.{Optional, OptionalLong}
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 import kafka.cluster.Partition
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, NotLeaderOrFollowerException}
@@ -25,6 +26,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.server.purgatory.DelayedFetch
 import org.apache.kafka.server.quota.ReplicaQuota
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchPartitionStatus, LogOffsetMetadata, LogOffsetSnapshot, LogReadResult}
@@ -60,12 +62,10 @@ class DelayedFetchTest {
       fetchResultOpt = Some(responses.head._2)
     }
 
-    val delayedFetch = new DelayedFetch(
-      params = fetchParams,
-      fetchPartitionStatus = createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
-      replicaManager = replicaManager,
-      quota = replicaQuota,
-      responseCallback = callback
+    val delayedFetch = buildDelayedFetch(
+      fetchParams,
+      createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
+      callback
     )
 
     val partition: Partition = mock(classOf[Partition])
@@ -106,12 +106,10 @@ class DelayedFetchTest {
       fetchResultOpt = Some(responses.head._2)
     }
 
-    val delayedFetch = new DelayedFetch(
-      params = fetchParams,
-      fetchPartitionStatus = createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
-      replicaManager = replicaManager,
-      quota = replicaQuota,
-      responseCallback = callback
+    val delayedFetch = buildDelayedFetch(
+      fetchParams,
+      createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
+      callback
     )
 
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition))
@@ -146,12 +144,10 @@ class DelayedFetchTest {
       fetchResultOpt = Some(responses.head._2)
     }
 
-    val delayedFetch = new DelayedFetch(
-      params = fetchParams,
-      fetchPartitionStatus = createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
-      replicaManager = replicaManager,
-      quota = replicaQuota,
-      responseCallback = callback
+    val delayedFetch = buildDelayedFetch(
+      fetchParams,
+      createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
+      callback
     )
 
     val partition: Partition = mock(classOf[Partition])
@@ -197,12 +193,10 @@ class DelayedFetchTest {
       fetchResultOpt = Some(responses.head._2)
     }
 
-    val delayedFetch = new DelayedFetch(
-      params = fetchParams,
-      fetchPartitionStatus = createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
-      replicaManager = replicaManager,
-      quota = replicaQuota,
-      responseCallback = callback
+    val delayedFetch = buildDelayedFetch(
+      fetchParams,
+      createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
+      callback
     )
 
     val partition: Partition = mock(classOf[Partition])
@@ -227,6 +221,21 @@ class DelayedFetchTest {
     }
   }
 
+
+  private def buildDelayedFetch(
+    fetchParams: FetchParams,
+    fetchPartitionStatus: util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus],
+    responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit
+  ): DelayedFetch = {
+    new DelayedFetch(
+      fetchParams,
+      fetchPartitionStatus,
+      replicaManager,
+      replicaQuota,
+      (fetchPartitionData: util.LinkedHashMap[TopicIdPartition, FetchPartitionData]) => responseCallback(fetchPartitionData.asScala.toSeq)
+    )
+  }
+
   private def buildFollowerFetchParams(
     replicaId: Int,
     maxWaitMs: Int,
@@ -249,12 +258,17 @@ class DelayedFetchTest {
     fetchPartitionData: FetchRequest.PartitionData,
     error: Errors
   ): Unit = {
-    when(replicaManager.readFromLog(
+    val readPartitionInfo = new util.LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData]
+    readPartitionInfo.put(topicIdPartition, fetchPartitionData)
+
+    val logReadResults = new util.LinkedHashMap[TopicIdPartition, LogReadResult]
+    logReadResults.put(topicIdPartition, buildReadResult(error))
+
+    when(replicaManager.readFromLogByPurgatory(
       fetchParams,
-      readPartitionInfo = Seq((topicIdPartition, fetchPartitionData)),
-      quota = replicaQuota,
-      readFromPurgatory = true
-    )).thenReturn(Seq((topicIdPartition, buildReadResult(error))))
+      readPartitionInfo,
+      replicaQuota
+    )).thenReturn(logReadResults)
   }
 
   private def buildReadResult(error: Errors): LogReadResult = {
