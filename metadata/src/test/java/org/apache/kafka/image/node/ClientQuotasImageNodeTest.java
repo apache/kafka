@@ -91,6 +91,16 @@ public class ClientQuotasImageNodeTest {
     }
 
     @Test
+    public void defaultClientIdWithSpecificUserEntityRoundTrip() {
+        // Mixes a default (null) value with a specific value across two entity types, to
+        // exercise the has*/value split for each type independently of the others.
+        Map<String, String> entityMap = new HashMap<>();
+        entityMap.put("client-id", null);
+        entityMap.put("user", "bob");
+        entityToStringRoundTrip(new ClientQuotaEntity(entityMap), "clientId()_user(bob)");
+    }
+
+    @Test
     public void clientIdAndUserEntityRoundTrip() {
         Map<String, String> entityMap = new HashMap<>();
         entityMap.put("user", "bob");
