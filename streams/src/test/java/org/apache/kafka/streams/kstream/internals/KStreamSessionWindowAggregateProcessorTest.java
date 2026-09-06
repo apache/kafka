@@ -21,7 +21,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -61,7 +60,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
@@ -69,10 +67,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.utils.TestUtils.mockStoreFactory;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -490,13 +484,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
             processor.process(new Record<>(null, "1", 0L));
 
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. topic=[topic] partition=[-3] offset=[-2]")
-            );
+            assertTrue(appender.getMessages("WARN").contains(
+                "Skipping record due to null key. topic=[topic] partition=[-3] offset=[-2]"));
         }
 
         assertEquals(
@@ -538,11 +527,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
             mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("Late1", "1", 0L));
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record for expired window." +
-                    " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[11]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Skipping record for expired window."
+                    + " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[11]"
+            ));
         }
 
         final MetricName dropTotal;
@@ -565,11 +553,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 mkEntry("task-id", "0_0")
             )
         );
-        assertThat(metrics.metrics().get(dropTotal).metricValue(), is(1.0));
-        assertThat(
-            (Double) metrics.metrics().get(dropRate).metricValue(),
-            greaterThan(0.0)
-        );
+        assertEquals(1.0, metrics.metrics().get(dropTotal).metricValue());
+        assertTrue((Double) metrics.metrics().get(dropRate).metricValue() > 0.0);
     }
 
     @ParameterizedTest
@@ -613,11 +598,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
             mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("Late1", "1", 0L));
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record for expired window." +
-                    " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[12]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Skipping record for expired window."
+                    + " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[12]"
+            ));
         }
 
         final MetricName dropTotal;
@@ -641,9 +625,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             )
         );
 
-        assertThat(metrics.metrics().get(dropTotal).metricValue(), is(1.0));
-        assertThat(
-            (Double) metrics.metrics().get(dropRate).metricValue(),
-            greaterThan(0.0));
+        assertEquals(1.0, metrics.metrics().get(dropTotal).metricValue());
+        assertTrue((Double) metrics.metrics().get(dropRate).metricValue() > 0.0);
     }
 }
