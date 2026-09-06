@@ -23,11 +23,13 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,9 @@ import static org.apache.kafka.common.test.api.TestKitDefaults.DEFAULT_CONTROLLE
 
 public class ClusterConfigTest {
 
+    @TempDir
+    private Path tempDir;
+
     private static Map<String, Object> fields(ClusterConfig config) {
         return Arrays.stream(config.getClass().getDeclaredFields()).collect(Collectors.toMap(Field::getName, f -> {
             f.setAccessible(true);
@@ -50,8 +55,7 @@ public class ClusterConfigTest {
 
     @Test
     public void testCopy() throws IOException {
-        File trustStoreFile = Files.createTempFile("kafka", ".tmp").toFile();
-        trustStoreFile.deleteOnExit();
+        File trustStoreFile = Files.createFile(tempDir.resolve("kafka.tmp")).toFile();
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
                 .setTypes(Set.of(Type.KRAFT))

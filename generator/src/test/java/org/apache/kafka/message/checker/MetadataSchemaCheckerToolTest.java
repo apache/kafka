@@ -18,6 +18,7 @@
 package org.apache.kafka.message.checker;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -30,6 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class MetadataSchemaCheckerToolTest {
+    @TempDir
+    private Path tempDir;
+
     @Test
     public void testVerifyEvolutionGit() throws Exception {
         // Try to find the Git root directory
@@ -62,7 +66,7 @@ public class MetadataSchemaCheckerToolTest {
     @Test
     public void testSuccessfulParse() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-            String path = messageSpecStringToTempFile(
+            String path = messageSpecStringToTempFile(tempDir,
                 "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
                 "'validVersions': '0-2', 'flexibleVersions': '0+', " +
                 "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
@@ -74,7 +78,7 @@ public class MetadataSchemaCheckerToolTest {
     @Test
     public void testSuccessfulVerifyEvolution() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-            String path = messageSpecStringToTempFile(
+            String path = messageSpecStringToTempFile(tempDir,
                 "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
                 "'validVersions': '0-2', 'flexibleVersions': '0+', " +
                 "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
