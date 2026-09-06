@@ -35,6 +35,7 @@ import java.util.OptionalInt;
 
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -43,13 +44,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class LeaderEpochFileCacheTest {
     private final TopicPartition tp = new TopicPartition("TestTopic", 5);
 
-    private MockTime mockTime;
     private LeaderEpochCheckpointFile checkpoint;
     private LeaderEpochFileCache cache;
 
     @BeforeEach
     public void setup() throws IOException {
-        mockTime = new MockTime();
+        MockTime mockTime = new MockTime();
         checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
         cache = new LeaderEpochFileCache(tp, checkpoint, mockTime.scheduler);
     }
@@ -244,12 +244,10 @@ public class LeaderEpochFileCacheTest {
     @Test
     public void shouldEnforceMonotonicallyIncreasingEpochs() {
         cache.assign(1, 5);
-        long logEndOffset = 6;
         cache.assign(2, 6);
-        logEndOffset = 7;
-
         cache.assign(1, 7);
-        logEndOffset = 8;
+
+        long logEndOffset = 8;
 
         assertEquals(Optional.of(1), cache.latestEpoch());
         assertEquals(Map.entry(1, logEndOffset), cache.endOffsetFor(1, logEndOffset));
@@ -350,17 +348,6 @@ public class LeaderEpochFileCacheTest {
     }
 
     @Test
-    public void shouldUpdateSavedOffsetWhenOffsetToClearToIsBetweenEpochs() {
-        cache.assign(2, 6);
-        cache.assign(3, 8);
-        cache.assign(4, 11);
-
-        cache.truncateFromStartAsyncFlush(9);
-
-        assertEquals(List.of(new EpochEntry(3, 9), new EpochEntry(4, 11)), cache.epochEntries());
-    }
-
-    @Test
     public void shouldNotClearAnythingIfOffsetTooEarly() {
         cache.assign(2, 6);
         cache.assign(3, 8);
@@ -405,7 +392,7 @@ public class LeaderEpochFileCacheTest {
     }
 
     @Test
-    public void shouldUpdateOffsetBetweenEpochBoundariesOnClearEarliest2() {
+    public void shouldUpdateOffsetBetweenFirstTwoEpochBoundariesOnClearEarliest() {
         cache.assign(0, 0);
         cache.assign(1, 7);
         cache.assign(2, 10);
@@ -485,12 +472,12 @@ public class LeaderEpochFileCacheTest {
 
     @Test
     public void shouldClearEarliestOnEmptyCache() {
-        cache.truncateFromStartAsyncFlush(7);
+        assertDoesNotThrow(() -> cache.truncateFromStartAsyncFlush(7));
     }
 
     @Test
     public void shouldClearLatestOnEmptyCache() {
-        cache.truncateFromEndAsyncFlush(7);
+        assertDoesNotThrow(() -> cache.truncateFromEndAsyncFlush(7));
     }
 
     @Test
