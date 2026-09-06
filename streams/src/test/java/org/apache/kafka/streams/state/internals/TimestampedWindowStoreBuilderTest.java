@@ -26,7 +26,6 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -38,11 +37,9 @@ import org.mockito.quality.Strictness;
 import java.time.Duration;
 import java.util.Collections;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
@@ -89,7 +86,7 @@ public class TimestampedWindowStoreBuilderTest {
     public void shouldHaveMeteredStoreAsOuterStore(final String storeName) {
         setUp(storeName);
         final TimestampedWindowStore<String, String> store = builder.build();
-        assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
+        assertInstanceOf(MeteredTimestampedWindowStore.class, store);
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
@@ -98,7 +95,7 @@ public class TimestampedWindowStoreBuilderTest {
         setUp(storeName);
         final TimestampedWindowStore<String, String> store = builder.build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, instanceOf(ChangeLoggingTimestampedWindowBytesStore.class));
+        assertInstanceOf(ChangeLoggingTimestampedWindowBytesStore.class, next);
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
@@ -107,7 +104,7 @@ public class TimestampedWindowStoreBuilderTest {
         setUp(storeName);
         final TimestampedWindowStore<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, CoreMatchers.equalTo(inner));
+        assertEquals(inner, next);
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
@@ -116,11 +113,11 @@ public class TimestampedWindowStoreBuilderTest {
         setUp(storeName);
         final TimestampedWindowStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
+        assertInstanceOf(MeteredTimestampedWindowStore.class, store);
         if (isTimeOrderedStore) {
-            assertThat(wrapped, instanceOf(TimeOrderedCachingWindowStore.class));
+            assertInstanceOf(TimeOrderedCachingWindowStore.class, wrapped);
         } else {
-            assertThat(wrapped, instanceOf(CachingWindowStore.class));
+            assertInstanceOf(CachingWindowStore.class, wrapped);
         }
     }
 
@@ -132,9 +129,9 @@ public class TimestampedWindowStoreBuilderTest {
                 .withLoggingEnabled(Collections.emptyMap())
                 .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
-        assertThat(wrapped, instanceOf(ChangeLoggingTimestampedWindowBytesStore.class));
-        assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.equalTo(inner));
+        assertInstanceOf(MeteredTimestampedWindowStore.class, store);
+        assertInstanceOf(ChangeLoggingTimestampedWindowBytesStore.class, wrapped);
+        assertEquals(inner, ((WrappedStateStore) wrapped).wrapped());
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
@@ -147,14 +144,14 @@ public class TimestampedWindowStoreBuilderTest {
                 .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
+        assertInstanceOf(MeteredTimestampedWindowStore.class, store);
         if (isTimeOrderedStore) {
-            assertThat(caching, instanceOf(TimeOrderedCachingWindowStore.class));
+            assertInstanceOf(TimeOrderedCachingWindowStore.class, caching);
         } else {
-            assertThat(caching, instanceOf(CachingWindowStore.class));
+            assertInstanceOf(CachingWindowStore.class, caching);
         }
-        assertThat(changeLogging, instanceOf(ChangeLoggingTimestampedWindowBytesStore.class));
-        assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
+        assertInstanceOf(ChangeLoggingTimestampedWindowBytesStore.class, changeLogging);
+        assertEquals(inner, changeLogging.wrapped());
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
@@ -175,7 +172,7 @@ public class TimestampedWindowStoreBuilderTest {
             .withLoggingDisabled()
             .withCachingDisabled()
             .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(RocksDBTimestampedWindowStore.class));
+        assertInstanceOf(RocksDBTimestampedWindowStore.class, ((WrappedStateStore) store).wrapped());
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
@@ -196,7 +193,7 @@ public class TimestampedWindowStoreBuilderTest {
             .withLoggingDisabled()
             .withCachingDisabled()
             .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(WindowToTimestampedWindowByteStoreAdapter.class));
+        assertInstanceOf(WindowToTimestampedWindowByteStoreAdapter.class, ((WrappedStateStore) store).wrapped());
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
@@ -221,8 +218,8 @@ public class TimestampedWindowStoreBuilderTest {
 
         // typed as StateStore so this compiles, and fails, when the adapter does not expose it
         final StateStore adapter = ((WrappedStateStore) store).wrapped();
-        assertThat(adapter, instanceOf(WithRetentionPeriod.class));
-        assertThat(((WithRetentionPeriod) adapter).retentionPeriod(), is(retentionMs));
+        assertInstanceOf(WithRetentionPeriod.class, adapter);
+        assertEquals(retentionMs, ((WithRetentionPeriod) adapter).retentionPeriod());
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})

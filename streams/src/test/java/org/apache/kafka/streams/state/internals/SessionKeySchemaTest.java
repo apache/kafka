@@ -46,11 +46,10 @@ import java.util.function.Function;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SessionKeySchemaTest {
     private static final Map<SchemaType, KeySchema> SCHEMA_TYPE_MAP = mkMap(
@@ -173,7 +172,7 @@ public class SessionKeySchemaTest {
         setUp(type);
         final Bytes key = Bytes.wrap(new byte[]{0});
         final List<Integer> result = getValues(keySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE, true));
-        assertThat(result, equalTo(asList(2, 4)));
+        assertEquals(List.of(2, 4), result);
     }
 
     @ParameterizedTest
@@ -183,7 +182,7 @@ public class SessionKeySchemaTest {
         final Bytes key = Bytes.wrap(new byte[]{0, 0});
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE, true);
         final List<Integer> results = getValues(hasNextCondition);
-        assertThat(results, equalTo(asList(1, 5)));
+        assertEquals(List.of(1, 5), results);
     }
 
     @ParameterizedTest
@@ -192,7 +191,7 @@ public class SessionKeySchemaTest {
         setUp(type);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true);
         final List<Integer> results = getValues(hasNextCondition);
-        assertThat(results, equalTo(asList(1, 2, 3, 4, 5, 6)));
+        assertEquals(List.of(1, 2, 3, 4, 5, 6), results);
     }
     
     @ParameterizedTest
@@ -201,35 +200,24 @@ public class SessionKeySchemaTest {
         setUp(type);
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
-        assertThat(
-            "shorter key with max timestamp should be in range",
+        assertTrue(
             upper.compareTo(toBinary.apply(
-                new Windowed<>(
-                    Bytes.wrap(new byte[]{0xA}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-            )) >= 0
-        );
+                new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))) >= 0,
+            "shorter key with max timestamp should be in range");
 
-        assertThat(
-            "shorter key with max timestamp should be in range",
+        assertTrue(
             upper.compareTo(toBinary.apply(
-                new Windowed<>(
-                    Bytes.wrap(new byte[]{0xA, 0xB}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-
-            )) >= 0
-        );
+                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))) >= 0,
+            "shorter key with max timestamp should be in range");
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(upper, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
-            );
+            assertEquals(
+                toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))),
+                upper);
         } else {
-            assertThat(upper, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
-            );
+            assertEquals(
+                toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))),
+                upper);
         }
     }
 
@@ -239,19 +227,15 @@ public class SessionKeySchemaTest {
         setUp(type);
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), Long.MAX_VALUE);
 
-        assertThat(
-            "shorter key with max timestamp should be in range",
+        assertTrue(
             upper.compareTo(toBinary.apply(
-                new Windowed<>(
-                    Bytes.wrap(new byte[]{0xA, (byte) 0x8F}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-                )
-            ) >= 0
-        );
+                new Windowed<>(Bytes.wrap(new byte[]{0xA, (byte) 0x8F}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))) >= 0,
+            "shorter key with max timestamp should be in range");
 
-        assertThat(upper, equalTo(toBinary.apply(
-            new Windowed<>(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
-        );
+        assertEquals(
+            toBinary.apply(
+                new Windowed<>(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))),
+            upper);
     }
 
     @ParameterizedTest
@@ -262,13 +246,9 @@ public class SessionKeySchemaTest {
         final Function<Windowed<Bytes>, Bytes> toBinary = WINDOW_TO_STORE_BINARY_MAP.get(schemaType);
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(upper, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, Long.MAX_VALUE))))
-            );
+            assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, Long.MAX_VALUE))), upper);
         } else {
-            assertThat(upper, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(0, Long.MAX_VALUE))))
-            );
+            assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(0, Long.MAX_VALUE))), upper);
         }
     }
 
@@ -277,7 +257,7 @@ public class SessionKeySchemaTest {
     public void testLowerBoundWithZeroTimestamp(final SchemaType type) {
         setUp(type);
         final Bytes lower = keySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
-        assertThat(lower, equalTo(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0)))));
+        assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0))), lower);
     }
 
     @ParameterizedTest
@@ -286,21 +266,16 @@ public class SessionKeySchemaTest {
         setUp(type);
         final Bytes lower = keySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
-        assertThat(
-            "appending zeros to key should still be in range",
-            lower.compareTo(toBinary.apply(
-                new Windowed<>(
-                    Bytes.wrap(new byte[]{0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-            )) < 0
-        );
+        assertTrue(
+            lower.compareTo(toBinary.apply(new Windowed<>(
+                Bytes.wrap(new byte[]{0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
+                new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))) < 0,
+            "appending zeros to key should still be in range");
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(lower, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, Long.MAX_VALUE)))));
+            assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, Long.MAX_VALUE))), lower);
         } else {
-            assertThat(lower, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0)))));
+            assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0))), lower);
         }
     }
 
