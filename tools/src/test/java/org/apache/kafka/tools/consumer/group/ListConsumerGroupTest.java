@@ -102,7 +102,7 @@ public class ListConsumerGroupTest {
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"})
             ) {
                 Set<String> expectedGroups = Set.of(topicPartitionsGroup, topicGroup, protocolGroup);
-                final AtomicReference<Set<String>> foundGroups = new AtomicReference<>(Set.of());
+                final AtomicReference<Set<String>> foundGroups = new AtomicReference<>();
 
                 TestUtils.waitForCondition(() -> {
                     foundGroups.set(new HashSet<>(service.listConsumerGroups()));
@@ -590,7 +590,7 @@ public class ListConsumerGroupTest {
         Set<GroupState> groupStateFilterSet,
         Set<GroupListing> expectedListing
     ) throws Exception {
-        final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>(Set.of());
+        final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
             foundListing.set(new HashSet<>(service.listConsumerGroupsWithFilters(typeFilterSet, groupStateFilterSet)));
             return Objects.equals(expectedListing, foundListing.get());
