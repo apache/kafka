@@ -240,7 +240,6 @@ libs += [
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   spotbugs: "com.github.spotbugs:spotbugs-annotations:$versions.spotbugs",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
-  testcontainersJunitJupiter: "org.testcontainers:testcontainers-junit-jupiter:$versions.testcontainers",
   testcontainersKeycloak: "com.github.dasniko:testcontainers-keycloak:$versions.testcontainersKeycloak",
   mockOAuth2Server: "no.nav.security:mock-oauth2-server:$versions.mockOAuth2Server",
   jfreechart: "org.jfree:jfreechart:$versions.jfreechart",
