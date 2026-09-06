@@ -60,10 +60,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation. Each instance of this
- * class is provided with a configuration for the cluster.
+ * JUnit 5 invocation context for integration tests that run against an in-process Kafka cluster.
  *
- * This context also provides parameter resolvers for:
+ * <p>Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation.
+ * Each instance of this class is provided with a configuration for the cluster.
+ *
+ * <p>This context also provides parameter resolvers for:
  *
  * <ul>
  *     <li>ClusterConfig (the same instance passed to the constructor)</li>

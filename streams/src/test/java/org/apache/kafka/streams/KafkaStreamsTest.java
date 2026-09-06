@@ -107,14 +107,9 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -521,7 +516,7 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
                 "Streams never stopped.");
 
-            assertThat(appender.getMessages(), not(hasItem(containsString("ERROR"))));
+            assertFalse(appender.getMessages().stream().anyMatch(message -> message.contains("ERROR")));
         }
 
         assertTrue(supplier.consumer.closed());
@@ -608,9 +603,9 @@ public class KafkaStreamsTest {
 
             streams.close();
             assertEquals(KafkaStreams.State.ERROR, streams.state(), "KafkaStreams should remain in ERROR state after close.");
-            assertThat(appender.getMessages(), hasItem(containsString("State transition from RUNNING to PENDING_ERROR")));
-            assertThat(appender.getMessages(), hasItem(containsString("State transition from PENDING_ERROR to ERROR")));
-            assertThat(appender.getMessages(), hasItem(containsString("Streams client is already in the terminal ERROR state")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("State transition from RUNNING to PENDING_ERROR")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("State transition from PENDING_ERROR to ERROR")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("Streams client is already in the terminal ERROR state")));
         }
     }
 
@@ -716,8 +711,8 @@ public class KafkaStreamsTest {
             streams.start();
             final int oldSize = streams.threads.size();
             waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
-            assertThat(streams.addStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 2)));
-            assertThat(streams.threads.size(), equalTo(oldSize + 1));
+            assertEquals(Optional.of("processId-StreamThread-" + 2), streams.addStreamThread());
+            assertEquals(oldSize + 1, streams.threads.size());
         }
     }
 
@@ -728,8 +723,8 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             final int oldSize = streams.threads.size();
-            assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
-            assertThat(streams.threads.size(), equalTo(oldSize));
+            assertEquals(Optional.empty(), streams.addStreamThread());
+            assertEquals(oldSize, streams.threads.size());
         }
     }
 
@@ -741,8 +736,8 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             final int oldSize = streams.threads.size();
             streams.close();
-            assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
-            assertThat(streams.threads.size(), equalTo(oldSize));
+            assertEquals(Optional.empty(), streams.addStreamThread());
+            assertEquals(oldSize, streams.threads.size());
         }
     }
 
@@ -760,8 +755,8 @@ public class KafkaStreamsTest {
             final int oldSize = streams.threads.size();
             streams.start();
             streams.globalStreamThread.shutdown();
-            assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
-            assertThat(streams.threads.size(), equalTo(oldSize));
+            assertEquals(Optional.empty(), streams.addStreamThread());
+            assertEquals(oldSize, streams.threads.size());
         }
     }
 
@@ -778,8 +773,8 @@ public class KafkaStreamsTest {
             streams.start();
             streamThreadOne.shutdown(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             final Set<ThreadMetadata> threads = streams.metadataForLocalThreads();
-            assertThat(threads.size(), equalTo(1));
-            assertThat(threads, hasItem(streamThreadTwo.threadMetadata()));
+            assertEquals(1, threads.size());
+            assertTrue(threads.contains(streamThreadTwo.threadMetadata()));
         }
     }
 
@@ -799,8 +794,8 @@ public class KafkaStreamsTest {
             final int oldSize = streams.threads.size();
             waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
                 "Kafka Streams client did not reach state RUNNING");
-            assertThat(streams.removeStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 1)));
-            assertThat(streams.threads.size(), equalTo(oldSize - 1));
+            assertEquals(Optional.of("processId-StreamThread-" + 1), streams.removeStreamThread());
+            assertEquals(oldSize - 1, streams.threads.size());
         }
     }
 
@@ -811,8 +806,8 @@ public class KafkaStreamsTest {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         try (final KafkaStreams streams =
                      new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
-            assertThat(streams.threads.size(), equalTo(1));
+            assertEquals(Optional.empty(), streams.removeStreamThread());
+            assertEquals(1, streams.threads.size());
         }
     }
 
@@ -978,9 +973,9 @@ public class KafkaStreamsTest {
                 "Streams never started.");
 
             streams.close(Duration.ZERO);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
             assertThrows(IllegalStateException.class, streams::cleanUp);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
         }
     }
 
@@ -1006,9 +1001,9 @@ public class KafkaStreamsTest {
                     .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
 
             streams.close(closeOptions);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
             assertThrows(IllegalStateException.class, streams::cleanUp);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
         }
     }
 
@@ -1029,9 +1024,9 @@ public class KafkaStreamsTest {
             final CloseOptions closeOptions = CloseOptions.timeout(Duration.ZERO);
 
             streams.close(closeOptions);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
             assertThrows(IllegalStateException.class, streams::cleanUp);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
         }
     }
 
@@ -1571,10 +1566,11 @@ public class KafkaStreamsTest {
         try (final KafkaStreams ignored = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
             fail("Should have thrown TopologyException");
         } catch (final TopologyException e) {
-            assertThat(
-                e.getMessage(),
-                equalTo("Invalid topology: Topology has no stream threads and no global threads, " +
-                            "must subscribe to at least one source topic or global table."));
+            assertEquals(
+                "Invalid topology: Topology has no stream threads and no global threads, " +
+                    "must subscribe to at least one source topic or global table.",
+                e.getMessage()
+            );
         }
     }
 
@@ -1584,7 +1580,7 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
-            assertThat(streams.threads.size(), equalTo(0));
+            assertEquals(0, streams.threads.size());
         }
     }
 
@@ -1595,7 +1591,7 @@ public class KafkaStreamsTest {
         builder.globalTable("anyTopic");
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
 
-            assertThat(streams.threads.size(), equalTo(0));
+            assertEquals(0, streams.threads.size());
             assertEquals(KafkaStreams.State.CREATED, streams.state());
 
             streams.start();
@@ -1622,10 +1618,7 @@ public class KafkaStreamsTest {
                 IllegalArgumentException.class,
                 () -> streams.clientInstanceIds(Duration.ofMillis(-1L))
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("The timeout cannot be negative.")
-            );
+            assertEquals("The timeout cannot be negative.", error.getMessage());
         }
     }
 
@@ -1640,10 +1633,7 @@ public class KafkaStreamsTest {
                 IllegalStateException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("KafkaStreams has not been started, you can retry after calling start().")
-            );
+            assertEquals("KafkaStreams has not been started, you can retry after calling start().", error.getMessage());
         }
     }
 
@@ -1660,10 +1650,7 @@ public class KafkaStreamsTest {
                 IllegalStateException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("KafkaStreams has been stopped (NOT_RUNNING).")
-            );
+            assertEquals("KafkaStreams has been stopped (NOT_RUNNING).", error.getMessage());
         }
     }
 
@@ -1680,17 +1667,11 @@ public class KafkaStreamsTest {
                 StreamsException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("Could not retrieve admin client instance id.")
-            );
+            assertEquals("Could not retrieve admin client instance id.", error.getMessage());
 
             final Throwable cause = error.getCause();
-            assertThat(cause, instanceOf(UnsupportedOperationException.class));
-            assertThat(
-                cause.getMessage(),
-                equalTo("clientInstanceId not set")
-            );
+            assertInstanceOf(UnsupportedOperationException.class, cause);
+            assertEquals("clientInstanceId not set", cause.getMessage());
         }
     }
 
@@ -1710,9 +1691,9 @@ public class KafkaStreamsTest {
                 IllegalStateException.class,
                 clientInstanceIds::adminInstanceId
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("Telemetry is not enabled on the admin client. Set config `enable.metrics.push` to `true`.")
+            assertEquals(
+                "Telemetry is not enabled on the admin client. Set config `enable.metrics.push` to `true`.",
+                error.getMessage()
             );
         }
     }
@@ -1747,10 +1728,7 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
 
-            assertThat(
-                streams.clientInstanceIds(Duration.ZERO).adminInstanceId(),
-                equalTo(instanceId)
-            );
+            assertEquals(instanceId, streams.clientInstanceIds(Duration.ZERO).adminInstanceId());
         }
     }
 
@@ -1774,11 +1752,11 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ZERO);
-            assertThat(clientInstanceIds.consumerInstanceIds().size(), equalTo(1));
-            assertThat(clientInstanceIds.consumerInstanceIds().get("main-consumer"), equalTo(mainConsumerInstanceId));
-            assertThat(clientInstanceIds.producerInstanceIds().size(),  equalTo(1));
-            assertThat(clientInstanceIds.producerInstanceIds().get("some-thread-producer"), equalTo(producerInstanceId));
-            assertThat(clientInstanceIds.adminInstanceId(), equalTo(adminInstanceId));
+            assertEquals(1, clientInstanceIds.consumerInstanceIds().size());
+            assertEquals(mainConsumerInstanceId, clientInstanceIds.consumerInstanceIds().get("main-consumer"));
+            assertEquals(1, clientInstanceIds.producerInstanceIds().size());
+            assertEquals(producerInstanceId, clientInstanceIds.producerInstanceIds().get("some-thread-producer"));
+            assertEquals(adminInstanceId, clientInstanceIds.adminInstanceId());
         }
     }
 
@@ -1798,8 +1776,8 @@ public class KafkaStreamsTest {
                 TimeoutException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve consumer/producer instance id for some-client."));
-            assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
+            assertEquals("Could not retrieve consumer/producer instance id for some-client.", timeoutException.getMessage());
+            assertInstanceOf(java.util.concurrent.TimeoutException.class, timeoutException.getCause());
         }
     }
 
@@ -1823,8 +1801,8 @@ public class KafkaStreamsTest {
                 TimeoutException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve global consumer client instance id."));
-            assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
+            assertEquals("Could not retrieve global consumer client instance id.", timeoutException.getMessage());
+            assertInstanceOf(java.util.concurrent.TimeoutException.class, timeoutException.getCause());
         }
     }
 
@@ -1848,7 +1826,7 @@ public class KafkaStreamsTest {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertThreadOne.set(true);
-                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-10L)));
+                    assertEquals(expectedTimeout.getAndAdd(-10L), timeout);
                     mockTime.sleep(10L);
                     return null;
                 }
@@ -1858,7 +1836,7 @@ public class KafkaStreamsTest {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertThreadTwo.set(true);
-                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-5L)));
+                    assertEquals(expectedTimeout.getAndAdd(-5L), timeout);
                     mockTime.sleep(5L);
                     return null;
                 }
@@ -1875,7 +1853,7 @@ public class KafkaStreamsTest {
                     @Override
                     public Uuid get(final long timeout, final TimeUnit timeUnit) {
                         didAssertGlobalThread.set(true);
-                        assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-8L)));
+                        assertEquals(expectedTimeout.getAndAdd(-8L), timeout);
                         mockTime.sleep(8L);
                         return null;
                     }
@@ -1884,9 +1862,9 @@ public class KafkaStreamsTest {
             streams.clientInstanceIds(Duration.ofMillis(60L));
         }
 
-        assertThat(didAssertThreadOne.get(), equalTo(true));
-        assertThat(didAssertThreadTwo.get(), equalTo(true));
-        assertThat(didAssertGlobalThread.get(), equalTo(true));
+        assertTrue(didAssertThreadOne.get());
+        assertTrue(didAssertThreadTwo.get());
+        assertTrue(didAssertGlobalThread.get());
     }
 
     @Test
