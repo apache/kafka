@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.partition;
 
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
-import kafka.server.builders.LogManagerBuilder;
 
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
@@ -29,6 +28,7 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.jmh.server.builders.LogManagerBuilder;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
