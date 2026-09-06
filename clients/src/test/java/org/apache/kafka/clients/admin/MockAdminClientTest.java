@@ -111,7 +111,8 @@ public class MockAdminClientTest {
             new Node(0, "host", 0),
             Set.of(),
             Optional.empty(),
-            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED);
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            Optional.empty());
     }
 
     private StreamsGroupDescription newStreamsGroupDescriptionWithTopology(String groupId) {
@@ -127,6 +128,7 @@ public class MockAdminClientTest {
             new Node(0, "host", 0),
             Set.of(),
             Optional.of(topology),
-            StreamsGroupTopologyDescriptionStatus.AVAILABLE);
+            StreamsGroupTopologyDescriptionStatus.AVAILABLE,
+            Optional.empty());
     }
 }

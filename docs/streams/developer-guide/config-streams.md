@@ -91,6 +91,7 @@ This section contains the most common Streams configuration parameters. For a fu
     * topology.optimization
   * Kafka consumers and producer configuration parameters
     * Naming
+    * group.instance.id
     * Default Values
     * Parameters controlled by Kafka Streams
     * enable.auto.commit
@@ -1407,7 +1408,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >
 > See [KIP-1271](https://cwiki.apache.org/confluence/x/QIM8G) for migration procedures, changelog compatibility, restore behavior, and per-record overhead.
 >
-> **Current limitations**: `dsl.store.format=HEADERS` changes the state store format. It does not define how DSL operators create headers for output records. Some operators write empty headers to their materialized stores, and the buffer stores used by `suppress()` and left/outer stream-stream joins are not headers-aware. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) and the [Streams upgrade guide](/{version}/streams/upgrade-guide.html#current-limitations) for details.
+> **Current limitations**: `dsl.store.format=HEADERS` changes the state store format. It does not define how DSL operators create headers for output records. Some operators write empty headers to their materialized stores, and the buffer store used by left/outer stream-stream joins for not-yet-matched records is not headers-aware. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) and the [Streams upgrade guide](/{version}/streams/upgrade-guide.html#current-limitations) for details.
 
 ### ensure.explicit.internal.resource.naming
 
@@ -1806,6 +1807,10 @@ If you call `streamsBuilder.build()` without passing the `Properties` object, op
      // alternatively, you can use
      streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
  
+ #### group.instance.id {#group-instance-id}
+
+ `group.instance.id` is a consumer configuration that enables static membership. For Kafka Streams, it is configured at the Kafka Streams client level, and the configured value must be unique to each `KafkaStreams` instance. Internally, Kafka Streams appends the 1-based stream thread index to the configured `group.instance.id` to ensure that each stream thread's main consumer uses a unique value. For example, a configured value of `ks-client-A` results in `ks-client-A-1`, `ks-client-A-2`, and so on. Static membership is supported with both `group.protocol=classic` and `group.protocol=streams`.
+
  #### Default Values
  
  Kafka Streams uses different default values for some of the underlying client configs, which are summarized below. For detailed descriptions of these configs, see [Producer Configs](/43/documentation.html#producerconfigs) and [Consumer Configs](/43/documentation.html#consumerconfigs).  

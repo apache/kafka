@@ -96,6 +96,28 @@ class KafkaRaftClientTest {
         assertEquals(context.log.endOffset().offset(), context.client.logEndOffset());
     }
 
+    @Test
+    public void testVoterSetsWithStaticVoters() throws Exception {
+        int localId = randomReplicaId();
+        ReplicaKey otherNode = replicaKey(localId + 1, false);
+        Set<Integer> voters = Set.of(localId, otherNode.id());
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        // Establish the high watermark
+        context.deliverRequest(
+            context.fetchRequest(epoch, otherNode, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertTrue(context.client.highWatermark().isPresent());
+
+        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.kraftVersion());
+        assertEquals(voters, context.client.latestVoterSet().voterIds());
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
     public void testInitializeAsLeaderFromStateStoreSingleMemberQuorum(boolean withKip853Rpc) throws Exception {
@@ -854,7 +876,7 @@ class KafkaRaftClientTest {
     @ValueSource(booleans = { true, false })
     public void testCannotResignIfObserver(boolean withKip853Rpc) throws Exception {
         int leaderId = randomReplicaId();
-        int otherNodeId = randomReplicaId() + 1;
+        int otherNodeId = leaderId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(leaderId, otherNodeId);
 

@@ -114,7 +114,6 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -314,7 +313,7 @@ public class DumpLogSegmentsTest {
 
         Map<String, Map<Long, Long>> offsetMismatches = new HashMap<>();
         DumpLogSegments.dumpIndex(new File(indexFilePath), false, true, offsetMismatches, Integer.MAX_VALUE);
-        assertEquals(Collections.emptyMap(), offsetMismatches);
+        assertEquals(Map.of(), offsetMismatches);
     }
 
     @Test
@@ -325,9 +324,9 @@ public class DumpLogSegmentsTest {
 
         DumpLogSegments.TimeIndexDumpErrors errors = new DumpLogSegments.TimeIndexDumpErrors();
         DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), false, true, errors);
-        assertEquals(Collections.emptyMap(), errors.misMatchesForTimeIndexFilesMap);
-        assertEquals(Collections.emptyMap(), errors.outOfOrderTimestamp);
-        assertEquals(Collections.emptyMap(), errors.shallowOffsetNotFound);
+        assertEquals(Map.of(), errors.misMatchesForTimeIndexFilesMap);
+        assertEquals(Map.of(), errors.outOfOrderTimestamp);
+        assertEquals(Map.of(), errors.shallowOffsetNotFound);
     }
 
     @Test
@@ -800,14 +799,14 @@ public class DumpLogSegmentsTest {
 
         // Get all the batches
         String output = runDumpLogSegments(new String[] {"--files", logFilePath});
-        ListIterator<String> lines = Arrays.asList(output.split("\n")).listIterator();
+        ListIterator<String> lines = List.of(output.split("\n")).listIterator();
 
         // Get total bytes of the partial batches
         int partialBatchesBytes = readPartialBatchesBytes(lines, partialBatches);
 
         // Request only the partial batches by bytes
         String partialOutput = runDumpLogSegments(new String[] {"--max-bytes", Integer.toString(partialBatchesBytes), "--files", logFilePath});
-        ListIterator<String> partialLines = Arrays.asList(partialOutput.split("\n")).listIterator();
+        ListIterator<String> partialLines = List.of(partialOutput.split("\n")).listIterator();
 
         // Count the total of partial batches limited by bytes
         int partialBatchesCount = countBatches(partialLines);
@@ -862,7 +861,7 @@ public class DumpLogSegmentsTest {
                         .setProtocol("range")
                         .setLeader("member")
                         .setGeneration(10)
-                        .setMembers(Collections.singletonList(
+                        .setMembers(List.of(
                             new GroupMetadataValue.MemberMetadata()
                                 .setMemberId("member")
                                 .setClientId("client")
@@ -872,13 +871,13 @@ public class DumpLogSegmentsTest {
                                 .setRebalanceTimeout(1000)
                                 .setSubscription(Utils.toArray(ConsumerProtocol.serializeSubscription(
                                     new Subscription(
-                                        Collections.singletonList("foo"),
+                                        List.of("foo"),
                                         null,
-                                        Collections.singletonList(new TopicPartition("foo", 0)),
+                                        List.of(new TopicPartition("foo", 0)),
                                         0,
                                         Optional.of("rack")))))
                                 .setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
-                                    new Assignment(Collections.singletonList(new TopicPartition("foo", 0))))))
+                                    new Assignment(List.of(new TopicPartition("foo", 0))))))
                         )),
                     GroupMetadataValue.HIGHEST_SUPPORTED_VERSION
                 )
@@ -903,7 +902,7 @@ public class DumpLogSegmentsTest {
                         .setProtocol("range")
                         .setLeader("member")
                         .setGeneration(10)
-                        .setMembers(Collections.singletonList(
+                        .setMembers(List.of(
                             new GroupMetadataValue.MemberMetadata()
                                 .setMemberId("member")
                                 .setClientId("client")
@@ -1141,7 +1140,7 @@ public class DumpLogSegmentsTest {
         FetchDataInfo logReadInfo = log.read(0, Integer.MAX_VALUE, FetchIsolation.LOG_END, true);
 
         String output = runDumpLogSegments(new String[] {"--deep-iteration", "--files", logFilePath});
-        ListIterator<String> lines = Arrays.asList(output.split("\n")).listIterator();
+        ListIterator<String> lines = List.of(output.split("\n")).listIterator();
 
         for (RecordBatch batch : logReadInfo.records.batches()) {
             Optional<String> parsedBatchOpt = readBatchMetadata(lines);

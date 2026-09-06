@@ -135,7 +135,7 @@ Every application instance can directly query any of its local state stores.
 
 The _name_ of a state store is defined when you create the store. You can create the store explicitly by using the Processor API or implicitly by using stateful operations in the DSL.
 
-The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in implementation from [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) as the second argument to `KafkaStreams#store(...)`. The available built-in helpers are:
+The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in implementation from [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) to [`StoreQueryParameters.fromNameAndType(...)`](/{version}/javadoc/org/apache/kafka/streams/StoreQueryParameters.html), then hand that to `KafkaStreams#store(...)`. The available built-in helpers are:
 
   * **`QueryableStoreTypes#keyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
   * **`QueryableStoreTypes#timestampedKeyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
@@ -152,9 +152,7 @@ You can also implement your own QueryableStoreType as described in section Query
 
 Kafka Streams materializes one state store per stream partition. This means your application will potentially manage many underlying state stores. The API enables you to query all of the underlying stores without having to know which partition the data is in.
 
-<a id="header-aware-stores-interactive-queries"></a>
-
-**Note:** For a [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores), use the **`*WithHeaders()`** entry from the list above that corresponds to your store type when interactive query results must include record headers.
+**Note:** For a [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores), use the **`*WithHeaders()`** entry from the list above that corresponds to your store type when interactive query results must include record headers. See [Header-aware stores and interactive queries](#header-aware-stores-interactive-queries) to read record headers back through either the `store()` API or the IQv2 `query()` API.
 
 ## Querying local key-value stores
 
@@ -184,7 +182,8 @@ After the application has started, you can get access to "CountsKeyValueStore" a
     
     // Get the key-value store CountsKeyValueStore
     ReadOnlyKeyValueStore<String, Long> keyValueStore =
-        streams.store("CountsKeyValueStore", QueryableStoreTypes.keyValueStore());
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "CountsKeyValueStore", QueryableStoreTypes.keyValueStore()));
     
     // Get value by key
     System.out.println("count for hello:" + keyValueStore.get("hello"));
@@ -244,7 +243,8 @@ After the application has started, you can get access to "CountsWindowStore" and
     
     // Get the window store named "CountsWindowStore"
     ReadOnlyWindowStore<String, Long> windowStore =
-        streams.store("CountsWindowStore", QueryableStoreTypes.windowStore());
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "CountsWindowStore", QueryableStoreTypes.windowStore()));
     
     // Fetch values for the key "world" for all of the windows available in this application instance.
     // To get *all* available windows we fetch windows from the beginning of time until now.
@@ -256,6 +256,237 @@ After the application has started, you can get access to "CountsWindowStore" and
       long windowTimestamp = next.key;
       System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
     }
+
+## Header-aware stores and interactive queries {#header-aware-stores-interactive-queries}
+
+A [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores) — built with a `*WithHeaders` supplier and its matching builder ([KIP-1271](../../upgrade-guide/#kip-1271-headers-aware-stores)) — persists each record's [headers](</{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()>) alongside its value (and, for key-value and window stores, its timestamp). This section shows how to read those headers back interactively, through both the `store()` API and the IQv2 `query()` API.
+
+### Reading headers with the `store()` API
+
+Look up the store with the `*WithHeaders()` entry from `QueryableStoreTypes` that matches your store type. The returned `ReadOnly*Store` surfaces the headers as part of its value type: [ValueTimestampHeaders](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html) for key-value and window stores, and [AggregationWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html) for session stores. These examples assume a header-aware store built with a `*WithHeaders` supplier, as shown in [Headers in State Stores](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores). There are only three such helpers — `timestampedKeyValueStoreWithHeaders()`, `timestampedWindowStoreWithHeaders()`, and `sessionStoreWithHeaders()`; there is no `*WithHeaders()` helper for a plain (non-timestamped) key-value or window store. What the store returns also depends on the supplier the `*WithHeaders` builder wraps (see the store-build table below): on the adapter paths the `store()` API degrades silently — a timestamped supplier returns empty headers, and a plain one surfaces a `-1` timestamp without error, whereas the IQv2 `query()` API fails on that `-1`.
+    
+    
+    // Key-value store built with a *WithHeaders supplier
+    ReadOnlyKeyValueStore<String, ValueTimestampHeaders<Long>> keyValueStore =
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "counts-store", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+    
+    ValueTimestampHeaders<Long> vth = keyValueStore.get("hello");
+    if (vth != null) {
+      System.out.println("value:     " + vth.value());
+      System.out.println("timestamp: " + vth.timestamp());
+      System.out.println("headers:   " + vth.headers());
+    }
+    
+    // Window store built with a *WithHeaders supplier
+    ReadOnlyWindowStore<String, ValueTimestampHeaders<Long>> windowStore =
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "counts-window-store", QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
+    
+    // fetch returns a WindowStoreIterator whose values carry headers
+    try (WindowStoreIterator<ValueTimestampHeaders<Long>> it =
+             windowStore.fetch("hello", Instant.ofEpochMilli(0), Instant.now())) {
+      while (it.hasNext()) {
+        ValueTimestampHeaders<Long> wv = it.next().value;
+        System.out.println("value: " + wv.value() + " headers: " + wv.headers());
+      }
+    }
+
+Session stores return `AggregationWithHeaders<V>`, which exposes the aggregated value via `aggregation()` (not `value()`) and the headers via `headers()`.
+    
+    
+    // Session store built with a *WithHeaders supplier
+    ReadOnlySessionStore<String, AggregationWithHeaders<Long>> sessionStore =
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "counts-session-store", QueryableStoreTypes.sessionStoreWithHeaders()));
+    
+    try (KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> it =
+             sessionStore.fetch("hello")) {
+      while (it.hasNext()) {
+        AggregationWithHeaders<Long> awh = it.next().value;
+        System.out.println("aggregation: " + awh.aggregation());
+        System.out.println("headers:     " + awh.headers());
+      }
+    }
+
+### Reading headers with the IQv2 `query()` API
+
+Interactive Queries v2 (IQv2) is the query-based interactive-queries API: instead of accessing a store object directly, you build a `Query`, wrap it in a [StateQueryRequest](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryRequest.html), and run it with `KafkaStreams#query(...)`. The call returns a [StateQueryResult](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryResult.html) that holds a per-partition [QueryResult](/{version}/javadoc/org/apache/kafka/streams/query/QueryResult.html): use `getOnlyPartitionResult()` for a single-key lookup, or `getPartitionResults()` for the full `Map<Integer, QueryResult<R>>`. Each `QueryResult` exposes the query result via `getResult()` and its data-freshness `Position` via `getPosition()`. To require a minimum freshness on the request side, bound it with `StateQueryRequest#withPositionBound(...)`; a not-up-to-bound failure (described in the behavior notes below) means the store had not yet reached that bound. For the full IQv2 API — the four-step query flow, all built-in query types, per-partition result handling, and the consistency and availability controls — see the [Interactive Queries v2 (IQv2)](#interactive-queries-v2) section; here we cover only how record headers surface through it.
+
+Before [KIP-1356](../../upgrade-guide/#kip-1356-iqv2-header-queries), no IQv2 query type exposed record headers. [KIP-1356](../../upgrade-guide/#kip-1356-iqv2-header-queries) adds four `@Evolving` query types whose results carry headers. Each returns a [ReadOnlyRecord](/{version}/javadoc/org/apache/kafka/streams/processor/api/ReadOnlyRecord.html) — a read-only view exposing `key()`, `value()`, `timestamp()`, and `headers()` — or, for the range and window queries, a closeable [ReadOnlyRecordIterator](/{version}/javadoc/org/apache/kafka/streams/state/ReadOnlyRecordIterator.html) of such records. `headers()` is never null (an empty `Headers` when the record had none) and must be treated as read-only: records served as IQv2 results have their headers frozen, so adding or removing a header (for example `add(...)`) throws `IllegalStateException`. The freeze is shallow, though — the byte array behind an individual header value can still be mutated in place, so treat header values as read-only too.
+
+`TimestampedKeyWithHeadersQuery` is a single-key lookup against a header-aware key-value store, parallel to `TimestampedKeyQuery`:
+    
+    
+    TimestampedKeyWithHeadersQuery<String, Long> query =
+        TimestampedKeyWithHeadersQuery.withKey("hello");
+    
+    StateQueryRequest<ReadOnlyRecord<String, Long>> request =
+        StateQueryRequest.inStore("counts-store").withQuery(query);
+    
+    StateQueryResult<ReadOnlyRecord<String, Long>> result = streams.query(request);
+    QueryResult<ReadOnlyRecord<String, Long>> partitionResult = result.getOnlyPartitionResult();
+    if (partitionResult != null && partitionResult.isSuccess()) {
+      ReadOnlyRecord<String, Long> record = partitionResult.getResult();
+      if (record != null) {
+        System.out.println("value:   " + record.value());
+        System.out.println("headers: " + record.headers());
+      }
+    }
+
+Chain `skipCache()` when building the query — `TimestampedKeyWithHeadersQuery.<String, Long>withKey("hello").skipCache()`, with an explicit type witness because a chained call isn't target-typed the way the assignment above is — to bypass the record cache and read directly from the underlying store. The query types are immutable, so `skipCache()` returns a new query rather than mutating the one you already built (of the four header-aware queries, only this single-key one offers `skipCache()`).
+
+`TimestampedRangeWithHeadersQuery` is a key-range scan, parallel to `TimestampedRangeQuery`. It returns a `ReadOnlyRecordIterator`, so close it when done (for example, with try-with-resources). A range can span several local partitions, so iterate `getPartitionResults()`:
+    
+    
+    TimestampedRangeWithHeadersQuery<String, Long> query =
+        TimestampedRangeWithHeadersQuery.withRange("a", "n");
+    
+    StateQueryRequest<ReadOnlyRecordIterator<String, Long>> request =
+        StateQueryRequest.inStore("counts-store").withQuery(query);
+    
+    StateQueryResult<ReadOnlyRecordIterator<String, Long>> result = streams.query(request);
+    for (QueryResult<ReadOnlyRecordIterator<String, Long>> partition : result.getPartitionResults().values()) {
+      if (partition.isFailure()) {
+        System.out.println("failed: " + partition.getFailureReason() + " - " + partition.getFailureMessage());
+        continue;
+      }
+      try (ReadOnlyRecordIterator<String, Long> iterator = partition.getResult()) {
+        while (iterator.hasNext()) {
+          ReadOnlyRecord<String, Long> record = iterator.next();
+          System.out.println(record.key() + " -> " + record.value() + " " + record.headers());
+        }
+      }
+    }
+
+Use `withLowerBound`, `withUpperBound`, or `withNoBounds` for open-ended or full scans. Results are unordered by default; call `withAscendingKeys()` or `withDescendingKeys()` to fix the order, which is defined over the serialized `byte[]` of the keys rather than their logical order.
+
+`TimestampedWindowKeyWithHeadersQuery` fetches all windows for a single key within a window-start range from a header-aware window store. It parallels `WindowKeyQuery`, but with a different result shape: `WindowKeyQuery` returns a `WindowStoreIterator<V>` keyed by the window-start `long`, whereas this query returns a `ReadOnlyRecordIterator<Windowed<K>, V>` whose records are keyed by `Windowed<K>` (the window lives in the key; `timestamp()` is the stored record event-time). Build and consume it as for the range query above, but note the `Windowed<String>` in the request and result types:
+    
+    
+    TimestampedWindowKeyWithHeadersQuery<String, Long> query =
+        TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+            "hello", Instant.ofEpochMilli(0), Instant.now());
+    
+    StateQueryRequest<ReadOnlyRecordIterator<Windowed<String>, Long>> request =
+        StateQueryRequest.inStore("counts-window-store").withQuery(query);
+    
+    StateQueryResult<ReadOnlyRecordIterator<Windowed<String>, Long>> result = streams.query(request);
+    // Iterate result.getPartitionResults() and close each ReadOnlyRecordIterator, as in the range example.
+
+`TimestampedWindowRangeWithHeadersQuery` is parallel to `WindowRangeQuery` and has two forms. Use `withWindowStartRange(timeFrom, timeTo)` against a header-aware window store to fetch every key across a window-start range, or `withKey(key)` against a header-aware session store to fetch all sessions for a key (for session results, `timestamp()` is the session-window end). As with `WindowRangeQuery`, each store accepts only its corresponding form; submitting the wrong form fails with an unknown-query-type error. Both forms are `Query<ReadOnlyRecordIterator<Windowed<K>, V>>` — including the session `withKey` form, whose records are keyed by the session's `Windowed<K>`.
+    
+    
+    // Window store: every key across a window-start range
+    TimestampedWindowRangeWithHeadersQuery<String, Long> byWindow =
+        TimestampedWindowRangeWithHeadersQuery.withWindowStartRange(
+            Instant.ofEpochMilli(0), Instant.now());
+    
+    // Session store: all sessions for one key
+    TimestampedWindowRangeWithHeadersQuery<String, Long> byKey =
+        TimestampedWindowRangeWithHeadersQuery.withKey("hello");
+    
+    // Both forms have the same result type (element type ReadOnlyRecord<Windowed<String>, Long>),
+    // but each must target its own store type — submitting the wrong form fails with an unknown-query-type error:
+    StateQueryRequest<ReadOnlyRecordIterator<Windowed<String>, Long>> windowRequest =
+        StateQueryRequest.inStore("counts-window-store").withQuery(byWindow);
+    StateQueryRequest<ReadOnlyRecordIterator<Windowed<String>, Long>> sessionRequest =
+        StateQueryRequest.inStore("counts-session-store").withQuery(byKey);
+    
+    StateQueryResult<ReadOnlyRecordIterator<Windowed<String>, Long>> result = streams.query(windowRequest);
+    // Iterate result.getPartitionResults() and close each ReadOnlyRecordIterator, as in the range example.
+
+**Behavior notes**
+
+  * **Window start range is required.** As with the existing window queries, `TimestampedWindowKeyWithHeadersQuery` and the `withWindowStartRange` form of `TimestampedWindowRangeWithHeadersQuery` require a closed window-start range — both `timeFrom` and `timeTo` must be present, and both bounds are inclusive.
+  * **Close iterators exactly once.** The range and window queries return a `ReadOnlyRecordIterator`; close it when you are done — always, even if a `next()` call throws partway through — or the underlying store iterator (and the store's `num-open-iterators` metric) leaks. A try-with-resources block does this correctly. The iterator does not support `remove()`.
+  * **Read-your-writes applies only to the single-key query.** Only `TimestampedKeyWithHeadersQuery` reads through the record cache, so it sees a write that has not yet been flushed to the store — unless you call `skipCache()`, or the entry has already been flushed. The range, window, and session queries bypass the cache entirely, so a not-yet-flushed write is invisible to them and, with a position bound, fails with a not-up-to-bound error.
+
+**How the store was built determines what the queries return.** For key-value and window stores, the outcome depends on the supplier the `*WithHeaders` builder wraps:
+
+<table>
+<tr>
+<th>
+
+`*WithHeaders` store built over…
+</th>
+<th>
+
+Headers
+</th>
+<th>
+
+Query outcome
+</th> </tr>
+<tr>
+<td>
+
+Native (RocksDB) header supplier
+</td>
+<td>
+
+Returned
+</td>
+<td>
+
+All succeed
+</td> </tr>
+<tr>
+<td>
+
+In-memory non-header supplier
+</td>
+<td>
+
+Returned (a marker keeps the header-format bytes verbatim)
+</td>
+<td>
+
+All succeed
+</td> </tr>
+<tr>
+<td>
+
+Persistent *timestamped* non-header supplier
+</td>
+<td>
+
+Returned while cache-served; empty once store-served (after a flush or with `skipCache()`)
+</td>
+<td>
+
+All succeed
+</td> </tr>
+<tr>
+<td>
+
+Persistent *plain* non-header supplier
+</td>
+<td>
+
+Returned while cache-served; otherwise —
+</td>
+<td>
+
+Store-served point query fails with a store-exception error (a cache-served read still succeeds, with real value, timestamp, and headers, until the cache is flushed or `skipCache()` is used); the range, window-key, and `withWindowStartRange` window-range iterators throw a `StreamsException` mid-iteration. (The `withKey` form of the window-range query targets session stores, covered in the note below.)
+</td> </tr>
+<tr>
+<td>
+
+*(no `*WithHeaders` builder at all)*
+</td>
+<td>
+
+—
+</td>
+<td>
+
+Unknown-query-type
+</td> </tr> </table>
+
+Session stores have no plain/timestamped split, but they do split on persistence: a `*WithHeaders` session store built over a non-header **persistent** supplier uses a single adapter and behaves like the *timestamped* row above (empty `headers()`), while one built over an **in-memory** supplier uses a marker and behaves like the *in-memory* row (headers returned). Either way, the `withKey` form of `TimestampedWindowRangeWithHeadersQuery` (the session-store form) never throws — a session window always carries a valid end timestamp — so it surfaces a `null` `value()` only where the stored value itself is null.
+
+The pre-existing IQv2 query types (`KeyQuery`, `TimestampedKeyQuery`, `RangeQuery`, `TimestampedRangeQuery`, `WindowKeyQuery`, `WindowRangeQuery`) also run against header-aware stores, returning header-stripped results, and behave identically whether the header store was built on the native or the *timestamped* adapter path. The *plain* adapter is not equivalent: it surfaces a `-1` timestamp rather than a real event-time, and its window queries return plain values instead of `ValueAndTimestamp`.
 
 ## Querying local custom state stores
 
@@ -370,9 +601,226 @@ You can now find and query your custom store:
     streams.start();
     
     // Get access to the custom store
-    MyReadableCustomStore<String,String> store = streams.store("the-custom-store", new MyCustomStoreType<String,String>());
+    MyReadableCustomStore<String,String> store =
+        streams.store(StoreQueryParameters.fromNameAndType("the-custom-store", new MyCustomStoreType<String,String>()));
     // Query the store
     String value = store.read("key");
+
+# Interactive Queries v2 (IQv2) {#interactive-queries-v2}
+
+The sections above describe the original interactive queries API (informally, "IQv1"), where you obtain a read-only store facade from [KafkaStreams#store(...)](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.html) and call methods such as `get(key)` or `range(from, to)` on it. Interactive Queries v2 (IQv2), introduced in [KIP-796](https://cwiki.apache.org/confluence/x/34xnCw), is an alternative, more flexible API for the same purpose: querying the local state of a running Kafka Streams application.
+
+Instead of a fixed store facade, IQv2 models every query as a first-class [Query](/{version}/javadoc/org/apache/kafka/streams/query/Query.html) object that you submit through a single [KafkaStreams#query(StateQueryRequest)](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.html) method. The response is a [StateQueryResult](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryResult.html) that contains a separate [QueryResult](/{version}/javadoc/org/apache/kafka/streams/query/QueryResult.html) for each partition that executed the query, along with metadata such as each partition's [Position](/{version}/javadoc/org/apache/kafka/streams/query/Position.html).
+
+IQv2 offers several advantages over the original API:
+
+  * A single, uniform entry point for every kind of query.
+  * Query-level extensibility: custom state stores can handle their own `Query` types (the runtime forwards unknown queries straight through to the underlying byte store), rather than requiring a custom `QueryableStoreType` store facade as the original API does.
+  * Rich, per-partition results with typed failure reasons instead of exceptions.
+  * Fine-grained consistency control through `Position` and `PositionBound`.
+  * The ability to target specific partitions, require active (leader) tasks, override the isolation level, and collect execution information.
+
+Both APIs are fully supported and can be used side by side. Note that IQv2 is marked as an evolving API, so it may change between releases, and global stores are not yet supported by `query(...)` (see [Limitations](#limitations-of-iqv2) below).
+
+## How Interactive Queries v2 works
+
+Issuing an IQv2 query follows four steps:
+
+  1. **Build a query.** Create a `Query` object that describes what you want to read, for example a [KeyQuery](/{version}/javadoc/org/apache/kafka/streams/query/KeyQuery.html) for a single-key lookup or a [RangeQuery](/{version}/javadoc/org/apache/kafka/streams/query/RangeQuery.html) for a scan.
+  2. **Build a request.** Wrap the query in a [StateQueryRequest](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryRequest.html) that names the store to query: `StateQueryRequest.inStore(storeName).withQuery(query)`. Optionally configure the request (partitions, position bound, isolation level, and so on).
+  3. **Execute the request.** Call `streams.query(request)`, which runs the query against every locally available partition of the store (or just the partitions you requested) and returns a `StateQueryResult`. Like the original API, `query(...)` reads only the state hosted locally on this instance; to discover which instance holds a given key, use the same metadata APIs as IQv1 (see [Querying remote state stores for the entire app](#querying-remote-state-stores-for-the-entire-app)).
+  4. **Read the results.** For a query that targets a single partition, use `getOnlyPartitionResult()`. For a query that may span multiple partitions, use `getPartitionResults()` to get a `Map` from partition number to `QueryResult`. Each `QueryResult` reports whether the query succeeded on that partition and holds either the result value or a typed failure reason.
+
+## Building and executing a query
+
+The following example looks up a single key in the `CountsKeyValueStore` state store from the word-count example used earlier on this page:
+
+```java
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
+
+import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
+
+KafkaStreams streams = ...;
+
+// 1. Build the query: retrieve the value for a single key.
+KeyQuery<String, Long> query = KeyQuery.withKey("alice");
+
+// 2. Build the request, naming the store to run the query against.
+//    A KeyQuery<String, Long> is a Query<Long>, so the request is a StateQueryRequest<Long>.
+StateQueryRequest<Long> request = inStore("CountsKeyValueStore").withQuery(query);
+
+// 3. Execute the query.
+StateQueryResult<Long> result = streams.query(request);
+
+// 4. Read the result. A given key lives in exactly one partition, so at most one partition
+//    returns a value. getOnlyPartitionResult() returns that partition's result, or null if
+//    no locally available partition holds the key.
+QueryResult<Long> partitionResult = result.getOnlyPartitionResult();
+if (partitionResult != null && partitionResult.isSuccess()) {
+    Long count = partitionResult.getResult();
+    System.out.println("Count for alice: " + count);
+}
+```
+
+Note that the type parameter of `StateQueryRequest` (and of `StateQueryResult` and `QueryResult`) is the query's *result* type, not the query type: a `KeyQuery<String, Long>` implements `Query<Long>`, so the request is a `StateQueryRequest<Long>`.
+
+## Built-in query types
+
+Kafka Streams ships with a set of query types covering the standard store types. All of them live in the [org.apache.kafka.streams.query](/{version}/javadoc/org/apache/kafka/streams/query/package-summary.html) package.
+
+| Query | Result type (`R`) | Key factory / builder methods |
+| --- | --- | --- |
+| `KeyQuery<K, V>` | `V` | `withKey(key)`; `.skipCache()` |
+| `TimestampedKeyQuery<K, V>` | `ValueAndTimestamp<V>` | `withKey(key)`; `.skipCache()` |
+| `RangeQuery<K, V>` | `KeyValueIterator<K, V>` | `withRange(lower, upper)`, `withLowerBound(lower)`, `withUpperBound(upper)`, `withNoBounds()`; `.withAscendingKeys()` / `.withDescendingKeys()` |
+| `TimestampedRangeQuery<K, V>` | `KeyValueIterator<K, ValueAndTimestamp<V>>` | `withRange(lower, upper)`, `withLowerBound(lower)`, `withUpperBound(upper)`, `withNoBounds()`; `.withAscendingKeys()` / `.withDescendingKeys()` |
+| `WindowKeyQuery<K, V>` | `WindowStoreIterator<V>` | `withKeyAndWindowStartRange(key, timeFrom, timeTo)` |
+| `WindowRangeQuery<K, V>` (window store) | `KeyValueIterator<Windowed<K>, V>` | `withWindowStartRange(timeFrom, timeTo)` |
+| `WindowRangeQuery<K, V>` (session store) | `KeyValueIterator<Windowed<K>, V>` | `withKey(key)` |
+| `VersionedKeyQuery<K, V>` | `VersionedRecord<V>` | `withKey(key)`; `.asOf(instant)` |
+| `MultiVersionedKeyQuery<K, V>` | `VersionedRecordIterator<V>` | `withKey(key)`; `.fromTime(instant)`, `.toTime(instant)`, `.withAscendingTimestamps()` / `.withDescendingTimestamps()` |
+| `TimestampedKeyWithHeadersQuery<K, V>` | `ReadOnlyRecord<K, V>` | `withKey(key)`; `.skipCache()` |
+| `TimestampedRangeWithHeadersQuery<K, V>` | `ReadOnlyRecordIterator<K, V>` | `withRange(lower, upper)`, `withLowerBound(lower)`, `withUpperBound(upper)`, `withNoBounds()`; `.withAscendingKeys()` / `.withDescendingKeys()` |
+| `TimestampedWindowKeyWithHeadersQuery<K, V>` | `ReadOnlyRecordIterator<Windowed<K>, V>` | `withKeyAndWindowStartRange(key, timeFrom, timeTo)` |
+| `TimestampedWindowRangeWithHeadersQuery<K, V>` (window store) | `ReadOnlyRecordIterator<Windowed<K>, V>` | `withWindowStartRange(timeFrom, timeTo)` |
+| `TimestampedWindowRangeWithHeadersQuery<K, V>` (session store) | `ReadOnlyRecordIterator<Windowed<K>, V>` | `withKey(key)` |
+
+For range and scan queries (`RangeQuery`, `TimestampedRangeQuery`), passing no bounds performs a full scan, and result ordering is based on the serialized `byte[]` of the keys, not on the logical key order.
+
+The two `WindowRangeQuery` forms are store-specific: window stores accept only `withWindowStartRange`, and session stores only `withKey` — submitting the wrong form fails with `UNKNOWN_QUERY_TYPE`. `WindowRangeQuery.withKey` is how a session store is queried through IQv2.
+
+The `*WithHeaders` query types return records that carry their headers and require a store built with a headers-aware (`*WithHeaders`) supplier; against any other store they fail with `UNKNOWN_QUERY_TYPE`. See [Header-aware stores and interactive queries](#header-aware-stores-interactive-queries) for their result semantics, examples, and store-build requirements.
+
+Versioned key-value stores are queryable **only** through IQv2 — use `VersionedKeyQuery` for a single version (latest, or as of a timestamp) and `MultiVersionedKeyQuery` for a range of versions. The original `KafkaStreams#store(...)` API has no queryable store type for versioned stores.
+
+Because IQv2 is extensible, a custom state store may implement additional query types of its own. When a store does not know how to handle a query, it does not throw; instead it returns a failed `QueryResult` with `FailureReason.UNKNOWN_QUERY_TYPE`.
+
+## Handling query results
+
+A `StateQueryResult` aggregates one `QueryResult` per partition that ran the query. By default a request runs against all locally available partitions of the store (unless you narrow it with `withPartitions(...)`), so `getPartitionResults()` may contain an entry for every one of those partitions.
+
+Which accessor to use is determined by the *query type* you chose, not by inspecting the result at runtime:
+
+  * **Point lookups** (`KeyQuery`, `TimestampedKeyQuery`, `VersionedKeyQuery`) can only match in the single partition that owns the key, so at most one partition returns a value (the other queried partitions return a successful result with `null`). Use `getOnlyPartitionResult()`.
+  * **Range, scan, and window queries** (`RangeQuery`, `WindowRangeQuery`, `MultiVersionedKeyQuery`, and so on) can match records in every queried partition, so results are spread across partitions. Use `getPartitionResults()` and iterate.
+
+The accessors are:
+
+  * `getPartitionResults()` returns a `Map<Integer, QueryResult<R>>`, keyed by partition number — one entry per partition that ran the query. This is the general form and works for any query.
+  * `getOnlyPartitionResult()` is a convenience that returns the single partition result that is either a non-`null` value or a failure, or `null` if there is none. It throws `IllegalArgumentException` if more than one partition returned a value **or a failure** — failures count toward that limit, so avoid it when a query may fan out across partitions (for example a `KeyQuery` issued with `requireActive()`, where non-active partitions come back as `NOT_ACTIVE` failures). Use it only when you know the query matches at most one partition.
+  * `getGlobalResult()` returns the `QueryResult` for a global-store query, or `null` for a partitioned store (conversely, `getPartitionResults()` is empty for a global-store query). Global stores are not yet supported by `query(...)`, so this is where that rejection surfaces — as a failed result with `UNKNOWN_QUERY_TYPE`.
+  * `getPosition()` returns the merged `Position` observed across the partition results.
+
+Each `QueryResult` reports the outcome for one partition. Use `isSuccess()` / `isFailure()` before reading: `getResult()` returns the value on success (which may itself be `null`, for example when a key is not found), while `getFailureReason()` and `getFailureMessage()` describe a failure. Results are always **per-partition** — a query may succeed on some partitions and fail on others (for example, if one partition has migrated off this instance).
+
+These `FailureReason`s describe per-partition outcomes. Problems with the request itself still raise exceptions from `query()`: `UnknownStateStoreException` if the named store is not registered in the topology, `StreamsNotStartedException` if the instance has not been started yet, and `StreamsStoppedException` once it is shutting down or has stopped.
+
+When a query returns an iterator (`RangeQuery`, `WindowKeyQuery`, `MultiVersionedKeyQuery`, and so on), the iterator must be closed after use. Iterate over every partition's result and use a try-with-resources block:
+
+```java
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
+import org.apache.kafka.streams.state.KeyValueIterator;
+
+import java.util.Map;
+
+import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
+
+RangeQuery<String, Long> query = RangeQuery.withRange("a", "n");
+StateQueryRequest<KeyValueIterator<String, Long>> request =
+    inStore("CountsKeyValueStore").withQuery(query);
+StateQueryResult<KeyValueIterator<String, Long>> result = streams.query(request);
+
+for (Map.Entry<Integer, QueryResult<KeyValueIterator<String, Long>>> entry
+        : result.getPartitionResults().entrySet()) {
+    QueryResult<KeyValueIterator<String, Long>> partitionResult = entry.getValue();
+    if (partitionResult.isFailure()) {
+        System.out.println("Partition " + entry.getKey() + " failed: "
+            + partitionResult.getFailureReason() + " - " + partitionResult.getFailureMessage());
+        continue;
+    }
+    try (KeyValueIterator<String, Long> iterator = partitionResult.getResult()) {
+        while (iterator.hasNext()) {
+            KeyValue<String, Long> record = iterator.next();
+            System.out.println(record.key + ": " + record.value);
+        }
+    }
+}
+```
+
+A failed `QueryResult` carries one of the [FailureReason](/{version}/javadoc/org/apache/kafka/streams/query/FailureReason.html) values:
+
+| `FailureReason` | Meaning | Recommended action |
+| --- | --- | --- |
+| `UNKNOWN_QUERY_TYPE` | The store does not know how to execute this query. | Verify the query is supported by that store type; for custom queries, contact the store maintainer. |
+| `NOT_ACTIVE` | `requireActive()` was set, but the partition is a standby or an active task that is not yet in the `RUNNING` state. | Retry later or query a different replica. |
+| `NOT_UP_TO_BOUND` | The partition has not yet caught up to the requested `PositionBound`. | Retry later or query a different replica. |
+| `NOT_PRESENT` | The requested partition is not present on this instance (for example, it migrated during a rebalance). | Query a different replica. |
+| `DOES_NOT_EXIST` | Defined for store implementations to signal a partition that does not exist, but **not currently emitted by the Streams runtime** — a missing or non-existent partition comes back as `NOT_PRESENT` instead. | n/a (not produced by `query()` today). |
+| `STORE_EXCEPTION` | The store threw an exception while executing the query. | Depending on the exception, retry this instance or a different one. |
+
+## Controlling consistency and availability
+
+A `StateQueryRequest` is immutable; each configuration method returns a new request. Beyond `inStore(...).withQuery(...)`, the following options let you trade off consistency, availability, and cost:
+
+  * `withPartitions(Set<Integer>)` / `withAllPartitions()`: run against a specific set of partitions or against all locally available partitions (the default). Any requested partition that is not present on this instance returns `NOT_PRESENT`, whether it migrated away or does not exist for the store at all — the runtime does not currently distinguish the two.
+  * `requireActive()`: run only on active (leader) partitions. Non-active partitions return `NOT_ACTIVE`. Use this when you need the most up-to-date data and want to avoid reading from standby replicas.
+  * `withPositionBound(PositionBound)`: by default a request is `PositionBound.unbounded()`. Use `PositionBound.at(position)` to require that each queried partition has consumed up to a given `Position` before serving the query; a partition that is behind returns `NOT_UP_TO_BOUND`. Combined with the `Position` returned by `StateQueryResult#getPosition()`, this lets you implement read-your-writes / monotonic reads: feed the position from one query into the bound of the next so repeated queries never appear to move backwards in time, while still allowing reads to be served from any replica that is caught up. Note that `withPositionBound(...)` is ignored when `requireActive()` is also set: an active, running task is always served without a bound check, so it never returns `NOT_UP_TO_BOUND`.
+  * `withIsolationLevel(IsolationLevel)`: override the isolation level for this query. When not set, the effective level falls back to the `default.interactive.query.isolation.level` configuration (default `READ_UNCOMMITTED`). The isolation level is only meaningful when `enable.transactional.statestores` is `true`: `READ_UNCOMMITTED` reads include writes staged in the transaction buffer since the last commit, while `READ_COMMITTED` skips the buffer and returns only committed data.
+  * `enableExecutionInfo()`: ask stores and the runtime to record details about how the query executed, retrievable via `QueryResult#getExecutionInfo()`.
+
+For example, the following request reads a key from the active replica only, and only for partitions 0 and 1:
+
+```java
+KeyQuery<String, Long> query = KeyQuery.withKey("alice");
+StateQueryRequest<Long> request =
+    inStore("CountsKeyValueStore")
+        .withQuery(query)
+        .requireActive()
+        .withPartitions(Set.of(0, 1));
+
+StateQueryResult<Long> result = streams.query(request);
+```
+
+For monotonic reads, bound the query on a `Position` instead of requiring an active task — the two do not combine, since `requireActive()` discards the position bound. Feed the `Position` returned by one query into the bound of the next so repeated reads never appear to move backwards, while still letting any caught-up replica serve them:
+
+```java
+KeyQuery<String, Long> query = KeyQuery.withKey("alice");
+StateQueryRequest<Long> request =
+    inStore("CountsKeyValueStore")
+        .withQuery(query)
+        .withPositionBound(PositionBound.at(knownPosition));
+
+StateQueryResult<Long> result = streams.query(request);
+Position position = result.getPosition(); // pass into a later query for monotonic reads
+```
+
+## Comparison of IQv1 and IQv2
+
+| Aspect | IQv1 (`KafkaStreams#store`) | IQv2 (`KafkaStreams#query`) |
+| --- | --- | --- |
+| Entry point | `store(StoreQueryParameters)` returns a typed, read-only store facade | `query(StateQueryRequest)` returns a `StateQueryResult` |
+| Query surface | Fixed methods on the store facade (`get`, `range`, ...) | First-class `Query` objects |
+| Extensibility | Custom `QueryableStoreType` store facades | Custom `Query` types forwarded to the store |
+| Result granularity | Values from the store facade | A `QueryResult` per partition |
+| Failure reporting | Exceptions (for example, `InvalidStateStoreException`) | Typed `FailureReason` per partition |
+| Consistency control | `enableStaleStores()` toggle | `PositionBound` plus the returned `Position` |
+| Partition targeting | `.withPartition(int)` | `.withPartitions(Set)` / `.withAllPartitions()` |
+| Versioned stores | Not queryable | `VersionedKeyQuery` / `MultiVersionedKeyQuery` |
+| Global stores | Supported | Not yet supported |
+| Maturity | Stable | Evolving |
+
+## Limitations of IQv2 {#limitations-of-iqv2}
+
+  * Global stores are not yet supported by `query(...)`. Use [KafkaStreams#store(...)](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.html) to query global stores.
+  * The IQv2 API is still evolving and may change in future releases.
 
 # Querying remote state stores for the entire app
 
@@ -496,8 +944,6 @@ At this point the full state of the application is interactively queryable:
   * Through the RPC layer that was added to the application, you can communicate with these application instances over the network and query them for locally available state.
   * The application instances are able to serve such queries because they can directly query their own local state stores and respond via the RPC layer.
   * Collectively, this allows us to query the full state of the entire application.
-
-
 
 To see an end-to-end application with interactive queries, review the demo applications.
 

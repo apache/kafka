@@ -115,6 +115,11 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG = "streams.acceptable.recovery.lag";
 
+    public static final String STREAMS_ASSIGNOR_NAME_CONFIG = "streams.assignor.name";
+    public static final String STREAMS_ASSIGNOR_NAME_DOC = "The task assignor to use for this streams group, selected by short name from the assignors registered via the broker configuration " +
+        GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG + ". When unset, the group defaults to the first assignor configured in the broker's " +
+        GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG + " setting. Changing the assignor does not trigger a rebalance for the group; the new assignor takes effect on the next rebalance.";
+
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG = "errors.deadletterqueue.topic.name";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT = "";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC = "The name of the topic to be used as the dead-letter queue (DLQ) topic for this share group. If blank (the default), the group does not have a DLQ topic.";
@@ -166,6 +171,8 @@ public final class GroupConfig extends AbstractConfig {
     private final Optional<Integer> streamsNumWarmupReplicas;
 
     private final Optional<Long> streamsAcceptableRecoveryLag;
+
+    private final Optional<String> streamsAssignorName;
 
     private final Optional<IsolationLevel> shareIsolationLevel;
 
@@ -316,6 +323,11 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(0),
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC)
+        .define(STREAMS_ASSIGNOR_NAME_CONFIG,
+            STRING,
+            null,
+            MEDIUM,
+            STREAMS_ASSIGNOR_NAME_DOC)
 
         // DLQ configurations (KIP-1191)
         .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG,
@@ -363,6 +375,7 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_NUM_WARMUP_REPLICAS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG)),
         Map.entry(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG)),
         Map.entry(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG)),
+        Map.entry(STREAMS_ASSIGNOR_NAME_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)),
 
         // DLQ configs
         Map.entry(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, Optional.empty()),
@@ -414,6 +427,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsTaskOffsetIntervalMs = optionalInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.streamsNumWarmupReplicas = optionalInt(STREAMS_NUM_WARMUP_REPLICAS_CONFIG);
         this.streamsAcceptableRecoveryLag = optionalLong(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG);
+        this.streamsAssignorName = optionalString(STREAMS_ASSIGNOR_NAME_CONFIG);
         this.shareIsolationLevel = optionalString(SHARE_ISOLATION_LEVEL_CONFIG)
             .map(s -> IsolationLevel.valueOf(s.toUpperCase(Locale.ROOT)));
         this.shareRenewAcknowledgeEnable = optionalBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
@@ -613,6 +627,16 @@ public final class GroupConfig extends AbstractConfig {
             STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
             groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
+
+        // The selected streams assignor must be one of the assignors registered on the broker.
+        if (parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) {
+            String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
+            List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
+            if (!registeredAssignors.contains(assignorName)) {
+                throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
+                    "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
+            }
+        }
 
         // Cross-field validations: session timeout must be greater than heartbeat interval.
         validateSessionExceedsHeartbeat(
@@ -1212,6 +1236,13 @@ public final class GroupConfig extends AbstractConfig {
      */
     public Optional<Long> streamsAcceptableRecoveryLag() {
         return streamsAcceptableRecoveryLag;
+    }
+
+    /**
+     * The task assignor selected for streams groups.
+     */
+    public Optional<String> streamsAssignorName() {
+        return streamsAssignorName;
     }
 
     /**

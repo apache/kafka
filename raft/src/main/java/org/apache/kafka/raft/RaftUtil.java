@@ -715,6 +715,14 @@ public class RaftUtil {
             data.responses().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
+    static boolean hasValidTopicPartition(FetchSnapshotRequestData data) {
+        return data.topics().size() == 1 && data.topics().get(0).partitions().size() == 1;
+    }
+
+    static boolean hasValidTopicPartition(FetchSnapshotResponseData data) {
+        return data.topics().size() == 1 && data.topics().get(0).partitions().size() == 1;
+    }
+
     static boolean hasValidTopicPartition(VoteResponseData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
                    data.topics().get(0).topicName().equals(topicPartition.topic()) &&

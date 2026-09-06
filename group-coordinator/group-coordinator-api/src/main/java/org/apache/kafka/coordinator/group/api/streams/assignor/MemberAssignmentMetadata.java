@@ -49,7 +49,7 @@ public interface MemberAssignmentMetadata {
     String processId();
 
     /**
-     * @return The client tags for a rack-aware assignment.
+     * @return The client tags for a rack-aware assignment. The map is unmodifiable.
      */
     Map<String, String> clientTags();
 

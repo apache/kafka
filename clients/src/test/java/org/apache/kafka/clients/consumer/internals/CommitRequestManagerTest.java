@@ -16,15 +16,23 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
@@ -33,6 +41,7 @@ import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
@@ -50,6 +59,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -732,6 +742,83 @@ public class CommitRequestManagerTest {
     }
 
     @Test
+    public void testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+
+        time.sleep(100);
+        long result = commitRequestManager.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 when the coordinator is unknown to avoid a busy-spin; got " + result);
+        assertEquals(100, result);
+    }
+
+    @Test
+    public void testMaximumTimeToWaitDoesNotSpinDuringRealBootstrapDnsResolution() throws Exception {
+        long bootstrapResolveTimeoutMs = 1000;
+
+        BootstrapConfiguration bootstrapConfiguration = BootstrapConfiguration.enabled(
+            List.of("unresolvable.invalid:9092"),
+            ClientDnsLookup.USE_ALL_DNS_IPS,
+            bootstrapResolveTimeoutMs,
+            retryBackoffMs
+        );
+
+        ConsumerConfig config = new ConsumerConfig(Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.GROUP_ID_CONFIG, DEFAULT_GROUP_ID,
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "unresolvable.invalid:9092",
+            // Much shorter than bootstrapResolveTimeoutMs, so the auto-commit timer expires several
+            // times while the coordinator is still (and will remain, since DNS never resolves) unknown.
+            ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "100",
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true"
+        ));
+
+        ConsumerMetadata metadata = new ConsumerMetadata(config, subscriptionState, logContext, new ClusterResourceListeners());
+
+        MockSelector selector = new MockSelector(time);
+        NetworkClient networkClient = new NetworkClient(selector, metadata, "test-client",
+            Integer.MAX_VALUE, 50, 1000, 64 * 1024, 64 * 1024, 1000, 5000, 30000,
+            time, false, new ApiVersions(), logContext,
+            MetadataRecoveryStrategy.NONE, bootstrapConfiguration, false);
+
+
+        CoordinatorRequestManager realCoordinatorRequestManager = new CoordinatorRequestManager(
+            logContext, retryBackoffMs, retryBackoffMaxMs, DEFAULT_GROUP_ID);
+
+        CommitRequestManager realCommitRequestManager = new CommitRequestManager(
+            time, logContext, subscriptionState, config, realCoordinatorRequestManager,
+            mock(OffsetCommitCallbackInvoker.class), DEFAULT_GROUP_ID, Optional.empty(), retryBackoffMs,
+            retryBackoffMaxMs, OptionalDouble.of(0), new Metrics(), metadata);
+
+        try (NetworkClientDelegate networkClientDelegate = new NetworkClientDelegate(time, config, logContext, networkClient, metadata,
+                mock(BackgroundEventHandler.class), false, mock(AsyncConsumerMetrics.class));
+        ) {
+            long deadline = time.milliseconds() + bootstrapResolveTimeoutMs + 3000;
+            boolean sawBootstrapException = false;
+
+            while (time.milliseconds() < deadline) {
+                // Drives the real NetworkClient's ensureBootstrapped()/async DNS resolution forward;
+                // the coordinator never becomes known since there is no real broker to respond.
+                networkClientDelegate.poll(50, time.milliseconds());
+
+                long waitMs = realCommitRequestManager.maximumTimeToWait(time.milliseconds());
+                assertTrue(waitMs > 0, "maximumTimeToWait must be > 0 while real bootstrap DNS resolution is pending; got " + waitMs);
+
+                Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
+                if (metadataError.isPresent()) {
+                    assertInstanceOf(BootstrapResolutionException.class, metadataError.get());
+                    sawBootstrapException = true;
+                    break;
+                }
+            }
+            assertTrue(sawBootstrapException, "Expected a real BootstrapResolutionException within " + (bootstrapResolveTimeoutMs + 3000) + "ms");
+        }
+    }
+
+    @Test
     public void testOffsetFetchRequestEnsureDuplicatedRequestSucceed() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -1236,6 +1323,66 @@ public class CommitRequestManagerTest {
         assertEquals(1, reqData.groups().size());
         assertEquals(newEpoch, reqData.groups().get(0).memberEpoch());
         assertEquals(memberId, reqData.groups().get(0).memberId());
+    }
+
+    // Same as testSyncOffsetFetchFailsWithStaleEpochAndRetriesWithNewEpoch, but with a
+    // duplicated fetch for the same partitions chained onto the in-flight request when the
+    // STALE_MEMBER_EPOCH error is received. The retry of the chained request must not be
+    // deduplicated against the already-completed in-flight request: chaining onto a completed
+    // future fails it again immediately and re-triggers the retry in a tight synchronous loop
+    // that never sends a request with the new epoch and never completes the callers' futures
+    // (KAFKA-20765).
+    @Test
+    public void testDuplicatedOffsetFetchFailsWithStaleEpochAndRetriesWithNewEpoch() {
+        CommitRequestManager commitRequestManager = create(false, 100);
+        Set<TopicPartition> partitions = Collections.singleton(new TopicPartition("t1", 0));
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        // Two callers fetch offsets for the same partitions; the second request is deduplicated
+        // and chained onto the first.
+        long deadlineMs = time.milliseconds() + defaultApiTimeoutMs;
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> firstResult =
+            commitRequestManager.fetchOffsets(partitions, deadlineMs);
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> secondResult =
+            commitRequestManager.fetchOffsets(partitions, deadlineMs);
+
+        // A single deduplicated request goes on the wire.
+        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+
+        // Mock member has a new valid epoch, so STALE_MEMBER_EPOCH is retriable.
+        int newEpoch = 8;
+        String memberId = "member1";
+        commitRequestManager.onMemberEpochUpdated(Optional.of(newEpoch), memberId);
+
+        // Receive error when member already has a newer member epoch. Request should be retried.
+        res.unsentRequests.get(0).handler().onComplete(
+            buildOffsetFetchClientResponse(res.unsentRequests.get(0), partitions, Errors.STALE_MEMBER_EPOCH));
+
+        // The failed request should be removed from the in-flight buffer, a retry should be
+        // enqueued, and the callers' futures should still be waiting for the retry's outcome.
+        assertEquals(0, commitRequestManager.pendingRequests.inflightOffsetFetches.size());
+        assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
+        assertFalse(firstResult.isDone());
+        assertFalse(secondResult.isDone());
+
+        // The deduplicated retry is chained onto the original as a fresh request, so it is sent on
+        // the next poll with no backoff, carrying the latest member ID and epoch.
+        res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        OffsetFetchRequestData reqData =
+            (OffsetFetchRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
+        assertEquals(1, reqData.groups().size());
+        assertEquals(newEpoch, reqData.groups().get(0).memberEpoch());
+        assertEquals(memberId, reqData.groups().get(0).memberId());
+
+        // A successful response should complete both callers' futures.
+        res.unsentRequests.get(0).handler().onComplete(
+            buildOffsetFetchClientResponse(res.unsentRequests.get(0), partitions, Errors.NONE));
+        assertTrue(firstResult.isDone());
+        assertFalse(firstResult.isCompletedExceptionally());
+        assertTrue(secondResult.isDone());
+        assertFalse(secondResult.isCompletedExceptionally());
     }
 
     // This should be the case of an OffsetFetch that fails because the member is not in the

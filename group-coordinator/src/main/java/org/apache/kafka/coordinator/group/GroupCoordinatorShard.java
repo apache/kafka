@@ -274,6 +274,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withGroupConfigManager(groupConfigManager)
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .withShareGroupAssignor(config.shareGroupAssignors().get(0))
+                .withStreamsGroupAssignors(config.streamsGroupAssignors())
+                .withStreamsGroupAssignmentRefiner(config.streamsGroupAssignmentRefiner())
                 .withAuthorizerPlugin(authorizerPlugin)
                 .build();
 

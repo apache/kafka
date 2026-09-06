@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -46,7 +47,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StickyTaskAssignorTest {
 
-    public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
     private final StickyTaskAssignor assignor = new StickyTaskAssignor();
 
     @Test
@@ -64,7 +64,7 @@ public class StickyTaskAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 mkMap(mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3)),
-                new HashMap<>()
+                AssignmentConfigsImpl.DEFAULT
             ),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
@@ -93,7 +93,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member3_1", memberMetadata31), mkEntry("member3_2", memberMetadata32));
 
         final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, Arrays.asList("test-subtopology1", "test-subtopology2"))
         );
 
@@ -122,7 +122,7 @@ public class StickyTaskAssignorTest {
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
-                mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+                AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(3, true, Arrays.asList("test-subtopology1", "test-subtopology2"))
         );
 
@@ -144,7 +144,7 @@ public class StickyTaskAssignorTest {
         Map<String, MemberMetadataAndStateImpl> members = mkMap(mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -163,7 +163,7 @@ public class StickyTaskAssignorTest {
         members = mkMap(mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -186,7 +186,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -214,7 +214,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2_1", memberMetadata21), mkEntry("member2_2", memberMetadata22));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -240,7 +240,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl2()
         );
 
@@ -271,7 +271,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4), mkEntry("member5", memberMetadata5));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -305,7 +305,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4), mkEntry("member5", memberMetadata5));
 
         result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -338,7 +338,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -364,7 +364,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
         );
 
@@ -397,7 +397,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member2_1", memberMetadata21), mkEntry("member2_2", memberMetadata22));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -428,7 +428,7 @@ public class StickyTaskAssignorTest {
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
-                mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+                AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
         );
 
@@ -464,7 +464,7 @@ public class StickyTaskAssignorTest {
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
-                mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "2"))),
+                AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2)),
             new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
         );
 
@@ -481,7 +481,7 @@ public class StickyTaskAssignorTest {
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
-                mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+                AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(1, true, List.of("test-subtopology"))
         );
 
@@ -499,7 +499,7 @@ public class StickyTaskAssignorTest {
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
-                mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+                AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
         );
 
@@ -519,7 +519,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -541,7 +541,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member4", memberMetadata4), mkEntry("member5", memberMetadata5), mkEntry("member6", memberMetadata6));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -563,7 +563,7 @@ public class StickyTaskAssignorTest {
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
-                mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+                AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
         );
 
@@ -581,7 +581,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2_1", memberMetadata21), mkEntry("member2_2", memberMetadata22));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, Arrays.asList("test-subtopology0", "test-subtopology1", "test-subtopology2", "test-subtopology3"))
         );
 
@@ -599,7 +599,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(4, false, List.of("test-subtopology"))
         );
 
@@ -618,7 +618,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(4, false, List.of("test-subtopology"))
         );
 
@@ -636,7 +636,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member2", memberMetadata2), mkEntry("member3_1", memberMetadata31), mkEntry("member3_2", memberMetadata32));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
         );
 
@@ -655,7 +655,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(4, false, List.of("test-subtopology"))
         );
 
@@ -676,7 +676,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(6, false, List.of("test-subtopology"))
         );
 
@@ -697,7 +697,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(6, false, List.of("test-subtopology"))
         );
 
@@ -730,7 +730,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3), mkEntry("newMember", newMemberSpec));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(4, false, Arrays.asList("test-subtopology0", "test-subtopology1", "test-subtopology2"))
         );
 
@@ -762,7 +762,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("bounce_member1", bounce1), mkEntry("bounce_member2", bounce2));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(4, false, Arrays.asList("test-subtopology0", "test-subtopology1", "test-subtopology2"))
         );
 
@@ -784,7 +784,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(2, false, List.of("test-subtopology"))
         );
 
@@ -800,7 +800,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("newMember", newMemberSpec));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(6, false, List.of("test-subtopology"))
         );
 
@@ -826,7 +826,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("newMember", newMemberSpec));
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
             new TopologyDescriberImpl(7, false, List.of("test-subtopology"))
         );
 
@@ -855,7 +855,7 @@ public class StickyTaskAssignorTest {
         }
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(numStandbyReplicas)),
             new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
         );
 
@@ -926,7 +926,7 @@ public class StickyTaskAssignorTest {
         }
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(numStandbyReplicas)),
             new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
         );
 
@@ -977,7 +977,7 @@ public class StickyTaskAssignorTest {
         }
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(numStandbyReplicas)),
             new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
         );
 
@@ -1021,7 +1021,7 @@ public class StickyTaskAssignorTest {
         }
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(numStandbyReplicas)),
             new TopologyDescriberImpl(5, true, subtopologies) // 5 tasks per subtopology
         );
 
@@ -1053,7 +1053,7 @@ public class StickyTaskAssignorTest {
         );
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(numStandbyReplicas)),
             new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
         );
 
@@ -1078,7 +1078,7 @@ public class StickyTaskAssignorTest {
         }
 
         GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(numStandbyReplicas)),
             new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
         );
 
@@ -1120,7 +1120,7 @@ public class StickyTaskAssignorTest {
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
         );
 
@@ -1161,7 +1161,7 @@ public class StickyTaskAssignorTest {
 
         // Two subtopologies with 2 tasks each (4 tasks total) with standby replicas enabled
         final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(1)))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(2, true, Arrays.asList("test-subtopology1", "test-subtopology2"))
         );
 
@@ -1207,7 +1207,7 @@ public class StickyTaskAssignorTest {
 
         // Two subtopologies with 2 tasks each (4 tasks total) with standby replicas enabled
         final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(1)))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(2, true, Arrays.asList("test-subtopology1", "test-subtopology2"))
         );
 
@@ -1277,7 +1277,7 @@ public class StickyTaskAssignorTest {
         // We have 2 active tasks + 1 standby replica = 4 total tasks
         // Quota per process = 4 tasks / 3 processes = 1.33 -> 2 tasks per process
         final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
         );
 
@@ -1305,6 +1305,187 @@ public class StickyTaskAssignorTest {
         assertTrue(member1TotalTasks <= 2, "Member1 should have <= 2 total tasks (quota), but has " + member1TotalTasks);
     }
 
+    @Test
+    public void shouldAssignStandbyToPreviousStandbyThatDoesNotHoldTheActiveTask() {
+        // starting assignment [active] [standby]:
+        //   member1/process1: [] [2]
+        //   member2/process2: [0] [2]
+        //   member3/process3: [1] []
+        //   member4/process4: [] []
+        //
+        // active 0,1 stay on their previous owner (stickiness)
+        // active 2 must go to member1/process1 as it has previous standby (standby->active promotion)
+        // -> it should not go to member2/process2 due to load balancing of active tasks
+        // standby 2 should stay on member2/process2 -> no reason to move it (load of member2 stays within capacity)
+        // standby 0,1: one *must* go to member4/process4 due to load balancing
+        // -> standby 0 can go anywhere but member2/process2 due to load balancing
+        // -> standby 1 can not go to member3, so only member 1 is left for this case, due to load balancing
+        //
+        // expected new assignment [active] [standby]
+        // ("expected" here means, based on the concrete implementation -- if this test fails with a different but
+        //  still correct result -- as laid out above --, we should just update the test)
+        //   member1/process1: [2] []
+        //   member2/process2: [0] [2]
+        //   member3/process3: [1] [0]
+        //   member4/process4: [] [1]
+        final Map<String, MemberMetadataAndStateImpl> members = new LinkedHashMap<>();
+        members.put("member1", createMemberMetadata("process1",
+            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(2)))));
+        members.put("member2", createMemberMetadata("process2",
+            mkMap(mkEntry("test-subtopology", Set.of(0))), mkMap(mkEntry("test-subtopology", Set.of(2)))));
+        members.put("member3", createMemberMetadata("process3",
+            mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of()));
+        members.put("member4", createMemberMetadata("process4"));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
+            new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
+        );
+
+        @SuppressWarnings("unchecked")
+        final HashMap<String, List<Integer>>[] resultInvariants = new HashMap[3];
+        resultInvariants[0] = new HashMap<>();
+        resultInvariants[0].put("member1", List.of()); // may be empty
+        resultInvariants[0].put("member2", List.of(2)); // standby-2 should always be on member2
+        resultInvariants[0].put("member3", List.of(0)); // can never hold standby-1
+        resultInvariants[0].put("member4", List.of(1));
+
+        resultInvariants[1] = new HashMap<>();
+        resultInvariants[1].put("member1", List.of(1));
+        resultInvariants[1].put("member2", List.of(2)); // standby-2 should always be on member2
+        resultInvariants[1].put("member3", List.of()); // may be empty
+        resultInvariants[1].put("member4", List.of(0)); // should either hold 0 or 1
+
+        resultInvariants[2] = new HashMap<>();
+        resultInvariants[2].put("member1", List.of(0));
+        resultInvariants[2].put("member2", List.of(2)); // standby-2 should always be on member2
+        resultInvariants[2].put("member3", List.of()); // may be empty
+        resultInvariants[2].put("member4", List.of(1)); // should either hold 0 or 1
+
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member1"));
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member3"));
+        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member4"));
+
+        // verify standbys
+
+        // member2 must always host standby-2
+        assertEquals(List.of(2), getAllStandbyTaskIds(result, "member2"));
+
+        if (getAllStandbyTaskIds(result, "member1").equals(resultInvariants[0].get("member1"))) {
+            assertEquals(resultInvariants[0].get("member3"), getAllStandbyTaskIds(result, "member3"));
+            assertEquals(resultInvariants[0].get("member4"), getAllStandbyTaskIds(result, "member4"));
+        } else if (getAllStandbyTaskIds(result, "member1").equals(resultInvariants[1].get("member1"))) {
+            assertEquals(resultInvariants[1].get("member3"), getAllStandbyTaskIds(result, "member3"));
+            assertEquals(resultInvariants[1].get("member4"), getAllStandbyTaskIds(result, "member4"));
+        } else {
+            assertEquals(resultInvariants[2].get("member1"), getAllStandbyTaskIds(result, "member1"));
+            assertEquals(resultInvariants[2].get("member3"), getAllStandbyTaskIds(result, "member3"));
+            assertEquals(resultInvariants[2].get("member4"), getAllStandbyTaskIds(result, "member4"));
+        }
+    }
+
+    @Test
+    public void shouldAssignTasksToMembersReportingTaskOffsetsOnColdStart() {
+        // Cold start (KAFKA-20719): all members have fresh member IDs and empty target assignments, but report
+        // cumulative offsets for the tasks whose state they hold on local disk.
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithOffsets("process1",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 100L), mkEntry(1, 100L)))));
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(2, 100L), mkEntry(3, 100L)))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2", memberMetadata2));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Sets.newSet(0, 1), getActiveTasks(result, "test-subtopology", "member1"));
+        assertEquals(Sets.newSet(2, 3), getActiveTasks(result, "test-subtopology", "member2"));
+    }
+
+    @Test
+    public void shouldAssignTasksToProcessesReportingTaskOffsetsOnColdStartWithMultipleMembersPerProcess() {
+        // Members of the same process share the state directory and report the same offsets; tasks should stay
+        // on the process holding the state, spread across its members.
+        final Map<String, Map<Integer, Long>> process1Offsets = mkMap(
+            mkEntry("test-subtopology", mkMap(mkEntry(0, 100L), mkEntry(1, 100L))));
+        final Map<String, Map<Integer, Long>> process2Offsets = mkMap(
+            mkEntry("test-subtopology", mkMap(mkEntry(2, 100L), mkEntry(3, 100L))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1_1", createMemberMetadataWithOffsets("process1", process1Offsets)),
+            mkEntry("member1_2", createMemberMetadataWithOffsets("process1", process1Offsets)),
+            mkEntry("member2_1", createMemberMetadataWithOffsets("process2", process2Offsets)),
+            mkEntry("member2_2", createMemberMetadataWithOffsets("process2", process2Offsets)));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))),
+            mergeAllActiveTasks(result, "member1_1", "member1_2"));
+        assertEquals(mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))),
+            mergeAllActiveTasks(result, "member2_1", "member2_2"));
+    }
+
+    @Test
+    public void shouldRankCurrentOwnersAheadOfReportedTaskOffsetsAndMostCaughtUpFirst() {
+        // All previous-ownership signals compete at once. member3 reports the largest possible offset sums for
+        // tasks 0 and 1, but loses both: the current active owner keeps task 0 and the current standby is promoted
+        // to active for task 1. Among the two members only known through their offsets, task 2 goes to the more
+        // caught-up one, leaving task 3 for the other.
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
+            mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
+            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0, 1))));
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadataWithOffsets("process3",
+            mkMap(mkEntry("test-subtopology",
+                mkMap(mkEntry(0, 1_000_000L), mkEntry(1, 1_000_000L), mkEntry(2, 100L)))));
+        final MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadataWithOffsets("process4",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(2, 50L)))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3),
+            mkEntry("member4", memberMetadata4));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member3"));
+        assertEquals(Set.of(3), getActiveTasks(result, "test-subtopology", "member4"));
+    }
+
+    @Test
+    public void shouldAssignStandbysAwayFromProcessHoldingStateOnColdStart() {
+        // On cold start with standbys enabled, actives follow the reported state and standbys land on the
+        // other process (a standby may not be co-located with its active).
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithOffsets("process1",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 100L)))));
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(1, 100L)))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2", memberMetadata2));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
+            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(Set.of(1), getStandbyTasks(result, "test-subtopology", "member1"));
+        assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "member2"));
+    }
+
 
     private int getAllActiveTaskCount(GroupAssignment result, String... memberIds) {
         int size = 0;
@@ -1329,6 +1510,19 @@ public class StickyTaskAssignorTest {
             assertNotNull(testMember.activeTasks());
             if (testMember.activeTasks().get(topologyId) != null) {
                 res.addAll(testMember.activeTasks().get(topologyId));
+            }
+        }
+        return res;
+    }
+
+    private Set<Integer> getStandbyTasks(GroupAssignment result, final String topologyId, String... memberIds) {
+        Set<Integer> res = new HashSet<>();
+        for (String memberId : memberIds) {
+            final MemberAssignment testMember = result.members().get(memberId);
+            assertNotNull(testMember);
+            assertNotNull(testMember.standbyTasks());
+            if (testMember.standbyTasks().get(topologyId) != null) {
+                res.addAll(testMember.standbyTasks().get(topologyId));
             }
         }
         return res;
@@ -1443,6 +1637,22 @@ public class StickyTaskAssignorTest {
             Map.of(),
             Map.of(),
             Map.of(),
+            Map.of());
+    }
+
+    private MemberMetadataAndStateImpl createMemberMetadataWithOffsets(
+        final String processId,
+        final Map<String, Map<Integer, Long>> taskOffsets
+    ) {
+        return new MemberMetadataAndStateImpl(
+            Optional.empty(),
+            Optional.empty(),
+            processId,
+            Map.of(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
+            taskOffsets,
             Map.of());
     }
 

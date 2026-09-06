@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -195,6 +196,9 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         if (headerCount == -1) { // keep for backward compatibility
             headers = new RecordHeaders();
         } else {
+            if (headerCount > buffer.remaining() / (2 * Integer.BYTES)) {
+                throw new SerializationException();
+            }
             final Header[] headerArr = new Header[headerCount];
             for (int i = 0; i < headerCount; i++) {
                 final byte[] keyBytes = requireNonNull(getNullableSizePrefixedArray(buffer));

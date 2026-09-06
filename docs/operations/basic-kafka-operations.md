@@ -399,7 +399,7 @@ $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "e
 Completed updating default config for brokers in the cluster.
 ```
 
-By default, the records written to the DLQ topic just include metadata about the source records such as the topic, partition and offset. You can set the `errors.deadletterqueue.copy.read.enable` configuration for the share group so the source record key and value are copied to the DLQ topic.
+By default, the records written to the DLQ topic just include metadata about the source records such as the topic, partition and offset. You can set the `errors.deadletterqueue.copy.record.enable` configuration for the share group so the source record key and value are copied to the DLQ topic.
 
 ```bash
 $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.copy.record.enable=true" --entity-type groups --entity-name my-share-group

@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
+import org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulator;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
@@ -92,6 +93,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -441,6 +443,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
                         clusterResourceListeners);
+                ClientUtils.maybeBootstrapMetadataSynchronously(config,
+                    config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG), this.metadata);
             }
             this.transactionManager = configureTransactionState(config, logContext);
             // There is no need to do work required for adaptive partitioning, if we use a custom partitioner.
@@ -455,19 +459,57 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // As per Kafka producer configuration documentation batch.size may be set to 0 to explicitly disable
             // batching which in practice actually means using a batch size of 1.
             int batchSize = Math.max(1, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
-            this.accumulator = new RecordAccumulator(logContext,
-                    batchSize,
-                    compression,
-                    lingerMs(config),
-                    retryBackoffMs,
-                    retryBackoffMaxMs,
-                    deliveryTimeoutMs,
-                    partitionerConfig,
-                    metrics,
-                    PRODUCER_METRIC_GROUP_NAME,
-                    time,
-                    transactionManager,
-                    new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
+            String allocationStrategy = config.getString(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG)
+                    .toLowerCase(Locale.ROOT);
+            boolean incremental = ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL.equals(allocationStrategy);
+            // Use the chunked path only when a batch is at least one full chunk
+            // (batch.size >= CHUNK_SIZE). Below that, a batch can't fill even one chunk, so chunking
+            // would over-reserve and the producer falls back to the full strategy instead.
+            boolean useIncremental = incremental && batchSize >= ChunkedRecordAccumulator.CHUNK_SIZE;
+            if (incremental && !useIncremental) {
+                log.warn("Ignoring {}={} and falling back to {}: {} is {} bytes, below the {} byte chunk size, " +
+                                "so a batch cannot fill a single chunk.",
+                        ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG,
+                        ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL,
+                        ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+                        ProducerConfig.BATCH_SIZE_CONFIG, batchSize, ChunkedRecordAccumulator.CHUNK_SIZE);
+            }
+            // The chunked path does not support compression yet (TODO: KAFKA-20579)
+            if (useIncremental && compression.type() != CompressionType.NONE) {
+                throw new ConfigException("The " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL
+                        + " " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG
+                        + " does not support compression yet. " + ProducerConfig.COMPRESSION_TYPE_CONFIG
+                        + " must be set to none.");
+            }
+            if (useIncremental) {
+                this.accumulator = new ChunkedRecordAccumulator(logContext,
+                        batchSize,
+                        compression,
+                        lingerMs(config),
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        deliveryTimeoutMs,
+                        partitionerConfig,
+                        metrics,
+                        PRODUCER_METRIC_GROUP_NAME,
+                        time,
+                        transactionManager,
+                        new BufferPool(this.totalMemorySize, ChunkedRecordAccumulator.CHUNK_SIZE, metrics, time, PRODUCER_METRIC_GROUP_NAME, BufferPool.AllocationMode.INCREMENTAL));
+            } else {
+                this.accumulator = new RecordAccumulator(logContext,
+                        batchSize,
+                        compression,
+                        lingerMs(config),
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        deliveryTimeoutMs,
+                        partitionerConfig,
+                        metrics,
+                        PRODUCER_METRIC_GROUP_NAME,
+                        time,
+                        transactionManager,
+                        new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME, BufferPool.AllocationMode.FULL));
+            }
 
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);
