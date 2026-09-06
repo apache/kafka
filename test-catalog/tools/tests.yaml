@@ -425,15 +425,13 @@ org.apache.kafka.tools.LeaderElectionCommandErrorTest:
 - testPartitionWithoutTopic
 - testTopicWithoutPartition
 org.apache.kafka.tools.LeaderElectionCommandTest:
-- testAllTopicPartition
 - testCommandConfig
 - testCommandConfigAndDeprecatedConfigPresent
 - testDeprecatedAdminConfig
 - testElectionResultOutput
-- testPathToJsonFile
 - testPreferredReplicaElection
 - testTopicDoesNotExist
-- testTopicPartition
+- testUncleanLeaderElectionInputModes
 org.apache.kafka.tools.LineMessageReaderTest:
 - testDemarcationsLongerThanOne
 - testHeaderDemarcationCollision
