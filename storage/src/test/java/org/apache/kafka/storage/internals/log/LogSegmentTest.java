@@ -294,6 +294,8 @@ public class LogSegmentTest {
         try (LogSegment seg = createSegment(0L, time)) {
             seg.timeIndex(); // Force load indexes before closing the segment
             seg.offsetIndex();
+            // Trim indexes to simulate a segment from a previous clean shutdown
+            seg.onBecomeInactiveSegment();
             seg.close();
 
             LogSegment reopened = createSegment(0L, time);

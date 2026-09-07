@@ -191,7 +191,7 @@ public abstract class AbstractIndex implements Closeable {
 
     /**
      * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
-     * trimToValidSize() which is called at closing the segment or new segment being rolled; (2) at
+     * trimToValidSize() which is called when a segment becomes inactive (e.g. rolled or prepared for shutdown); (2) at
      * loading segments from disk or truncating back to an old segment where a new log segment became active;
      * we want to reset the index size to maximum index size to avoid rolling new segment.
      *
@@ -285,8 +285,6 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     public void close() throws IOException {
-        trimToValidSize();
-        flush();
         closeHandler();
     }
 
