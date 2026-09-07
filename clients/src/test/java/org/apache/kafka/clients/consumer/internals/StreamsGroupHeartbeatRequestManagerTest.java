@@ -2192,7 +2192,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
             final ClientResponse response = buildClientErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED, "message");
             networkRequest.handler().onComplete(response);
-            assertTrue(logAppender.getMessages("ERROR").stream()
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
                 .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to group authorization failure: " +
                     "Not authorized to access group: " + GROUP_ID)));
             verify(heartbeatState).reset();
@@ -2231,7 +2231,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final String errorMessage = "message";
             final ClientResponse response = buildClientErrorResponse(Errors.TOPIC_AUTHORIZATION_FAILED, errorMessage);
             networkRequest.handler().onComplete(response);
-            assertTrue(logAppender.getMessages("ERROR").stream()
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
                 .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed for member " + MEMBER_ID +
                     " with state " + MemberState.STABLE + " due to " + Errors.TOPIC_AUTHORIZATION_FAILED + ": " +
                     errorMessage)));
@@ -2285,12 +2285,12 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     "protocol or does not support the versions of the STREAMS group protocol used by this client " +
                     "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
                     StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").";
-                assertTrue(logAppender.getMessages("ERROR").stream()
+                assertTrue(logAppender.getMessages(Level.ERROR).stream()
                     .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to " +
                         error + ": " + errorMessage)));
                 assertEquals(errorMessage, errorEvent.getValue().error().getMessage());
             } else {
-                assertTrue(logAppender.getMessages("ERROR").stream()
+                assertTrue(logAppender.getMessages(Level.ERROR).stream()
                     .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to " +
                         error + ": " + errorMessageInResponse)));
                 assertEquals(errorMessageInResponse, errorEvent.getValue().error().getMessage());
@@ -2326,7 +2326,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             networkRequest.handler().onComplete(response);
 
-            assertTrue(logAppender.getMessages("ERROR").stream()
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
                 .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed because instance id " +
                     INSTANCE_ID + " is fenced: " + errorMessage + ". Check for another Streams instance using " +
                     "the same group instance id.")));
@@ -2396,7 +2396,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final String errorMessage = "message";
             final ClientResponse response = buildClientErrorResponse(error, errorMessage);
             networkRequest.handler().onComplete(response);
-            assertTrue(logAppender.getMessages("ERROR").stream()
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
                 .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to unexpected error")));
             verify(heartbeatState).reset();
             ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
@@ -2851,11 +2851,11 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result1.unsentRequests.get(0).handler().onComplete(response1);
 
-            long firstWarnCount = logAppender.getMessages("WARN").stream()
+            long firstWarnCount = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(1, firstWarnCount);
-            assertTrue(logAppender.getMessages("WARN").stream().anyMatch(m -> m.contains("[zone, cluster]")),
+            assertTrue(logAppender.getMessages(Level.WARN).stream().anyMatch(m -> m.contains("[zone, cluster]")),
                 "The logged warning should contain the missing client tags detail [zone, cluster]");
 
             // Second heartbeat with the same status — should NOT log again
@@ -2875,7 +2875,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result2.unsentRequests.get(0).handler().onComplete(response2);
 
-            long secondWarnCount = logAppender.getMessages("WARN").stream()
+            long secondWarnCount = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(1, secondWarnCount, "MISSING_CLIENT_TAGS warning should not be logged again for the same detail");
@@ -2899,7 +2899,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result3.unsentRequests.get(0).handler().onComplete(response3);
 
-            List<String> missingTagWarnings = logAppender.getMessages("WARN").stream()
+            List<String> missingTagWarnings = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .collect(Collectors.toList());
             assertEquals(2, missingTagWarnings.size(),
@@ -2928,7 +2928,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result4.unsentRequests.get(0).handler().onComplete(response4);
 
-            long fourthWarnCount = logAppender.getMessages("WARN").stream()
+            long fourthWarnCount = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(2, fourthWarnCount, "Clearing the status should not log a new warning");
@@ -2951,7 +2951,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result5.unsentRequests.get(0).handler().onComplete(response5);
 
-            long fifthWarnCount = logAppender.getMessages("WARN").stream()
+            long fifthWarnCount = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(3, fifthWarnCount, "MISSING_CLIENT_TAGS warning should be logged again after the status cleared and recurred");
@@ -2990,7 +2990,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result.unsentRequests.get(0).handler().onComplete(response);
 
-            assertTrue(logAppender.getMessages("WARN").stream()
+            assertTrue(logAppender.getMessages(Level.WARN).stream()
                     .noneMatch(m -> m.contains("Missing required client tags")),
                 "No MISSING_CLIENT_TAGS warning should be logged when the client provides the required tags");
         }

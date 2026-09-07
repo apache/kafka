@@ -259,7 +259,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
 
             // Each opt-out path must log a WARN naming the config that disabled the check, so the weakened
             // posture is visible in the broker logs.
-            List<String> warnings = appender.getMessages("WARN");
+            List<String> warnings = appender.getMessages(Level.WARN);
             assertTrue(warnings.stream().anyMatch(m -> m.contains(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER)),
                     "Expected a WARN mentioning " + SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER + ", got " + warnings);
             assertTrue(warnings.stream().anyMatch(m -> m.contains(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE)),

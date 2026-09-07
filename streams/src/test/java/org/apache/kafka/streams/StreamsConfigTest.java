@@ -1861,7 +1861,7 @@ public class StreamsConfigTest {
 
             assertEquals(1, streamsConfigLogs.getMessages().size());
             assertTrue(streamsConfigLogs
-                .getMessages(Level.WARN.name())
+                .getMessages(Level.WARN)
                 .get(0)
                 .startsWith("Processing exception handler is not enabled for the GlobalThread.")
             );

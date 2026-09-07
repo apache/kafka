@@ -90,6 +90,7 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.TopicAdmin;
 
+import org.apache.logging.log4j.Level;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -2765,8 +2766,8 @@ public class WorkerTest {
             taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
             assertEquals(3, taskConfigs.size());
 
-            assertEquals(List.of(), logCaptureAppender.getMessages("WARN"));
-            assertEquals(List.of(), logCaptureAppender.getMessages("ERROR"));
+            assertEquals(List.of(), logCaptureAppender.getMessages(Level.WARN));
+            assertEquals(List.of(), logCaptureAppender.getMessages(Level.ERROR));
         }
 
         // Warning/exception when a connector generates too many task configs
@@ -2794,7 +2795,7 @@ public class WorkerTest {
                             new ConnectorConfig(plugins, connectorProps)
                     );
                     assertEquals(tooManyTaskConfigs.size(), taskConfigs.size());
-                    List<String> warningMessages = logCaptureAppender.getMessages("WARN");
+                    List<String> warningMessages = logCaptureAppender.getMessages(Level.WARN);
                     assertEquals(1, warningMessages.size());
                     tasksMaxExceededMessage = warningMessages.get(0);
                 }
@@ -2805,7 +2806,7 @@ public class WorkerTest {
                 );
 
                 // Regardless of enforcement, there should never be any error-level log messages
-                assertEquals(List.of(), logCaptureAppender.getMessages("ERROR"));
+                assertEquals(List.of(), logCaptureAppender.getMessages(Level.ERROR));
             }
         }
 
@@ -2816,8 +2817,8 @@ public class WorkerTest {
             List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
             assertEquals(1, taskConfigs.size());
 
-            assertEquals(List.of(), logCaptureAppender.getMessages("WARN"));
-            assertEquals(List.of(), logCaptureAppender.getMessages("ERROR"));
+            assertEquals(List.of(), logCaptureAppender.getMessages(Level.WARN));
+            assertEquals(List.of(), logCaptureAppender.getMessages(Level.ERROR));
         }
 
         worker.stop();
@@ -2910,7 +2911,7 @@ public class WorkerTest {
                         TargetState.STARTED
                 ));
 
-                List<String> warningMessages = logCaptureAppender.getMessages("WARN");
+                List<String> warningMessages = logCaptureAppender.getMessages(Level.WARN);
                 assertEquals(1, warningMessages.size());
                 tasksMaxExceededMessage = warningMessages.get(0);
             }
