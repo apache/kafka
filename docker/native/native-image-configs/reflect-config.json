@@ -1041,6 +1041,30 @@
   "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator"
 },
 {
+  "name":"org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerRefreshingLogin",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClient$OAuthBearerSaslClientFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientCallbackHandler",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServer$OAuthBearerSaslServerFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.common.security.plain.PlainLoginModule",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
