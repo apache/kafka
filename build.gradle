@@ -2055,7 +2055,6 @@ project(':clients') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.testcontainersKeycloak
-    testImplementation libs.testcontainersJunitJupiter
 
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly runtimeTestLibs
