@@ -81,8 +81,4 @@ public class JoinGroupResponse extends AbstractResponse {
         return data.toString();
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 3;
-    }
 }

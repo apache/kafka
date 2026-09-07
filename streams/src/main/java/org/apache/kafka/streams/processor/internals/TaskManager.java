@@ -60,6 +60,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
@@ -79,6 +80,7 @@ public class TaskManager {
     private static final String BUG_ERROR_MESSAGE = "This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
     private static final String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
+    private static final long REMOVAL_LOG_INTERVAL_MINUTES = 1L;
 
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
@@ -91,6 +93,7 @@ public class TaskManager {
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
     private final ProcessingMode processingMode;
+    private final boolean streamsProtocolEnabled;
     private final ChangelogReader changelogReader;
     private final TopologyMetadata topologyMetadata;
 
@@ -139,6 +142,7 @@ public class TaskManager {
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
         this.processingMode = topologyMetadata.processingMode();
+        this.streamsProtocolEnabled = topologyMetadata.streamsProtocolEnabled();
 
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
@@ -318,7 +322,7 @@ public class TaskManager {
 
             tasks.removeTask(task);
             task.revive();
-            tasks.addPendingTasksToInit(Collections.singleton(task));
+            tasks.addPendingTasksToInit(Set.of(task));
         }
     }
 
@@ -333,7 +337,7 @@ public class TaskManager {
             }
             return activeTaskCreator.createTasks(mainConsumer, assignedTasks);
         } else {
-            return Collections.emptySet();
+            return Set.of();
         }
     }
 
@@ -349,7 +353,7 @@ public class TaskManager {
             }
             return standbyTaskCreator.createTasks(assignedTasks);
         } else {
-            return Collections.emptySet();
+            return Set.of();
         }
     }
 
@@ -716,14 +720,22 @@ public class TaskManager {
 
     private StateUpdater.RemovedTaskResult waitForFuture(final TaskId taskId,
                                                          final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
-        final StateUpdater.RemovedTaskResult removedTaskResult;
         try {
-            removedTaskResult = future.get(5, TimeUnit.MINUTES);
-            if (removedTaskResult == null) {
-                throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
-                    + BUG_ERROR_MESSAGE);
+            long minutesWaited = 0L;
+            while (true) {
+                try {
+                    final StateUpdater.RemovedTaskResult removedTaskResult =
+                        future.get(REMOVAL_LOG_INTERVAL_MINUTES, TimeUnit.MINUTES);
+                    if (removedTaskResult == null) {
+                        throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
+                            + BUG_ERROR_MESSAGE);
+                    }
+                    return removedTaskResult;
+                } catch (final java.util.concurrent.TimeoutException retryTimeout) {
+                    minutesWaited += REMOVAL_LOG_INTERVAL_MINUTES;
+                    log.warn("Waiting for the removal of task {} from the state updater for {} minute(s).", taskId, minutesWaited);
+                }
             }
-            return removedTaskResult;
         } catch (final ExecutionException executionException) {
             log.warn("An exception happened when removing task {} from the state updater. The task was added to the " +
                     "failed task in the state updater: ",
@@ -733,10 +745,6 @@ public class TaskManager {
             Thread.currentThread().interrupt();
             log.error(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
             throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
-        } catch (final java.util.concurrent.TimeoutException timeoutException) {
-            log.warn("The state updater wasn't able to remove task {} in time. The state updater thread may be dead. "
-                    + BUG_ERROR_MESSAGE, taskId, timeoutException);
-            return null;
         }
     }
 
@@ -826,7 +834,7 @@ public class TaskManager {
                 if (oldTask.isActive()) {
                     final StandbyTask standbyTask = convertActiveToStandby((StreamTask) oldTask, inputPartitions);
                     tasks.removeTask(oldTask);
-                    tasks.addPendingTasksToInit(Collections.singleton(standbyTask));
+                    tasks.addPendingTasksToInit(Set.of(standbyTask));
                 } else {
                     final StreamTask activeTask = convertStandbyToActive((StandbyTask) oldTask, inputPartitions);
                     tasks.replaceStandbyWithActive(activeTask);
@@ -858,6 +866,7 @@ public class TaskManager {
 
     public boolean checkStateUpdater(final long now,
                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        maybeThrowFatalExceptionFromStateUpdater();
         addTasksToStateUpdater();
         if (stateUpdater.hasExceptionsAndFailedTasks()) {
             handleExceptionsFromStateUpdater();
@@ -879,7 +888,7 @@ public class TaskManager {
             newTask = task.isActive() ?
                 convertActiveToStandby((StreamTask) task, inputPartitions) :
                 convertStandbyToActive((StandbyTask) task, inputPartitions);
-            tasks.addPendingTasksToInit(Collections.singleton(newTask));
+            tasks.addPendingTasksToInit(Set.of(newTask));
         } catch (final RuntimeException e) {
             final TaskId taskId = task.id();
             final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
@@ -965,23 +974,30 @@ public class TaskManager {
                 stateUpdater.add(task);
             } else {
                 log.trace("Task {} is still not allowed to retry acquiring the state directory lock", task.id());
-                tasks.addPendingTasksToInit(Collections.singleton(task));
+                tasks.addPendingTasksToInit(Set.of(task));
             }
         } catch (final LockException lockException) {
             // The state directory may still be locked by another thread, when the rebalance just happened.
             // Retry in the next iteration.
             log.info("Encountered lock exception. Reattempting locking the state in the next iteration. Error message was: {}",
                      lockException.getMessage());
-            tasks.addPendingTasksToInit(Collections.singleton(task));
+            tasks.addPendingTasksToInit(Set.of(task));
             updateOrCreateBackoffRecord(task.id(), nowMs);
         } catch (final TimeoutException timeoutException) {
             // A timeout can occur either during producer initialization OR while fetching committed offsets.
             // Retry in the next iteration.
             task.maybeInitTaskTimeoutOrThrow(nowMs, timeoutException);
-            tasks.addPendingTasksToInit(Collections.singleton(task));
+            tasks.addPendingTasksToInit(Set.of(task));
             updateOrCreateBackoffRecord(task.id(), nowMs);
             log.info("Encountered timeout exception. Reattempting initialization in the next iteration. Error message was: {}",
                      timeoutException.getMessage());
+        }
+    }
+
+    private void maybeThrowFatalExceptionFromStateUpdater() {
+        final Optional<RuntimeException> fatalException = stateUpdater.fatalException();
+        if (fatalException.isPresent()) {
+            throw new StreamsException("The state updater died and cannot update tasks anymore.", fatalException.get());
         }
     }
 
@@ -1277,8 +1293,15 @@ public class TaskManager {
      * For all other assigned tasks this thread owns, we overwrite the (potentially) state offset-sum from the
      * state directory with the latest changelog offset information. This step also add offset-sums for in-memory
      * state stores.
+     *
+     * <p>No-op under the classic protocol, which reports offset sums through {@link #taskOffsetSums()} instead and
+     * never reads this snapshot.
      */
     public void maybeUpdateTaskOffsetSumSnapshot() {
+        if (!streamsProtocolEnabled) {
+            return;
+        }
+
         final Map<TaskId, Long> offsetSums = new HashMap<>(stateDirectory.taskOffsetSums());
         for (final Task task : allTasks().values()) {
             if (task.isActive() && task.state() == State.RUNNING) {
@@ -1525,14 +1548,9 @@ public class TaskManager {
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task, false);
         }
-        // Handling all failures that occurred during the remove process
-        for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
-            final Task failedTask = exceptionAndTask.task();
-            closeTaskDirty(failedTask, false);
-        }
-
-        // If there is anything left unhandled due to timeouts, handling now
-        for (final Task task : stateUpdater.tasks()) {
+        // Closing everything that is still left in the queues of the state updater, i.e., tasks that failed during
+        // the removals above and tasks that the state updater never got to hand over or pick up
+        for (final Task task : stateUpdater.drainQueuedTasks()) {
             closeTaskDirty(task, false);
         }
     }

@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -599,7 +600,7 @@ public class MemoryRecordsBuilderTest {
         long deleteHorizon = 100;
         int payloadLen = 1024 * 1024;
         ByteBuffer buffer = ByteBuffer.allocate(payloadLen * 2);
-        ByteBufferOutputStream byteBufferOutputStream = new ByteBufferOutputStream(buffer);
+        ByteBufferOutputStream byteBufferOutputStream = new SingleByteBufferOutputStream(buffer);
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(byteBufferOutputStream, args.magic, args.compression,
                 TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,

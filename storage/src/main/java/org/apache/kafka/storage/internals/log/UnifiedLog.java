@@ -1224,8 +1224,8 @@ public class UnifiedLog implements AutoCloseable {
                                 }
                             });
 
-                            // check messages size does not exceed config.segmentSize
-                            if (validRecords.sizeInBytes() > config().segmentSize()) {
+                            // Like KAFKA-9617 for max.message.bytes, KAFKA-17375 lets followers replicate data accepted before segment.bytes was lowered.
+                            if (origin != AppendOrigin.REPLICATION && validRecords.sizeInBytes() > config().segmentSize()) {
                                 throw new RecordBatchTooLargeException("Message batch size is " + validRecords.sizeInBytes() + " bytes in append " +
                                         "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize() + ".");
                             }
@@ -2000,39 +2000,34 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     private int deleteRetentionMsBreachedSegments() throws IOException {
-        long retentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled());
+        boolean remoteLogEnabledAndRemoteCopyEnabled = remoteLogEnabledAndRemoteCopyEnabled();
+        long retentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled);
         if (retentionMs < 0) return 0;
         long startMs = time().milliseconds();
 
         DeletionCondition shouldDelete = (segment, nextSegmentOpt) -> {
-            if (startMs < segment.largestTimestamp()) {
-                futureTimestampLogger.warn("{} contains future timestamp(s), making it ineligible to be deleted", segment);
+            long anchorTimestamp = segment.largestTimestamp();
+            if (startMs < anchorTimestamp) {
+                if (remoteLogEnabledAndRemoteCopyEnabled) {
+                    anchorTimestamp = segment.lastModified();
+                    futureTimestampLogger.warn("{} contains future timestamp(s), using lastModified time {} as the retention anchor", segment, anchorTimestamp);
+                } else {
+                    futureTimestampLogger.warn("{} contains future timestamp(s), making it ineligible to be deleted", segment);
+                }
             }
-            boolean delete = startMs - segment.largestTimestamp() > retentionMs;
+            boolean delete = startMs - anchorTimestamp > retentionMs;
             logger.debug("{} retentionMs breached: {}, startMs={}, retentionMs={}",
                     segment, delete, startMs, retentionMs);
             return delete;
         };
         return deleteOldSegments(shouldDelete, toDelete -> {
-            long localRetentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled());
+            String retentionScope = remoteLogEnabledAndRemoteCopyEnabled ? "local log retention" : "log retention";
             for (LogSegment segment : toDelete) {
-                if (segment.largestRecordTimestamp().isPresent()) {
-                    if (remoteLogEnabledAndRemoteCopyEnabled()) {
-                        logger.info("Deleting segment {} due to local log retention time {}ms breach based on the largest " +
-                                "record timestamp in the segment", segment, localRetentionMs);
-                    } else {
-                        logger.info("Deleting segment {} due to log retention time {}ms breach based on the largest " +
-                                "record timestamp in the segment", segment, localRetentionMs);
-                    }
-                } else {
-                    if (remoteLogEnabledAndRemoteCopyEnabled()) {
-                        logger.info("Deleting segment {} due to local log retention time {}ms breach based on the " +
-                                "last modified time of the segment", segment, localRetentionMs);
-                    } else {
-                        logger.info("Deleting segment {} due to log retention time {}ms breach based on the " +
-                                "last modified time of the segment", segment, localRetentionMs);
-                    }
-                }
+                String anchor = segment.largestRecordTimestamp().isEmpty() || (remoteLogEnabledAndRemoteCopyEnabled && startMs < segment.largestTimestamp())
+                        ? "last modified time of the segment"
+                        : "largest record timestamp in the segment";
+                logger.info("Deleting segment {} due to {} time {}ms breach based on the {}",
+                        segment, retentionScope, retentionMs, anchor);
             }
         });
     }
@@ -2104,16 +2099,27 @@ public class UnifiedLog implements AutoCloseable {
 
     /**
      * The log size in bytes for all segments that are only in local log but not yet in remote log.
+     *
+     * <p>A segment is considered "only local" (not yet in remote) when its base-offset is strictly
+     * greater than {@link #highestOffsetInRemoteStorage()}. The strict {@code >} (rather than
+     * {@code >=}) matters: {@code highestOffsetInRemoteStorage} holds the end-offset of the last
+     * segment already copied to remote, so the segment whose base-offset equals that value has
+     * itself been copied. This arises for single-record segments (base-offset == end-offset), which
+     * are common on low-throughput partitions; counting such a segment as local would double-count a
+     * segment that is already in remote storage.
      */
     public long onlyLocalLogSegmentsSize() {
-        return LogSegments.sizeInBytes(logSegments().stream().filter(s -> s.baseOffset() >= highestOffsetInRemoteStorage()).collect(Collectors.toList()));
+        return LogSegments.sizeInBytes(logSegments().stream().filter(s -> s.baseOffset() > highestOffsetInRemoteStorage()).collect(Collectors.toList()));
     }
 
     /**
      * The number of segments that are only in local log but not yet in remote log.
+     *
+     * <p>See {@link #onlyLocalLogSegmentsSize()} for why the base-offset comparison is a strict
+     * {@code >} against {@link #highestOffsetInRemoteStorage()} rather than {@code >=}.
      */
     public long onlyLocalLogSegmentsCount() {
-        return logSegments().stream().filter(s -> s.baseOffset() >= highestOffsetInRemoteStorage()).count();
+        return logSegments().stream().filter(s -> s.baseOffset() > highestOffsetInRemoteStorage()).count();
     }
 
     /**

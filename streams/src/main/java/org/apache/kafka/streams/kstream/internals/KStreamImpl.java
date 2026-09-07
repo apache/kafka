@@ -642,7 +642,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
             tableParentNode = repartitionNodeBuilder.build();
             builder.addGraphNode(graphNode, tableParentNode);
-            subTopologySourceNodes = Collections.singleton(sourceName);
+            subTopologySourceNodes = Set.of(sourceName);
         } else {
             tableParentNode = graphNode;
             subTopologySourceNodes = this.subTopologySourceNodes;
@@ -918,7 +918,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 name.name() != null);
         }
 
-        joinThis.ensureCopartitionWith(Collections.singleton(joinOther));
+        joinThis.ensureCopartitionWith(Set.of(joinOther));
 
         return join.join(
             joinThis,
@@ -961,7 +961,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionedSourceName,
             repartitionKeySerde,
             repartitionValueSerde,
-            Collections.singleton(repartitionedSourceName),
+            Set.of(repartitionedSourceName),
             false,
             repartitionNode,
             builder);
@@ -1118,7 +1118,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                               final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
                                                               final JoinedInternal<K, V, VTable> joinedInternal,
                                                               final boolean leftJoin) {
-        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VTable>) table));
+        final Set<String> allSourceNodes = ensureCopartitionWith(Set.of((AbstractStream<K, VTable>) table));
 
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 

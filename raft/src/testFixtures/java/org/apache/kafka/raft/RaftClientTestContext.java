@@ -109,7 +109,7 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
     // Used to determine if the local kraft client was configured to always flush
     final boolean canBecomeVoter;
 
-    private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 1;
+    private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 2;
 
     public RaftClientTestContext(RaftClientContextBuilder<RaftClientTestContext> builder) {
         this(builder, new MockListener(builder.localId));

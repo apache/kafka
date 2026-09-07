@@ -76,14 +76,14 @@
     { "name": "EndpointInformationEpoch", "type": "int32", "versions": "0+",
       "about": "The endpoint epoch set in the response"},
     { "name": "PartitionsByUserEndpoint", "type": "[]EndpointToPartitions", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Global assignment information used for IQ. Null if unchanged since last heartbeat." ,
+      "about": "Global assignment information used for IQ. There is one entry per member, so several entries carry the same UserEndpoint when a client runs more than one stream thread; clients must union the entries of an endpoint. Null if unchanged since last heartbeat.",
       "fields": [
         { "name": "UserEndpoint", "type": "Endpoint", "versions": "0+",
           "about": "User-defined endpoint to connect to the node" },
         { "name": "ActivePartitions", "type": "[]TopicPartition", "versions": "0+",
-          "about": "All topic partitions materialized by active tasks on the node" },
+          "about": "The source topic partitions, including repartition source topics, of the active tasks assigned to this member" },
         { "name": "StandbyPartitions", "type": "[]TopicPartition", "versions": "0+",
-          "about": "All topic partitions materialized by standby and warm-up tasks on the node" }
+          "about": "The source topic partitions, including repartition source topics, of the standby and warm-up tasks assigned to this member" }
       ]
     }
   ],

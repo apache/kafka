@@ -3462,4 +3462,20 @@ public class KafkaProducerTest {
                 () -> producer.sendOffsetsToTransaction(offsets, groupMetadata));
         }
     }
+
+    @Test
+    public void testProducerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero() {
+        // Default bootstrap.resolve.timeout.ms=0 resolves DNS synchronously in the constructor;
+        // any failure surfaces as ConfigException (wrapped in KafkaException by the constructor's
+        // outer try/catch), so no producer instance is created.
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost
+        );
+
+        KafkaException e = assertThrows(KafkaException.class, () -> new KafkaProducer<>(configs));
+        assertInstanceOf(ConfigException.class, e.getCause());
+    }
 }

@@ -22,10 +22,10 @@ import org.apache.kafka.streams.query.internals.SucceededQueryResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 class StateQueryResultTest {
@@ -44,21 +44,21 @@ class StateQueryResultTest {
     void getOnlyPartitionResultNoResultsTest() {
         stringStateQueryResult.addResult(0, noResultsFound);
         final QueryResult<String> result = stringStateQueryResult.getOnlyPartitionResult();
-        assertThat("Zero query results shouldn't error", result, nullValue());
+        assertNull(result, "Zero query results shouldn't error");
     }
 
     @Test
     void getOnlyPartitionResultWithSingleResultTest() {
         stringStateQueryResult.addResult(0, validResult);
         final QueryResult<String> result = stringStateQueryResult.getOnlyPartitionResult();
-        assertThat("Valid query results still works", result.getResult(), is("Foo"));
+        assertEquals("Foo", result.getResult(), "Valid query results still works");
     }
 
     @Test
     void getOnlyPartitionResultWithSingleFailureResultTest() {
         stringStateQueryResult.addResult(0, invalidResult);
         final QueryResult<String> result = stringStateQueryResult.getOnlyPartitionResult();
-        assertThat("Invalid query result should be a failure", result.isFailure(), is(true));
+        assertTrue(result.isFailure(), "Invalid query result should be a failure");
     }
 
     @Test

@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.KafkaRaftClient;
-import org.apache.kafka.raft.internals.IdentitySerde;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.slf4j.Logger;
@@ -163,9 +162,8 @@ public final class Snapshots {
     public static long lastContainedLogTimestamp(RawSnapshotReader reader, LogContext logContext) {
         try (var bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
              RecordsSnapshotReader<ByteBuffer> recordsSnapshotReader =
-                RecordsSnapshotReader.of(
+                RecordsSnapshotReader.ofControlOnly(
                     reader,
-                    IdentitySerde.INSTANCE,
                     bufferSupplier,
                     KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
                     true,

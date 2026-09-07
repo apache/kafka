@@ -25,8 +25,6 @@ import static java.time.Duration.ofSeconds;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -57,7 +55,7 @@ public class JoinWindowsTest {
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(ANY_OTHER_SIZE))
             .before(ofSeconds(ANY_SIZE));
 
-        assertThat(joinWindows.gracePeriodMs(), equalTo(ANY_OTHER_SIZE));
+        assertEquals(ANY_OTHER_SIZE, joinWindows.gracePeriodMs());
     }
 
     @Test
@@ -65,7 +63,7 @@ public class JoinWindowsTest {
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(ANY_OTHER_SIZE))
             .after(ofSeconds(ANY_SIZE));
 
-        assertThat(joinWindows.gracePeriodMs(), equalTo(ANY_OTHER_SIZE));
+        assertEquals(ANY_OTHER_SIZE, joinWindows.gracePeriodMs());
     }
 
     @Test

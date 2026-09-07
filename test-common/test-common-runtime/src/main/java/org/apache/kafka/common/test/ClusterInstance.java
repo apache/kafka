@@ -39,6 +39,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -203,17 +204,29 @@ public interface ClusterInstance {
     default Map<String, Object> setClientSaslConfig(Map<String, Object> configs) {
         Map<String, Object> props = new HashMap<>(configs);
         if (config().brokerSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT) {
+            String mechanism = clientSaslMechanism();
             props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
-            props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
-            props.putIfAbsent(
-                SaslConfigs.SASL_JAAS_CONFIG,
-                String.format(
-                    "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
-                    JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
-                )
-            );
+            props.putIfAbsent(SaslConfigs.SASL_MECHANISM, mechanism);
+            if (mechanism.equalsIgnoreCase("PLAIN")) {
+                props.putIfAbsent(
+                    SaslConfigs.SASL_JAAS_CONFIG,
+                    String.format(
+                        "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                        JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
+                    )
+                );
+            }
         }
         return props;
+    }
+
+    default String clientSaslMechanism() {
+        String mechanisms = config().serverProperties().get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
+        if (mechanisms == null) return "PLAIN";
+        for (String m : mechanisms.split(",")) {
+            if (m.trim().equalsIgnoreCase("PLAIN")) return "PLAIN";
+        }
+        return mechanisms.split(",")[0].trim();
     }
 
     Map<String, Object> setClientSslConfig(Map<String, Object> configs);

@@ -347,7 +347,8 @@ class ConfigAdminManagerTest {
       new ApiError(INVALID_REQUEST, "Unknown resource type 8")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-          brokerLogger1)))))
+          brokerLogger1))),
+        (_, _) => true))
   }
 
   @Test
@@ -358,7 +359,8 @@ class ConfigAdminManagerTest {
       new ApiError(INVALID_REQUEST, s"Null value not supported for : ${logger.getName}")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-          brokerLogger2)))))
+          brokerLogger2))),
+        (_, _) => true))
   }
 
   @Test
@@ -368,7 +370,8 @@ class ConfigAdminManagerTest {
     val brokerLogger1b = brokerLogger1Legacy()
     val output = manager.preprocess(new AlterConfigsRequestData().
       setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-        brokerLogger1a, brokerLogger1b))))
+        brokerLogger1a, brokerLogger1b))),
+      (_, _) => true)
     assertEquals(2, output.size())
     Seq(brokerLogger1a, brokerLogger1b).foreach(r =>
       assertEquals(new ApiError(INVALID_REQUEST, "Each resource must appear at most once."),
@@ -410,7 +413,8 @@ class ConfigAdminManagerTest {
       new ApiError(INVALID_REQUEST, "Unknown resource type 0")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-          unknown)))))
+          unknown))),
+        (_, _) => true))
   }
 
   @Test
