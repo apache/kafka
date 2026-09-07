@@ -89,6 +89,8 @@ public class MirrorSourceConnector extends SourceConnector {
     private static final AclBindingFilter ANY_TOPIC_ACL = new AclBindingFilter(ANY_TOPIC, AccessControlEntryFilter.ANY);
     private static final String READ_COMMITTED = IsolationLevel.READ_COMMITTED.toString();
     private static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
+    // Keep topic creation requests within the controller's default maximum number of metadata records per batch.
+    private static final int MAX_ESTIMATED_RECORDS_PER_CREATE_TOPICS_REQUEST = 10_000;
 
     private final AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
 
@@ -514,18 +516,59 @@ public class MirrorSourceConnector extends SourceConnector {
     void createNewTopics(Map<String, NewTopic> newTopics) throws ExecutionException, InterruptedException {
         adminCall(
                 () -> {
-                    targetAdminClient.createTopics(newTopics.values(), new CreateTopicsOptions()).values()
-                            .forEach((k, v) -> v.whenComplete((x, e) -> {
-                                if (e != null) {
-                                    log.warn("Could not create topic {}.", k, e);
-                                } else {
-                                    log.info("Created remote topic {} with {} partitions.", k, newTopics.get(k).numPartitions());
-                                }
-                            }));
+                    topicCreationBatches(newTopics.values()).forEach(this::submitTopicCreationRequest);
                     return null;
                 },
                 () -> String.format("create topics %s on %s cluster", newTopics, config.targetClusterAlias())
         );
+    }
+
+    private void submitTopicCreationRequest(List<NewTopic> newTopics) {
+        Map<String, NewTopic> topicsByName = newTopics.stream()
+                .collect(Collectors.toMap(NewTopic::name, Function.identity()));
+        targetAdminClient.createTopics(newTopics, new CreateTopicsOptions()).values()
+                .forEach((name, future) -> future.whenComplete((ignored, error) -> {
+                    if (error != null) {
+                        log.warn("Could not create topic {}.", name, error);
+                    } else {
+                        log.info("Created remote topic {} with {} partitions.",
+                                name, topicsByName.get(name).numPartitions());
+                    }
+                }));
+    }
+
+    private static List<List<NewTopic>> topicCreationBatches(Collection<NewTopic> newTopics) {
+        List<List<NewTopic>> batches = new ArrayList<>();
+        List<NewTopic> currentBatch = new ArrayList<>();
+        long currentBatchRecords = 0;
+        for (NewTopic topic : newTopics) {
+            long topicRecords = estimatedTopicCreationRecords(topic);
+            if (!currentBatch.isEmpty()
+                    && currentBatchRecords + topicRecords > MAX_ESTIMATED_RECORDS_PER_CREATE_TOPICS_REQUEST) {
+                batches.add(currentBatch);
+                currentBatch = new ArrayList<>();
+                currentBatchRecords = 0;
+            }
+            currentBatch.add(topic);
+            currentBatchRecords += topicRecords;
+        }
+        if (!currentBatch.isEmpty()) {
+            batches.add(currentBatch);
+        }
+        return batches;
+    }
+
+    private static long estimatedTopicCreationRecords(NewTopic topic) {
+        long partitionRecords;
+        if (topic.numPartitions() > 0) {
+            partitionRecords = topic.numPartitions();
+        } else if (topic.replicasAssignments() != null) {
+            partitionRecords = topic.replicasAssignments().size();
+        } else {
+            partitionRecords = 1;
+        }
+        long configRecords = topic.configs() == null ? 0 : topic.configs().size();
+        return 1 + partitionRecords + configRecords;
     }
 
     void createNewPartitions(Map<String, NewPartitions> newPartitions) throws ExecutionException, InterruptedException {
