@@ -115,6 +115,7 @@ class ControllerApis(
         case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
         case ApiKeys.UNREGISTER_BROKER => handleUnregisterBroker(request)
+        case ApiKeys.DECOMMISSION_CONTROLLER => handleDecommissionController(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotas(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
@@ -747,6 +748,39 @@ class ControllerApis(
           decommissionRequest.getErrorResponse(requestThrottleMs, e)
         } else {
           new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
+            setThrottleTimeMs(requestThrottleMs))
+        }
+      }
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => createResponseCallback(requestThrottleMs, e))
+    }
+  }
+
+  // Aiven fork addition (KAFKA-20295). Same authorization as upstream's
+  // unregister-controller (apache/kafka#22191, KIP-1312): ALTER on CLUSTER.
+  def handleDecommissionController(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val decommissionRequest = request.body[DecommissionControllerRequest]
+    authHelper.authorizeClusterOperation(request, ALTER)
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+
+    controller.decommissionController(context, decommissionRequest.data.controllerId).handle[Unit] { (_, e) =>
+      def createResponseCallback(requestThrottleMs: Int,
+                                 e: Throwable): DecommissionControllerResponse = {
+        if (e != null) {
+          // Aiven fork addition (KAFKA-20295): use the exception's own message, not just the
+          // generic one tied to its error code (Errors.forException(e).message would discard
+          // ClusterControlManager/QuorumController's specific, actionable text -- e.g. which
+          // config to edit for the static-voter guard, S3). ApiError.fromThrowable already
+          // falls back to the generic message for UNKNOWN_SERVER_ERROR, so nothing sensitive
+          // leaks for unexpected failures.
+          val apiError = ApiError.fromThrowable(e)
+          new DecommissionControllerResponse(new DecommissionControllerResponseData().
+            setThrottleTimeMs(requestThrottleMs).
+            setErrorCode(apiError.error.code).
+            setErrorMessage(apiError.messageWithFallback))
+        } else {
+          new DecommissionControllerResponse(new DecommissionControllerResponseData().
             setThrottleTimeMs(requestThrottleMs))
         }
       }

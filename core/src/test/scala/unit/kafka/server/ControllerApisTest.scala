@@ -476,6 +476,67 @@ class ControllerApisTest {
     })
   }
 
+  // Aiven fork addition (KAFKA-20295): same authorization as handleUnregisterBroker (ALTER on
+  // CLUSTER).
+  @Test
+  def testUnauthorizedHandleDecommissionController(): Unit = {
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleDecommissionController(buildRequest(new DecommissionControllerRequest.Builder(
+        new DecommissionControllerRequestData()).build(0)))
+    })
+  }
+
+  // Aiven fork addition (KAFKA-20295): verifies the request is dispatched to
+  // Controller#decommissionController and a successful result produces an error-free response.
+  @Test
+  def testHandleDecommissionController(): Unit = {
+    val controller = mock(classOf[Controller])
+    when(controller.decommissionController(
+      any(classOf[ControllerRequestContext]),
+      ArgumentMatchers.eq(5)
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
+
+    controllerApis = createControllerApis(None, controller)
+    controllerApis.handleDecommissionController(buildRequest(new DecommissionControllerRequest.Builder(
+      new DecommissionControllerRequestData().setControllerId(5)).build(0)))
+
+    val capturedResponse: ArgumentCaptor[AbstractResponse] =
+      ArgumentCaptor.forClass(classOf[AbstractResponse])
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.any(),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None))
+    val response = capturedResponse.getValue.asInstanceOf[DecommissionControllerResponse]
+    assertEquals(Errors.NONE.code(), response.data().errorCode())
+  }
+
+  // Aiven fork addition (KAFKA-20295): verifies a controller-side failure (e.g.
+  // ControllerIdNotRegisteredException) is translated into the matching wire error code.
+  @Test
+  def testHandleDecommissionControllerError(): Unit = {
+    val controller = mock(classOf[Controller])
+    val future = new CompletableFuture[Void]()
+    future.completeExceptionally(new ControllerIdNotRegisteredException("Controller 5 is not registered."))
+    when(controller.decommissionController(
+      any(classOf[ControllerRequestContext]),
+      ArgumentMatchers.eq(5)
+    )).thenReturn(future)
+
+    controllerApis = createControllerApis(None, controller)
+    controllerApis.handleDecommissionController(buildRequest(new DecommissionControllerRequest.Builder(
+      new DecommissionControllerRequestData().setControllerId(5)).build(0)))
+
+    val capturedResponse: ArgumentCaptor[AbstractResponse] =
+      ArgumentCaptor.forClass(classOf[AbstractResponse])
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.any(),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None))
+    val response = capturedResponse.getValue.asInstanceOf[DecommissionControllerResponse]
+    assertEquals(Errors.CONTROLLER_ID_NOT_REGISTERED.code(), response.data().errorCode())
+  }
+
   @Test
   def testClose(): Unit = {
     controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller]))

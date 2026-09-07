@@ -187,6 +187,66 @@ public class ClusterToolTest {
         assertEquals("--config and --command-config cannot be specified together.", ex.getMessage());
     }
 
+    // Aiven fork addition (KAFKA-20295). The static-voter guard (S3/D4) is easy to hit end-to-end:
+    // a @ClusterTest KRaft cluster's controllers are always listed in the static
+    // controller.quorum.voters configuration, so decommissioning any registered controller other
+    // than the active one exercises it without any extra setup.
+    @ClusterTest(brokers = 1, controllers = 3, types = {Type.KRAFT})
+    public void testDecommissionControllerRejectsStaticVoter(ClusterInstance clusterInstance) throws Exception {
+        int leaderId;
+        try (Admin admin = clusterInstance.admin()) {
+            leaderId = admin.describeMetadataQuorum().quorumInfo().get().leaderId();
+        }
+        int followerId = clusterInstance.controllerIds().stream()
+                .filter(id -> id != leaderId)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Expected at least one non-leader controller"));
+
+        TerseException exception = assertThrows(TerseException.class,
+                () -> ClusterTool.execute("decommission-controller",
+                        "--bootstrap-server", clusterInstance.bootstrapServers(),
+                        "--id", String.valueOf(followerId)));
+        assertTrue(exception.getMessage().contains("controller.quorum.voters"));
+    }
+
+    @ClusterTest(brokers = 1, controllers = 3, types = {Type.KRAFT})
+    public void testDecommissionControllerRefusesToDecommissionItself(ClusterInstance clusterInstance) throws Exception {
+        int leaderId;
+        try (Admin admin = clusterInstance.admin()) {
+            leaderId = admin.describeMetadataQuorum().quorumInfo().get().leaderId();
+        }
+
+        TerseException exception = assertThrows(TerseException.class,
+                () -> ClusterTool.execute("decommission-controller",
+                        "--bootstrap-server", clusterInstance.bootstrapServers(),
+                        "--id", String.valueOf(leaderId)));
+        assertTrue(exception.getMessage().contains("cannot decommission itself"));
+    }
+
+    @ClusterTest
+    public void testDecommissionControllerUnknownId(ClusterInstance clusterInstance) throws Exception {
+        TerseException exception = assertThrows(TerseException.class,
+                () -> ClusterTool.execute("decommission-controller",
+                        "--bootstrap-server", clusterInstance.bootstrapServers(),
+                        "--id", "999999"));
+        assertTrue(exception.getMessage().contains("is not registered"));
+    }
+
+    // D2/RK9: decommissionController is deliberately off the public Admin interface, so a
+    // MockAdminClient (which extends AdminClient as a sibling of KafkaAdminClient, not a subtype)
+    // cannot reach it and must fail with a clear TerseException rather than a raw
+    // ClassCastException.
+    @Test
+    public void testDecommissionControllerCommandRequiresKafkaAdminClient() {
+        Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
+                usingRaftController(true).
+                build();
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        TerseException exception = assertThrows(TerseException.class,
+                () -> ClusterTool.decommissionControllerCommand(new PrintStream(stream), adminClient, 0));
+        assertTrue(exception.getMessage().contains("KafkaAdminClient"));
+    }
+
     @Test
     public void testPrintClusterId() throws Exception {
         Admin adminClient = new MockAdminClient.Builder().

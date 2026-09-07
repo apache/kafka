@@ -1921,6 +1921,26 @@ public final class QuorumController implements Controller {
                 EnumSet.noneOf(ControllerOperationFlag.class));
     }
 
+    // Aiven fork addition (KAFKA-20295).
+    @Override
+    public CompletableFuture<Void> decommissionController(
+        ControllerRequestContext context,
+        int controllerId
+    ) {
+        return appendWriteEvent("decommissionController", context.deadlineNs(),
+            () -> {
+                // The active controller refuses to decommission itself. `nodeId` is this node's
+                // own id, and only the active controller ever executes a write event, so this
+                // check is exactly the self-targeting guard needed here.
+                if (controllerId == nodeId) {
+                    throw new InvalidRequestException("The active controller (id " + nodeId +
+                        ") cannot decommission itself.");
+                }
+                return clusterControl.decommissionController(controllerId);
+            },
+            EnumSet.noneOf(ControllerOperationFlag.class));
+    }
+
     @Override
     public CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(
         ControllerRequestContext context,

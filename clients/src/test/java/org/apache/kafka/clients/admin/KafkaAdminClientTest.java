@@ -100,6 +100,7 @@ import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartit
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResultCollection;
+import org.apache.kafka.common.message.DecommissionControllerResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
@@ -193,6 +194,7 @@ import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.DecommissionControllerResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
@@ -10247,6 +10249,76 @@ public class KafkaAdminClientTest {
         }
     }
 
+    // Aiven fork addition (KAFKA-20295): decommissionController is deliberately not part of the
+    // public Admin interface, so it is reached via a cast to KafkaAdminClient rather than
+    // through env.adminClient() directly.
+    @Test
+    public void testDecommissionControllerSuccess() throws InterruptedException, ExecutionException {
+        int controllerId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_CONTROLLER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareDecommissionControllerResponse(Errors.NONE, 0));
+            KafkaAdminClient admin = (KafkaAdminClient) env.adminClient();
+            DecommissionControllerResult result = admin.decommissionController(controllerId);
+            assertNotNull(result.all());
+            result.all().get();
+        }
+    }
+
+    @Test
+    public void testDecommissionControllerSuccessWithBootstrapControllers()
+            throws InterruptedException, ExecutionException {
+        int controllerId = 1;
+        try (AdminClientUnitTestEnv env = mockClientEnv(
+                AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, "dummy")) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_CONTROLLER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(
+                    prepareDecommissionControllerResponse(Errors.NONE, 0));
+            KafkaAdminClient admin = (KafkaAdminClient) env.adminClient();
+            admin.decommissionController(controllerId).all().get();
+        }
+    }
+
+    @Test
+    public void testDecommissionControllerRetriesNotControllerWithBootstrapControllers()
+            throws InterruptedException, ExecutionException {
+        int controllerId = 1;
+        try (AdminClientUnitTestEnv env = mockClientEnv(
+                AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, "dummy")) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_CONTROLLER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(
+                    prepareDecommissionControllerResponse(Errors.NOT_CONTROLLER, 0));
+            env.kafkaClient().prepareResponse(
+                    prepareDescribeClusterResponse(0,
+                            env.cluster().nodes(),
+                            env.cluster().clusterResource().clusterId(),
+                            2,
+                            MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED,
+                            true));
+            env.kafkaClient().prepareResponse(
+                    prepareDecommissionControllerResponse(Errors.NONE, 0));
+            KafkaAdminClient admin = (KafkaAdminClient) env.adminClient();
+            admin.decommissionController(controllerId).all().get();
+        }
+    }
+
+    @Test
+    public void testDecommissionControllerFailure() {
+        int controllerId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_CONTROLLER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareDecommissionControllerResponse(Errors.CONTROLLER_ID_NOT_REGISTERED, 0));
+            KafkaAdminClient admin = (KafkaAdminClient) env.adminClient();
+            DecommissionControllerResult result = admin.decommissionController(controllerId);
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(Errors.CONTROLLER_ID_NOT_REGISTERED.exception().getClass(), result.all());
+        }
+    }
+
     @Test
     public void testDescribeProducers() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -10931,6 +11003,13 @@ public class KafkaAdminClientTest {
 
     private UnregisterBrokerResponse prepareUnregisterBrokerResponse(Errors error, int throttleTimeMs) {
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message())
+                .setThrottleTimeMs(throttleTimeMs));
+    }
+
+    private DecommissionControllerResponse prepareDecommissionControllerResponse(Errors error, int throttleTimeMs) {
+        return new DecommissionControllerResponse(new DecommissionControllerResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(error.message())
                 .setThrottleTimeMs(throttleTimeMs));

@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -418,7 +419,13 @@ public enum Errors {
     STREAMS_INVALID_TOPOLOGY(130, "The supplied topology is invalid.", StreamsInvalidTopologyException::new),
     STREAMS_INVALID_TOPOLOGY_EPOCH(131, "The supplied topology epoch is invalid.", StreamsInvalidTopologyEpochException::new),
     STREAMS_TOPOLOGY_FENCED(132, "The supplied topology epoch is outdated.", StreamsTopologyFencedException::new),
-    SHARE_SESSION_LIMIT_REACHED(133, "The limit of share sessions has been reached.", ShareSessionLimitReachedException::new);
+    SHARE_SESSION_LIMIT_REACHED(133, "The limit of share sessions has been reached.", ShareSessionLimitReachedException::new),
+    // Aiven fork addition (KAFKA-20295): codes 130-133 are already claimed on this branch.
+    // 134-135 remain unused (claimed by unrelated upstream features) and must not be reused.
+    // 136 and the name are taken verbatim from apache/kafka#22191 (KIP-1312) because this
+    // describes the condition, not the operation, so it stays a no-op when the fork later
+    // merges upstream 4.4's real UnregisterController mechanism.
+    CONTROLLER_ID_NOT_REGISTERED(136, "The given controller ID was not registered.", ControllerIdNotRegisteredException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

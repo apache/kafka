@@ -166,6 +166,24 @@ public interface Controller extends AclMutator, AutoCloseable {
     );
 
     /**
+     * Aiven fork addition (KAFKA-20295). Decommission a controller: retire it from feature and
+     * {@code metadata.version} upgrade decisions without physically removing its registration.
+     * This is a different operation from upstream KIP-1312's unregistration; see
+     * {@link org.apache.kafka.common.errors.ControllerIdNotRegisteredException} for the error
+     * returned when the target id has no registration at all.
+     *
+     * @param context       The controller request context.
+     * @param controllerId  The controller id to decommission.
+     *
+     * @return              A future that is completed successfully when the controller is
+     *                      decommissioned.
+     */
+    CompletableFuture<Void> decommissionController(
+        ControllerRequestContext context,
+        int controllerId
+    );
+
+    /**
      * Find the ids for topic names.
      *
      * @param context       The controller request context.

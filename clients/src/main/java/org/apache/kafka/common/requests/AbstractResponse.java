@@ -297,6 +297,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return AlterDisklessSwitchResponse.parse(readable, version);
             case REPAIR_DISKLESS_LOG:
                 return RepairDisklessLogResponse.parse(readable, version);
+            case DECOMMISSION_CONTROLLER:
+                return DecommissionControllerResponse.parse(readable, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

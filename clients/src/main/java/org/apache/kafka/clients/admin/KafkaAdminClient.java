@@ -135,6 +135,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DecommissionControllerRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
@@ -208,6 +209,8 @@ import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.DecommissionControllerRequest;
+import org.apache.kafka.common.requests.DecommissionControllerResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
@@ -4916,6 +4919,93 @@ public class KafkaAdminClient extends AdminClient {
         };
         runnable.call(call, now);
         return new UnregisterBrokerResult(future);
+    }
+
+    /**
+     * Aiven fork addition (KAFKA-20295). Decommission a controller: it stops counting towards
+     * feature / {@code metadata.version} upgrade decisions, but (unlike upstream 4.4+'s
+     * {@code unregisterController}) its registration is not removed from the metadata image.
+     * This branch retains the marked registration. A 4.4+ forward-port must make a subsequent
+     * {@code decommission-controller} invocation after finalizing {@code metadata.version} to
+     * {@code 4.4-IV2} or above remove that registration with upstream's unregistration record.
+     *
+     * Deliberately not part of the public {@link Admin} interface — reachable only via a cast
+     * to {@link KafkaAdminClient}, since this is a fork-local operator action, not an upstream API.
+     *
+     * This is a convenience method for {@link #decommissionController(int, DecommissionControllerOptions)}.
+     *
+     * @param controllerId the controller id to decommission.
+     *
+     * @return the {@link DecommissionControllerResult} containing the result
+     */
+    public DecommissionControllerResult decommissionController(int controllerId) {
+        return decommissionController(controllerId, new DecommissionControllerOptions());
+    }
+
+    /**
+     * Aiven fork addition (KAFKA-20295). See {@link #decommissionController(int)}.
+     *
+     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * returned {@link DecommissionControllerResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the decommission operation could finish.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
+     *   If the software is too old to support controller registrations at all.</li>
+     *   <li>{@link org.apache.kafka.common.errors.ControllerIdNotRegisteredException}
+     *   If the requested controller id is not currently registered.</li>
+     *   <li>{@link org.apache.kafka.common.errors.NotControllerException}
+     *   If the request does not arrive at the active controller.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *   If the request tries to decommission the current active controller id, or an id still
+     *   present in {@code controller.quorum.voters}.</li>
+     * </ul>
+     *
+     * @param controllerId the controller id to decommission.
+     * @param options the options to use.
+     *
+     * @return the {@link DecommissionControllerResult} containing the result
+     */
+    public DecommissionControllerResult decommissionController(int controllerId, DecommissionControllerOptions options) {
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call("decommissionController", calcDeadlineMs(now, options.timeoutMs()),
+                new LeastLoadedBrokerOrActiveKController()) {
+
+            @Override
+            DecommissionControllerRequest.Builder createRequest(int timeoutMs) {
+                DecommissionControllerRequestData data =
+                        new DecommissionControllerRequestData().setControllerId(controllerId);
+                return new DecommissionControllerRequest.Builder(data);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                handleNotControllerError(abstractResponse);
+                final DecommissionControllerResponse response =
+                        (DecommissionControllerResponse) abstractResponse;
+                Errors error = Errors.forCode(response.data().errorCode());
+                switch (error) {
+                    case NONE:
+                        future.complete(null);
+                        break;
+                    case REQUEST_TIMED_OUT:
+                        throw error.exception(response.data().errorMessage());
+                    default:
+                        log.error("Decommission controller request for controller ID {} failed: {}",
+                            controllerId, response.data().errorMessage());
+                        future.completeExceptionally(error.exception(response.data().errorMessage()));
+                        break;
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new DecommissionControllerResult(future);
     }
 
     @Override

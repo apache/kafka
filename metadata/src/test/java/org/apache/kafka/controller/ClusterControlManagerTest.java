@@ -20,9 +20,11 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidRegistrationException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
@@ -33,6 +35,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -43,6 +46,7 @@ import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
+import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
@@ -51,6 +55,7 @@ import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
@@ -63,6 +68,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1145,5 +1151,184 @@ public class ClusterControlManagerTest {
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         return featureControlManager;
+    }
+
+    // Aiven fork addition (KAFKA-20295): tests for ClusterControlManager#decommissionController
+    // and the corresponding controllerSupportedFeatures() filtering.
+
+    private static void registerTestController(
+        ClusterControlManager clusterControl,
+        int id,
+        Map<String, VersionRange> features
+    ) {
+        RegisterControllerRecord record = new RegisterControllerRecord().
+            setControllerId(id).
+            setIncarnationId(Uuid.randomUuid());
+        features.forEach((name, range) -> record.features().add(
+            new RegisterControllerRecord.ControllerFeature().
+                setName(name).
+                setMinSupportedVersion(range.min()).
+                setMaxSupportedVersion(range.max())));
+        clusterControl.replay(record);
+    }
+
+    @Test
+    public void testDecommissionController() {
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                Collections.singletonList(0))).
+            build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+            setFeatureControlManager(featureControl).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+        registerTestController(clusterControl, 1, Map.of(
+            "kafka.aiven.fork.example.feature", VersionRange.of((short) 1, (short) 2)));
+
+        ControllerResult<Void> result = clusterControl.decommissionController(1);
+        assertEquals(1, result.records().size());
+        RecordTestUtils.replayAll(clusterControl, result.records());
+
+        ControllerRegistration registration = clusterControl.controllerRegistrations().get(1);
+        assertTrue(registration.isDecommissioned());
+
+        // A feature unknown to Feature.FEATURES is preserved unchanged, while decommissioning
+        // widens metadata.version and every known Feature to the maximal permissive range, so
+        // unpatched readers keep treating this controller as supporting anything.
+        assertEquals(VersionRange.of((short) 1, (short) 2),
+            registration.supportedFeatures().get("kafka.aiven.fork.example.feature"));
+        assertEquals(VersionRange.of(MetadataVersion.MINIMUM_VERSION.featureLevel(), Short.MAX_VALUE),
+            registration.supportedFeatures().get(MetadataVersion.FEATURE_NAME));
+        for (Feature feature : Feature.FEATURES) {
+            assertEquals(VersionRange.of((short) 0, Short.MAX_VALUE),
+                registration.supportedFeatures().get(feature.featureName()));
+        }
+
+        // The marker itself must never leak out through the effective supportedFeatures() view.
+        assertFalse(registration.supportedFeatures().containsKey(
+            ControllerRegistration.DECOMMISSIONED_FEATURE_NAME));
+
+        // The decommissioned controller must no longer be considered for feature /
+        // metadata.version upgrade decisions.
+        Iterator<Map.Entry<Integer, Map<String, VersionRange>>> iterator =
+            clusterControl.controllerSupportedFeatures();
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void testDecommissionControllerIsIdempotent() {
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                Collections.singletonList(0))).
+            build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+            setFeatureControlManager(featureControl).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+        registerTestController(clusterControl, 1, Collections.emptyMap());
+        RecordTestUtils.replayAll(clusterControl, clusterControl.decommissionController(1).records());
+
+        // Decommissioning an already-decommissioned controller is a no-op that yields no records,
+        // rather than an error.
+        ControllerResult<Void> result = clusterControl.decommissionController(1);
+        assertEquals(Collections.emptyList(), result.records());
+        assertTrue(clusterControl.controllerRegistrations().get(1).isDecommissioned());
+    }
+
+    @Test
+    public void testDecommissionControllerThrowsWhenNotRegistered() {
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+            setFeatureControlManager(createFeatureControlManager()).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+
+        assertEquals("Controller 1 is not registered, so it cannot be decommissioned.",
+            assertThrows(ControllerIdNotRegisteredException.class,
+                () -> clusterControl.decommissionController(1)).getMessage());
+    }
+
+    @Test
+    public void testDecommissionControllerThrowsForStaticQuorumVoter() {
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                Collections.singletonList(0))).
+            build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+            setFeatureControlManager(featureControl).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+        registerTestController(clusterControl, 0, Collections.emptyMap());
+
+        // An id present in the static controller.quorum.voters configuration cannot be
+        // decommissioned.
+        assertThrows(InvalidRequestException.class, () -> clusterControl.decommissionController(0));
+    }
+
+    @Test
+    public void testDecommissionControllerThrowsWithUnsupportedMetadataVersion() {
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_6_IV2.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+            setFeatureControlManager(featureControl).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+
+        assertEquals("The current MetadataVersion is too old to support controller registrations.",
+            assertThrows(UnsupportedVersionException.class,
+                () -> clusterControl.decommissionController(1)).getMessage());
+    }
+
+    @Test
+    public void testControllerSupportedFeaturesSkipsDecommissionedControllers() {
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                Collections.singletonList(0))).
+            build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+            setFeatureControlManager(featureControl).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+        registerTestController(clusterControl, 1, Collections.emptyMap());
+        registerTestController(clusterControl, 2, Collections.emptyMap());
+        RecordTestUtils.replayAll(clusterControl, clusterControl.decommissionController(1).records());
+
+        Map<Integer, Map<String, VersionRange>> remaining = new HashMap<>();
+        Iterator<Map.Entry<Integer, Map<String, VersionRange>>> iterator =
+            clusterControl.controllerSupportedFeatures();
+        while (iterator.hasNext()) {
+            Map.Entry<Integer, Map<String, VersionRange>> entry = iterator.next();
+            remaining.put(entry.getKey(), entry.getValue());
+        }
+        assertEquals(Collections.singleton(2), remaining.keySet());
     }
 }

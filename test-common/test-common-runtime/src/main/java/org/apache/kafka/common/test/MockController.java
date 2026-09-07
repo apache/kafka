@@ -238,6 +238,15 @@ public class MockController implements Controller {
         throw new UnsupportedOperationException();
     }
 
+    // Aiven fork addition (KAFKA-20295).
+    @Override
+    public CompletableFuture<Void> decommissionController(
+        ControllerRequestContext context,
+        int controllerId
+    ) {
+        throw new UnsupportedOperationException();
+    }
+
     static class MockTopic {
         private final String name;
         private final Uuid id;

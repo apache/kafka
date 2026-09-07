@@ -40,6 +40,14 @@ import java.util.stream.Collectors;
  * An immutable class which represents controller registrations.
  */
 public class ControllerRegistration {
+    // Aiven fork addition (KAFKA-20295): a synthetic controller feature entry marking this
+    // registration as decommissioned. It rides inside RegisterControllerRecord's existing,
+    // unvalidated Features array, so no schema change or MetadataVersion bump is required.
+    // The `__` prefix guards against a future upstream feature collision.
+    public static final String DECOMMISSIONED_FEATURE_NAME = "__decommissioned_controller";
+
+    private static final VersionRange DECOMMISSIONED_MARKER_RANGE = VersionRange.of((short) 1, (short) 1);
+
     public static class Builder {
         private int id;
         private Uuid incarnationId;
@@ -105,6 +113,24 @@ public class ControllerRegistration {
             return this;
         }
 
+        /**
+         * Aiven fork addition (KAFKA-20295). Add or remove the decommissioned-controller marker
+         * feature entry. Backed by a {@code Map}, so this is idempotent: setting the marker twice
+         * writes the same single entry, and it never produces a duplicate {@code ControllerFeature}
+         * when the registration is later serialized via {@link #toRecord}.
+         */
+        public Builder setDecommissioned(boolean decommissioned) {
+            Map<String, VersionRange> newSupportedFeatures =
+                new HashMap<>(supportedFeatures == null ? Collections.emptyMap() : supportedFeatures);
+            if (decommissioned) {
+                newSupportedFeatures.put(DECOMMISSIONED_FEATURE_NAME, DECOMMISSIONED_MARKER_RANGE);
+            } else {
+                newSupportedFeatures.remove(DECOMMISSIONED_FEATURE_NAME);
+            }
+            this.supportedFeatures = newSupportedFeatures;
+            return this;
+        }
+
         public ControllerRegistration build() {
             if (incarnationId == null) throw new RuntimeException("You must set incarnationId.");
             if (listeners == null) throw new RuntimeException("You must set listeners.");
@@ -165,8 +191,31 @@ public class ControllerRegistration {
         return Optional.of(new Node(id, endpoint.host(), endpoint.port(), null));
     }
 
+    /**
+     * The effective supported features, i.e. the ones this controller actually negotiates feature
+     * and metadata.version upgrades with. Deliberately excludes the internal
+     * {@link #DECOMMISSIONED_FEATURE_NAME} bookkeeping entry, if present, so it is never mistaken
+     * for a real feature by a caller that reads a single registration's features directly. Callers
+     * that need the raw, on-the-wire representation (round-tripping via {@link #toRecord} or
+     * displaying it via {@link #toString}) use the internal field, not this accessor.
+     */
     public Map<String, VersionRange> supportedFeatures() {
-        return supportedFeatures;
+        if (!isDecommissioned()) {
+            return supportedFeatures;
+        }
+        Map<String, VersionRange> effective = new HashMap<>(supportedFeatures);
+        effective.remove(DECOMMISSIONED_FEATURE_NAME);
+        return Collections.unmodifiableMap(effective);
+    }
+
+    /**
+     * Aiven fork addition (KAFKA-20295): true if this registration carries the
+     * decommissioned-controller marker. The registration itself is otherwise unchanged — this
+     * only signals that it should be skipped when computing controller-supported features
+     * ({@code ClusterControlManager.controllerSupportedFeatures()}).
+     */
+    public boolean isDecommissioned() {
+        return supportedFeatures.containsKey(DECOMMISSIONED_FEATURE_NAME);
     }
 
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {

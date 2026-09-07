@@ -20,9 +20,11 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidRegistrationException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
@@ -39,6 +41,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
@@ -51,6 +54,7 @@ import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -59,6 +63,7 @@ import org.slf4j.Logger;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -498,6 +503,65 @@ public class ClusterControlManager {
         return ControllerResult.atomicOf(records, null);
     }
 
+    /**
+     * Aiven fork addition (KAFKA-20295). Decommission a controller: mark its existing
+     * {@code RegisterControllerRecord} so it is skipped by {@link #controllerSupportedFeatures()},
+     * without physically removing the registration.
+     *
+     * @param controllerId  The controller id to decommission.
+     * @return               A result containing the record(s) to append, if any (a controller
+     *                       that is already decommissioned yields no records).
+     * @throws UnsupportedVersionException     if the current MetadataVersion is too old to
+     *                                          support controller registrations.
+     * @throws ControllerIdNotRegisteredException  if the id has no registration at all.
+     * @throws InvalidRequestException         if the id is present in the static
+     *                                          {@code controller.quorum.voters} configuration.
+     */
+    ControllerResult<Void> decommissionController(int controllerId) {
+        if (!featureControl.metadataVersionOrThrow().isControllerRegistrationSupported()) {
+            throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
+                    "support controller registrations.");
+        }
+        ControllerRegistration registration = controllerRegistrations.get(controllerId);
+        if (registration == null) {
+            throw new ControllerIdNotRegisteredException("Controller " + controllerId +
+                " is not registered, so it cannot be decommissioned.");
+        }
+        if (featureControl.isControllerId(controllerId)) {
+            throw new InvalidRequestException("Cannot decommission controller " + controllerId +
+                " because it is present in the static controller.quorum.voters configuration. " +
+                "Stop it and remove it from controller.quorum.voters on every controller node " +
+                "before retrying decommissioning it.");
+        }
+        if (registration.isDecommissioned()) {
+            log.info("Controller {} is already decommissioned. Taking no action.", controllerId);
+            return ControllerResult.of(Collections.emptyList(), null);
+        }
+        // In addition to the marker, write permissive feature ranges so that even a reader that
+        // does not understand the marker (an unpatched active controller, or vanilla non-fork 4.4)
+        // treats this controller as supporting any feature version.
+        Map<String, VersionRange> newFeatures = new HashMap<>(registration.supportedFeatures());
+        newFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+            MetadataVersion.MINIMUM_VERSION.featureLevel(), Short.MAX_VALUE));
+        for (Feature feature : Feature.FEATURES) {
+            newFeatures.put(feature.featureName(), VersionRange.of((short) 0, Short.MAX_VALUE));
+        }
+        ControllerRegistration decommissioned = new ControllerRegistration.Builder().
+            setId(registration.id()).
+            setIncarnationId(registration.incarnationId()).
+            setZkMigrationReady(registration.zkMigrationReady()).
+            setListeners(registration.listeners()).
+            setSupportedFeatures(newFeatures).
+            setDecommissioned(true).
+            build();
+        log.info("Decommissioning controller {}. It will no longer be consulted for feature and " +
+            "metadata.version upgrade decisions; its registration otherwise remains unchanged.",
+            controllerId);
+        ImageWriterOptions options = new ImageWriterOptions.Builder(featureControl.metadataVersionOrThrow()).build();
+        return ControllerResult.atomicOf(
+            Collections.singletonList(decommissioned.toRecord(options)), null);
+    }
+
     BrokerFeature processRegistrationFeature(
         int brokerId,
         FinalizedControllerFeatures finalizedFeatures,
@@ -856,21 +920,21 @@ public class ClusterControlManager {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
                     "support controller registrations.");
         }
-        return new Iterator<>() {
-            private final Iterator<ControllerRegistration> iter = controllerRegistrations.values().iterator();
-
-            @Override
-            public boolean hasNext() {
-                return iter.hasNext();
+        // Aiven fork addition (KAFKA-20295): skip decommissioned controllers entirely, so they no
+        // longer count towards feature / metadata.version upgrade decisions. This is the whole
+        // behavioural fix, and the part the fork's 4.4 forward-port must keep.
+        List<Entry<Integer, Map<String, VersionRange>>> result = new ArrayList<>();
+        for (ControllerRegistration registration : controllerRegistrations.values()) {
+            if (registration.isDecommissioned()) {
+                log.debug("Skipping decommissioned controller {} when computing controller-supported " +
+                    "features: it does not participate in feature or metadata.version upgrade " +
+                    "decisions.", registration.id());
+                continue;
             }
-
-            @Override
-            public Entry<Integer, Map<String, VersionRange>> next() {
-                ControllerRegistration registration = iter.next();
-                return new AbstractMap.SimpleImmutableEntry<>(registration.id(),
-                        registration.supportedFeatures());
-            }
-        };
+            result.add(new AbstractMap.SimpleImmutableEntry<>(registration.id(),
+                    registration.supportedFeatures()));
+        }
+        return result.iterator();
     }
 
     @FunctionalInterface

@@ -18,7 +18,10 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
+import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -75,7 +78,20 @@ public class ClusterTool {
                 .help("Unregister a broker.");
         Subparser listEndpoints = subparsers.addParser("list-endpoints")
                 .help("List endpoints");
-        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, listEndpoints)) {
+        // Aiven fork addition (KAFKA-20295). Deliberately not "unregister-controller": on this
+        // branch the controller's registration is not removed, only excluded from feature /
+        // metadata.version upgrade decisions (see docs/operations/kraft.md). It uses the same
+        // wire format as apache/kafka#22191's (KIP-1312) unregister-controller RPC, but this
+        // branch only writes the decommission marker.
+        Subparser decommissionControllerParser = subparsers.addParser("decommission-controller")
+                .help("Decommission a stopped controller: retire it from feature / metadata.version " +
+                        "upgrade decisions. This branch retains the registration, so it remains " +
+                        "listed by list-endpoints / DescribeCluster and MetadataShell; that is by " +
+                        "design (see docs/operations/kraft.md). The 4.4+ forward-port removes a " +
+                        "marked registration when this command is re-run after metadata.version " +
+                        "is finalized to 4.4-IV2.");
+        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, listEndpoints,
+                decommissionControllerParser)) {
             MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
             connectionOptions.addArgument("--bootstrap-server", "-b")
                     .action(store())
@@ -99,6 +115,13 @@ public class ClusterTool {
         listEndpoints.addArgument("--include-fenced-brokers")
                 .action(storeTrue())
                 .help("Whether to include fenced brokers when listing broker endpoints");
+        decommissionControllerParser.addArgument("--id", "-i")
+                .type(Integer.class)
+                .action(store())
+                .required(true)
+                .help("The ID of the stopped controller to decommission. It must not be the " +
+                        "active controller and must not be present in this cluster's " +
+                        "controller.quorum.voters configuration.");
 
         Namespace namespace = parser.parseArgsOrFail(args);
         String command = namespace.getString("command");
@@ -141,6 +164,12 @@ public class ClusterTool {
                 }
                 break;
             }
+            case "decommission-controller": {
+                try (Admin adminClient = Admin.create(properties)) {
+                    decommissionControllerCommand(System.out, adminClient, namespace.getInt("id"));
+                }
+                break;
+            }
             default:
                 throw new RuntimeException("Unknown command " + command);
         }
@@ -163,6 +192,38 @@ public class ClusterTool {
             Throwable cause = ee.getCause();
             if (cause instanceof UnsupportedVersionException) {
                 stream.println("The target cluster does not support the broker unregistration API.");
+            } else {
+                throw ee;
+            }
+        }
+    }
+
+    // Aiven fork addition (KAFKA-20295). decommissionController is deliberately not on the public
+    // Admin interface, so it is reached via a cast to KafkaAdminClient. That means a non-
+    // KafkaAdminClient Admin (e.g. MockAdminClient in unit tests) cannot reach this command; fail
+    // clearly with a TerseException instead of letting a raw ClassCastException escape.
+    static void decommissionControllerCommand(PrintStream stream, Admin adminClient, int controllerId) throws Exception {
+        if (!(adminClient instanceof KafkaAdminClient)) {
+            throw new TerseException("The decommission-controller command requires a real " +
+                    "KafkaAdminClient (got " + adminClient.getClass().getName() + " instead); " +
+                    "decommissionController is not part of the public Admin interface.");
+        }
+        KafkaAdminClient kafkaAdminClient = (KafkaAdminClient) adminClient;
+        try {
+            kafkaAdminClient.decommissionController(controllerId).all().get();
+            stream.println("Controller " + controllerId + " has been decommissioned: it no longer " +
+                    "participates in feature and metadata.version upgrade decisions. Its " +
+                    "registration is unchanged, so it remains listed by list-endpoints, " +
+                    "DescribeCluster and MetadataShell; that is expected, not a failure (see " +
+                    "docs/operations/kraft.md). The 4.4+ forward-port removes the retained " +
+                    "registration when this command is re-run after metadata.version is " +
+                    "finalized to 4.4-IV2.");
+        } catch (ExecutionException ee) {
+            Throwable cause = ee.getCause();
+            if (cause instanceof UnsupportedVersionException
+                    || cause instanceof ControllerIdNotRegisteredException
+                    || cause instanceof InvalidRequestException) {
+                throw new TerseException(cause.getMessage());
             } else {
                 throw ee;
             }
