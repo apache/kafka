@@ -62,7 +62,6 @@ public abstract class AbstractApiVersionsRequestTest {
         }
     }
 
-
     void validateApiVersionsResponse(ApiVersionsResponse apiVersionsResponse,
                                      ListenerName listenerName,
                                      boolean enableUnstableLastVersion,
