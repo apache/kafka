@@ -65,6 +65,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.nCopies;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
@@ -317,6 +318,33 @@ public class StreamsConfigTest {
         assertEquals(0L, streamsConfig.getGlobalConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
         assertEquals(0L, streamsConfig.getProducerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
         assertEquals(0L, streamsConfig.getAdminConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
+    public void shouldLogWarningWhenIgnoringUserSpecifiedBootstrapResolveTimeout() {
+        props.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "120000");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            streamsConfig.getRestoreConsumerConfigs(clientId);
+            streamsConfig.getGlobalConsumerConfigs(clientId);
+            streamsConfig.getProducerConfigs(clientId);
+            streamsConfig.getAdminConfigs(clientId);
+
+            final List<String> warnings = appender.getMessages().stream()
+                .filter(msg -> msg.contains("config 'bootstrap.resolve.timeout.ms' found") && msg.contains("User setting (120000) will be ignored"))
+                .collect(Collectors.toList());
+            assertEquals(5, warnings.size(), "Should log exactly one warning per client type, got: " + warnings);
+            for (final String clientType : List.of("consumer", "restore consumer", "global consumer", "producer", "admin")) {
+                assertTrue(
+                    warnings.stream().anyMatch(msg -> msg.contains("Unexpected user-specified " + clientType + " config")),
+                    "Missing warning for " + clientType + " in: " + warnings
+                );
+            }
+        }
     }
 
     @Test
