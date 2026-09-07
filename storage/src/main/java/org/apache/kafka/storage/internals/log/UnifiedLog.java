@@ -945,6 +945,20 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     /**
+     * Append the largest time index entry to the time index of the active segment and trim the log and indexes.
+     * This is the same operation performed when rolling a segment and should be called before flushing and
+     * closing the log during shutdown.
+     */
+    public void prepareActiveSegmentForClose() {
+        maybeHandleIOException(
+                () -> "Error while preparing active segment for close for " + topicPartition() + " in dir " + dir().getParent(),
+                () -> {
+                    localLog.segments().activeSegment().onBecomeInactiveSegment();
+                    return null;
+                });
+    }
+
+    /**
      * Close this log.
      * The memory mapped buffer for index files of this log will be left open until the log is deleted.
      */

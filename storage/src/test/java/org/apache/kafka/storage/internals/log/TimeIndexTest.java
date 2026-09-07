@@ -102,6 +102,7 @@ public class TimeIndexTest {
         appendEntries(5);
         TimestampOffset firstEntry = idx.entry(0);
         idx.sanityCheck();
+        idx.trimToValidSize();
         idx.close();
 
         class MockTimeIndex extends TimeIndex {

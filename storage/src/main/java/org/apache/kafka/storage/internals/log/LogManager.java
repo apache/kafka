@@ -877,13 +877,11 @@ public class LogManager {
 
             Collection<UnifiedLog> logs = logsInDir(localLogsByDir, dir).values();
 
-            List<Runnable> jobsForDir = logs.stream().map(log -> {
+            List<Runnable> jobsForDir = logs.stream().map(log -> (Runnable) () -> {
+                log.prepareActiveSegmentForClose();
                 // flush the log to ensure latest possible recovery point
-                return (Runnable) () -> {
-                    // flush the log to ensure latest possible recovery point
-                    log.flush(true);
-                    log.close();
-                };
+                log.flush(true);
+                log.close();
             }).toList();
 
             jobs.put(dir, jobsForDir.stream().map(pool::submit).collect(Collectors.toList()));
