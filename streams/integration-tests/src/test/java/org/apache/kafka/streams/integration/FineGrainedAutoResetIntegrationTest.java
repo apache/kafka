@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -426,8 +428,8 @@ public class FineGrainedAutoResetIntegrationTest {
         boolean correctExceptionThrown = false;
         @Override
         public StreamThreadExceptionResponse handle(final Throwable throwable) {
-            assertEquals("StreamsException", throwable.getClass().getSimpleName());
-            assertEquals("NoOffsetForPartitionException", throwable.getCause().getClass().getSimpleName());
+            assertEquals(StreamsException.class, throwable.getClass());
+            assertEquals(NoOffsetForPartitionException.class, throwable.getCause().getClass());
             correctExceptionThrown = true;
             return StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         }
