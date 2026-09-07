@@ -106,18 +106,6 @@ public class LeaderEpochFileCacheTest {
     }
 
     @Test
-    public void shouldNotOverwriteLogEndOffsetForALeaderEpochOnceItHasBeenAssigned() {
-        long logEndOffset = 9;
-
-        cache.assign(2, logEndOffset);
-
-        cache.assign(2, 10);
-
-        assertEquals(logEndOffset, cache.epochEntries().get(0).startOffset());
-        assertEquals(List.of(new EpochEntry(2, 9)), cache.epochEntries());
-    }
-
-    @Test
     public void shouldEnforceMonotonicallyIncreasingStartOffsets() {
         cache.assign(2, 9);
 
@@ -132,7 +120,7 @@ public class LeaderEpochFileCacheTest {
 
         cache.assign(2, 10);
 
-        assertEquals(6, cache.epochEntries().get(0).startOffset());
+        assertEquals(List.of(new EpochEntry(2, 6)), cache.epochEntries());
     }
 
     @Test
@@ -245,6 +233,12 @@ public class LeaderEpochFileCacheTest {
     public void shouldEnforceMonotonicallyIncreasingEpochs() {
         cache.assign(1, 5);
         cache.assign(2, 6);
+
+        // When we update an epoch in the past with a different offset, the log has already reached
+        // an inconsistent state. Our options are either to raise an error, ignore the new append,
+        // or truncate the cached epochs to the point of conflict. We take this latter approach in
+        // order to guarantee that epochs and offsets in the cache increase monotonically, which makes
+        // the search logic simpler to reason about.
         cache.assign(1, 7);
 
         long logEndOffset = 8;
