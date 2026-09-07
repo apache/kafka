@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -267,7 +268,7 @@ public class ProducerFailureHandlingTest {
 
         // verify the internal topic was not auto-created
         try (Admin admin = clusterInstance.admin()) {
-            assertFalse(admin.listTopics().names().get().contains(Topic.GROUP_METADATA_TOPIC_NAME));
+            assertFalse(admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get().contains(Topic.GROUP_METADATA_TOPIC_NAME));
         }
     }
 
@@ -333,13 +334,9 @@ public class ProducerFailureHandlingTest {
     }
 
     private void createInternalTopic(ClusterInstance clusterInstance) throws Exception {
-        try (Admin admin = clusterInstance.admin()) {
-            Map<String, String> topicConfig = clusterInstance.brokers().get(0)
-                    .groupCoordinator()
-                    .groupMetadataTopicConfigs();
-            admin.createTopics(List.of(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1).configs(topicConfig)));
-            clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
-        }
+        clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1, clusterInstance.brokers().get(0)
+                .groupCoordinator()
+                .groupMetadataTopicConfigs());
     }
 
     private void assertSendToInternalTopicFails(ClusterInstance clusterInstance, Class<? extends Throwable> expectedCause) {
