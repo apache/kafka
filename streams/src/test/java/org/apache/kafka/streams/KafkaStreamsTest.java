@@ -810,13 +810,10 @@ public class KafkaStreamsTest {
     @Test
     @Timeout(60)
     public void shouldNotBlockOtherThreadChangesWhileRemovalWaitsForShutdown() throws Exception {
-        // `removeStreamThread` used to wait for the removed thread to reach DEAD while holding
-        // `changeThreadCount`. A thread that hit an uncaught exception and was being replaced
-        // acquired the same lock in `replaceStreamThread -> addStreamThread`, so it never
-        // finished shutting down and the removal waited for it forever. Any other thread-count
-        // change must therefore stay possible while a removal is waiting; a second removal is
-        // used here because it takes the same lock and additionally shows that it picks a
-        // different thread rather than the one already shutting down.
+        // A removal waits for the removed thread to reach DEAD without holding `changeThreadCount`,
+        // so other thread-count changes can proceed in the meantime. A second removal is used as the
+        // concurrent operation: it contends for the same lock, and must also pick a different thread
+        // rather than the one that is already shutting down.
         prepareStreams();
         final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
