@@ -130,7 +130,6 @@ versions += [
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
   spotbugs: "4.9.8",
-  testcontainers: "2.0.5",
   testcontainersKeycloak: "4.3.1",
   mockOAuth2Server: "2.3.0",
   zinc: "1.12.1",
