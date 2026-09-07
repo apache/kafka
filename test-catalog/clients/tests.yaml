@@ -5452,10 +5452,12 @@ org.apache.kafka.common.security.ssl.CommonNameLoggingSslEngineFactoryTest:
 - testPemKeyStoreConfigWithKeyPassword
 - testPemKeyStoreFileNoKeyPassword
 - testPemKeyStoreFileWithKeyPassword
+- testPemKeyStoreWithUnparseablePrivateKey
 - testPemTrustStoreConfigWithMultipleCerts
 - testPemTrustStoreConfigWithOneCert
 - testPemTrustStoreFile
 - testTrailingNewLines
+- testUnavailableKeyFactoryAlgorithmDoesNotThrow
 org.apache.kafka.common.security.ssl.CommonNameLoggingTrustManagerFactoryWrapperTest:
 - testCalcDigestForCertificateChain
 - testCommonNameLoggingTrustManagerFactoryWrapper
@@ -5475,10 +5477,12 @@ org.apache.kafka.common.security.ssl.DefaultSslEngineFactoryTest:
 - testPemKeyStoreConfigWithKeyPassword
 - testPemKeyStoreFileNoKeyPassword
 - testPemKeyStoreFileWithKeyPassword
+- testPemKeyStoreWithUnparseablePrivateKey
 - testPemTrustStoreConfigWithMultipleCerts
 - testPemTrustStoreConfigWithOneCert
 - testPemTrustStoreFile
 - testTrailingNewLines
+- testUnavailableKeyFactoryAlgorithmDoesNotThrow
 org.apache.kafka.common.security.ssl.SslPrincipalMapperTest:
 - testCommaWithWhitespace
 - testInvalidRules
@@ -5498,6 +5502,7 @@ org.apache.kafka.common.security.ssl.Tls12SslFactoryTest:
 - testPemCertificateEntriesValidation
 - testPemKeystoreVerifiableUsingTruststore
 - testPemReconfiguration
+- testPemReconfigurationWithInvalidKeyPreservesExistingFactory
 - testReconfiguration
 - testReconfigurationWithoutKeystore
 - testReconfigurationWithoutTruststore
@@ -5523,6 +5528,7 @@ org.apache.kafka.common.security.ssl.Tls13SslFactoryTest:
 - testPemCertificateEntriesValidation
 - testPemKeystoreVerifiableUsingTruststore
 - testPemReconfiguration
+- testPemReconfigurationWithInvalidKeyPreservesExistingFactory
 - testReconfiguration
 - testReconfigurationWithoutKeystore
 - testReconfigurationWithoutTruststore
