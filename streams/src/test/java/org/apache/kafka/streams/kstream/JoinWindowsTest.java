@@ -27,7 +27,6 @@ import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class JoinWindowsTest {
 
@@ -82,23 +81,13 @@ public class JoinWindowsTest {
     @Test
     public void endTimeShouldNotBeBeforeStart() {
         final JoinWindows windowSpec = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(ANY_SIZE));
-        try {
-            windowSpec.after(ofMillis(-ANY_SIZE - 1));
-            fail("window end time should not be before window start time");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> windowSpec.after(ofMillis(-ANY_SIZE - 1)));
     }
 
     @Test
     public void startTimeShouldNotBeAfterEnd() {
         final JoinWindows windowSpec = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(ANY_SIZE));
-        try {
-            windowSpec.before(ofMillis(-ANY_SIZE - 1));
-            fail("window start time should not be after window end time");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> windowSpec.before(ofMillis(-ANY_SIZE - 1)));
     }
 
     @SuppressWarnings("deprecation")
@@ -113,12 +102,7 @@ public class JoinWindowsTest {
     public void gracePeriodShouldEnforceBoundaries() {
         JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3L), ofMillis(0L));
 
-        try {
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3L), ofMillis(-1L));
-            fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3L), ofMillis(-1L)));
     }
 
     @SuppressWarnings("deprecation")

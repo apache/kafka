@@ -28,7 +28,6 @@ import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class TimeWindowsTest {
 
@@ -60,46 +59,26 @@ public class TimeWindowsTest {
     @Test
     public void advanceIntervalMustNotBeZero() {
         final TimeWindows windowSpec = TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE));
-        try {
-            windowSpec.advanceBy(ofMillis(0));
-            fail("should not accept zero advance parameter");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> windowSpec.advanceBy(ofMillis(0)));
     }
 
     @Test
     public void advanceIntervalMustNotBeNegative() {
         final TimeWindows windowSpec = TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE));
-        try {
-            windowSpec.advanceBy(ofMillis(-1));
-            fail("should not accept negative advance parameter");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> windowSpec.advanceBy(ofMillis(-1)));
     }
 
     @Test
     public void advanceIntervalMustNotBeLargerThanWindowSize() {
         final TimeWindows windowSpec = TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE));
-        try {
-            windowSpec.advanceBy(ofMillis(ANY_SIZE + 1));
-            fail("should not accept advance greater than window size");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> windowSpec.advanceBy(ofMillis(ANY_SIZE + 1)));
     }
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
         TimeWindows.ofSizeAndGrace(ofMillis(3L), ofMillis(0L));
 
-        try {
-            TimeWindows.ofSizeAndGrace(ofMillis(3L), ofMillis(-1L));
-            fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> TimeWindows.ofSizeAndGrace(ofMillis(3L), ofMillis(-1L)));
     }
 
     @Test

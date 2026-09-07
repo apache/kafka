@@ -23,7 +23,6 @@ import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class SessionWindowsTest {
 
@@ -43,12 +42,7 @@ public class SessionWindowsTest {
     public void gracePeriodShouldEnforceBoundaries() {
         SessionWindows.ofInactivityGapAndGrace(ofMillis(3L), ofMillis(0));
 
-        try {
-            SessionWindows.ofInactivityGapAndGrace(ofMillis(3L), ofMillis(-1L));
-            fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapAndGrace(ofMillis(3L), ofMillis(-1L)));
     }
 
     @Test
