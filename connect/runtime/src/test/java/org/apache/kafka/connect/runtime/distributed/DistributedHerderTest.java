@@ -107,6 +107,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -975,6 +976,66 @@ public class DistributedHerderTest {
         ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
         verify(putConnectorCallback).onCompletion(error.capture(), isNull());
         assertInstanceOf(ConnectException.class, error.getValue());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsPreconditionRecheckFails() {
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, List.of(), List.of(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        when(statusBackingStore.connectors()).thenReturn(Set.of());
+        expectMemberPoll();
+
+        // Leadership is held when the request starts but is lost after the offsets are written (below), so the
+        // precondition re-check before the config write fails
+        AtomicBoolean leader = new AtomicBoolean(true);
+        doAnswer(invocation -> leader.get()).when(herder).isLeader();
+
+        herder.tick();
+
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+                Map.of(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue"));
+
+        ArgumentCaptor<Callback<Message>> offsetsCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            offsetsCallback.getValue().onCompletion(null, new Message("The offsets for this connector have been set successfully"));
+            leader.set(false);
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), eq(initialOffsets), eq(true), offsetsCallback.capture());
+
+        // The offsets written in the previous step are wiped once the re-check fails
+        ArgumentCaptor<Callback<Message>> wipeCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            wipeCallback.getValue().onCompletion(null, new Message("The offsets for this connector have been reset successfully"));
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), isNull(), wipeCallback.capture());
+
+        expectMemberEnsureActive();
+        expectRecordStages(putConnectorCallback);
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, null, initialOffsets, false, putConnectorCallback);
+        herder.tick();
+        herder.tick();
+        herder.tick();
+
+        // The offsets were written, the config was never written because the re-check failed, and the offsets
+        // were wiped back out
+        InOrder inOrder = inOrder(worker, configBackingStore);
+        inOrder.verify(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), eq(initialOffsets), eq(true), any());
+        inOrder.verify(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), isNull(), any());
+        verify(configBackingStore, never()).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), any());
+
+        // The caller sees the precondition failure that stopped the create
+        ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
+        verify(putConnectorCallback).onCompletion(error.capture(), isNull());
+        assertInstanceOf(NotLeaderException.class, error.getValue());
     }
 
     @Test

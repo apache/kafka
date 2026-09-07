@@ -1215,14 +1215,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 }
                 addRequest(
                     () -> {
-                        if (!putConnectorConfigChecks(connName, allowReplace, callback)) {
+                        // The offsets are already durable, so wipe them back out if the create can't be completed,
+                        // whether because the precondition re-check fails here or the config write below throws.
+                        Callback<Created<ConnectorInfo>> wipeOnFailure = (error, ignored) ->
+                            wipeInitialOffsetsAfterFailedCreate(connName, config, error, callback);
+                        if (!putConnectorConfigChecks(connName, allowReplace, wipeOnFailure)) {
                             return null;
                         }
                         try {
                             writeConnectorConfigAndComplete(connName, config, targetState, allowReplace, message.message(), callback);
                         } catch (Throwable t) {
-                            // The offsets are durable but the connector was not created, so wipe them back
-                            // out to avoid leaving offsets behind for a connector that doesn't exist
                             wipeInitialOffsetsAfterFailedCreate(connName, config, t, callback);
                         }
                         return null;

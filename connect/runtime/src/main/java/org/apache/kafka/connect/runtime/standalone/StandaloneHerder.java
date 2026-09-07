@@ -49,6 +49,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.FutureCallback;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -257,17 +259,19 @@ public final class StandaloneHerder extends AbstractHerder {
 
             // Validate before anything destructive happens, so an invalid request can't wipe the connector's offsets
             validateInitialOffsets(connName, initialOffsets);
-            setInitialConnectorOffsets(connName, config, initialOffsets, (error, message) -> {
-                if (error != null) {
-                    callback.onCompletion(error, null);
-                    return;
-                }
-                // The offsets callback fires on the worker's executor, so hop back onto the herder's single-threaded
-                // executor before writing the config; writeConfigAndStartConnector must hold this herder's monitor.
-                requestExecutorService.submit(
-                    () -> writeConfigAndStartConnector(connName, config, targetState, created, message.message(), callback)
-                );
-            });
+            // Block until the offsets are written so the whole creation completes under this herder's monitor;
+            // otherwise a concurrent request for the same connector could interleave between the offsets write
+            // and the config write.
+            FutureCallback<Message> offsetsCallback = new FutureCallback<>();
+            setInitialConnectorOffsets(connName, config, initialOffsets, offsetsCallback);
+            Message offsetsMessage;
+            try {
+                offsetsMessage = offsetsCallback.get();
+            } catch (ExecutionException e) {
+                callback.onCompletion(e.getCause(), null);
+                return;
+            }
+            writeConfigAndStartConnector(connName, config, targetState, created, offsetsMessage.message(), callback);
         } catch (Throwable t) {
             callback.onCompletion(t, null);
         }
