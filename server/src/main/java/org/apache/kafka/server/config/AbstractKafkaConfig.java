@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -743,11 +744,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getLong(MetadataLogConfig.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG);
     }
 
-    public Optional<Long> metadataMaxIdleIntervalNs() {
+    public OptionalLong metadataMaxIdleIntervalNs() {
         long value = TimeUnit.NANOSECONDS.convert(
                 getInt(MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG).longValue(),
                 TimeUnit.MILLISECONDS);
-        return value > 0 ? Optional.of(value) : Optional.empty();
+        return value > 0 ? OptionalLong.of(value) : OptionalLong.empty();
     }
 
     // ********* Rack Configuration **********
