@@ -31,11 +31,14 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
@@ -54,6 +57,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -293,6 +297,60 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
+    public void shouldWipeGlobalStateDirectoryOnTaskCorruptedExceptionDuringStartup() throws Exception {
+        final InternalTopologyBuilder corruptedBuilder = new InternalTopologyBuilder();
+
+        final ProcessorSupplier<Object, Object, Void, Void> processorSupplier = () ->
+            new ContextualProcessor<>() {
+                @Override
+                public void process(final Record<Object, Object> record) {
+                }
+            };
+
+        corruptedBuilder.addGlobalStore(
+            "sourceName",
+            null,
+            null,
+            null,
+            GLOBAL_STORE_TOPIC_NAME,
+            "processorName",
+            new StoreDelegatingProcessorSupplier<>(
+                processorSupplier,
+                Set.of(new CorruptedStoreBuilder())
+            ),
+            false
+        );
+
+        globalStreamThread = new GlobalStreamThread(
+            corruptedBuilder.rewriteTopology(config).buildGlobalStateTopology(),
+            config,
+            mockConsumer,
+            new StateDirectory(config, time, true, false),
+            0,
+            -1L,
+            new StreamsMetricsImpl(new Metrics(), "test-client", time),
+            time,
+            "clientId",
+            stateRestoreListener,
+            e -> { }
+        );
+
+        final File globalStateDir =
+            new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global");
+
+        initializeConsumer();
+
+        assertThrows(
+            StreamsException.class,
+            () -> globalStreamThread.start(),
+            "Should have thrown StreamsException if start up failed."
+        );
+        globalStreamThread.join();
+
+        assertFalse(globalStateDir.exists());
+    }
+
+    @Test
     public void shouldDieOnInvalidOffsetExceptionWhileRunning() throws Exception {
         final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
         initializeConsumer();
@@ -491,6 +549,74 @@ public class GlobalStreamThreadTest {
         try {
             globalStreamThread.start();
         } catch (final IllegalStateException ignored) {
+        }
+    }
+
+    private static class CorruptedStore implements StateStore {
+        @Override
+        public String name() {
+            return GLOBAL_STORE_NAME;
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            throw new TaskCorruptedException(Set.of(new TaskId(0, 0)));
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public boolean persistent() {
+            return true;
+        }
+
+        @Override
+        public boolean isOpen() {
+            return false;
+        }
+    }
+
+    private static class CorruptedStoreBuilder implements StoreBuilder<StateStore> {
+        @Override
+        public StoreBuilder<StateStore> withCachingEnabled() {
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<StateStore> withCachingDisabled() {
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<StateStore> withLoggingEnabled(final Map<String, String> config) {
+            return this;
+        }
+
+        @Override
+        public StoreBuilder<StateStore> withLoggingDisabled() {
+            return this;
+        }
+
+        @Override
+        public StateStore build() {
+            return new CorruptedStore();
+        }
+
+        @Override
+        public Map<String, String> logConfig() {
+            return Map.of();
+        }
+
+        @Override
+        public boolean loggingEnabled() {
+            return false;
+        }
+
+        @Override
+        public String name() {
+            return GLOBAL_STORE_NAME;
         }
     }
 }

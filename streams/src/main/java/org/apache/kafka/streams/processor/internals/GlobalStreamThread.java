@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -451,6 +452,18 @@ public class GlobalStreamThread extends Thread {
                 throw new StreamsException(
                     "Bootstrapping global state failed. You can restart KafkaStreams to recover from this error.",
                     recoverableException
+                );
+            } catch (final TaskCorruptedException corruptedException) {
+                log.error(
+                    "Bootstrapping global state failed due to a corrupted state store. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
+                    corruptedException
+                );
+
+                closeStateConsumer(stateConsumer, true);
+
+                throw new StreamsException(
+                    "Bootstrapping global state failed. You can restart KafkaStreams to recover from this error.",
+                    corruptedException
                 );
             }
 
