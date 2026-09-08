@@ -262,6 +262,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final String SEND_OFFSETS_TIMEOUT_MSG =
             "SendOffsetsToTransaction timed out - did not reach the coordinator or " +
                     "receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms";
+    private static final String SEND_SHARE_ACKS_TIMEOUT_MSG =
+            "SendShareAcknowledgementsToTransaction timed out - did not receive the TxnShareAcknowledge response within max.block.ms";
     private static final String COMMIT_TXN_TIMEOUT_MSG =
             "CommitTransaction timed out - did not complete EndTxn with the transaction coordinator within max.block.ms";
     private static final String ABORT_TXN_TIMEOUT_MSG =
@@ -797,6 +799,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             ShareAcknowledgements acknowledgements,
             ShareGroupMetadata groupMetadata) throws ProducerFencedException {
         Objects.requireNonNull(acknowledgements, "acknowledgements cannot be null");
+        Objects.requireNonNull(groupMetadata, "groupMetadata cannot be null");
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         throwIfInPreparedState();
@@ -805,7 +808,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             TransactionalRequestResult result =
                 transactionManager.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
             sender.wakeup();
-            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_SHARE_ACKS_TIMEOUT_MSG);
         }
     }
 
@@ -958,7 +961,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Completes a prepared transaction by comparing the provided prepared transaction state with the
      * current prepared state on the producer.
-     * If they match, the transaction is committed; otherwise, it is aborted.
+     * If they match, the transaction is committed; otherwise, completion fails without committing or aborting.
      * 
      * @param preparedTxnState              The prepared transaction state to compare against the current state
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
@@ -970,6 +973,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException {
+        Objects.requireNonNull(preparedTxnState, "preparedTxnState cannot be null");
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         
@@ -981,11 +985,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ProducerIdAndEpoch currentTransactionOwner = transactionManager.preparedTransactionState();
         PreparedTxnState currentPreparedState = new PreparedTxnState(currentTransactionOwner.producerId, currentTransactionOwner.epoch);
         
-        // Compare the prepared transaction state token and commit or abort accordingly
         if (currentPreparedState.equals(preparedTxnState)) {
             commitTransaction();
         } else {
-            abortTransaction();
+            throw new InvalidTxnStateException("Cannot complete transaction because the prepared transaction state " +
+                preparedTxnState + " does not match the current prepared transaction state " + currentPreparedState);
         }
     }
 
