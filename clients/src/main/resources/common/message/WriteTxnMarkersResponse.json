@@ -24,6 +24,7 @@
   // Version 2 matches WriteTxnMarkersRequest version 2 (KIP-1228).
   "flexibleVersions": "1+",
   "headerVersions": {
+    "0": "0",
     "1+": "1"
   },
   "fields": [

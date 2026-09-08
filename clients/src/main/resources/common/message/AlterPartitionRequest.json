@@ -27,7 +27,7 @@
   "validVersions": "2-3",
   "flexibleVersions": "0+",
   "headerVersions": {
-    "2+": "2"
+    "0+": "2"
   },
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",

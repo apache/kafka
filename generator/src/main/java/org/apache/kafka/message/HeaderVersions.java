@@ -26,9 +26,10 @@ import java.util.Map;
 /**
  * The mapping from request/response versions to header versions for an RPC.
  *
- * The entries form an ascending, non-overlapping, contiguous set of version ranges that
- * covers the RPC's valid versions and ends with an open-ended range, e.g.
- * {@code { "0-1": "1", "2+": "2" }}.
+ * The entries form an ascending, non-overlapping, contiguous set of version ranges that starts at
+ * version 0 and ends with an open-ended range, e.g. {@code { "0-1": "1", "2+": "2" }}. Like
+ * {@code flexibleVersions}, the map covers every version the schema describes, including versions
+ * that are no longer valid.
  */
 public final class HeaderVersions {
     public static final class Entry {
@@ -115,9 +116,10 @@ public final class HeaderVersions {
     }
 
     private static void validate(String messageName, List<Entry> entries, Versions validVersions) {
-        if (entries.get(0).range.lowest() != validVersions.lowest()) {
+        if (entries.get(0).range.lowest() != 0) {
             throw new RuntimeException("Message " + messageName + " has headerVersions starting at version " +
-                entries.get(0).range.lowest() + ", but the lowest valid version is " + validVersions.lowest() + ".");
+                entries.get(0).range.lowest() + ", but the first range must start at version 0 so that the map " +
+                "covers every version the schema describes, including versions that are no longer valid.");
         }
         for (int i = 1; i < entries.size(); i++) {
             int expected = entries.get(i - 1).range.highest() + 1;

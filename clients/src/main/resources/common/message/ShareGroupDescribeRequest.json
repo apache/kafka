@@ -24,7 +24,7 @@
   "validVersions": "1",
   "flexibleVersions": "0+",
   "headerVersions": {
-    "1+": "2"
+    "0+": "2"
   },
   "fields": [
     { "name": "GroupIds", "type": "[]string", "versions": "0+", "entityType": "groupId",

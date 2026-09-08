@@ -25,6 +25,7 @@
   "validVersions": "1-2",
   "flexibleVersions": "1+",
   "headerVersions": {
+    "0": "1",
     "1+": "2"
   },
   "fields": [

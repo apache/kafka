@@ -83,8 +83,7 @@ public class ApiMessageTypeTest {
 
     @Test
     public void testHeaderVersion() {
-        // Produce validVersions start at 3, but versions below the lowest valid version fall through
-        // to the first range's header version (v1 request / v0 response) rather than throwing.
+        // Produce versions 0-2 were removed in Apache Kafka 4.0, but the headerVersions map still covers them.
         assertEquals((short) 1, ApiMessageType.PRODUCE.requestHeaderVersion((short) 0));
         assertEquals((short) 0, ApiMessageType.PRODUCE.responseHeaderVersion((short) 0));
 
@@ -116,6 +115,12 @@ public class ApiMessageTypeTest {
         // Envelope is flexible from v0: header v2 request / v1 response everywhere.
         assertEquals((short) 2, ApiMessageType.ENVELOPE.requestHeaderVersion((short) 0));
         assertEquals((short) 1, ApiMessageType.ENVELOPE.responseHeaderVersion((short) 0));
+
+        // WriteTxnMarkers v0 was removed in Apache Kafka 4.0 and was its only non-flexible version.
+        assertEquals((short) 1, ApiMessageType.WRITE_TXN_MARKERS.requestHeaderVersion((short) 0));
+        assertEquals((short) 0, ApiMessageType.WRITE_TXN_MARKERS.responseHeaderVersion((short) 0));
+        assertEquals((short) 2, ApiMessageType.WRITE_TXN_MARKERS.requestHeaderVersion((short) 1));
+        assertEquals((short) 1, ApiMessageType.WRITE_TXN_MARKERS.responseHeaderVersion((short) 1));
     }
 
     /**

@@ -32,7 +32,7 @@
   "validVersions": "2-4",
   "flexibleVersions": "4+",
   "headerVersions": {
-    "2-3": "1",
+    "0-3": "1",
     "4+": "2"
   },
   "fields": [

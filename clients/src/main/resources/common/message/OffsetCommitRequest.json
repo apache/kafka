@@ -41,7 +41,7 @@
   "validVersions": "2-10",
   "flexibleVersions": "8+",
   "headerVersions": {
-    "2-7": "1",
+    "0-7": "1",
     "8+": "2"
   },
   "fields": [

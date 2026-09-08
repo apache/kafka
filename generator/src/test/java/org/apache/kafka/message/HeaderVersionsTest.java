@@ -92,12 +92,18 @@ public class HeaderVersionsTest {
     }
 
     @Test
-    public void testNonZeroStart() throws Exception {
-        MessageSpec spec = parse(requestSpec("3-9", "9+", "{'3-8': '1', '9+': '2'}"));
+    public void testTruncatedValidVersionsStillStartAtZero() throws Exception {
+        // Versions 0-2 are no longer valid, but the map still describes them, like flexibleVersions does.
+        MessageSpec spec = parse(requestSpec("3-9", "9+", "{'0-8': '1', '9+': '2'}"));
         List<HeaderVersions.Entry> entries = spec.headerVersions().orElseThrow().entries();
         assertEquals(2, entries.size());
-        assertEquals("3-8", entries.get(0).range().toString());
+        assertEquals("0-8", entries.get(0).range().toString());
         assertEquals("9+", entries.get(1).range().toString());
+
+        spec = parse(requestSpec("2-3", "0+", "{'0+': '2'}"));
+        entries = spec.headerVersions().orElseThrow().entries();
+        assertEquals(1, entries.size());
+        assertEquals("0+", entries.get(0).range().toString());
     }
 
     @Test
@@ -173,8 +179,9 @@ public class HeaderVersionsTest {
     }
 
     @Test
-    public void testDoesNotStartAtLowestValidVersion() {
-        assertMessageContains("lowest valid version", () -> parse(requestSpec("0-9", "2+", "{'2+': '2'}")));
+    public void testDoesNotStartAtVersionZero() {
+        assertMessageContains("must start at version 0", () -> parse(requestSpec("0-9", "2+", "{'2+': '2'}")));
+        assertMessageContains("must start at version 0", () -> parse(requestSpec("2-3", "0+", "{'2+': '2'}")));
     }
 
     @Test

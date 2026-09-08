@@ -39,7 +39,7 @@
   "validVersions": "2-10",
   "flexibleVersions": "8+",
   "headerVersions": {
-    "2-7": "0",
+    "0-7": "0",
     "8+": "1"
   },
   // Supported errors:

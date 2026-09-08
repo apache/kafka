@@ -27,7 +27,7 @@
   "validVersions": "2-3",
   "flexibleVersions": "0+",
   "headerVersions": {
-    "2+": "1"
+    "0+": "1"
   },
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
