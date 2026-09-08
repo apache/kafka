@@ -221,7 +221,7 @@ class KafkaConfigTest {
     propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
     setListenerProps(propertiesFile)
     val config = KafkaConfig.fromProps(propertiesFile)
-    assertTrue(config.isKRaftCombinedMode)
+    assertTrue(config.isKRaftCombinedMode(config.processRoles))
   }
 
   @Test
