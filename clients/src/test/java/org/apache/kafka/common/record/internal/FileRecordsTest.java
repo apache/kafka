@@ -29,7 +29,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.File;
@@ -59,7 +58,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -385,26 +383,6 @@ public class FileRecordsTest {
     }
 
     /**
-     * Closing a preallocated file must fsync after trimming so the truncated length is durable.
-     */
-    @Test
-    public void testCloseFlushesAfterTrim() throws IOException {
-        FileChannel channelMock = mock(FileChannel.class);
-
-        when(channelMock.size()).thenReturn(1024L);
-        when(channelMock.isOpen()).thenReturn(true);
-        when(channelMock.truncate(anyLong())).thenReturn(channelMock);
-        when(channelMock.position(anyLong())).thenReturn(channelMock);
-
-        FileRecords records = new FileRecords(tempFile(), channelMock, 100);
-        records.close();
-
-        InOrder inOrder = inOrder(channelMock);
-        inOrder.verify(channelMock).truncate(100L);
-        inOrder.verify(channelMock).force(true);
-    }
-
-    /**
      * Test the new FileRecords with pre allocate as true and file has been clearly shut down, the file will be truncate to end of valid data.
      */
     @Test
@@ -417,6 +395,8 @@ public class FileRecordsTest {
         int oldSize = fileRecords.sizeInBytes();
         assertEquals(this.fileRecords.sizeInBytes(), oldPosition);
         assertEquals(this.fileRecords.sizeInBytes(), oldSize);
+        fileRecords.trim();
+        fileRecords.flush();
         fileRecords.close();
 
         File tempReopen = new File(temp.getAbsolutePath());

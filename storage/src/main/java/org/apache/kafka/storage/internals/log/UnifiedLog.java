@@ -1016,7 +1016,7 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     /**
-     * Close file handlers used by this log but don't write to disk. This is called if the log directory is offline
+     * Close file handlers used by this log, swallowing any exceptions. This is called if the log directory is offline
      */
     public void closeHandlers() {
         logger.debug("Closing handlers");

@@ -312,13 +312,13 @@ public class DumpLogSegments {
             }
         } finally {
             if (fileRecords != null) {
-                fileRecords.closeHandlers();
+                fileRecords.close();
             }
             if (index != null) {
-                index.closeHandler();
+                index.close();
             }
             if (timeIndex != null) {
-                timeIndex.closeHandler();
+                timeIndex.close();
             }
         }
     }
@@ -394,7 +394,7 @@ public class DumpLogSegments {
             printTrailingBytes(fileRecords, validBytes, maxBytes, file);
         } finally {
             if (fileRecords != null) {
-                fileRecords.closeHandlers();
+                fileRecords.close();
             }
         }
     }

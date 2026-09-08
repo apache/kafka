@@ -628,16 +628,12 @@ public class LogSegment implements Closeable {
      */
     public void flush() throws IOException {
         try {
-            LOG_FLUSH_TIMER.time(new Callable<Void>() {
-                // lambdas cannot declare a more specific exception type, so we use an anonymous inner class
-                @Override
-                public Void call() throws IOException {
-                    log.flush();
-                    offsetIndex().flush();
-                    timeIndex().flush();
-                    txnIndex.flush();
-                    return null;
-                }
+            LOG_FLUSH_TIMER.time((Callable<Void>) () -> {
+                log.flush();
+                offsetIndex().flush();
+                timeIndex().flush();
+                txnIndex.flush();
+                return null;
             });
         } catch (Exception e) {
             if (e instanceof IOException)
@@ -770,13 +766,13 @@ public class LogSegment implements Closeable {
     }
 
     /**
-     * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
+     * Close file handlers used by the log segment, swallowing any exceptions. This is used when the disk may have failed
      */
     void closeHandlers() {
-        Utils.swallow(LOGGER, Level.WARN, "offsetIndex", lazyOffsetIndex::closeHandler);
-        Utils.swallow(LOGGER, Level.WARN, "timeIndex", lazyTimeIndex::closeHandler);
-        Utils.swallow(LOGGER, Level.WARN, "log", log::closeHandlers);
-        Utils.closeQuietly(txnIndex, "txnIndex", LOGGER);
+        Utils.swallow(LOGGER, Level.WARN, "offsetIndex", lazyOffsetIndex::close);
+        Utils.swallow(LOGGER, Level.WARN, "timeIndex", lazyTimeIndex::close);
+        Utils.swallow(LOGGER, Level.WARN, "log", log::close);
+        Utils.swallow(LOGGER, Level.WARN, "txnIndex", txnIndex::close);
     }
 
     /**

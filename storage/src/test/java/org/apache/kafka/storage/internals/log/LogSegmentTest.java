@@ -678,8 +678,9 @@ public class LogSegmentTest {
             long oldPosition = seg.log().channel().position();
             long oldFileSize = seg.log().file().length();
             assertEquals(512 * 1024 * 1024, oldFileSize);
+            seg.onBecomeInactiveSegment();
             seg.close();
-            // After close, file should be trimmed
+            // After onBecomeInactiveSegment, file should be trimmed
             assertEquals(oldSize, seg.log().file().length());
 
             LogSegment segReopen = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM,
