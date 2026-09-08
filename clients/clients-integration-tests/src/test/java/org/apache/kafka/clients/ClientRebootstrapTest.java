@@ -41,6 +41,7 @@ import java.util.concurrent.TimeoutException;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientRebootstrapTest {
     private static final String TOPIC = "topic";
@@ -65,7 +66,8 @@ public class ClientRebootstrapTest {
             admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
 
             // Only the broker 1 is available for the admin client during the bootstrap.
-            assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
+            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
+            assertTrue(topics.contains(TOPIC));
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
@@ -73,7 +75,8 @@ public class ClientRebootstrapTest {
             // The broker 1, originally cached during the bootstrap, is offline.
             // However, the broker 0 from the bootstrap list is online.
             // Should be able to list topics again.
-            assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
+            topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
+            assertTrue(topics.contains(TOPIC));
         }
     }
 
@@ -91,19 +94,22 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         var admin = clusterInstance.admin(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
-        admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
+        try {
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
+            // Only the broker 1 is available for the admin client during the bootstrap.
+            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS));
+            assertTrue(topics.contains(TOPIC));
 
-        // Only the broker 1 is available for the admin client during the bootstrap.
-        assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(TOPIC));
+            clusterInstance.shutdownBroker(broker1);
+            clusterInstance.startBroker(broker0);
 
-        clusterInstance.shutdownBroker(broker1);
-        clusterInstance.startBroker(broker0);
-
-        // The broker 1, originally cached during the bootstrap, is offline.
-        // As a result, the admin client will throw a TimeoutException when trying to get list of the topics.
-        assertThrows(TimeoutException.class, () -> admin.listTopics().names().get(5, TimeUnit.SECONDS));
-        // Since the brokers cached during the bootstrap are offline, the admin client needs to wait the default timeout for other threads.
-        admin.close(Duration.ZERO);
+            // The broker 1, originally cached during the bootstrap, is offline.
+            // As a result, the admin client will throw a TimeoutException when trying to get list of the topics.
+            assertThrows(TimeoutException.class, () -> admin.listTopics().names().get(5, TimeUnit.SECONDS));
+        } finally {
+            // Since the brokers cached during the bootstrap are offline, the admin client needs to wait the default timeout for other threads.
+            admin.close(Duration.ZERO);
+        }
     }
 
     @ClusterTest(

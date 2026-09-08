@@ -530,9 +530,19 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (pollTimer.isExpired() ||
-            membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
-
+        if (pollTimer.isExpired()) {
+            return 0L;
+        }
+        // A heartbeat is only sent when the coordinator is known; poll() returns EMPTY otherwise
+        // (see the guard at the top of poll()). If the coordinator is unavailable (for example,
+        // while bootstrap DNS resolution is still in progress), the
+        // shouldNotWaitForHeartbeatInterval() check would return 0 whenever the member wants to
+        // (re)join. Because no heartbeat can be sent until the coordinator is discovered, the
+        // condition remains true and both the application and network threads end up busy-spinning.
+        if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager.shouldSkipHeartbeat()) {
+            return heartbeatRequestState.heartbeatIntervalMs();
+        }
+        if (membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
@@ -879,8 +889,18 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpoint.activePartitions());
             List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpoint.standbyPartitions());
             StreamsGroupHeartbeatResponseData.Endpoint userEndpoint = endpoint.userEndpoint();
-            StreamsRebalanceData.EndpointPartitions endpointPartitions = new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions);
-            partitionsByHost.put(new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port()), endpointPartitions);
+            StreamsRebalanceData.HostInfo hostInfo = new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port());
+            partitionsByHost.merge(
+                hostInfo,
+                new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions),
+                (existing, newPartitions) -> {
+                    List<TopicPartition> mergedActive = new ArrayList<>(existing.activePartitions());
+                    mergedActive.addAll(newPartitions.activePartitions());
+                    List<TopicPartition> mergedStandby = new ArrayList<>(existing.standbyPartitions());
+                    mergedStandby.addAll(newPartitions.standbyPartitions());
+                    return new StreamsRebalanceData.EndpointPartitions(mergedActive, mergedStandby);
+                }
+            );
         });
         return partitionsByHost;
     }
@@ -889,7 +909,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         return topicPartitions.stream()
                 .flatMap(partition ->
                         partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
-                .collect(Collectors.toList());
+                // toUnmodifiableList rather than toList, so that List.copyOf in EndpointPartitions is a no-op
+                .collect(Collectors.toUnmodifiableList());
     }
 
 }

@@ -138,6 +138,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG);
     }
 
+    @SuppressWarnings("removal") // broker.id is deprecated (KIP-1232), but this method stays and will read node.id in 5.0
     public int brokerId() {
         return getInt(ServerConfigs.BROKER_ID_CONFIG);
     }
@@ -220,6 +221,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     /**
      * Copy a configuration map, populating some keys that we want to treat as synonyms.
      */
+    @SuppressWarnings("removal") // broker.id is deprecated (KIP-1232), but it still works as another name for node.id until 5.0
     public static Map<Object, Object> populateSynonyms(Map<?, ?> input) {
         Map<Object, Object> output = new HashMap<>(input);
         Object brokerId = output.get(ServerConfigs.BROKER_ID_CONFIG);

@@ -54,7 +54,7 @@ public class MetadataSnapshot {
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
     private final Map<String, Uuid> topicIds;
     private final Map<Uuid, String> topicNames;
-    private Cluster clusterInstance;
+    private final Cluster clusterInstance;
 
     public MetadataSnapshot(String clusterId,
                   Map<Integer, Node> nodes,
@@ -95,7 +95,7 @@ public class MetadataSnapshot {
         this.metadataByPartition = Collections.unmodifiableMap(tmpMetadataByPartition);
 
         if (clusterInstance == null) {
-            computeClusterView();
+            this.clusterInstance = computeClusterView();
         } else {
             this.clusterInstance = clusterInstance;
         }
@@ -118,11 +118,7 @@ public class MetadataSnapshot {
     }
 
     public Cluster cluster() {
-        if (clusterInstance == null) {
-            throw new IllegalStateException("Cached Cluster instance should not be null, but was.");
-        } else {
-            return clusterInstance;
-        }
+        return clusterInstance;
     }
 
     /**
@@ -222,12 +218,12 @@ public class MetadataSnapshot {
         return result;
     }
 
-    private void computeClusterView() {
+    private Cluster computeClusterView() {
         List<PartitionInfo> partitionInfos = metadataByPartition.values()
                 .stream()
                 .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
                 .collect(Collectors.toList());
-        this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
+        return new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
                 invalidTopics, internalTopics, controller, topicIds);
     }
 

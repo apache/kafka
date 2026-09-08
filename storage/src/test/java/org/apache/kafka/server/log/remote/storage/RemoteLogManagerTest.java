@@ -39,7 +39,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
@@ -385,7 +384,8 @@ public class RemoteLogManagerTest {
         assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
         assertEquals(securityProtocol, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
         assertEquals(clusterId, capture.getValue().get("cluster.id"));
-        assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
+        assertEquals(brokerId, capture.getValue().get("broker.id"));
+        assertEquals(brokerId, capture.getValue().get("node.id"));
     }
 
     @SuppressWarnings("unchecked")
@@ -423,7 +423,8 @@ public class RemoteLogManagerTest {
             // should be overridden as SSL
             assertEquals("SSL", capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
             assertEquals(clusterId, capture.getValue().get("cluster.id"));
-            assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
+            assertEquals(brokerId, capture.getValue().get("broker.id"));
+            assertEquals(brokerId, capture.getValue().get("node.id"));
         }
     }
 
@@ -433,10 +434,12 @@ public class RemoteLogManagerTest {
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
         verify(remoteStorageManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
+        assertEquals(brokerId, capture.getValue().get("node.id"));
         assertEquals(remoteLogStorageTestVal, capture.getValue().get(remoteLogStorageTestProp));
 
         verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
+        assertEquals(brokerId, capture.getValue().get("node.id"));
         assertEquals(logDir, capture.getValue().get("log.dir"));
 
         // verify the configs starting with "remote.log.metadata", "remote.log.metadata.common.client."

@@ -127,6 +127,17 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="RV_EXCEPTION_NOT_THROWN"/>
     </Match>
 
+    <Match>
+        <!-- False positive: ChunkedRecordAccumulator.append creates a ChunkedByteBufferOutputStream
+             and either transfers ownership to a new ProducerBatch (through the recordsBuilder
+             supplier passed to appendNewBatch) or releases it via bufferStream.deallocate() in the
+             finally block. Spotbugs only recognizes close() as the cleanup method, and doesn't
+             follow ownership through the supplier lambda — verified 2026-06-05 by removing this
+             suppression and observing the warning at the constructor site. -->
+        <Class name="org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulator"/>
+        <Bug pattern="OS_OPEN_STREAM"/>
+    </Match>
+
     <!-- false positive in Java 11, related to https://github.com/spotbugs/spotbugs/issues/756 but more complex -->
     <Match>
         <Class name="org.apache.kafka.common.compress.Lz4BlockOutputStream"/>

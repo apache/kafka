@@ -875,4 +875,32 @@ public class StandardAuthorizerTest {
             authorizer.authorize(aliceInBroadOnly, List.of(newAction(READ, TOPIC, "foo"))),
             "Client in only the broad ALLOW /8 should be allowed");
     }
+
+    @Test
+    public void testAuthorizeByResourceTypeWithCidrHost() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        StandardAclWithId cidrAcl = withId(new StandardAcl(
+            TOPIC, "test-topic", LITERAL, "User:bob",
+            "192.168.1.0/24", WRITE, ALLOW));
+        authorizer.addAcl(cidrAcl.id(), cidrAcl.acl());
+
+        // Client within the CIDR range should be allowed
+        AuthorizableRequestContext bobInRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+            .setClientAddress(InetAddress.getByName("192.168.1.50"))
+            .build();
+        assertEquals(ALLOWED,
+            authorizer.authorizeByResourceType(bobInRange, WRITE, TOPIC),
+            "Client within CIDR range should be allowed by authorizeByResourceType");
+
+        // Client outside the CIDR range should be denied
+        AuthorizableRequestContext bobOutOfRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+            .setClientAddress(InetAddress.getByName("10.0.0.1"))
+            .build();
+        assertEquals(DENIED,
+            authorizer.authorizeByResourceType(bobOutOfRange, WRITE, TOPIC),
+            "Client outside CIDR range should be denied by authorizeByResourceType");
+    }
 }

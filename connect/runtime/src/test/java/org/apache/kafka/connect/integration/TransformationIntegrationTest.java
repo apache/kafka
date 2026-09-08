@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Filter;
 import org.apache.kafka.connect.transforms.predicates.HasHeaderKey;
@@ -33,6 +34,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -146,12 +148,12 @@ public class TransformationIntegrationTest {
         assertConnectorRunning();
 
         // produce some messages into source topic partitions
-        for (int i = 0; i < numBarRecords; i++) {
-            connect.kafka().produce(barTopic, i % NUM_TOPIC_PARTITIONS, "key", "simple-message-value-" + i);
-        }
-        for (int i = 0; i < numFooRecords; i++) {
-            connect.kafka().produce(fooTopic, i % NUM_TOPIC_PARTITIONS, "key", "simple-message-value-" + i);
-        }
+        connect.kafka().produce(IntStream.range(0, numBarRecords)
+                .mapToObj(i -> new ProducerRecord<>(barTopic, i % NUM_TOPIC_PARTITIONS, "key".getBytes(), ("simple-message-value-" + i).getBytes()))
+                .toList());
+        connect.kafka().produce(IntStream.range(0, numFooRecords)
+                .mapToObj(i -> new ProducerRecord<>(fooTopic, i % NUM_TOPIC_PARTITIONS, "key".getBytes(), ("simple-message-value-" + i).getBytes()))
+                .toList());
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
         assertEquals(
@@ -235,9 +237,9 @@ public class TransformationIntegrationTest {
         assertConnectorRunning();
 
         // produce some messages into source topic partitions
-        for (int i = 0; i < numRecords; i++) {
-            connect.kafka().produce(topic, i % NUM_TOPIC_PARTITIONS, "key", i % 2 == 0 ? "simple-message-value-" + i : null);
-        }
+        connect.kafka().produce(IntStream.range(0, numRecords)
+                .mapToObj(i -> new ProducerRecord<>(topic, i % NUM_TOPIC_PARTITIONS, "key".getBytes(), i % 2 == 0 ? ("simple-message-value-" + i).getBytes() : null))
+                .toList());
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
         assertEquals(

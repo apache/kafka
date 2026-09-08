@@ -314,13 +314,13 @@ public class ConsumerPerformanceTest {
         AtomicLong joinTimeMs = new AtomicLong(0);
         AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
         ConsumerPerformance.ConsumerPerfRebListener listener = new ConsumerPerformance.ConsumerPerfRebListener(joinTimeMs, 0, joinTimeMsInSingleRound);
-        listener.onPartitionsAssigned(Set.of(tp0));
+        listener.onPartitionsAssigned(Set.of(tp0), null);
         long lastJoinTimeMs = joinTimeMs.get();
 
         // All assigned partitions have been revoked.
-        listener.onPartitionsRevoked(Set.of(tp0));
+        listener.onPartitionsRevoked(Set.of(tp0), null);
         Thread.sleep(100);
-        listener.onPartitionsAssigned(Set.of(tp1));
+        listener.onPartitionsAssigned(Set.of(tp1), null);
 
         assertNotEquals(lastJoinTimeMs, joinTimeMs.get());
     }
@@ -333,13 +333,13 @@ public class ConsumerPerformanceTest {
         AtomicLong joinTimeMs = new AtomicLong(0);
         AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
         ConsumerPerformance.ConsumerPerfRebListener listener = new ConsumerPerformance.ConsumerPerfRebListener(joinTimeMs, 0, joinTimeMsInSingleRound);
-        listener.onPartitionsAssigned(Set.of(tp0, tp1));
+        listener.onPartitionsAssigned(Set.of(tp0, tp1), null);
         long lastJoinTimeMs = joinTimeMs.get();
 
         // The assigned partitions were partially revoked.
-        listener.onPartitionsRevoked(Set.of(tp0));
+        listener.onPartitionsRevoked(Set.of(tp0), null);
         Thread.sleep(100);
-        listener.onPartitionsAssigned(Set.of(tp0));
+        listener.onPartitionsAssigned(Set.of(tp0), null);
 
         assertEquals(lastJoinTimeMs, joinTimeMs.get());
     }
@@ -352,11 +352,11 @@ public class ConsumerPerformanceTest {
         AtomicLong joinTimeMs = new AtomicLong(0);
         AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
         ConsumerPerformance.ConsumerPerfRebListener listener = new ConsumerPerformance.ConsumerPerfRebListener(joinTimeMs, 0, joinTimeMsInSingleRound);
-        listener.onPartitionsAssigned(Set.of(tp0));
+        listener.onPartitionsAssigned(Set.of(tp0), null);
         long lastJoinTimeMs = joinTimeMs.get();
 
         Thread.sleep(100);
-        listener.onPartitionsAssigned(Set.of(tp1));
+        listener.onPartitionsAssigned(Set.of(tp1), null);
 
         assertEquals(lastJoinTimeMs, joinTimeMs.get());
     }

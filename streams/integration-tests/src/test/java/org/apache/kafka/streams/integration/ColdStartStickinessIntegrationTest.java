@@ -45,7 +45,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
@@ -129,7 +128,6 @@ public class ColdStartStickinessIntegrationTest {
         CLUSTER.deleteAllTopics();
     }
 
-    @Disabled("Reproduces KAFKA-20719; enable once fixed")
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldStickToLocalStateOnColdStart(final boolean streamsProtocol) throws Exception {

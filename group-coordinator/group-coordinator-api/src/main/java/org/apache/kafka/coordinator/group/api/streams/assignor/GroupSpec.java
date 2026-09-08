@@ -20,7 +20,6 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
-import java.util.Map;
 
 /**
  * The group metadata specifications required to compute the target assignment.
@@ -51,8 +50,8 @@ public interface GroupSpec {
     MemberAssignmentState memberAssignmentState(String memberId);
 
     /**
-     * @return Any configurations passed to the assignor.
+     * @return The assignment configurations passed to the assignor.
      */
-    Map<String, String> configs();
+    AssignmentConfigs configs();
 
 }

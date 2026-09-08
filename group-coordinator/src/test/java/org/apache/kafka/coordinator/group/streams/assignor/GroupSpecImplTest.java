@@ -19,13 +19,14 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class GroupSpecImplTest {
@@ -53,7 +54,7 @@ public class GroupSpecImplTest {
 
         groupSpec = new GroupSpecImpl(
             members,
-            new HashMap<>()
+            new AssignmentConfigsImpl(2, new ArrayList<>(List.of("test-tag")))
         );
     }
 
@@ -80,7 +81,14 @@ public class GroupSpecImplTest {
 
     @Test
     void testConfigs() {
-        assertTrue(groupSpec.configs().isEmpty());
+        assertEquals(2, groupSpec.configs().numStandbyReplicas());
+        assertEquals(List.of("test-tag"), groupSpec.configs().rackAwareAssignmentTags());
+    }
+
+    @Test
+    void testMembersAndConfigsAreUnmodifiable() {
+        assertThrows(UnsupportedOperationException.class, () -> groupSpec.members().put("other-member", member));
+        assertThrows(UnsupportedOperationException.class, () -> groupSpec.configs().rackAwareAssignmentTags().add("other-tag"));
     }
 
 }

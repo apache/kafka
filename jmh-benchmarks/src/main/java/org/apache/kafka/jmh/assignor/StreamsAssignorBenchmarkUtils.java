@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.jmh.assignor;
 
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
@@ -39,12 +40,14 @@ public class StreamsAssignorBenchmarkUtils {
      *
      * @param members               The StreamsGroupMembers.
      * @param assignmentConfigs     The assignment configs.
+     * @param taskOffsets           The reported offset sums per member, empty for members reporting none.
      *
      * @return The new GroupSpec.
      */
     public static GroupSpec createGroupSpec(
         Map<String, StreamsGroupMember> members,
-        Map<String, String> assignmentConfigs
+        AssignmentConfigs assignmentConfigs,
+        Map<String, Map<String, Map<Integer, Long>>> taskOffsets
     ) {
         Map<String, MemberMetadataAndStateImpl> memberSpecs = new HashMap<>();
 
@@ -61,7 +64,7 @@ public class StreamsAssignorBenchmarkUtils {
                 Map.of(),
                 Map.of(),
                 Map.of(),
-                Map.of(),
+                taskOffsets.getOrDefault(memberId, Map.of()),
                 Map.of()
             ));
         }
@@ -70,6 +73,52 @@ public class StreamsAssignorBenchmarkUtils {
             memberSpecs,
             assignmentConfigs
         );
+    }
+
+    /**
+     * Creates the offset sums the members report for the state they hold on local disk.
+     *
+     * Tasks of stateful subtopologies are spread round-robin over the members, so every member reports the tasks
+     * it would have owned in an earlier generation. Each dormant replica makes a following member report the same
+     * task with a lower offset sum, so several members compete as candidates for it and the candidate ranking
+     * actually has something to sort.
+     *
+     * @param memberIds         The members to spread the tasks over, in a stable order.
+     * @param subtopologyMap    The subtopologies; only the stateful ones get offsets.
+     * @param dormantReplicas   The number of members reporting a task on top of the one owning it.
+     *
+     * @return The reported offset sums, per member.
+     */
+    public static Map<String, Map<String, Map<Integer, Long>>> createTaskOffsets(
+        List<String> memberIds,
+        SortedMap<String, ConfiguredSubtopology> subtopologyMap,
+        int dormantReplicas
+    ) {
+        Map<String, Map<String, Map<Integer, Long>>> taskOffsets = new HashMap<>();
+
+        int taskIndex = 0;
+        for (Map.Entry<String, ConfiguredSubtopology> subtopologyEntry : subtopologyMap.entrySet()) {
+            ConfiguredSubtopology subtopology = subtopologyEntry.getValue();
+            if (subtopology.stateChangelogTopics().isEmpty()) {
+                continue;
+            }
+
+            for (int partition = 0; partition < subtopology.numberOfTasks(); partition++) {
+                for (int replica = 0; replica <= dormantReplicas; replica++) {
+                    String memberId = memberIds.get((taskIndex + replica) % memberIds.size());
+                    // The owner holds the most caught-up state, every dormant copy a little less.
+                    long offsetSum = (long) (dormantReplicas + 1 - replica) * 1_000_000L + taskIndex;
+
+                    taskOffsets
+                        .computeIfAbsent(memberId, id -> new HashMap<>())
+                        .computeIfAbsent(subtopologyEntry.getKey(), id -> new HashMap<>())
+                        .put(partition, offsetSum);
+                }
+                taskIndex++;
+            }
+        }
+
+        return taskOffsets;
     }
 
     /**
