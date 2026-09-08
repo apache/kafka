@@ -393,7 +393,7 @@ public class LogManager {
                 .collect(Collectors.toUnmodifiableSet());
         offlineTopicPartitions.forEach(topicPartition -> {
             Optional<UnifiedLog> removedLog = removeLogAndMetrics(logs, topicPartition);
-            removedLog.ifPresent(UnifiedLog::closeHandlers);
+            removedLog.ifPresent(UnifiedLog::closeQuietly);
         });
 
         return offlineTopicPartitions;
@@ -1559,10 +1559,10 @@ public class LogManager {
             });
             destLog.newMetrics();
         } catch (KafkaStorageException kse) {
-            // If sourceLog's log directory is offline, we need close its handlers here.
-            // handleLogDirFailure() will not close handlers of sourceLog because it has been removed from currentLogs map
+            // If sourceLog's log directory is offline, we need to quietly close it here.
+            // handleLogDirFailure() will not close sourceLog because it has been removed from currentLogs map
             sourceLog.ifPresent(srcLog -> {
-                srcLog.closeHandlers();
+                srcLog.closeQuietly();
                 srcLog.removeLogMetrics();
             });
             throw kse;

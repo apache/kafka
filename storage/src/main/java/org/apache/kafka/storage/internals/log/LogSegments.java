@@ -109,11 +109,11 @@ public class LogSegments implements Closeable {
     }
 
     /**
-     * Close the handlers for all segments.
+     * Close all segments, swallowing any exceptions.
      */
-    public void closeHandlers() {
+    public void closeQuietly() {
         for (LogSegment s : values())
-            s.closeHandlers();
+            s.closeQuietly();
     }
 
     /**
