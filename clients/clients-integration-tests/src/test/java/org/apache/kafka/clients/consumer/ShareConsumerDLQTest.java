@@ -583,7 +583,7 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Raised max.message.bytes did not propagate on the DLQ topic");
         }
 
-        // Hook for any future subclasses whose DLQ manager caches topic config (e.g. max.message.bytes)
+        // Hook for any subclasses whose DLQ manager caches topic config (e.g. max.message.bytes)
         // and needs time for the raised value to propagate before the next produce batch.
         waitForDlqTopicConfigRefresh();
 

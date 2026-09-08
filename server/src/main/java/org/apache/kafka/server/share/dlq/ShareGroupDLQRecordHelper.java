@@ -52,12 +52,12 @@ public class ShareGroupDLQRecordHelper {
      */
     private static final int DLQ_MAX_FETCH_BYTES = 1024 * 1024;
 
-    public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
-    public static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
-    public static final String HEADER_DLQ_ERRORS_OFFSET = "__dlq.errors.offset";
-    public static final String HEADER_DLQ_ERRORS_GROUP = "__dlq.errors.group";
-    public static final String HEADER_DLQ_ERRORS_DELIVERY_COUNT = "__dlq.errors.delivery.count";
-    public static final String HEADER_DLQ_ERRORS_MESSAGE = "__dlq.errors.message";
+    protected static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
+    protected static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
+    protected static final String HEADER_DLQ_ERRORS_OFFSET = "__dlq.errors.offset";
+    protected static final String HEADER_DLQ_ERRORS_GROUP = "__dlq.errors.group";
+    protected static final String HEADER_DLQ_ERRORS_DELIVERY_COUNT = "__dlq.errors.delivery.count";
+    protected static final String HEADER_DLQ_ERRORS_MESSAGE = "__dlq.errors.message";
 
     /**
      * Result of building DLQ records for a range of offsets, respecting maxMessageBytes.
