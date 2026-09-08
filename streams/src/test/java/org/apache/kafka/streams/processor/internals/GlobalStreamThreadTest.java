@@ -37,7 +37,6 @@ import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -57,7 +56,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -74,6 +72,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class GlobalStreamThreadTest {
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
@@ -297,8 +299,9 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldWipeGlobalStateDirectoryOnTaskCorruptedExceptionDuringStartup() throws Exception {
-        final InternalTopologyBuilder corruptedBuilder = new InternalTopologyBuilder();
+        final InternalTopologyBuilder builderWithCorruptedStore = new InternalTopologyBuilder();
 
         final ProcessorSupplier<Object, Object, Void, Void> processorSupplier = () ->
             new ContextualProcessor<>() {
@@ -307,7 +310,19 @@ public class GlobalStreamThreadTest {
                 }
             };
 
-        corruptedBuilder.addGlobalStore(
+        final StateStore corruptedStore = mock(StateStore.class);
+        when(corruptedStore.name()).thenReturn(GLOBAL_STORE_NAME);
+        when(corruptedStore.persistent()).thenReturn(true);
+        when(corruptedStore.managesOffsets()).thenReturn(true);
+        doThrow(new TaskCorruptedException(Set.of(new TaskId(-1, -1))))
+            .when(corruptedStore).init(any(), any());
+
+        @SuppressWarnings("unchecked")
+        final StoreBuilder<StateStore> corruptedStoreBuilder = mock(StoreBuilder.class);
+        when(corruptedStoreBuilder.name()).thenReturn(GLOBAL_STORE_NAME);
+        when(corruptedStoreBuilder.build()).thenReturn(corruptedStore);
+
+        builderWithCorruptedStore.addGlobalStore(
             "sourceName",
             null,
             null,
@@ -316,13 +331,13 @@ public class GlobalStreamThreadTest {
             "processorName",
             new StoreDelegatingProcessorSupplier<>(
                 processorSupplier,
-                Set.of(new CorruptedStoreBuilder())
+                Set.of(corruptedStoreBuilder)
             ),
             false
         );
 
         globalStreamThread = new GlobalStreamThread(
-            corruptedBuilder.rewriteTopology(config).buildGlobalStateTopology(),
+            builderWithCorruptedStore.rewriteTopology(config).buildGlobalStateTopology(),
             config,
             mockConsumer,
             new StateDirectory(config, time, true, false),
@@ -340,11 +355,11 @@ public class GlobalStreamThreadTest {
 
         initializeConsumer();
 
-        assertThrows(
-            StreamsException.class,
+        final StreamsException e = assertThrows(StreamsException.class,
             () -> globalStreamThread.start(),
-            "Should have thrown StreamsException if start up failed."
-        );
+            "Should have thrown StreamsException if start up failed.");
+        assertThat(e.getCause(), instanceOf(TaskCorruptedException.class));
+
         globalStreamThread.join();
 
         assertFalse(globalStateDir.exists());
@@ -549,74 +564,6 @@ public class GlobalStreamThreadTest {
         try {
             globalStreamThread.start();
         } catch (final IllegalStateException ignored) {
-        }
-    }
-
-    private static class CorruptedStore implements StateStore {
-        @Override
-        public String name() {
-            return GLOBAL_STORE_NAME;
-        }
-
-        @Override
-        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
-            throw new TaskCorruptedException(Set.of(new TaskId(0, 0)));
-        }
-
-        @Override
-        public void close() {
-        }
-
-        @Override
-        public boolean persistent() {
-            return true;
-        }
-
-        @Override
-        public boolean isOpen() {
-            return false;
-        }
-    }
-
-    private static class CorruptedStoreBuilder implements StoreBuilder<StateStore> {
-        @Override
-        public StoreBuilder<StateStore> withCachingEnabled() {
-            return this;
-        }
-
-        @Override
-        public StoreBuilder<StateStore> withCachingDisabled() {
-            return this;
-        }
-
-        @Override
-        public StoreBuilder<StateStore> withLoggingEnabled(final Map<String, String> config) {
-            return this;
-        }
-
-        @Override
-        public StoreBuilder<StateStore> withLoggingDisabled() {
-            return this;
-        }
-
-        @Override
-        public StateStore build() {
-            return new CorruptedStore();
-        }
-
-        @Override
-        public Map<String, String> logConfig() {
-            return Map.of();
-        }
-
-        @Override
-        public boolean loggingEnabled() {
-            return false;
-        }
-
-        @Override
-        public String name() {
-            return GLOBAL_STORE_NAME;
         }
     }
 }

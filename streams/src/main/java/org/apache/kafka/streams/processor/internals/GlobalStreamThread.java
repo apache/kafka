@@ -441,9 +441,9 @@ public class GlobalStreamThread extends Thread {
 
             try {
                 stateConsumer.initialize();
-            } catch (final InvalidOffsetException recoverableException) {
+            } catch (final InvalidOffsetException | TaskCorruptedException recoverableException) {
                 log.error(
-                    "Bootstrapping global state failed due to inconsistent local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
+                    "Bootstrapping global state failed due to inconsistent or corrupted local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
                     recoverableException
                 );
 
@@ -452,18 +452,6 @@ public class GlobalStreamThread extends Thread {
                 throw new StreamsException(
                     "Bootstrapping global state failed. You can restart KafkaStreams to recover from this error.",
                     recoverableException
-                );
-            } catch (final TaskCorruptedException corruptedException) {
-                log.error(
-                    "Bootstrapping global state failed due to a corrupted state store. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
-                    corruptedException
-                );
-
-                closeStateConsumer(stateConsumer, true);
-
-                throw new StreamsException(
-                    "Bootstrapping global state failed. You can restart KafkaStreams to recover from this error.",
-                    corruptedException
                 );
             }
 
