@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -33,6 +34,7 @@ import java.util.Objects;
  * @param <K> key type of serde
  * @param <V> value type of serde
  */
+@InterfaceAudience.Public
 public final class StateSerdes<K, V> {
 
     public static final int TIMESTAMP_SIZE = 8;

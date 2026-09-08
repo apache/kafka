@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
  * {@link Admin#listConsumerGroupOffsets(String)} call.
  * <p>
  */
+@InterfaceAudience.Public
 public class ListConsumerGroupOffsetsResult {
 
     final Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures;

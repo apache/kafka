@@ -61,8 +61,4 @@ public class UnregisterBrokerResponse extends AbstractResponse {
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return true;
-    }
 }

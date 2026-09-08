@@ -126,6 +126,10 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupEligibleGroups";
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteSuccess";
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteError";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionSetSuccess";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionSetError";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionGetSuccess";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionGetError";
 
     private final MetricName offsetCountMetricName;
     private final MetricName classicGroupCountMetricName;
@@ -442,6 +446,46 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
                 METRICS_GROUP,
                 "The total number of failed plugin.deleteTopology calls (DeleteGroups and periodic cleanup combined)")));
 
+        Sensor streamsGroupTopologyDescriptionSetSuccessSensor =
+            metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
+        streamsGroupTopologyDescriptionSetSuccessSensor.add(new Meter(
+            metrics.metricName("streams-group-topology-description-set-success-rate",
+                METRICS_GROUP,
+                "The rate of successful plugin.setTopology calls"),
+            metrics.metricName("streams-group-topology-description-set-success-count",
+                METRICS_GROUP,
+                "The total number of successful plugin.setTopology calls")));
+
+        Sensor streamsGroupTopologyDescriptionSetErrorSensor =
+            metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
+        streamsGroupTopologyDescriptionSetErrorSensor.add(new Meter(
+            metrics.metricName("streams-group-topology-description-set-error-rate",
+                METRICS_GROUP,
+                "The rate of failed plugin.setTopology calls (any failure: permanent, transient, or otherwise)"),
+            metrics.metricName("streams-group-topology-description-set-error-count",
+                METRICS_GROUP,
+                "The total number of failed plugin.setTopology calls (any failure: permanent, transient, or otherwise)")));
+
+        Sensor streamsGroupTopologyDescriptionGetSuccessSensor =
+            metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+        streamsGroupTopologyDescriptionGetSuccessSensor.add(new Meter(
+            metrics.metricName("streams-group-topology-description-get-success-rate",
+                METRICS_GROUP,
+                "The rate of successful getTopology calls (a call returning null counts as success)"),
+            metrics.metricName("streams-group-topology-description-get-success-count",
+                METRICS_GROUP,
+                "The total number of successful plugin.getTopology calls (a call returning null counts as success)")));
+
+        Sensor streamsGroupTopologyDescriptionGetErrorSensor =
+            metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+        streamsGroupTopologyDescriptionGetErrorSensor.add(new Meter(
+            metrics.metricName("streams-group-topology-description-get-error-rate",
+                METRICS_GROUP,
+                "The rate of failed getTopology operations (plugin errors, SPI contract violations, or conversion failures)"),
+            metrics.metricName("streams-group-topology-description-get-error-count",
+                METRICS_GROUP,
+                "The total number of failed plugin.getTopology calls")));
+
         globalSensors = Collections.unmodifiableMap(Utils.mkMap(
             Utils.mkEntry(OFFSET_COMMITS_SENSOR_NAME, offsetCommitsSensor),
             Utils.mkEntry(OFFSET_EXPIRED_SENSOR_NAME, offsetExpiredSensor),
@@ -457,7 +501,15 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME,
                 streamsGroupTopologyDescriptionDeleteSuccessSensor),
             Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME,
-                streamsGroupTopologyDescriptionDeleteErrorSensor)
+                streamsGroupTopologyDescriptionDeleteErrorSensor),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME,
+                streamsGroupTopologyDescriptionSetSuccessSensor),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME,
+                streamsGroupTopologyDescriptionSetErrorSensor),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME,
+                streamsGroupTopologyDescriptionGetSuccessSensor),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME,
+                streamsGroupTopologyDescriptionGetErrorSensor)
         ));
     }
 
@@ -566,7 +618,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME,
             STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME,
             STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME,
-            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME,
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME,
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME,
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME,
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME
         ).forEach(metrics::removeSensor);
     }
 

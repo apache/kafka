@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
@@ -26,6 +28,7 @@ import org.apache.kafka.streams.state.internals.StateStoreProvider;
  * @param <T> The store type
  * @see QueryableStoreTypes
  */
+@InterfaceAudience.Public
 public interface QueryableStoreType<T> {
 
     /**
@@ -46,6 +49,7 @@ public interface QueryableStoreType<T> {
      * @return a read-only interface over a {@code StateStore}
      *        (cf. {@link QueryableStoreTypes.KeyValueStoreType})
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: method leaks internal StateStoreProvider — pending KIP review to promote or refactor")
     T create(final StateStoreProvider storeProvider,
              final String storeName);
 }

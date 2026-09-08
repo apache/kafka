@@ -23,6 +23,8 @@ import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
@@ -40,15 +42,20 @@ import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescri
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionConverter;
 import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.util.timer.MockTimer;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.mockito.MockedStatic;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -70,8 +77,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -104,12 +115,22 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         boolean startup,
         MockTimer timer
     ) {
+        return buildService(runtime, plugin, startup, timer, new GroupCoordinatorMetrics());
+    }
+
+    private static GroupCoordinatorService buildService(
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
+        Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
+        boolean startup,
+        MockTimer timer,
+        GroupCoordinatorMetrics metrics
+    ) {
         MockTime time = timer.time();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 600000L, 24),
             runtime,
-            new GroupCoordinatorMetrics(),
+            metrics,
             createConfigManager(),
             new NoOpStatePersister(),
             timer,
@@ -187,6 +208,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             any()
         )).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        when(runtime.scheduleWriteOperation(
             eq("streams-group-set-stored-topology-epoch"),
             eq(GROUP_TP),
             any()
@@ -211,6 +237,37 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testUpdateSkipsPluginWhenBarrierWriteFindsGroupGone() throws Exception {
+        // The UNCERTAIN barrier write returns false when the group vanished (or stopped being a
+        // streams group) between the validate read and the write. No barrier record exists, so the
+        // push must not create a plugin entry that no cleanup path would ever reclaim.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-description-validate"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), response.errorCode());
+        verify(plugin, never()).setTopology(anyString(), anyInt(), any());
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("streams-group-set-stored-topology-epoch"), any(), any());
+    }
+
+    @Test
     public void testUpdatePermanentFailurePersistsFailedEpoch() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
@@ -222,6 +279,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq(GROUP_TP),
             any()
         )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
         when(runtime.scheduleWriteOperation(
             eq("streams-group-set-failed-topology-epoch"),
             eq(GROUP_TP),
@@ -252,6 +314,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq(GROUP_TP),
             any()
         )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
 
@@ -288,6 +355,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq(GROUP_TP),
             any()
         )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
 
@@ -318,6 +390,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq(GROUP_TP),
             any()
         )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
         when(runtime.scheduleWriteOperation(
             eq("streams-group-set-stored-topology-epoch"),
             eq(GROUP_TP),
@@ -391,6 +468,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             any()
         )).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        when(runtime.scheduleWriteOperation(
             eq("streams-group-set-stored-topology-epoch"),
             eq(GROUP_TP),
             any()
@@ -428,6 +510,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             any()
         )).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        when(runtime.scheduleWriteOperation(
             eq("streams-group-set-stored-topology-epoch"),
             eq(GROUP_TP),
             any()
@@ -460,6 +547,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq(GROUP_TP),
             any()
         )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
         when(runtime.scheduleWriteOperation(
             eq("streams-group-set-failed-topology-epoch"),
             eq(GROUP_TP),
@@ -726,6 +818,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq(GROUP_TP),
             any()
         )).thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain-batch"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
 
@@ -762,6 +859,16 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq(GROUP_TP),
             any()
         )).thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain-batch"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
 
         DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
@@ -786,6 +893,10 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         assertEquals(Errors.NONE.code(), result.errorCode());
         assertNull(result.errorMessage());
         verify(plugin, times(1)).deleteTopology("foo");
+        // The successful plugin delete is smart-finalized before the tombstone, so a group that
+        // was revived past the tombstone cannot keep a raced push's epoch over the emptied plugin.
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any());
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("delete-groups"), eq(GROUP_TP), any());
     }
@@ -864,6 +975,10 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         assertNotNull(result);
         assertEquals(Errors.NONE.code(), result.errorCode());
         verify(plugin, never()).deleteTopology(anyString());
+        // No stored topology in the batch: the UNCERTAIN mark write must be skipped entirely,
+        // not scheduled as a no-op on the shard's event loop.
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("mark-topology-uncertain-batch"), any(), any());
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("delete-groups"), eq(GROUP_TP), any());
     }
@@ -890,6 +1005,16 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq(GROUP_TP),
             any()
         )).thenReturn(CompletableFuture.completedFuture(Set.of("good", "bad")));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain-batch"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Set.of("good", "bad")));
+        when(runtime.scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
 
         DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
@@ -920,6 +1045,141 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testDeleteGroupsPreservesBackoffOnPluginFailure() throws Exception {
+        // Symmetric with the cleanup cycle (testCleanupCyclePreservesBackoffOnPluginFailure): a
+        // failed plugin.deleteTopology in DeleteGroups leaves the group at UNCERTAIN(-2) — not
+        // tombstoned — which re-solicits a push on the next heartbeat. The back-off entry must
+        // survive so a rejoining member does not immediately re-attack the still-broken plugin.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+        when(runtime.scheduleWriteOperation(eq("delete-share-groups"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-pre-delete"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
+        service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS), List.of("foo"), BufferSupplier.NO_CACHING
+        ).get(5, TimeUnit.SECONDS);
+
+        assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
+            "failed plugin delete in DeleteGroups must not clear the back-off entry");
+    }
+
+    @Test
+    public void testDeleteGroupsClearsBackoffOnPluginSuccess() throws Exception {
+        // Counterpart: a successful plugin.deleteTopology means the group is on its way to
+        // tombstone, so its back-off entry is no longer load-bearing and is cleared.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("delete-share-groups"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-pre-delete"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        tombstoneResult.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("foo"));
+        when(runtime.scheduleWriteOperation(eq("delete-groups"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(tombstoneResult));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
+        service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS), List.of("foo"), BufferSupplier.NO_CACHING
+        ).get(5, TimeUnit.SECONDS);
+
+        assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
+            "successful plugin delete in DeleteGroups must clear the back-off entry");
+    }
+
+    @Test
+    public void testDeleteGroupsMarksUncertainBeforePluginDelete() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("g")).thenReturn(CompletableFuture.completedFuture(null));
+
+        when(runtime.scheduleWriteOperation(eq("delete-share-groups"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-pre-delete"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("g")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("g")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        tombstoneResult.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("g"));
+        when(runtime.scheduleWriteOperation(eq("delete-groups"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(tombstoneResult));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS),
+            List.of("g"),
+            BufferSupplier.NO_CACHING
+        ).get(5, TimeUnit.SECONDS);
+
+        InOrder inOrder = inOrder(runtime, plugin);
+        inOrder.verify(runtime).scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any());
+        inOrder.verify(plugin).deleteTopology("g");
+        inOrder.verify(runtime).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+        inOrder.verify(runtime).scheduleWriteOperation(eq("delete-groups"), any(), any());
+    }
+
+    @Test
+    public void testDeleteGroupsSkipsPluginDeleteForRevivedGroup() throws Exception {
+        // The pre-delete read finds "g" with a stored topology, but the mark batch returns an
+        // empty subset: "g" was revived between the committed read and the barrier write. The
+        // plugin delete must be skipped (no barrier was written), no plugin failure recorded for
+        // it, and the pipeline must still proceed to the tombstone write, which reports the
+        // group's fate (NON_EMPTY_GROUP for a revived group).
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        when(runtime.scheduleWriteOperation(eq("delete-share-groups"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-pre-delete"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("g")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of()));
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        tombstoneResult.add(new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("g")
+            .setErrorCode(Errors.NON_EMPTY_GROUP.code()));
+        when(runtime.scheduleWriteOperation(eq("delete-groups"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(tombstoneResult));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        DeleteGroupsResponseData.DeletableGroupResultCollection results = service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS),
+            List.of("g"),
+            BufferSupplier.NO_CACHING
+        ).get(5, TimeUnit.SECONDS);
+
+        DeleteGroupsResponseData.DeletableGroupResult result = results.find("g");
+        assertNotNull(result);
+        assertEquals(Errors.NON_EMPTY_GROUP.code(), result.errorCode());
+        verify(plugin, never()).deleteTopology(anyString());
+        // No plugin delete ran, so there is nothing to smart-finalize either.
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+        verify(runtime, times(1)).scheduleWriteOperation(eq("delete-groups"), eq(GROUP_TP), any());
+    }
+
+    @Test
     public void testCleanupCycleNoOpWhenNoPlugin() {
         // No plugin configured -> the cycle must not even touch the runtime.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
@@ -928,45 +1188,139 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         service.runOneStreamsTopologyCleanupCycle();
 
         verify(runtime, never()).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
-        verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
+        verify(runtime, never()).scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any());
+    }
+
+    @Test
+    public void testCleanupCycleMarksUncertainThenDeletesThenFinalizes() {
+        // The cycle must write the UNCERTAIN barrier batch before the plugin delete and run the
+        // smart finalize after it, in that order.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
+
+        Set<String> eligible = Set.of("foo");
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.runOneStreamsTopologyCleanupCycle();
+
+        InOrder inOrder = inOrder(runtime, plugin);
+        inOrder.verify(runtime).scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any());
+        inOrder.verify(plugin).deleteTopology("foo");
+        inOrder.verify(runtime).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+    }
+
+    @Test
+    public void testCleanupCycleSkipsDeleteForRevivedGroup() {
+        // The mark batch returns an empty subset: "foo" was revived (or converted) between the
+        // committed scan and the mark write. The cycle must not delete it nor finalize.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        Set<String> eligible = Set.of("foo");
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of()));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.runOneStreamsTopologyCleanupCycle();
+
+        verify(plugin, never()).deleteTopology(any());
+        verify(runtime, never()).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+    }
+
+    @Test
+    public void testCleanupCycleSwallowsMarkWriteFailure() throws Exception {
+        // A routine write failure (e.g. NOT_COORDINATOR during a shard move) on the UNCERTAIN
+        // mark must not fail the whole cycle's allOf: the partition is skipped with a targeted
+        // warn and the next cycle retries. No plugin delete and no finalize may run for it.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.failedFuture(Errors.NOT_COORDINATOR.exception()));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.runOneStreamsTopologyCleanupCycle().get(5, TimeUnit.SECONDS);
+
+        verify(plugin, never()).deleteTopology(any());
+        verify(runtime, never()).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
     }
 
     @Test
     public void testCleanupCycleClearsStoredEpochOnPluginSuccess() {
-        // Eligibility scan returns one group at storedEpoch=4; plugin succeeds; the cycle must
-        // schedule the conditional clear-stored write echoing the same epoch back so a
-        // concurrent setTopology that has advanced the field is preserved.
+        // Eligibility scan returns one group at storedEpoch=4; the mark batch marks it UNCERTAIN;
+        // plugin succeeds; the cycle must schedule the smart finalize so a concurrent setTopology
+        // that has advanced the field is re-solicited rather than silently undone.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
-        when(runtime.scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         service.runOneStreamsTopologyCleanupCycle();
 
         verify(plugin, times(1)).deleteTopology("foo");
-        verify(runtime, times(1)).scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any());
+        verify(runtime, times(1)).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any());
     }
 
     @Test
-    public void testCleanupCycleSkipsClearOnPluginFailure() {
-        // Plugin fails -> the cycle must NOT clear stored epoch; the group stays gated on
-        // the next sweep and the next cycle retries the plugin call.
+    public void testCleanupCycleBatchesClearWritesPerPartition() {
+        // Two eligible groups land on the same partition's eligibility read — they must trigger
+        // exactly one finalize scheduleWriteOperation carrying both groups, not one write per
+        // group.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
-        when(plugin.deleteTopology("foo"))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+        when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
+        when(plugin.deleteTopology("bar")).thenReturn(CompletableFuture.completedFuture(null));
+        Set<String> eligible = new LinkedHashSet<>(List.of("foo", "bar"));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+            .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo", "bar")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         service.runOneStreamsTopologyCleanupCycle();
 
         verify(plugin, times(1)).deleteTopology("foo");
-        verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
+        verify(plugin, times(1)).deleteTopology("bar");
+        // One finalize write covers both groups; not two per-group writes.
+        verify(runtime, times(1)).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+    }
+
+    @Test
+    public void testCleanupCycleSkipsClearOnPluginFailure() {
+        // Plugin delete fails -> the cycle must NOT finalize; the group is left at -2 so it stays
+        // delete-eligible and re-soliciting, and the next cycle retries the plugin call.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.runOneStreamsTopologyCleanupCycle();
+
+        verify(plugin, times(1)).deleteTopology("foo");
+        verify(runtime, never()).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
     }
 
     @Test
@@ -982,7 +1336,9 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(plugin.deleteTopology("foo"))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         // Arm a back-off entry at the same currentEpoch we will probe with the heartbeat helper,
@@ -1006,8 +1362,10 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
-        when(runtime.scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
@@ -1020,17 +1378,17 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
     @Test
     public void testCleanupCycleEmptyEligibility() {
-        // No groups eligible -> plugin is not called and no clear write is scheduled.
+        // No groups eligible -> the mark batch is not scheduled and the plugin is not called.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of())));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of())));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         service.runOneStreamsTopologyCleanupCycle();
 
         verify(plugin, never()).deleteTopology(anyString());
-        verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
+        verify(runtime, never()).scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any());
     }
 
     @Test
@@ -1052,29 +1410,31 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     @Test
     public void testCleanupCycleSingleFlightHoldsFlagUntilClearWriteSettles() {
         // Locks the fix for the gap Copilot flagged: invokeDeleteTopologies's plugin call
-        // completes synchronously, but the conditional clear-stored-epoch write is parked
-        // on an unresolved future. Until that write settles, the in-flight flag must remain
-        // held — a fresh cycle scheduled by the timer would otherwise re-scan the same
-        // eligible group (storedEpoch still != -1 because the clear has not landed) and
-        // double-fire plugin.deleteTopology. After the parked write completes the flag is
-        // released and a subsequent cycle observes a fresh scheduleReadAllOperation.
+        // completes synchronously, but the smart-finalize write is parked on an unresolved
+        // future. Until that write settles, the in-flight flag must remain held — a fresh cycle
+        // scheduled by the timer would otherwise re-scan the same eligible group (storedEpoch
+        // still != -1 because the finalize has not landed) and double-fire plugin.deleteTopology.
+        // After the parked write completes the flag is released and a subsequent cycle observes a
+        // fresh scheduleReadAllOperation.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
-        CompletableFuture<Object> parkedClearWrite = new CompletableFuture<>();
-        when(runtime.scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any()))
-            .thenReturn(parkedClearWrite);
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        CompletableFuture<Object> parkedFinalizeWrite = new CompletableFuture<>();
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any()))
+            .thenReturn(parkedFinalizeWrite);
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
-        // Plugin call resolved synchronously but clear-write is parked — second cycle skipped.
+        // Plugin call resolved synchronously but finalize-write is parked — second cycle skipped.
         service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
         verify(runtime, times(1)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
 
-        // Settle the clear-write: flag should now release, next cycle scans afresh.
-        parkedClearWrite.complete(null);
+        // Settle the finalize-write: flag should now release, next cycle scans afresh.
+        parkedFinalizeWrite.complete(null);
         service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
         verify(runtime, times(2)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
     }
@@ -1103,14 +1463,16 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // The skip case alone does not prove the flag is ever released: a buggy whenComplete
         // (e.g., missing the partitionDone allOf join) would leave it set forever and silently
         // disable every subsequent cycle. Drive a full cycle to completion (read resolves,
-        // plugin delete settles, conditional clear write settles), then issue a second cycle
+        // plugin delete settles, smart finalize write settles), then issue a second cycle
         // and verify it observes the released flag by scheduling a fresh read.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
-        when(runtime.scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
@@ -1131,8 +1493,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // behavior.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
-        CompletableFuture<Map<String, Integer>> parkedRead = new CompletableFuture<>();
-        when(runtime.<Map<String, Integer>>scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+        CompletableFuture<Set<String>> parkedRead = new CompletableFuture<>();
+        when(runtime.<Set<String>>scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
             .thenReturn(List.of(parkedRead));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
@@ -1143,11 +1505,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // for verification).
         service.shutdown();
         // Now resolve the read: the handle runs under running==false and must skip the
-        // plugin dispatch + the conditional clear writes that would have followed.
-        parkedRead.complete(Map.of("foo", 4));
+        // mark batch, plugin dispatch, and finalize write that would have followed.
+        parkedRead.complete(Set.of("foo"));
 
         verify(plugin, never()).deleteTopology(anyString());
-        verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
+        verify(runtime, never()).scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any());
     }
 
     @Test
@@ -1413,6 +1775,229 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         verify(plugin, never()).getTopology(anyString(), anyInt());
     }
 
+    @Test
+    public void testUpdateSuccessRecordsSetSuccessSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        when(runtime.scheduleWriteOperation(eq("streams-group-set-stored-topology-epoch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
+    }
+
+    @Test
+    public void testUpdatePermanentFailureRecordsSetErrorSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.failedFuture(
+                new StreamsTopologyDescriptionPermanentFailureException("too large")));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        when(runtime.scheduleWriteOperation(eq("streams-group-set-failed-topology-epoch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testUpdateTransientFailureRecordsSetErrorSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("backend offline")));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        // A transient failure is still a failed plugin.setTopology call: it folds into set-error,
+        // not a separate sensor.
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeAvailableRecordsGetSuccessSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        StreamsGroupTopologyDescription pojo = new StreamsGroupTopologyDescription(
+            List.of(new StreamsGroupTopologyDescription.Subtopology("sub-0", List.of(
+                new StreamsGroupTopologyDescription.Source("src", Set.of("input"), Set.of())))),
+            List.of()
+        );
+        when(plugin.getTopology("foo", 5)).thenReturn(CompletableFuture.completedFuture(pojo));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeNullReturnRecordsGetSuccessSensor() throws Exception {
+        // A getTopology returning null is a successful plugin call that found no data
+        // (surfaces as NOT_STORED) and must count as get-success, not get-error.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5)).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeErrorRecordsGetErrorSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeSynchronousThrowRecordsGetErrorSensor() throws Exception {
+        // A getTopology that throws synchronously violates the SPI contract and surfaces as
+        // ERROR; it must count as get-error.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5)).thenThrow(new RuntimeException("plugin blew up"));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeNullFutureRecordsGetErrorSensor() throws Exception {
+        // A getTopology that returns a null future violates the SPI contract and surfaces as
+        // ERROR; it must count as get-error.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5)).thenReturn(null);
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeConversionErrorRecordsGetErrorSensor() throws Exception {
+        // The plugin returns a valid topology, but converting it to the wire response throws.
+        // That defensive catch in applyGetTopologyOutcome is otherwise unreachable (the Node type
+        // is sealed to Source/Processor/Sink, so a well-formed topology always converts), so we
+        // force toDescribeResponse to throw to exercise it. The outcome surfaces as ERROR to the
+        // client and must count as get-error, not get-success.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        StreamsGroupTopologyDescription pojo = new StreamsGroupTopologyDescription(
+            List.of(new StreamsGroupTopologyDescription.Subtopology("sub-0", List.of(
+                new StreamsGroupTopologyDescription.Source("src", Set.of("input"), Set.of())))),
+            List.of()
+        );
+        when(plugin.getTopology("foo", 5)).thenReturn(CompletableFuture.completedFuture(pojo));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        // CALLS_REAL_METHODS so only toDescribeResponse is overridden; any other converter call
+        // (none on this path) keeps its real behavior.
+        try (MockedStatic<StreamsGroupTopologyDescriptionConverter> converter =
+                 mockStatic(StreamsGroupTopologyDescriptionConverter.class, CALLS_REAL_METHODS)) {
+            converter.when(() -> StreamsGroupTopologyDescriptionConverter.toDescribeResponse(any()))
+                .thenThrow(new RuntimeException("conversion failed"));
+
+            service.streamsGroupDescribe(
+                requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+            ).get(5, TimeUnit.SECONDS);
+        }
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+    }
+
     private static StreamsGroupDescribeResponseData.DescribedGroup describedGroupWithTopology(
         String groupId, int topologyEpoch
     ) {
@@ -1480,5 +2065,253 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), validHeartbeatRequest()
         ).get(5, TimeUnit.SECONDS);
         return result.data().topologyDescriptionRequired();
+    }
+
+    @Test
+    public void testPushMarksUncertainBeforePluginSetThenAdvances() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(eq("foo"), eq(3), any())).thenReturn(CompletableFuture.completedFuture(null));
+
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        when(runtime.scheduleWriteOperation(eq("streams-group-set-stored-topology-epoch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        InOrder inOrder = inOrder(runtime, plugin);
+        inOrder.verify(runtime).scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any());
+        inOrder.verify(plugin).setTopology(eq("foo"), eq(3), any());
+        inOrder.verify(runtime).scheduleWriteOperation(eq("streams-group-set-stored-topology-epoch"), any(), any());
+    }
+
+    private static JoinGroupRequestData classicJoinRequest(String groupId) {
+        return new JoinGroupRequestData()
+            .setGroupId(groupId)
+            .setSessionTimeoutMs(30000);
+    }
+
+    @Test
+    public void testClassicJoinDeletesTopologyBeforeConvertingEmptyStreamsGroup() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("g")).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        // The first classic-group-join detects the empty streams group with a stored topology and
+        // returns true (cleanup needed, no conversion); the second runs after cleanup and converts,
+        // returning false.
+        when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        // classicGroupJoin completes responseFuture internally; with a mock runtime that operation
+        // never runs, so we await the scheduling of the join writes rather than the response.
+        service.joinGroup(requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING);
+
+        verify(runtime, timeout(5000).times(2)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+        // The successful conversion delete is smart-finalized after the re-join: a no-op for the
+        // converted group, but it heals a raced push if the group was revived in between.
+        verify(runtime, timeout(5000).times(1)).scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+        InOrder inOrder = inOrder(runtime, plugin);
+        inOrder.verify(runtime).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+        inOrder.verify(runtime).scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any());
+        inOrder.verify(plugin).deleteTopology("g");
+        inOrder.verify(runtime).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+        inOrder.verify(runtime).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+    }
+
+    @Test
+    public void testClassicJoinFailsWhenPluginDeleteFailsAndDoesNotConvert() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("g"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("boom")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        // The single classic-group-join detects the empty streams group and returns true; the
+        // post-cleanup conversion never runs because the plugin delete fails.
+        when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        JoinGroupResponseData resp = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING)
+            .get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), resp.errorCode());
+        verify(runtime, times(1)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+    }
+
+    @Test
+    public void testClassicJoinThrottlesPluginDeleteAfterFailure() throws Exception {
+        // First join: the conversion delete fails -> REBALANCE_IN_PROGRESS and the throttle is
+        // armed. The classic client retries the join immediately (RebalanceInProgressException
+        // skips its retry back-off), so the retry must fail fast without re-invoking the plugin
+        // or re-scheduling the mark write while the throttle window is in effect.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("g"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("boom")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        // Every join detects the empty streams group with a stored topology (cleanup needed).
+        when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        JoinGroupResponseData first = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING)
+            .get(5, TimeUnit.SECONDS);
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), first.errorCode());
+
+        JoinGroupResponseData second = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING)
+            .get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), second.errorCode());
+        verify(plugin, times(1)).deleteTopology("g");
+        verify(runtime, times(1)).scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any());
+    }
+
+    @Test
+    public void testClassicJoinSkipsPluginDeleteWhenBarrierWriteFindsGroupChanged() throws Exception {
+        // The barrier write returns false when the group changed underneath the join (revived,
+        // converted, or removed) between the cleanup check and the mark: no barrier exists, so the
+        // plugin delete must be skipped — it could wipe a live group's topology — and the join
+        // fails with a retriable error so the client retries against the latest state.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+        when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        JoinGroupResponseData resp = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING)
+            .get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), resp.errorCode());
+        verify(plugin, never()).deleteTopology(any());
+        verify(runtime, times(1)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+    }
+
+    @Test
+    public void testClassicJoinSkipsPluginDeleteWhenGroupAlreadyClassic() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        // The single classic-group-join finds an already-classic group, completes the response and
+        // returns false (no cleanup needed).
+        when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.joinGroup(requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING);
+
+        verify(runtime, timeout(5000)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+        verify(runtime, times(1)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+        verify(runtime, never()).scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any());
+        verify(plugin, never()).deleteTopology(any());
+    }
+
+    // -----------------------------------------------------------------------
+    // Regression tests for the UNCERTAIN-epoch gap closure (Task 7)
+    // -----------------------------------------------------------------------
+
+    @Test
+    public void testHalfPushedGroupIsDeleteEligibleViaUncertain() {
+        // Regression: plugin.setTopology succeeded but the epoch-advance write failed, leaving
+        // storedEpoch at UNCERTAIN (-2). The cleanup cycle must still call plugin.deleteTopology
+        // rather than skipping the group because storedEpoch != NONE.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("g")).thenReturn(CompletableFuture.completedFuture(null));
+        Set<String> eligible = Set.of("g");
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("g")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.runOneStreamsTopologyCleanupCycle();
+
+        verify(plugin).deleteTopology("g");
+    }
+
+    @Test
+    public void testCleanupCycleFinalizesAfterDeleteNotPlainClear() {
+        // Regression: after a successful plugin.deleteTopology the cycle must write the smart-
+        // finalize batch op ("finalize-stored-topology-epoch-after-delete-batch") so that any
+        // racing push that advanced storedEpoch past UNCERTAIN is re-written to UNCERTAIN for
+        // re-solicitation. A plain clear would leave a stranded real epoch.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("g")).thenReturn(CompletableFuture.completedFuture(null));
+        Set<String> eligible = Set.of("g");
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("g")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.runOneStreamsTopologyCleanupCycle();
+
+        verify(runtime).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+    }
+
+    @Test
+    public void testUncertainStoredEpochSolicitsOnHeartbeat() throws Exception {
+        // Regression (loss direction): a group whose storedEpoch is UNCERTAIN (-2) — left by a
+        // delete that wrote -2 but whose finalize write then failed — must still solicit a push on
+        // the next heartbeat. UNCERTAIN != currentEpoch, so the back-off gate does not suppress
+        // solicitation and TopologyDescriptionRequired is set.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 3, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1),
+            "storedEpoch == UNCERTAIN must still solicit a push on heartbeat");
+    }
+
+    @Test
+    public void testDescribeAtUncertainEpochYieldsNotStored() throws Exception {
+        // Regression (loss direction): a group at storedEpoch == UNCERTAIN (-2) must be described
+        // as NOT_STORED because the broker cannot confirm the plugin holds a valid copy. The
+        // describe gate uses `storedEpoch <= NONE` (i.e. <= -1), which also covers -2.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = describedGroupWithTopology("g", 3);
+        // The storedEpoch map carries UNCERTAIN (-2): the plugin has not confirmed it holds epoch 3.
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroup),
+                    Map.of("g", StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN))));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> result = service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("g"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED,
+            result.get(0).topologyDescriptionStatus());
+        assertNull(result.get(0).topologyDescription());
+        verify(plugin, never()).getTopology(anyString(), anyInt());
     }
 }

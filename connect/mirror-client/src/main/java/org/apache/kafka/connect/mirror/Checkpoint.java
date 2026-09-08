@@ -19,6 +19,8 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -33,6 +35,7 @@ import java.util.Objects;
 /**
  * Checkpoint records emitted by MirrorCheckpointConnector.
  */
+@InterfaceAudience.Public
 public class Checkpoint {
     public static final String TOPIC_KEY = "topic";
     public static final String PARTITION_KEY = "partition";
@@ -43,16 +46,19 @@ public class Checkpoint {
     public static final String VERSION_KEY = "version";
     public static final short VERSION = 0;
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: public field exposes internal Schema type for the historical MirrorMaker wire format — pending KIP review to promote the type or refactor")
     public static final Schema VALUE_SCHEMA_V0 = new Schema(
             new Field(UPSTREAM_OFFSET_KEY, Type.INT64),
             new Field(DOWNSTREAM_OFFSET_KEY, Type.INT64),
             new Field(METADATA_KEY, Type.STRING));
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: public field exposes internal Schema type for the historical MirrorMaker wire format — pending KIP review to promote the type or refactor")
     public static final Schema KEY_SCHEMA = new Schema(
             new Field(CONSUMER_GROUP_ID_KEY, Type.STRING),
             new Field(TOPIC_KEY, Type.STRING),
             new Field(PARTITION_KEY, Type.INT32));
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: public field exposes internal Schema type for the historical MirrorMaker wire format — pending KIP review to promote the type or refactor")
     public static final Schema HEADER_SCHEMA = new Schema(
             new Field(VERSION_KEY, Type.INT16));
 

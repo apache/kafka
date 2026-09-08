@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.source;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 
@@ -25,6 +26,7 @@ import java.util.Map;
  * SourceTaskContext is provided to SourceTasks to allow them to interact with the underlying
  * runtime.
  */
+@InterfaceAudience.Public
 public interface SourceTaskContext {
     /**
      * Get the Task configuration. This is the latest configuration and may differ from that passed on startup.

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.tools;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -28,6 +29,7 @@ import java.util.Map;
 /**
  * Mock source implementation which delegates to {@link MockConnector}.
  */
+@InterfaceAudience.Public
 public class MockSourceConnector extends SourceConnector {
 
     private final MockConnector delegate = new MockConnector();

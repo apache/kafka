@@ -17,6 +17,7 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
 import org.apache.kafka.common.utils.Time;
@@ -40,6 +41,7 @@ import static java.util.Collections.unmodifiableList;
  * message size would record a sequence of message sizes using the {@link #record(double)} api and would maintain a set
  * of metrics about request sizes such as the average or max.
  */
+@InterfaceAudience.Public
 public final class Sensor {
 
     private final Metrics registry;

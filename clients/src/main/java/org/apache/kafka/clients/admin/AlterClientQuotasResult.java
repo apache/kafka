@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.util.Collection;
@@ -26,6 +27,7 @@ import java.util.Map;
 /**
  * The result of the {@link Admin#alterClientQuotas(Collection, AlterClientQuotasOptions)} call.
  */
+@InterfaceAudience.Public
 public class AlterClientQuotasResult {
 
     private final Map<ClientQuotaEntity, KafkaFuture<Void>> futures;

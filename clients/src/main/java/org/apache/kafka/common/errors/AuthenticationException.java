@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import javax.net.ssl.SSLException;
 
@@ -32,6 +35,7 @@ import javax.net.ssl.SSLException;
  *   <li>{@link SslAuthenticationException} if SSL handshake failed due to any {@link SSLException}.</li>
  * </ul>
  */
+@InterfaceAudience.Public
 public class AuthenticationException extends InvalidConfigurationException {
 
     private static final long serialVersionUID = 1L;

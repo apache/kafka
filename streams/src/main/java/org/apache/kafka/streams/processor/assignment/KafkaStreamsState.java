@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.HostInfo;
 
@@ -26,6 +27,7 @@ import java.util.SortedSet;
 /**
  * A read-only metadata class representing the current state of each KafkaStreams client with at least one StreamThread participating in this rebalance
  */
+@InterfaceAudience.Public
 public interface KafkaStreamsState {
     /**
      * @return the processId of the application instance running on this KafkaStreams client

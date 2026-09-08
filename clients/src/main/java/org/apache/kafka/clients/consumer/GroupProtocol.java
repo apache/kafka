@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Locale;
 
@@ -25,6 +28,7 @@ import java.util.Locale;
  *     <li>{@link #CONSUMER} - The Consumer rebalance protocol (KIP-848)</li>
  * </ul>
  */
+@InterfaceAudience.Public
 public enum GroupProtocol {
     /** Classic group protocol.  */
     CLASSIC("CLASSIC"),

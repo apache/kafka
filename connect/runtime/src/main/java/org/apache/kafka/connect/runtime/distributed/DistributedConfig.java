@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -186,6 +187,13 @@ public final class DistributedConfig extends WorkerConfig {
     public static final String CONNECT_PROTOCOL_CONFIG = "connect.protocol";
     public static final String CONNECT_PROTOCOL_DOC = "Compatibility mode for Kafka Connect Protocol";
     public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.SESSIONED.toString();
+
+
+    public static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG = "internal.topics.automatic.creation.enable";
+    private static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC = "Whether to automatically create internal topics used by Connect. "
+            + "This includes the offset, config, and status topics, as well as connector-specific offset topics "
+            + "configured via 'offsets.storage.topic' in the source connector configuration.";
+    public static final boolean INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT = true;
 
     /**
      * <code>scheduled.rebalance.max.delay.ms</code>
@@ -397,6 +405,12 @@ public final class DistributedConfig extends WorkerConfig {
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+            .define(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                    atLeast(0L),
+                    ConfigDef.Importance.HIGH,
+                    CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
@@ -427,6 +441,12 @@ public final class DistributedConfig extends WorkerConfig {
                     WORKER_UNSYNC_BACKOFF_MS_DEFAULT,
                     ConfigDef.Importance.MEDIUM,
                     WORKER_UNSYNC_BACKOFF_MS_DOC)
+            .define(
+                    INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG,
+                    Type.BOOLEAN,
+                    INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT,
+                    ConfigDef.Importance.MEDIUM,
+                    INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC)
             .define(OFFSET_STORAGE_TOPIC_CONFIG,
                     ConfigDef.Type.STRING,
                     ConfigDef.Importance.HIGH,
@@ -591,6 +611,11 @@ public final class DistributedConfig extends WorkerConfig {
     }
 
     @Override
+    public boolean internalTopicsCreationEnabled() {
+        return Boolean.TRUE.equals(getBoolean(INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG));
+    }
+
+    @Override
     public String groupId() {
         return getString(GROUP_ID_CONFIG);
     }
@@ -598,7 +623,20 @@ public final class DistributedConfig extends WorkerConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
+        warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs();
         return super.postProcessParsedConfig(parsedValues);
+    }
+
+    private void warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs() {
+        long connectionsMaxIdleMs = getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
+        int rebalanceTimeoutMs = getInt(REBALANCE_TIMEOUT_MS_CONFIG);
+        if (connectionsMaxIdleMs >= 0 && connectionsMaxIdleMs < rebalanceTimeoutMs) {
+            log.warn("Configuration '{}' with value '{}' is lower than configuration '{}' with value '{}'. " +
+                    "This may cause the connection to the group coordinator to be closed during an ongoing rebalance, " +
+                    "which can prolong or disrupt group rejoin.",
+                CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdleMs,
+                REBALANCE_TIMEOUT_MS_CONFIG, rebalanceTimeoutMs);
+        }
     }
 
     public DistributedConfig(Map<String, String> props) {

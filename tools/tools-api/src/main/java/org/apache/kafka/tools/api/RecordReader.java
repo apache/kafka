@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.tools.api;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 import java.io.InputStream;
@@ -30,6 +32,7 @@ import java.util.Map;
  *
  * This is used by the `org.apache.kafka.tools.ConsoleProducer`.
  */
+@InterfaceAudience.Public
 public interface RecordReader extends Closeable, Configurable {
 
     default void configure(Map<String, ?> configs) {}

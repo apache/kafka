@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
+import org.apache.kafka.clients.admin.DescribeFeaturesOptions;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
@@ -34,9 +37,12 @@ import net.sourceforge.argparse4j.inf.Subparsers;
 
 import java.io.PrintStream;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -73,9 +79,13 @@ public class ClusterTool {
                 .help("Get information about the ID of a cluster.");
         Subparser unregisterParser = subparsers.addParser("unregister")
                 .help("Unregister a broker.");
+        Subparser unregisterControllerParser = subparsers.addParser("unregister-controller")
+                .help("Unregister a controller.");
         Subparser listEndpoints = subparsers.addParser("list-endpoints")
                 .help("List endpoints");
-        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, listEndpoints)) {
+        Subparser apiVersionsParser = subparsers.addParser("api-versions")
+                .help("Get information about the api versions of the brokers or controllers.");
+        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, unregisterControllerParser, listEndpoints, apiVersionsParser)) {
             MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
             connectionOptions.addArgument("--bootstrap-server", "-b")
                     .action(store())
@@ -96,6 +106,11 @@ public class ClusterTool {
                 .action(store())
                 .required(true)
                 .help("The ID of the broker to unregister.");
+        unregisterControllerParser.addArgument("--id", "-i")
+                .type(Integer.class)
+                .action(store())
+                .required(true)
+                .help("The ID of the controller to unregister.");
         listEndpoints.addArgument("--include-fenced-brokers")
                 .action(storeTrue())
                 .help("Whether to include fenced brokers when listing broker endpoints");
@@ -130,6 +145,12 @@ public class ClusterTool {
                 }
                 break;
             }
+            case "unregister-controller": {
+                try (Admin adminClient = Admin.create(properties)) {
+                    unregisterControllerCommand(System.out, adminClient, namespace.getInt("id"));
+                }
+                break;
+            }
             case "list-endpoints": {
                 try (Admin adminClient = Admin.create(properties)) {
                     boolean includeFencedBrokers = Optional.of(namespace.getBoolean("include_fenced_brokers")).orElse(false);
@@ -138,6 +159,12 @@ public class ClusterTool {
                         throw new IllegalArgumentException("The option --include-fenced-brokers is only supported with --bootstrap-server option");
                     }
                     listEndpoints(System.out, adminClient, listControllerEndpoints, includeFencedBrokers);
+                }
+                break;
+            }
+            case "api-versions": {
+                try (Admin adminClient = Admin.create(properties)) {
+                    apiVersionsCommand(System.out, adminClient);
                 }
                 break;
             }
@@ -163,6 +190,20 @@ public class ClusterTool {
             Throwable cause = ee.getCause();
             if (cause instanceof UnsupportedVersionException) {
                 stream.println("The target cluster does not support the broker unregistration API.");
+            } else {
+                throw ee;
+            }
+        }
+    }
+
+    static void unregisterControllerCommand(PrintStream stream, Admin adminClient, int id) throws Exception {
+        try {
+            adminClient.unregisterController(id).all().get();
+            stream.println("Controller " + id + " is no longer registered.");
+        } catch (ExecutionException ee) {
+            Throwable cause = ee.getCause();
+            if (cause instanceof UnsupportedVersionException) {
+                stream.println("The target cluster does not support the controller unregistration API.");
             } else {
                 throw ee;
             }
@@ -207,5 +248,27 @@ public class ClusterTool {
                 throw ee;
             }
         }
+    }
+
+    static void apiVersionsCommand(PrintStream stream, Admin adminClient) throws Exception {
+        Collection<Node> nodes = adminClient.describeCluster().nodes().get();
+        Map<Node, InternalDescribeFeaturesResult> nodeApiVersions = new TreeMap<>(Comparator.comparingInt(Node::id));
+        nodes.forEach(node -> {
+            InternalDescribeFeaturesResult result = (InternalDescribeFeaturesResult) adminClient.describeFeatures(
+                    new DescribeFeaturesOptions().nodeId(node.id()));
+            nodeApiVersions.put(node, result);
+        });
+
+        nodeApiVersions.forEach((broker, future) -> {
+            try {
+                NodeApiVersions apiVersions = future.nodeApiVersions().get();
+                stream.print(broker + " -> " + apiVersions.toString(true) + "\n");
+            } catch (ExecutionException e) {
+                stream.print(broker + " -> ERROR: " + e.getCause() + "\n");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                stream.print(broker + " -> ERROR: " + e + "\n");
+            }
+        });
     }
 }

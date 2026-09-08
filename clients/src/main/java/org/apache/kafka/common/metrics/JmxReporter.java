@@ -18,6 +18,7 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.internals.Sanitizer;
 
@@ -48,6 +49,7 @@ import javax.management.ObjectName;
 /**
  * Register metrics in JMX as dynamic mbeans based on the metric names
  */
+@InterfaceAudience.Public
 public class JmxReporter implements MetricsReporter {
 
     public static final String METRICS_CONFIG_PREFIX = "metrics.jmx.";

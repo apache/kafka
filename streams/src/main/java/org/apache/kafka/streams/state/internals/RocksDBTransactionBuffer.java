@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDB;
@@ -58,6 +60,11 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     private final String storeName;
     private WriteBatch writeBatch;
     private volatile NavigableMap<Bytes, List<Bytes>> rangeTombstones = Collections.emptyNavigableMap();
+    // Position deltas for writes staged in the current (uncommitted) transaction. Merged into the
+    // store's committed Position and cleared on commit; discarded on rollback. Guarded by
+    // snapshotLock (the same lock that guards the staging map), so reads from IQ threads and
+    // owner mutations stay consistent with the staged writes they correspond to.
+    private Position pendingPosition = Position.emptyPosition();
 
     RocksDBTransactionBuffer(final RocksDB db,
                              final ColumnFamilyHandle cfHandle,
@@ -88,8 +95,10 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     void stage(final ColumnFamilyHandle cf, final Bytes key, final byte[] value) {
         snapshotLock.writeLock().lock();
         try {
-            pendingWrites.put(key, Optional.ofNullable(value));
-            pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
+            if (cf == cfHandle) {
+                pendingWrites.put(key, Optional.ofNullable(value));
+                pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
+            }
             try {
                 if (value != null) {
                     writeBatch.put(cf, key.get(), value);
@@ -99,6 +108,25 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error staging write in transaction buffer for store " + storeName, e);
             }
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Runs a sequence of {@link #stage} calls as one batch, holding the {@code snapshotLock} write
+     * lock for the whole batch so a non-owner (IQ) read observes either none or all of it. Without
+     * this, a multi-write operation would stage entry-by-entry and a reader could interleave with a
+     * half-staged batch, which the equivalent non-transactional {@code WriteBatch} write never
+     * exposes. The lock is reentrant, so the per-write acquisitions nested inside are uncontended.
+     *
+     * @param stagingOperations the batch to stage; must only call {@code stage}/{@code stageDeleteRange}
+     *                          on this buffer, and must not block
+     */
+    void stageAll(final Runnable stagingOperations) {
+        snapshotLock.writeLock().lock();
+        try {
+            stagingOperations.run();
         } finally {
             snapshotLock.writeLock().unlock();
         }
@@ -274,6 +302,35 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     void discardPendingBatch() {
         writeBatch.clear();
         rangeTombstones = Collections.emptyNavigableMap();
+        pendingPosition = Position.emptyPosition();
+    }
+
+    void updatePosition(final StateStoreContext stateStoreContext) {
+        snapshotLock.writeLock().lock();
+        try {
+            StoreQueryUtils.updatePosition(pendingPosition, stateStoreContext);
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    Position pendingPosition() {
+        snapshotLock.readLock().lock();
+        try {
+            return pendingPosition.copy();
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    void mergePendingPositionInto(final Position committed) {
+        snapshotLock.writeLock().lock();
+        try {
+            committed.merge(pendingPosition);
+            pendingPosition = Position.emptyPosition();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
     }
 
     @Override

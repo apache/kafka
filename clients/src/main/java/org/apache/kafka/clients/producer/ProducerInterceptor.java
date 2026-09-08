@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 
 /**
@@ -37,6 +38,7 @@ import org.apache.kafka.common.header.Headers;
  * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the interceptor to register metrics. The following tags are automatically added to
  * all metrics registered: <code>config</code> set to <code>interceptor.classes</code>, and <code>class</code> set to the ProducerInterceptor class name.
  */
+@InterfaceAudience.Public
 public interface ProducerInterceptor<K, V> extends Configurable, AutoCloseable {
     /**
      * This is called from {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)} and

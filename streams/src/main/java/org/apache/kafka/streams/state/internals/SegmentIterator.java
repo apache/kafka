@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -32,6 +34,9 @@ public class SegmentIterator<S extends Segment> implements KeyValueIterator<Byte
     private final Bytes from;
     private final Bytes to;
     private final boolean forward;
+    // Non-null only for interactive-query iteration, where reads go through the segment's isolation view;
+    // null means read the segment live (the owner's own path during processing).
+    private final IsolationLevel isolationLevel;
     protected final Iterator<S> segments;
     protected final HasNextCondition hasNextCondition;
 
@@ -43,11 +48,21 @@ public class SegmentIterator<S extends Segment> implements KeyValueIterator<Byte
                     final Bytes from,
                     final Bytes to,
                     final boolean forward) {
+        this(segments, hasNextCondition, from, to, forward, null);
+    }
+
+    SegmentIterator(final Iterator<S> segments,
+                    final HasNextCondition hasNextCondition,
+                    final Bytes from,
+                    final Bytes to,
+                    final boolean forward,
+                    final IsolationLevel isolationLevel) {
         this.segments = segments;
         this.hasNextCondition = hasNextCondition;
         this.from = from;
         this.to = to;
         this.forward = forward;
+        this.isolationLevel = isolationLevel;
     }
 
     @Override
@@ -74,10 +89,12 @@ public class SegmentIterator<S extends Segment> implements KeyValueIterator<Byte
             close();
             currentSegment = segments.next();
             try {
-                if (forward) {
-                    currentIterator = currentSegment.range(from, to);
+                if (isolationLevel == null) {
+                    currentIterator = forward ? currentSegment.range(from, to) : currentSegment.reverseRange(from, to);
                 } else {
-                    currentIterator = currentSegment.reverseRange(from, to);
+                    // Interactive query: read through the segment's isolation view.
+                    final ReadOnlyKeyValueStore<Bytes, byte[]> segmentView = currentSegment.readOnly(isolationLevel);
+                    currentIterator = forward ? segmentView.range(from, to) : segmentView.reverseRange(from, to);
                 }
             } catch (final InvalidStateStoreException e) {
                 // segment may have been closed so we ignore it.

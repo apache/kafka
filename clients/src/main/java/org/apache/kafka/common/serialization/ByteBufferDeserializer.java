@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 
 import java.nio.ByteBuffer;
 
+@InterfaceAudience.Public
 public class ByteBufferDeserializer implements Deserializer<ByteBuffer> {
 
     @Override

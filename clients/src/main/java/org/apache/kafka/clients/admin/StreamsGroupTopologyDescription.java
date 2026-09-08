@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
@@ -33,6 +34,7 @@ import java.util.Set;
  * callers do not need to depend on {@code kafka-streams}. The wire format only carries the successor relation between
  * nodes; the {@link Node#predecessors() predecessors} are reconstructed from the successors when this description is built.
  */
+@InterfaceAudience.Public
 @InterfaceStability.Evolving
 public class StreamsGroupTopologyDescription {
 

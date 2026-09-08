@@ -27,6 +27,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -71,9 +72,9 @@ class StreamsGroupTestUtil {
      * This matches what streamsGroupAssignmentConfigs() would return.
      */
     static Map<String, String> getDefaultAssignmentConfigs() {
-        // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
         return new TreeMap<>(Map.of(
-            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+            AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG,
+            String.valueOf(AssignmentConfigsImpl.DEFAULT.numStandbyReplicas())
         ));
     }
 

@@ -658,6 +658,7 @@ public class StreamThreadStateStoreProviderTest {
             false,
             logContext,
             stateDirectory,
+            new MockTime(),
             topology.storeToChangelogTopic(),
             partitions);
         final RecordCollector recordCollector = new RecordCollectorImpl(

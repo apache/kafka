@@ -17,11 +17,14 @@
 
 package org.apache.kafka.server.telemetry;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * {@code ClientTelemetryExporter} defines the behavior for telemetry exporters on the broker side
  * which receive and export client telemetry metrics and provides additional context including the
  * push interval.
  */
+@InterfaceAudience.Public
 public interface ClientTelemetryExporter {
 
     /**

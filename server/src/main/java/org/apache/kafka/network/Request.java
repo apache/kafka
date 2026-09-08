@@ -282,6 +282,10 @@ public final class Request implements BaseRequest {
             + ", but found " + bodyAndSize.request.getClass().getName());
     }
 
+    public AbstractRequest body() {
+        return bodyAndSize.request;
+    }
+
     public AbstractRequest loggableRequest() {
         if (bodyAndSize.request instanceof AlterConfigsRequest alterConfigs) {
             var newData = alterConfigs.data().duplicate();
@@ -356,7 +360,7 @@ public final class Request implements BaseRequest {
         };
 
         for (String metricName : overrideMetricNames) {
-            RequestMetrics m = metrics.apply(metricName);
+            RequestMetrics m = metrics.get(metricName);
             m.requestRate(header().apiVersion()).mark();
             m.deprecatedRequestRate(header().apiKey(), header().apiVersion(), context.clientInformation)
                 .ifPresent(Meter::mark);

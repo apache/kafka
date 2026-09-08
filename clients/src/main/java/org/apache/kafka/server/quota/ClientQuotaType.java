@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.quota;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Types of quotas that may be configured on brokers for client requests.
  */
+@InterfaceAudience.Public
 public enum ClientQuotaType {
     PRODUCE,
     FETCH,

@@ -17,11 +17,14 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 
 /**
  * Represents an access control entry.  ACEs are a tuple of principal, host, operation, and permissionType.
  */
+@InterfaceAudience.Public
 public class AccessControlEntry {
     final AccessControlEntryData data;
 

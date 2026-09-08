@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
@@ -25,6 +26,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Stable
+@InterfaceAudience.Public
 public class AddRaftVoterResult {
     private final KafkaFuture<Void> result;
 

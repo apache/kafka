@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
-public class RequestChannelMetrics {
+public class RequestChannelMetrics implements AutoCloseable {
 
     private final Map<String, RequestMetrics> metricsMap;
 
@@ -48,7 +48,7 @@ public class RequestChannelMetrics {
         this(ApiKeys.apisForListener(scope));
     }
 
-    public RequestMetrics apply(String metricName) {
+    public RequestMetrics get(String metricName) {
         RequestMetrics requestMetrics = metricsMap.get(metricName);
         if (requestMetrics == null) {
             throw new NoSuchElementException("No RequestMetrics for " + metricName);
@@ -56,6 +56,7 @@ public class RequestChannelMetrics {
         return requestMetrics;
     }
 
+    @Override
     public void close() {
         for (RequestMetrics requestMetrics : metricsMap.values()) {
             requestMetrics.removeMetrics();

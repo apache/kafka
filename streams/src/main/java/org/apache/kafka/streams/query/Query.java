@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.query;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Marker interface that all interactive queries must implement (see {@link
@@ -30,6 +33,7 @@ package org.apache.kafka.streams.query;
  *
  * @param <R> The type of the result returned by this query.
  */
+@InterfaceAudience.Public
 public interface Query<R> {
 
 }

@@ -18,9 +18,10 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -63,7 +65,7 @@ public class RocksDBSessionStoreWithHeadersTest {
             new StreamsConfig(props)
         );
 
-        final SegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
+        final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
             STORE_NAME,
             "test-metrics-scope",
             RETENTION_PERIOD,
@@ -83,15 +85,29 @@ public class RocksDBSessionStoreWithHeadersTest {
     }
 
     @Test
-    public void shouldReturnUnknownQueryTypeForWindowRangeQuery() {
-        final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withKey(
-            new Bytes("test-key".getBytes())
-        );
+    public void shouldHandleWindowRangeQuery() {
+        // KIP-1356: the withKey form of the headers-aware TimestampedWindowRangeWithHeadersQuery
+        // forwards a raw WindowRangeQuery to this native store, so enable WindowRangeQuery via the
+        // inherited RocksDBSessionStore handling (StoreQueryUtils), returning the raw stored
+        // header-format bytes (previously UNKNOWN_QUERY_TYPE for every query). This also fixes the
+        // same pre-existing gap for the plain (non-headers) WindowRangeQuery.withKey.
+        final Bytes key = new Bytes("test-key".getBytes());
+        final byte[] storedBytes = "headers+aggregation".getBytes();
+        final Windowed<Bytes> windowedKey = new Windowed<>(key, new SessionWindow(0L, 1_000L));
+        sessionStore.put(windowedKey, storedBytes);
+
+        final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withKey(key);
         final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
             sessionStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        assertFalse(result.isSuccess());
-        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+        assertTrue(result.isSuccess(), "Expected WindowRangeQuery to succeed");
+        try (KeyValueIterator<Windowed<Bytes>, byte[]> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext(), "Expected the stored session in the window range result");
+            final KeyValue<Windowed<Bytes>, byte[]> keyValue = iterator.next();
+            assertEquals(key, keyValue.key.key());
+            assertArrayEquals(storedBytes, keyValue.value, "Expected the raw stored bytes to be returned");
+            assertFalse(iterator.hasNext(), "Expected exactly one entry in the window range result");
+        }
         assertNotNull(result.getPosition());
     }
 
@@ -103,10 +119,13 @@ public class RocksDBSessionStoreWithHeadersTest {
         final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
             sessionStore.query(query, PositionBound.unbounded(), new QueryConfig(true));
 
-        assertFalse(result.getExecutionInfo().isEmpty());
-        assertTrue(result.getExecutionInfo().get(0).contains("Handled in"));
-        assertTrue(result.getExecutionInfo().get(0).contains(
-            RocksDBSessionStoreWithHeaders.class.getName()));
+        // The query now succeeds and returns an open store iterator, so close it to avoid a leak.
+        try (KeyValueIterator<Windowed<Bytes>, byte[]> iterator = result.getResult()) {
+            assertFalse(result.getExecutionInfo().isEmpty());
+            assertTrue(result.getExecutionInfo().get(0).contains("Handled in"));
+            assertTrue(result.getExecutionInfo().get(0).contains(
+                RocksDBSessionStoreWithHeaders.class.getName()));
+        }
     }
 
     @Test
@@ -117,6 +136,8 @@ public class RocksDBSessionStoreWithHeadersTest {
         final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
             sessionStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        assertTrue(result.getExecutionInfo().isEmpty());
+        try (KeyValueIterator<Windowed<Bytes>, byte[]> iterator = result.getResult()) {
+            assertTrue(result.getExecutionInfo().isEmpty());
+        }
     }
 }

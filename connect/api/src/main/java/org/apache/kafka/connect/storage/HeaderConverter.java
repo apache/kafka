@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -36,6 +37,7 @@ import java.io.Closeable;
  * The following tags are automatically added to all metrics registered: <code>connector</code> set to connector name,
  * <code>task</code> set to the task id and <code>converter</code> set to <code>header</code>.
  */
+@InterfaceAudience.Public
 public interface HeaderConverter extends Configurable, Closeable, ConnectPlugin {
 
     /**

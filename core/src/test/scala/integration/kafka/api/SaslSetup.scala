@@ -17,9 +17,7 @@
 
 package kafka.api
 
-import kafka.security.JaasTestUtils
-import kafka.security.JaasTestUtils.JaasSection
-import kafka.security.minikdc.MiniKdc
+import org.apache.kafka.security.JaasTestUtils.JaasSection
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ScramCredentialInfo, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
@@ -27,6 +25,8 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.LoginManager
+import org.apache.kafka.security.JaasTestUtils
+import org.apache.kafka.security.minikdc.MiniKdc
 
 import java.io.File
 import java.util

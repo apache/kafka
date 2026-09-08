@@ -17,9 +17,12 @@
 
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Thrown when a regular expression received in a request is not valid.
  */
+@InterfaceAudience.Public
 public class InvalidRegularExpression extends ApiException {
     public InvalidRegularExpression(String message) {
         super(message);

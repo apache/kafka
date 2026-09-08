@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -73,6 +74,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
  *
  * @see StreamsBuilder#addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)
  */
+@InterfaceAudience.Public
 public interface GlobalKTable<K, V> {
     /**
      * Get the name of the local state store that can be used to query this {@code GlobalKTable}.

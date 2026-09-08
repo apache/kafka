@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Indicates a pre run time error occurred while parsing the {@link org.apache.kafka.streams.Topology logical topology}
  * to construct the {@link org.apache.kafka.streams.processor.internals.ProcessorTopology physical processor topology}.
  */
+@InterfaceAudience.Public
 public class TopologyException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

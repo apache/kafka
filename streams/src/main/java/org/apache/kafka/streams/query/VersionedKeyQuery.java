@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.state.VersionedRecord;
 
@@ -30,6 +31,7 @@ import java.util.Optional;
  * @param <V> The type of the value.
  */
 @Evolving
+@InterfaceAudience.Public
 public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> {
 
     private final K key;

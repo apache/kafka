@@ -13,6 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pluginManagement {
+    // Exposes the api-checker plugins (org.apache.kafka.public-api-checker and
+    // org.apache.kafka.internal-api-checker) to Kafka's own build by ID. The api-checker
+    // tree is a separate Gradle build, so its Maven runtime dependencies don't end up on
+    // every developer's main-build classpath, and each published artifact carries only
+    // the classes its consumers need.
+    includeBuild 'api-checker'
+}
+
 plugins {
     id 'com.gradle.develocity' version '3.19'
     id 'com.gradle.common-custom-user-data-gradle-plugin' version '2.0.2'

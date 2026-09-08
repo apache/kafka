@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
@@ -33,6 +34,7 @@ import java.util.Optional;
 /**
  * A new topic to be created via {@link Admin#createTopics(Collection)}.
  */
+@InterfaceAudience.Public
 public class NewTopic {
 
     private final String name;

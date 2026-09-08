@@ -19,10 +19,13 @@ from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService, quorum
-from kafkatest.services.streams import StreamsBrokerCompatibilityService
+from kafkatest.services.streams import (
+    INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS,
+    StreamsBrokerCompatibilityService,
+)
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.version import LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, \
-    LATEST_3_7, LATEST_3_8, LATEST_3_9, LATEST_4_0, LATEST_4_1, LATEST_4_2, LATEST_4_3, KafkaVersion
+    LATEST_3_7, LATEST_3_8, LATEST_3_9, LATEST_4_0, LATEST_4_1, LATEST_4_2, LATEST_4_3, DEV_BRANCH, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
@@ -45,7 +48,12 @@ class StreamsBrokerCompatibility(Test):
                                   },
                                   server_prop_overrides=[
                                       ["transaction.state.log.replication.factor", "1"],
-                                      ["transaction.state.log.min.isr", "1"]
+                                      ["transaction.state.log.min.isr", "1"],
+                                      # KIP-1331 streams topology description plugin: broker_version>4.4 instantiate the plugin at startup;
+                                      # older brokers warn about the unknown config and ignores it.
+                                      # Note that the plugin is never invoked in this system test since it uses classic protocol,
+                                      # so this just verifies a plugin-configured broker still serves classic-protocol streams app without breaking it.
+                                      ["group.streams.topology.description.plugin.class", INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS]
                                   ])
         self.consumer = VerifiableConsumer(test_context,
                                            1,
@@ -58,7 +66,7 @@ class StreamsBrokerCompatibility(Test):
     @matrix(broker_version=[str(LATEST_3_0),str(LATEST_3_1),str(LATEST_3_2),str(LATEST_3_3),
                             str(LATEST_3_4),str(LATEST_3_5),str(LATEST_3_6),str(LATEST_3_7),
                             str(LATEST_3_8),str(LATEST_3_9),str(LATEST_4_0),str(LATEST_4_1),
-                            str(LATEST_4_2),str(LATEST_4_3)],
+                            str(LATEST_4_2),str(LATEST_4_3),str(DEV_BRANCH)],
             metadata_quorum=[quorum.combined_kraft]
             )
     def test_compatible_brokers_eos_disabled(self, broker_version, metadata_quorum):
@@ -81,7 +89,7 @@ class StreamsBrokerCompatibility(Test):
     @matrix(broker_version=[str(LATEST_3_0),str(LATEST_3_1),str(LATEST_3_2),str(LATEST_3_3),
                             str(LATEST_3_4),str(LATEST_3_5),str(LATEST_3_6),str(LATEST_3_7),
                             str(LATEST_3_8),str(LATEST_3_9),str(LATEST_4_0),str(LATEST_4_1),
-                            str(LATEST_4_2),str(LATEST_4_3)],
+                            str(LATEST_4_2),str(LATEST_4_3),str(DEV_BRANCH)],
             metadata_quorum=[quorum.combined_kraft])
     def test_compatible_brokers_eos_v2_enabled(self, broker_version, metadata_quorum):
         self.kafka.set_version(KafkaVersion(broker_version))

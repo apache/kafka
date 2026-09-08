@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 
 import java.util.Objects;
@@ -26,6 +27,7 @@ import java.util.Objects;
  *
  * @param <AGG> the aggregation type
  */
+@InterfaceAudience.Public
 public final class AggregationWithHeaders<AGG> {
 
     private final AGG aggregation;

@@ -17,8 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Options for {@link AdminClient#listPartitionReassignments(ListPartitionReassignmentsOptions)}
  */
+@InterfaceAudience.Public
 public class ListPartitionReassignmentsOptions extends AbstractOptions<ListPartitionReassignmentsOptions> {
 }

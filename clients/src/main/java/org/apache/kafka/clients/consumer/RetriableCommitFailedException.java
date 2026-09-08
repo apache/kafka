@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.RetriableException;
 
 /**
@@ -27,6 +28,7 @@ import org.apache.kafka.common.errors.RetriableException;
  * can be retried. The consumer should attempt to commit the offsets again.
  * </p>
  */
+@InterfaceAudience.Public
 public class RetriableCommitFailedException extends RetriableException {
 
     private static final long serialVersionUID = 1L;

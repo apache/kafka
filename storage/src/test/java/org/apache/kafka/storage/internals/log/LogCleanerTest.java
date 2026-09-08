@@ -2280,11 +2280,11 @@ public class LogCleanerTest {
     public void testReconfigureLogCleanerIoMaxBytesPerSecond() {
         var oldConfig = makeReconfigureConfig(Map.of(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, 10000000D));
 
-        LogCleaner logCleaner = new LogCleaner(new CleanerConfig(oldConfig),
-            List.of(TestUtils.tempDirectory()),
-            new ConcurrentHashMap<>(),
-            new LogDirFailureChannel(1),
-            time) {
+        LogCleaner logCleaner = new LogCleaner(oldConfig,
+                List.of(TestUtils.tempDirectory()),
+                new ConcurrentHashMap<>(),
+                new LogDirFailureChannel(1),
+                time) {
             // shutdown() and startup() are called in LogCleaner.reconfigure().
             // Empty startup() and shutdown() to ensure that no unnecessary log cleaner threads remain after this test.
             @Override
@@ -2703,11 +2703,11 @@ public class LogCleanerTest {
         return cleaner.doClean(logToClean, currentTime + tombstoneRetentionMs + 1).getKey();
     }
 
-    private AbstractConfig makeReconfigureConfig(Map<String, Object> overrides) {
+    private CleanerConfig makeReconfigureConfig(Map<String, Object> overrides) {
         ConfigDef configDef = new ConfigDef(CleanerConfig.CONFIG_DEF)
             .define(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, ConfigDef.Type.INT,
                 ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, ConfigDef.Importance.HIGH,
                 ServerConfigs.MESSAGE_MAX_BYTES_DOC);
-        return new AbstractConfig(configDef, new HashMap<>(overrides));
+        return new CleanerConfig(new AbstractConfig(configDef, new HashMap<>(overrides)));
     }
 }

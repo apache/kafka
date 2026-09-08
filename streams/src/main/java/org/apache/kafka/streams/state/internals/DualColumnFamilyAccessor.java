@@ -70,7 +70,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
                              final Function<byte[], byte[]> valueConverter,
                              final RocksDBStore store,
                              final AtomicBoolean storeOpen) {
-        super(offsetColumnFamily, storeOpen);
+        super(offsetColumnFamily, storeOpen, store.isTransactional);
         this.oldColumnFamily = oldColumnFamily;
         this.newColumnFamily = newColumnFamily;
         this.valueConverter = valueConverter;

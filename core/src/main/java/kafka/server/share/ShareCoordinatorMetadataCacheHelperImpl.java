@@ -44,24 +44,28 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.IntSupplier;
 
 public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinatorMetadataCacheHelper, ShareGroupDLQMetadataCacheHelper {
     private final MetadataCache metadataCache;
     private final Function<SharePartitionKey, Integer> keyToPartitionMapper;
     private final ListenerName interBrokerListenerName;
     private final GroupConfigManager groupConfigManager;
+    private final IntSupplier messageMaxBytesSupplier;
     private final Logger log = LoggerFactory.getLogger(ShareCoordinatorMetadataCacheHelperImpl.class);
 
     public ShareCoordinatorMetadataCacheHelperImpl(
         MetadataCache metadataCache,
         Function<SharePartitionKey, Integer> keyToPartitionMapper,
         ListenerName interBrokerListenerName,
-        GroupConfigManager groupConfigManager
+        GroupConfigManager groupConfigManager,
+        IntSupplier messageMaxBytesSupplier
     ) {
         this.metadataCache = Objects.requireNonNull(metadataCache, "metadataCache must not be null");
         this.keyToPartitionMapper = Objects.requireNonNull(keyToPartitionMapper, "keyToPartitionMapper must not be null");
         this.interBrokerListenerName = Objects.requireNonNull(interBrokerListenerName, "interBrokerListenerName must not be null");
         this.groupConfigManager = Objects.requireNonNull(groupConfigManager, "groupConfigManager must not be null");
+        this.messageMaxBytesSupplier = Objects.requireNonNull(messageMaxBytesSupplier, "messageMaxBytesSupplier must not be null");
     }
 
     @Override
@@ -100,6 +104,22 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
             return new LogConfig(props).getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
         } catch (ConfigException exe) {
             return false;
+        }
+    }
+
+    @Override
+    public int dlqTopicMaxMessageBytes(String topic) {
+        Properties props = metadataCache.topicConfig(topic);
+        // LogConfig defines its own static default for this key, so an explicit containsKey
+        // check is needed to distinguish "no topic-level override" from "override present"
+        // and fall back to the broker's configured message.max.bytes in the former case.
+        if (props == null || !props.containsKey(TopicConfig.MAX_MESSAGE_BYTES_CONFIG)) {
+            return messageMaxBytesSupplier.getAsInt();
+        }
+        try {
+            return new LogConfig(props).getInt(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
+        } catch (ConfigException exe) {
+            return messageMaxBytesSupplier.getAsInt();
         }
     }
 

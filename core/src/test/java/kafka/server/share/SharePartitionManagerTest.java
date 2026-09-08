@@ -1771,7 +1771,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
@@ -1882,7 +1882,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
 
@@ -1989,7 +1989,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
@@ -2097,7 +2097,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
 

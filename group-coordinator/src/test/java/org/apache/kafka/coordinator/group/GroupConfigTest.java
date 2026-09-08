@@ -30,6 +30,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -132,7 +133,14 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
             } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_boolean");
-            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
+            } else if (GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG.equals(name)) {
+                // This is a free-form list of tag keys, so values like "not_a_number" are valid. Only an
+                // empty tag key (an empty element between commas) is rejected.
+                assertPropertyInvalid(name, "tag1,,tag2");
+            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)
+                    && !GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG.equals(name)) {
+                // Free-form string configs (no ConfigDef validator) accept any value at construction
+                // time; their values are validated separately in GroupConfig.validate.
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
         });
@@ -345,6 +353,84 @@ public class GroupConfigTest {
         doTestInvalidProps(props, ConfigException.class);
     }
 
+    @Test
+    public void testStreamsRackAwareAssignmentTagsValidation() {
+        // Duplicate rack-aware assignment tags are rejected rather than silently de-duplicated.
+        Map<String, String> duplicateProps = createValidGroupConfig();
+        duplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
+        assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(InvalidConfigurationException.class,
+                () -> GroupConfig.validate(duplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
+
+        // Duplicates are detected regardless of surrounding whitespace.
+        Map<String, String> whitespaceDuplicateProps = createValidGroupConfig();
+        whitespaceDuplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , zone ");
+        assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(InvalidConfigurationException.class,
+                () -> GroupConfig.validate(whitespaceDuplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
+
+        // Distinct rack-aware assignment tags are accepted.
+        Map<String, String> distinctProps = createValidGroupConfig();
+        distinctProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
+        doTestValidProps(distinctProps);
+
+        // Surrounding whitespace is trimmed: " zone , cluster " parses and returns two clean tags.
+        Map<String, String> whitespaceProps = createValidGroupConfig();
+        whitespaceProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , cluster ");
+        doTestValidProps(whitespaceProps);
+        assertEquals(Optional.of(List.of("zone", "cluster")),
+            new GroupConfig(whitespaceProps).streamsRackAwareAssignmentTags());
+    }
+
+    @Test
+    public void testStreamsAssignorNameValidation() {
+        // A registered assignor name is accepted.
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky");
+        doTestValidProps(props);
+
+        // An unknown assignor name is rejected with INVALID_CONFIG.
+        props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+    }
+
+    @Test
+    public void testStreamsAssignorNameSelectsCustomAssignor() {
+        // A custom assignor registered on the broker can be selected by its name.
+        GroupCoordinatorConfig groupCoordinatorConfig = createGroupCoordinatorConfig(Map.of(
+            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+            "sticky," + GroupCoordinatorConfigTest.CustomTaskAssignor.class.getName()
+        ));
+
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "CustomTaskAssignor");
+        assertDoesNotThrow(() -> GroupConfig.validate(props, groupCoordinatorConfig, createShareGroupConfig()));
+
+        // The built-in assignor is still selectable alongside it.
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky");
+        assertDoesNotThrow(() -> GroupConfig.validate(props, groupCoordinatorConfig, createShareGroupConfig()));
+
+        // The custom assignor's class name is not a valid selector; only its name() is.
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, GroupCoordinatorConfigTest.CustomTaskAssignor.class.getName());
+        assertThrows(InvalidConfigurationException.class,
+            () -> GroupConfig.validate(props, groupCoordinatorConfig, createShareGroupConfig()));
+    }
+
+    @Test
+    public void testStreamsAssignorNameEvaluateIsLenient() {
+        // The Admin path (validate) rejects an unknown assignor name...
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+
+        // ...but the metadata-replay path (evaluate) accepts it, so a value that was valid when set
+        // survives a broker restart even if the assignor was later removed from the broker config.
+        Properties replayed = new Properties();
+        replayed.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        assertDoesNotThrow(() -> GroupConfig.evaluate(replayed, "group", createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
     private void doTestInvalidProps(Map<String, String> props, Class<? extends Exception> exceptionClassName) {
         assertThrows(exceptionClassName, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
@@ -509,6 +595,7 @@ public class GroupConfigTest {
         assertEquals(Optional.empty(), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.empty(), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.empty(), config.streamsTaskOffsetIntervalMs());
+        assertEquals(Optional.empty(), config.streamsRackAwareAssignmentTags());
 
         // DLQ configs - have defaults from CONFIG_DEF
         assertEquals("", config.errorsDLQTopicName());
@@ -540,6 +627,7 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
         props.put(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
         props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
+        props.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
 
@@ -571,6 +659,7 @@ public class GroupConfigTest {
         assertEquals(Optional.of(1250), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.of(false), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.of(30000), config.streamsTaskOffsetIntervalMs());
+        assertEquals(Optional.of(List.of("zone", "cluster")), config.streamsRackAwareAssignmentTags());
 
         // DLQ configs
         assertEquals("my-dlq-topic", config.errorsDLQTopicName());
@@ -857,15 +946,21 @@ public class GroupConfigTest {
     }
 
     private GroupCoordinatorConfig createGroupCoordinatorConfig() {
+        return createGroupCoordinatorConfig(Map.of());
+    }
+
+    private GroupCoordinatorConfig createGroupCoordinatorConfig(Map<String, Object> overrides) {
+        Map<String, Object> configs = new HashMap<>(Map.of(
+            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
+            GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
+            GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000
+        ));
+        configs.putAll(overrides);
         return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(
             OFFSET_METADATA_MAX_SIZE,
             OFFSETS_RETENTION_CHECK_INTERVAL_MS,
             OFFSETS_RETENTION_MINUTES,
-            Map.of(
-                GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
-                GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
-                GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000
-            )
+            configs
         );
     }
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KeyValue;
 
 import java.util.Objects;
@@ -25,6 +26,7 @@ import java.util.Objects;
  *
  * @param <V>
  */
+@InterfaceAudience.Public
 public final class ValueAndTimestamp<V> {
     private final V value;
     private final long timestamp;

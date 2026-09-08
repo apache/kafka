@@ -14,17 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.scram;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
 
-
 /**
  * Optional callback used for SCRAM mechanisms if any extensions need to be set
  * in the SASL/SCRAM exchange.
  */
+@InterfaceAudience.Public
 public class ScramExtensionsCallback implements Callback {
     private Map<String, String> extensions = Map.of();
 

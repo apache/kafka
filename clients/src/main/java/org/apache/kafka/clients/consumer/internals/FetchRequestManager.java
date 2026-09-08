@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
     private final NetworkClientDelegate networkClientDelegate;
+    private final long retryBackoffMs;
     private CompletableFuture<Void> pendingFetchRequestFuture;
 
     FetchRequestManager(final LogContext logContext,
@@ -54,9 +55,11 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final FetchBuffer fetchBuffer,
                         final FetchMetricsManager metricsManager,
                         final NetworkClientDelegate networkClientDelegate,
-                        final ApiVersions apiVersions) {
+                        final ApiVersions apiVersions,
+                        final long retryBackoffMs) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
+        this.retryBackoffMs = retryBackoffMs;
     }
 
     @Override
@@ -67,6 +70,18 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     @Override
     protected void maybeThrowAuthFailure(Node node) {
         networkClientDelegate.maybeThrowAuthFailure(node);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * If any request is in flight, its completion will wake the application thread regardless of the outcome, so
+     * no separate bound is needed. Otherwise, the application thread's wait is bounded by {@code retryBackoffMs}
+     * so it can re-evaluate subscription state changes promptly.
+     */
+    @Override
+    public long maximumTimeToWait(long currentTimeMs) {
+        return nodesWithPendingFetchRequests.isEmpty() ? retryBackoffMs : Long.MAX_VALUE;
     }
 
     /**
@@ -128,8 +143,8 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      * Creates the {@link PollResult poll result} that contains a list of zero or more
      * {@link FetchRequest.Builder fetch requests}.
      *
-     * @param fetchRequestPreparer {@link FetchRequestPreparer} to generate a {@link Map} of {@link Node nodes}
-     *                             to their {@link FetchSessionHandler.FetchRequestData}
+     * @param fetchRequestPreparer {@link FetchRequestPreparer} to generate a {@link FetchRequestPreparationResult}
+     *                             mapping {@link Node nodes} to their {@link FetchSessionHandler.FetchRequestData}
      * @param successHandler       {@link ResponseHandler Handler for successful responses}
      * @param errorHandler         {@link ResponseHandler Handler for failure responses}
      * @return {@link PollResult}
@@ -143,12 +158,16 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
         }
 
         try {
-            Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = fetchRequestPreparer.prepare();
+            FetchRequestPreparationResult result = fetchRequestPreparer.prepare();
+            Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = result.requests();
 
             if (fetchRequests.isEmpty()) {
-                // If there's nothing to fetch, wake up the FetchBuffer so it doesn't needlessly wait for a wakeup
-                // that won't come until the data in the fetch buffer is consumed.
-                fetchBuffer.wakeup();
+                if (result.canWakeBufferIfNoFetchRequestsToSend()) {
+                    // If there's nothing to fetch because every fetchable partition already has buffered data,
+                    // wake up the FetchBuffer so it doesn't needlessly wait for a wakeup that won't come until
+                    // the data in the fetch buffer is consumed.
+                    fetchBuffer.wakeup();
+                }
                 pendingFetchRequestFuture.complete(null);
                 return PollResult.EMPTY;
             }
@@ -186,6 +205,6 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     @FunctionalInterface
     protected interface FetchRequestPreparer {
 
-        Map<Node, FetchSessionHandler.FetchRequestData> prepare();
+        FetchRequestPreparationResult prepare();
     }
 }

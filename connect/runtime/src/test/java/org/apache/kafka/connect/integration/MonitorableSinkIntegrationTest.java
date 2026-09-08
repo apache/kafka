@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -32,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -111,9 +113,9 @@ public class MonitorableSinkIntegrationTest {
         assertEquals(MonitorableSinkConnector.VALUE, kafkaMetric.metricValue());
 
         // produce some records
-        for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-            connect.kafka().produce("test-topic", "key-" + i, "value-" + i);
-        }
+        connect.kafka().produce(IntStream.range(0, NUM_RECORDS_PRODUCED)
+                .mapToObj(i -> new ProducerRecord<>("test-topic", ("key-" + i).getBytes(), ("value-" + i).getBytes()))
+                .toList());
 
         // wait for records to reach the task
         connectorHandle.taskHandle(TASK_ID).awaitRecords(CONSUME_MAX_DURATION_MS);

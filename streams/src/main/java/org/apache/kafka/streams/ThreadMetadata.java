@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
 
 /**
  * Metadata of a stream thread.
  */
+@InterfaceAudience.Public
 public interface ThreadMetadata {
 
 

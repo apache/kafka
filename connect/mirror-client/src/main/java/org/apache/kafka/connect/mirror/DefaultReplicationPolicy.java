@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,7 @@ import java.util.regex.Pattern;
  * For example, if the source cluster alias is "us-west", topics created in the target cluster will be named
  * us-west.&lt;TOPIC&gt;. The separator is customizable by setting {@link #SEPARATOR_CONFIG} and defaults to a period.
  */
+@InterfaceAudience.Public
 public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable {
     
     private static final Logger log = LoggerFactory.getLogger(DefaultReplicationPolicy.class);

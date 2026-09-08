@@ -14,19 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-
 /**
  * Metadata of a task.
  */
+@InterfaceAudience.Public
 public interface TaskMetadata {
 
     /**

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.errors.DataException;
 
 import java.math.BigDecimal;
@@ -37,6 +38,7 @@ import java.math.BigInteger;
  *     The underlying representation of this type is bytes containing a two's complement integer
  * </p>
  */
+@InterfaceAudience.Public
 public class Decimal {
     public static final String LOGICAL_NAME = "org.apache.kafka.connect.data.Decimal";
     public static final String SCALE_FIELD = "scale";

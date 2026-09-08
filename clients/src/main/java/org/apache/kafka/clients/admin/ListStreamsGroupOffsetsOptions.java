@@ -17,8 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
-
 
 /**
  * Options for {@link Admin#listStreamsGroupOffsets(java.util.Map, ListStreamsGroupOffsetsOptions)}.
@@ -26,6 +26,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class ListStreamsGroupOffsetsOptions extends AbstractOptions<ListStreamsGroupOffsetsOptions> {
 
     private boolean requireStable = false;

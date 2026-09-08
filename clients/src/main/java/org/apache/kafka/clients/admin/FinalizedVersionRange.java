@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
 /**
  * Represents a range of version levels supported by every broker in a cluster for some feature.
  */
+@InterfaceAudience.Public
 public class FinalizedVersionRange {
     private final short minVersionLevel;
 

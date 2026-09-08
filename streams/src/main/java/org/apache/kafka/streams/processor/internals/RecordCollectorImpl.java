@@ -56,7 +56,6 @@ import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
 import org.slf4j.Logger;
 
 import java.text.MessageFormat;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -159,7 +158,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 );
             }
             if (!partitions.isEmpty()) {
-                final Optional<Set<Integer>> maybeMulticastPartitions = partitioner.partitions(topic, key, value, partitions.size());
+                final Optional<Set<Integer>> maybeMulticastPartitions = partitioner.partitions(topic, key, value, headers, partitions.size());
                 if (maybeMulticastPartitions.isEmpty()) {
                     // A null//empty partition indicates we should use the default partitioner
                     send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
@@ -529,7 +528,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
-                sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
+                sendException.set(new TaskCorruptedException(Set.of(taskId)));
             } else {
                 if (maybeFailResponse(response.result()) == ProductionExceptionHandler.Result.FAIL) {
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";

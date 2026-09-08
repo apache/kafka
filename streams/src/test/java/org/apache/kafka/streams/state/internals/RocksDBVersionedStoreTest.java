@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.ResultOrder;
+import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -831,6 +833,88 @@ public class RocksDBVersionedStoreTest {
         putToStore("k2", "v", BASE_TIMESTAMP + 2, PUT_RETURN_CODE_NOT_PUT);
         verifyGetNullFromStore("k2");
         verifyExpiredRecordSensor(1);
+    }
+
+    @Test
+    public void readOnlyCommittedShouldHideStagedLatestPut() {
+        reopenWithTransactionalEOS();
+
+        putToStore("k", "v1", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        store.commit(Map.of());
+        putToStore("k", "v2", BASE_TIMESTAMP + 1, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+
+        final VersionedKeyValueStore<Bytes, byte[]> uncommitted = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final VersionedKeyValueStore<Bytes, byte[]> committed = store.readOnly(IsolationLevel.READ_COMMITTED);
+
+        final Bytes key = new Bytes(STRING_SERIALIZER.serialize(null, "k"));
+        final VersionedRecord<byte[]> uLatest = uncommitted.get(key);
+        assertThat(STRING_DESERIALIZER.deserialize(null, uLatest.value()), equalTo("v2"));
+        assertThat(uLatest.timestamp(), equalTo(BASE_TIMESTAMP + 1));
+
+        final VersionedRecord<byte[]> cLatest = committed.get(key);
+        assertThat(STRING_DESERIALIZER.deserialize(null, cLatest.value()), equalTo("v1"));
+        assertThat(cLatest.timestamp(), equalTo(BASE_TIMESTAMP));
+    }
+
+    @Test
+    public void readOnlyCommittedShouldHideStagedTimestampedPut() {
+        reopenWithTransactionalEOS();
+
+        putToStore("k", "v1", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        store.commit(Map.of());
+        putToStore("k", "v2", BASE_TIMESTAMP + 2, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+
+        final Bytes key = new Bytes(STRING_SERIALIZER.serialize(null, "k"));
+
+        final VersionedRecord<byte[]> uAtNew = store.readOnly(IsolationLevel.READ_UNCOMMITTED).get(key, BASE_TIMESTAMP + 2);
+        assertThat(STRING_DESERIALIZER.deserialize(null, uAtNew.value()), equalTo("v2"));
+
+        final VersionedRecord<byte[]> cAtNew = store.readOnly(IsolationLevel.READ_COMMITTED).get(key, BASE_TIMESTAMP + 2);
+        assertThat(STRING_DESERIALIZER.deserialize(null, cAtNew.value()), equalTo("v1"));
+    }
+
+    @Test
+    public void packagePrivateTimestampRangeGetShouldRespectIsolationLevel() {
+        reopenWithTransactionalEOS();
+
+        putToStore("k", "v1", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+        store.commit(Map.of());
+        putToStore("k", "v2", BASE_TIMESTAMP + 2, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
+
+        final Bytes key = new Bytes(STRING_SERIALIZER.serialize(null, "k"));
+
+        final List<String> uncommitted = new ArrayList<>();
+        try (VersionedRecordIterator<byte[]> it = store.get(
+                key, BASE_TIMESTAMP, BASE_TIMESTAMP + 2, ResultOrder.ASCENDING, IsolationLevel.READ_UNCOMMITTED)) {
+            while (it.hasNext()) {
+                uncommitted.add(STRING_DESERIALIZER.deserialize(null, it.next().value()));
+            }
+        }
+        final List<String> committed = new ArrayList<>();
+        try (VersionedRecordIterator<byte[]> it = store.get(
+                key, BASE_TIMESTAMP, BASE_TIMESTAMP + 2, ResultOrder.ASCENDING, IsolationLevel.READ_COMMITTED)) {
+            while (it.hasNext()) {
+                committed.add(STRING_DESERIALIZER.deserialize(null, it.next().value()));
+            }
+        }
+        assertThat(uncommitted, equalTo(List.of("v1", "v2")));
+        assertThat(committed, equalTo(List.of("v1")));
+    }
+
+    private void reopenWithTransactionalEOS() {
+        store.close();
+        final java.util.Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        context = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
+        );
+        context.setTime(BASE_TIMESTAMP);
+        store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, HISTORY_RETENTION, SEGMENT_INTERVAL);
+        store.init(context, store);
     }
 
     @Test

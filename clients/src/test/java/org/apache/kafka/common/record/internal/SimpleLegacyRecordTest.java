@@ -20,8 +20,8 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import org.junit.jupiter.api.Test;
 
@@ -37,7 +37,7 @@ public class SimpleLegacyRecordTest {
     @Test
     public void testCompressedIterationWithNullValue() throws Exception {
         ByteBuffer buffer = ByteBuffer.allocate(128);
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(buffer));
         AbstractLegacyRecordBatch.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1);
         LegacyRecord.write(out, RecordBatch.MAGIC_VALUE_V1, 1L, (byte[]) null, null,
                 CompressionType.GZIP, TimestampType.CREATE_TIME);
@@ -51,13 +51,13 @@ public class SimpleLegacyRecordTest {
     public void testCompressedIterationWithEmptyRecords() throws Exception {
         ByteBuffer emptyCompressedValue = ByteBuffer.allocate(64);
         Compression gzip = Compression.gzip().build();
-        OutputStream gzipOutput = gzip.wrapForOutput(new ByteBufferOutputStream(emptyCompressedValue),
+        OutputStream gzipOutput = gzip.wrapForOutput(new SingleByteBufferOutputStream(emptyCompressedValue),
                 RecordBatch.MAGIC_VALUE_V1);
         gzipOutput.close();
         emptyCompressedValue.flip();
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(buffer));
         AbstractLegacyRecordBatch.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
         LegacyRecord.write(out, RecordBatch.MAGIC_VALUE_V1, 1L, null, Utils.toArray(emptyCompressedValue),
                 CompressionType.GZIP, TimestampType.CREATE_TIME);

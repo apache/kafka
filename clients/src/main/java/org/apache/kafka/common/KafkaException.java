@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * The base class of all other Kafka exceptions
  */
+@InterfaceAudience.Public
 public class KafkaException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;

@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 
+@InterfaceAudience.Public
 public class InvalidRecordException extends InvalidConfigurationException {
 
     private static final long serialVersionUID = 1;

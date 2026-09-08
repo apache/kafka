@@ -17,12 +17,15 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 
 /**
  * Options for {@link Admin#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}.
  * <p>
  */
+@InterfaceAudience.Public
 public class DescribeConsumerGroupsOptions extends AbstractOptions<DescribeConsumerGroupsOptions> {
     private boolean includeAuthorizedOperations;
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.metrics.stats;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.CompoundStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
@@ -40,6 +41,7 @@ import java.util.List;
  * object is a {@link CompoundStat}, and so it can be {@link org.apache.kafka.common.metrics.Sensor#add(CompoundStat)
  * added directly to a Sensor} so the metrics are created automatically.
  */
+@InterfaceAudience.Public
 public class Frequencies extends SampledStat implements CompoundStat {
 
     /**

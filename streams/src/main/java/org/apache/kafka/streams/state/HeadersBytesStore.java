@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Marker interface to indicate that a bytes store understands the value-with-headers format
@@ -26,6 +28,7 @@ package org.apache.kafka.streams.state;
  * Per KIP-1271, the value format is: [headersSize(varint)][headersBytes][payloadBytes]
  * where payloadBytes is the existing serialized value (e.g., [timestamp(8)][value] for timestamped stores).
  */
+@InterfaceAudience.Public
 public interface HeadersBytesStore {
 
     /**

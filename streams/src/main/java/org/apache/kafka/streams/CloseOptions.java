@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 
+@InterfaceAudience.Public
 public class CloseOptions {
     /**
      * Enum to specify the group membership operation upon closing the Kafka Streams application.

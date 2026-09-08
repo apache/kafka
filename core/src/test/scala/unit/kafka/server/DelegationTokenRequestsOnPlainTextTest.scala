@@ -16,11 +16,10 @@
   */
 package kafka.server
 
-import kafka.security.JaasTestUtils
-
 import java.util
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions.assertThrows
 

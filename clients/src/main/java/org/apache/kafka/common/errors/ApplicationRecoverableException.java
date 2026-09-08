@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Indicates that the error is fatal to the producer, and the application
  * needs to restart the producer after handling the error. Depending on the application,
  * different recovery strategies (e.g., re-balancing task, restoring from checkpoints) may be employed.
  */
+@InterfaceAudience.Public
 public abstract class ApplicationRecoverableException extends ApiException {
     private static final long serialVersionUID = 1L;
 

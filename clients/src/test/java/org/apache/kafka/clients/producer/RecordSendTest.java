@@ -33,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class RecordSendTest {
 
@@ -50,11 +49,9 @@ public class RecordSendTest {
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
                 RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
         assertFalse(future.isDone(), "Request is not completed");
-        try {
-            future.get(5, TimeUnit.MILLISECONDS);
-            fail("Should have thrown exception.");
-        } catch (TimeoutException e) { /* this is good */
-        }
+
+        assertThrows(TimeoutException.class,
+                () -> future.get(5, TimeUnit.MILLISECONDS));
 
         request.set(baseOffset, RecordBatch.NO_TIMESTAMP, null);
         request.done();

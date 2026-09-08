@@ -36,8 +36,6 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -70,7 +68,7 @@ public class PrintedTest {
         try (final InputStream stream = Files.newInputStream(file.toPath())) {
             final byte[] data = new byte[stream.available()];
             stream.read(data);
-            assertThat(new String(data, StandardCharsets.UTF_8), equalTo("[processor]: hi, 1\n"));
+            assertEquals("[processor]: hi, 1\n", new String(data, StandardCharsets.UTF_8));
         }
     }
 

@@ -267,7 +267,10 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 }
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {
-                log.warn("Error processing event {}", t.getMessage(), t);
+                log.error("Error processing event {}", t.getMessage(), t);
+                if (event instanceof CompletableEvent) {
+                    ((CompletableEvent<?>) event).future().completeExceptionally(t);
+                }
             }
         }
         asyncConsumerMetrics.recordApplicationEventQueueProcessingTime(time.milliseconds() - startMs);

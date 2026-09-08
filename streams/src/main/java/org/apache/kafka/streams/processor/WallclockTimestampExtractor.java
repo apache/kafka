@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Retrieves current wall clock timestamps as {@link System#currentTimeMillis()}.
@@ -30,6 +32,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
  * @see LogAndSkipOnInvalidTimestamp
  * @see UsePartitionTimeOnInvalidTimestamp
  */
+@InterfaceAudience.Public
 public class WallclockTimestampExtractor implements TimestampExtractor {
 
     /**

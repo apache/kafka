@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 
@@ -27,6 +29,7 @@ import java.io.Closeable;
  * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the partitioner to register metrics. The following tags are automatically added to
  * all metrics registered: <code>config</code> set to <code>partitioner.class</code>, and <code>class</code> set to the Partitioner class name.
  */
+@InterfaceAudience.Public
 public interface Partitioner extends Configurable, Closeable {
 
     /**

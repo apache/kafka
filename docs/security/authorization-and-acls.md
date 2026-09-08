@@ -2737,4 +2737,21 @@ Topic
 <td>
 
 
+</td> </tr>  
+<tr>  
+<td>
+
+UNREGISTER_CONTROLLER (94)
+</td>  
+<td>
+
+Alter
+</td>  
+<td>
+
+Cluster
+</td>  
+<td>
+
+
 </td> </tr> </table>

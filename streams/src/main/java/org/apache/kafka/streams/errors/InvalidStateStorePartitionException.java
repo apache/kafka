@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KafkaStreams;
 
 /**
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.KafkaStreams;
  * You can use {@link KafkaStreams#metadataForAllStreamsClients()} to discover the correct instance
  * that hosts the requested partition.
  */
+@InterfaceAudience.Public
 public class InvalidStateStorePartitionException extends InvalidStateStoreException {
 
     private static final long serialVersionUID = 1L;

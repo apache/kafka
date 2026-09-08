@@ -74,8 +74,8 @@ N=500; I=0; while [ $I -lt $N ] && ./gradlew clients:test --tests RequestRespons
 
 ### Running a particular test method within a unit/integration test
 ```bash
-./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
 ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
+./gradlew clients:clients-integration-tests:test --tests org.apache.kafka.clients.producer.ProducerFailureHandlingTest.testCannotSendToInternalTopic
 ./gradlew streams:integration-tests:test --tests org.apache.kafka.streams.integration.RestoreIntegrationTest.shouldRestoreNullRecord
 ```
 
@@ -298,7 +298,7 @@ These take the same arguments as the built-in variants.
 
 ### Determining if any dependencies could be updated
 ```bash
-./gradlew dependencyUpdates --no-parallel
+./gradlew dependencyUpdates
 ```
 
 ### Common build options ###

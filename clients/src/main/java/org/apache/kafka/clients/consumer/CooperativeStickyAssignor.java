@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -48,6 +50,8 @@ import java.util.Set;
  * IMPORTANT: if upgrading from 2.3 or earlier, you must follow a specific upgrade path in order to safely turn on
  * cooperative rebalancing. See the <a href="https://kafka.apache.org/documentation/#upgrade_240_notable">upgrade guide</a> for details.
  */
+@InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: extends internal AbstractStickyAssignor — pending KIP review to promote the parent or refactor the assignor hierarchy")
 public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     public static final String COOPERATIVE_STICKY_ASSIGNOR_NAME = "cooperative-sticky";
 
@@ -85,6 +89,9 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     }
 
     @Override
+    @SuppressKafkaInternalApiUsage("KIP-1265: forced override of AbstractStickyAssignor#memberData (internal) — "
+            + "the abstract parent declares the MemberData return type. Pending refactor to either promote MemberData "
+            + "or replace the hook with a public-typed equivalent.")
     protected MemberData memberData(Subscription subscription) {
         // In ConsumerProtocolSubscription v2 or higher, we can take member data from fields directly
         if (subscription.generationId().isPresent()) {

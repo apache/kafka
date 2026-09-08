@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.AutoOffsetReset;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -51,6 +52,7 @@ import java.util.Objects;
  * @param <K> type of record key
  * @param <V> type of record value
  */
+@InterfaceAudience.Public
 public class Consumed<K, V> implements NamedOperation<Consumed<K, V>> {
 
     protected Serde<K> keySerde;

@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Indicate the timestamp of a record is invalid.
  */
+@InterfaceAudience.Public
 public class InvalidTimestampException extends ApiException {
 
     private static final long serialVersionUID = 1L;

@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor.assignment;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.UUID;
 
 /** A simple wrapper around UUID that abstracts a Process ID */
+@InterfaceAudience.Public
 public class ProcessId implements Comparable<ProcessId> {
 
     private final UUID id;

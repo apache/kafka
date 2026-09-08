@@ -16,7 +16,6 @@
  */
 package kafka.api
 
-import kafka.security.JaasTestUtils
 import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.acl._
@@ -25,6 +24,7 @@ import org.apache.kafka.common.resource.ResourceType.USER
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 

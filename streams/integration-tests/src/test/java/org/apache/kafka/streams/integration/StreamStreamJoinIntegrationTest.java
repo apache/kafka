@@ -91,13 +91,14 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
-    public void testInner(final boolean cacheEnabled, final boolean withHeaders) {
+    @CsvSource({"true, false, false", "true, true, false", "false, false, false", "false, true, false", "false, false, true"})
+    public void testInner(final boolean cacheEnabled, final boolean withHeaders, final boolean transactional) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+        maybeEnableTransactionalStateStores(streamsConfig, transactional);
 
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
@@ -201,13 +202,14 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
-    public void testLeft(final boolean cacheEnabled, final boolean withHeaders) {
+    @CsvSource({"true, false, false", "true, true, false", "false, false, false", "false, true, false", "false, false, true"})
+    public void testLeft(final boolean cacheEnabled, final boolean withHeaders, final boolean transactional) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+        maybeEnableTransactionalStateStores(streamsConfig, transactional);
 
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
@@ -313,13 +315,14 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
-    public void testOuter(final boolean cacheEnabled, final boolean withHeaders) {
+    @CsvSource({"true, false, false", "true, true, false", "false, false, false", "false, true, false", "false, false, true"})
+    public void testOuter(final boolean cacheEnabled, final boolean withHeaders, final boolean transactional) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+        maybeEnableTransactionalStateStores(streamsConfig, transactional);
 
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
@@ -530,5 +533,14 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, streamsConfig, builder.build(streamsConfig));
+    }
+
+    // Transactional state stores (KIP-892) are only supported under exactly-once, so whenever
+    // enable.transactional.statestores=true we must also set processing.guarantee=exactly_once_v2.
+    private static void maybeEnableTransactionalStateStores(final Properties streamsConfig, final boolean transactional) {
+        if (transactional) {
+            streamsConfig.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
     }
 }

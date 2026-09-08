@@ -24,12 +24,14 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
+import org.apache.kafka.server.authorizer.internals.CidrUtils;
 
 import org.apache.commons.collections4.trie.PatriciaTrie;
 
@@ -80,6 +82,7 @@ import java.util.concurrent.CompletionStage;
  * </ul>
  * </p>
  */
+@InterfaceAudience.Public
 public interface Authorizer extends Configurable, Closeable {
 
     /**
@@ -216,7 +219,8 @@ public interface Authorizer extends Configurable, Closeable {
         String hostAddr = requestContext.clientAddress().getHostAddress();
 
         for (AclBinding binding : acls(aclFilter)) {
-            if (!binding.entry().host().equals(hostAddr) && !binding.entry().host().equals("*"))
+            String aclHost = binding.entry().host();
+            if (!aclHost.equals(hostAddr) && !aclHost.equals("*") && !CidrUtils.isInRange(hostAddr, aclHost))
                 continue;
 
             if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)

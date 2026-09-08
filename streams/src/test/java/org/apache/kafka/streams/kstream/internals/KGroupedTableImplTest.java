@@ -24,6 +24,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -46,8 +47,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -174,7 +173,7 @@ public class KGroupedTableImplTest {
                 Materialized.as("reduced"));
 
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = getReducedResults(reduced);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
             assertEquals("reduced", reduced.queryableStoreName());
         }
@@ -196,7 +195,7 @@ public class KGroupedTableImplTest {
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR);
 
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = getReducedResults(reduced);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
             assertNull(reduced.queryableStoreName());
         }
@@ -220,17 +219,17 @@ public class KGroupedTableImplTest {
                     .withValueSerde(Serdes.Integer()));
 
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = getReducedResults(reduced);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
             {
                 final KeyValueStore<String, Integer> reduce = driver.getKeyValueStore("reduce");
-                assertThat(reduce.get("A"), equalTo(5));
-                assertThat(reduce.get("B"), equalTo(6));
+                assertEquals(5, reduce.get("A"));
+                assertEquals(6, reduce.get("B"));
             }
             {
                 final KeyValueStore<String, ValueAndTimestamp<Integer>> reduce = driver.getTimestampedKeyValueStore("reduce");
-                assertThat(reduce.get("A"), equalTo(ValueAndTimestamp.make(5, 50L)));
-                assertThat(reduce.get("B"), equalTo(ValueAndTimestamp.make(6, 30L)));
+                assertEquals(ValueAndTimestamp.make(5, 50L), reduce.get("A"));
+                assertEquals(ValueAndTimestamp.make(6, 30L), reduce.get("B"));
             }
         }
     }
@@ -249,17 +248,17 @@ public class KGroupedTableImplTest {
                     .withKeySerde(Serdes.String())
                     .withValueSerde(Serdes.Long()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(topic, driver);
             {
                 final KeyValueStore<String, Long> counts = driver.getKeyValueStore("count");
-                assertThat(counts.get("1"), equalTo(3L));
-                assertThat(counts.get("2"), equalTo(2L));
+                assertEquals(3L, counts.get("1"));
+                assertEquals(2L, counts.get("2"));
             }
             {
                 final KeyValueStore<String, ValueAndTimestamp<Long>> counts = driver.getTimestampedKeyValueStore("count");
-                assertThat(counts.get("1"), equalTo(ValueAndTimestamp.make(3L, 50L)));
-                assertThat(counts.get("2"), equalTo(ValueAndTimestamp.make(2L, 60L)));
+                assertEquals(ValueAndTimestamp.make(3L, 50L), counts.get("1"));
+                assertEquals(ValueAndTimestamp.make(2L, 60L), counts.get("2"));
             }
         }
     }
@@ -281,18 +280,18 @@ public class KGroupedTableImplTest {
                     .withValueSerde(Serdes.String())
                     .withKeySerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(topic, driver);
             {
                 {
                     final KeyValueStore<String, String> aggregate = driver.getKeyValueStore("aggregate");
-                    assertThat(aggregate.get("1"), equalTo("0+1+1+1"));
-                    assertThat(aggregate.get("2"), equalTo("0+2+2"));
+                    assertEquals("0+1+1+1", aggregate.get("1"));
+                    assertEquals("0+2+2", aggregate.get("2"));
                 }
                 {
                     final KeyValueStore<String, ValueAndTimestamp<String>> aggregate = driver.getTimestampedKeyValueStore("aggregate");
-                    assertThat(aggregate.get("1"), equalTo(ValueAndTimestamp.make("0+1+1+1", 50L)));
-                    assertThat(aggregate.get("2"), equalTo(ValueAndTimestamp.make("0+2+2", 60L)));
+                    assertEquals(ValueAndTimestamp.make("0+1+1+1", 50L), aggregate.get("1"));
+                    assertEquals(ValueAndTimestamp.make("0+2+2", 60L), aggregate.get("2"));
                 }
             }
         }

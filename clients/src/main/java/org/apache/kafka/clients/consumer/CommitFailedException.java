@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * This exception is raised when an offset commit with {@link KafkaConsumer#commitSync()} fails
@@ -25,6 +27,7 @@ import org.apache.kafka.common.KafkaException;
  * the commit cannot generally be retried because some of the partitions may have already been
  * assigned to another member in the group.
  */
+@InterfaceAudience.Public
 public class CommitFailedException extends KafkaException {
 
     private static final long serialVersionUID = 1L;

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
 import java.util.Objects;
@@ -23,6 +24,7 @@ import java.util.Objects;
 /**
  * {@code StoreQueryParameters} allows you to pass a variety of parameters when fetching a store for interactive query.
  */
+@InterfaceAudience.Public
 public class StoreQueryParameters<T> {
 
     private final Integer partition;

@@ -137,6 +137,10 @@ class ConsumerTask implements Runnable, Closeable {
                 maybeWaitForPartitionAssignments();
             }
 
+            if (isClosed) {
+                return;
+            }
+
             log.trace("Polling consumer to receive remote log metadata topic records");
             final ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(Duration.ofMillis(pollTimeoutMs));
             for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {

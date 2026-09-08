@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * @param <K> the (new) grouping key type of this re-grouped table
  * @param <V> the (new) value type of this re-grouped table
  */
+@InterfaceAudience.Public
 public interface KGroupedTable<K, V> {
 
     /**

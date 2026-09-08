@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
@@ -54,6 +56,8 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  * @see KGroupedStream#windowedBy(Windows)
  * @see TimestampExtractor
  */
+@InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: class header signature exposes internal TimeWindow (Windows<TimeWindow>) — pending KIP review to promote the type or refactor")
 public final class TimeWindows extends Windows<TimeWindow> {
 
     /** The size of the windows in milliseconds. */
@@ -153,6 +157,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     }
 
     @Override
+    @SuppressKafkaInternalApiUsage("KIP-1265: public method's signature exposes internal TimeWindow — pending KIP review to promote the type or refactor the API")
     public Map<Long, TimeWindow> windowsFor(final long timestamp) {
         long windowStart = (Math.max(0, timestamp - sizeMs + advanceMs) / advanceMs) * advanceMs;
         final Map<Long, TimeWindow> windows = new LinkedHashMap<>();
