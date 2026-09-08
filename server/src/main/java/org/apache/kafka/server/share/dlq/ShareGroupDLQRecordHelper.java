@@ -88,19 +88,23 @@ public class ShareGroupDLQRecordHelper {
             Optional<Short> deliveryCount,
             Optional<Throwable> cause
     ) {
-        List<Header> headers = new ArrayList<>();
-        headers.add(new RecordHeader(HEADER_DLQ_ERRORS_TOPIC, sourceTopic.getBytes(StandardCharsets.UTF_8)));
-        headers.add(new RecordHeader(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(partition).getBytes(StandardCharsets.UTF_8)));
-        headers.add(new RecordHeader(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8)));
-        headers.add(new RecordHeader(HEADER_DLQ_ERRORS_GROUP, groupId.getBytes(StandardCharsets.UTF_8)));
-        deliveryCount.ifPresent(dc -> headers.add(
-                new RecordHeader(HEADER_DLQ_ERRORS_DELIVERY_COUNT, Short.toString(dc).getBytes(StandardCharsets.UTF_8))));
-        cause.ifPresent(c -> {
-            if (c.getMessage() != null) {
-                headers.add(new RecordHeader(HEADER_DLQ_ERRORS_MESSAGE, c.getMessage().getBytes(StandardCharsets.UTF_8)));
-            }
-        });
-        return headers.toArray(new Header[0]);
+        String causeMessage = cause.map(Throwable::getMessage).orElse(null);
+        int size = 4 + (deliveryCount.isPresent() ? 1 : 0) + (causeMessage != null ? 1 : 0);
+
+        Header[] headers = new Header[size];
+        int counter = 0;
+        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_TOPIC, sourceTopic.getBytes(StandardCharsets.UTF_8));
+        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(partition).getBytes(StandardCharsets.UTF_8));
+        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8));
+        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_GROUP, groupId.getBytes(StandardCharsets.UTF_8));
+        if (deliveryCount.isPresent()) {
+            headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_DELIVERY_COUNT,
+                    Short.toString(deliveryCount.get()).getBytes(StandardCharsets.UTF_8));
+        }
+        if (causeMessage != null) {
+            headers[counter] = new RecordHeader(HEADER_DLQ_ERRORS_MESSAGE, causeMessage.getBytes(StandardCharsets.UTF_8));
+        }
+        return headers;
     }
 
     /**
