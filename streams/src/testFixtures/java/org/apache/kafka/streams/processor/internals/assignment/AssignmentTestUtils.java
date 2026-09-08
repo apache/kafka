@@ -1023,7 +1023,7 @@ public final class AssignmentTestUtils {
         final ClientState clientState = new ClientState(processId, capacity);
         clientState.addPreviousActiveTasks(previousActiveTasks);
         clientState.addPreviousStandbyTasks(previousStandbyTasks);
-        clientState.taskLagTotals().putAll(taskLagTotals);
+        clientState.addTaskLagTotals(taskLagTotals);
         return clientState;
     }
 
@@ -1031,7 +1031,7 @@ public final class AssignmentTestUtils {
         final ClientState copy = new ClientState(clientState.processId(), clientState.capacity(), clientState.clientTags());
         copy.addPreviousActiveTasks(clientState.previousActiveTasks());
         copy.addPreviousStandbyTasks(clientState.previousStandbyTasks());
-        copy.taskLagTotals().putAll(clientState.taskLagTotals());
+        copy.addTaskLagTotals(clientState.taskLagTotals());
         return copy;
     }
 

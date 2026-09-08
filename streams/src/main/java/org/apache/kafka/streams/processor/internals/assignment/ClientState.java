@@ -438,6 +438,10 @@ public class ClientState {
         return taskLagTotals;
     }
 
+    void addTaskLagTotals(final Map<TaskId, Long> taskLagTotals) {
+        this.taskLagTotals.putAll(taskLagTotals);
+    }
+
     public SortedSet<TaskId> previousActiveTasks() {
         return new TreeSet<>(previousActiveTasks.taskIds());
     }
