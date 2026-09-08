@@ -262,7 +262,7 @@ public abstract class AbstractIndex implements Closeable {
      *         not exist
      */
     public boolean deleteIfExists() throws IOException {
-        closeHandler();
+        close();
         return Files.deleteIfExists(file.toPath());
     }
 
@@ -285,10 +285,6 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     public void close() throws IOException {
-        closeHandler();
-    }
-
-    public void closeHandler() {
         // On JVM, a memory mapping is typically unmapped by garbage collector.
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.

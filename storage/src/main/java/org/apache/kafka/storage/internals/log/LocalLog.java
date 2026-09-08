@@ -86,7 +86,7 @@ public class LocalLog {
     private final Logger logger;
 
     private volatile LogOffsetMetadata nextOffsetMetadata;
-    // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
+    // The memory mapped buffer for index files of this log will be closed with either delete(), close() or closeHandlers()
     // After memory mapped buffer is closed, no disk IO operation should be performed for this log.
     private volatile boolean isMemoryMappedBufferClosed = false;
     // Cache value of parent directory to avoid allocations in hot paths like ReplicaManager.checkpointHighWatermarks
@@ -309,7 +309,7 @@ public class LocalLog {
     }
 
     /**
-     * Close file handlers used by log but don't write to disk.
+     * Close file handlers used by log, swallowing any exceptions.
      * This is called if the log directory is offline.
      */
     public void closeHandlers() {
