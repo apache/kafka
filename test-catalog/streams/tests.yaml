@@ -526,10 +526,10 @@ org.apache.kafka.streams.internals.ApiUtilsTest:
 - shouldContainsNameAndValueInFailMsgPrefix
 - shouldReturnMillisecondsOnValidDuration
 - shouldReturnMillisecondsOnValidInstant
-- shouldThrowArithmeticExceptionForMaxDuration
-- shouldThrowArithmeticExceptionForMaxInstant
-- shouldThrowNullPointerExceptionForNullDuration
-- shouldThrowNullPointerExceptionForNullInstant
+- shouldThrowIllegalArgumentExceptionForMaxDuration
+- shouldThrowIllegalArgumentExceptionForMaxInstant
+- shouldThrowIllegalArgumentExceptionForNullDuration
+- shouldThrowIllegalArgumentExceptionForNullInstant
 org.apache.kafka.streams.internals.metrics.ClientMetricsTest:
 - shouldAddAliveStreamThreadsMetric
 - shouldAddApplicationIdMetric
