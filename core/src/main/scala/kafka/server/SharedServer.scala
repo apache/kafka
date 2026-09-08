@@ -290,9 +290,16 @@ class SharedServer(
           Option(controllerServerMetrics).foreach(_.setIgnoredStaticVoters(ignoredStaticVoters))
         }
 
+        // Enable propagation of dynamic config changes to the KafkaRaftManager
+        val raftManagerConfig = if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
+          controllerConfig
+        } else {
+          brokerConfig
+        }
+
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,
-          sharedServerConfig,
+          raftManagerConfig,
           metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
           MetadataRecordSerde.INSTANCE,
           KafkaRaftServer.MetadataPartition,
