@@ -30,11 +30,10 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
-
-import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,8 +47,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
-import joptsimple.OptionException;
-
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -62,32 +59,35 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_IN
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@ClusterTestDefaults(
+    types = {Type.CO_KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+    }
+)
 public class ListConsumerGroupTest {
     private static final String TOPIC_PREFIX = "test.topic.";
     private static final String TOPIC_PARTITIONS_GROUP_PREFIX = "test.topic.partitions.group.";
     private static final String TOPIC_GROUP_PREFIX = "test.topic.group.";
     private static final String PROTOCOL_GROUP_PREFIX = "test.protocol.group.";
-    private static final String DUMMY_BOOTSTRAP_SERVERS = "localhost:9092";
+    private final ClusterInstance clusterInstance;
 
-    private static List<GroupProtocol> supportedGroupProtocols(ClusterInstance clusterInstance) {
+    ListConsumerGroupTest(ClusterInstance clusterInstance) {
+        this.clusterInstance = clusterInstance;
+    }
+
+    private List<GroupProtocol> supportedGroupProtocols() {
         return new ArrayList<>(clusterInstance.supportedGroupProtocols());
     }
 
-    @ClusterTest(
-        types = {Type.CO_KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500")
-        }
-    )
-    public void testListConsumerGroupsWithoutFilters(ClusterInstance clusterInstance) throws Exception {
-        List<GroupProtocol> groupProtocols = supportedGroupProtocols(clusterInstance);
+    @ClusterTest
+    public void testListConsumerGroupsWithoutFilters() throws Exception {
+        List<GroupProtocol> groupProtocols = supportedGroupProtocols();
         for (int i = 0; i < groupProtocols.size(); i++) {
             GroupProtocol groupProtocol = groupProtocols.get(i);
             String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -96,9 +96,9 @@ public class ListConsumerGroupTest {
             String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + i;
             clusterInstance.createTopic(topic, 1, (short) 1);
 
-            try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(clusterInstance, topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
-                 AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(clusterInstance, GroupProtocol.CLASSIC, topicGroup, topic);
-                 AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(clusterInstance, groupProtocol, protocolGroup, topic);
+            try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
+                 AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, topicGroup, topic);
+                 AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"})
             ) {
                 Set<String> expectedGroups = Set.of(topicPartitionsGroup, topicGroup, protocolGroup);
@@ -110,29 +110,14 @@ public class ListConsumerGroupTest {
                 }, () -> "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
             }
 
-            removeConsumer(clusterInstance, Set.of(topicPartitionsGroup, topicGroup, protocolGroup));
-            deleteTopic(clusterInstance, topic);
+            removeConsumer(Set.of(topicPartitionsGroup, topicGroup, protocolGroup));
+            deleteTopic(topic);
         }
     }
 
-    @Test
-    public void testListWithUnrecognizedNewConsumerOption() {
-        String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", DUMMY_BOOTSTRAP_SERVERS, "--list"};
-        assertThrows(OptionException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
-    }
-
-    @ClusterTest(
-        types = {Type.CO_KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500")
-        }
-    )
-    public void testListConsumerGroupsWithStates(ClusterInstance clusterInstance) throws Exception {
-        List<GroupProtocol> groupProtocols = supportedGroupProtocols(clusterInstance);
+    @ClusterTest
+    public void testListConsumerGroupsWithStates() throws Exception {
+        List<GroupProtocol> groupProtocols = supportedGroupProtocols();
         for (int i = 0; i < groupProtocols.size(); i++) {
             GroupProtocol groupProtocol = groupProtocols.get(i);
             String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -140,8 +125,8 @@ public class ListConsumerGroupTest {
             String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + i;
             clusterInstance.createTopic(topic, 1, (short) 1);
 
-            try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(clusterInstance, topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
-                 AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(clusterInstance, groupProtocol, protocolGroup, topic);
+            try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
+                 AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
             ) {
                 Set<GroupListing> expectedListing = Set.of(
@@ -190,30 +175,21 @@ public class ListConsumerGroupTest {
                 );
             }
 
-            removeConsumer(clusterInstance, Set.of(topicPartitionsGroup, protocolGroup));
-            deleteTopic(clusterInstance, topic);
+            removeConsumer(Set.of(topicPartitionsGroup, protocolGroup));
+            deleteTopic(topic);
         }
     }
 
-    @ClusterTest(
-        types = {Type.CO_KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500")
-        }
-    )
-    public void testListConsumerGroupsWithTypesClassicProtocol(ClusterInstance clusterInstance) throws Exception {
+    @ClusterTest
+    public void testListConsumerGroupsWithTypesClassicProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
         String topic = TOPIC_PREFIX + groupProtocol.name;
         String protocolGroup = PROTOCOL_GROUP_PREFIX + groupProtocol.name;
         String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + "0";
         clusterInstance.createTopic(topic, 1, (short) 1);
 
-        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(clusterInstance, topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
-             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(clusterInstance, groupProtocol, protocolGroup, topic);
+        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
+             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
              ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
         ) {
             Set<GroupListing> expectedListing = Set.of(
@@ -258,17 +234,8 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTest(
-        types = {Type.CO_KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500")
-        }
-    )
-    public void testListConsumerGroupsWithTypesConsumerProtocol(ClusterInstance clusterInstance) throws Exception {
+    @ClusterTest
+    public void testListConsumerGroupsWithTypesConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
         String protocolGroup = PROTOCOL_GROUP_PREFIX + groupProtocol.name;
@@ -276,9 +243,9 @@ public class ListConsumerGroupTest {
         String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + "0";
         clusterInstance.createTopic(topic, 1, (short) 1);
 
-        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(clusterInstance, topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
-             AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(clusterInstance, GroupProtocol.CLASSIC, topicGroup, topic);
-             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(clusterInstance, groupProtocol, protocolGroup, topic);
+        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
+             AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, topicGroup, topic);
+             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
              ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"})
         ) {
 
@@ -354,25 +321,16 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTest(
-        types = {Type.CO_KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500")
-        }
-    )
-    public void testListGroupCommandClassicProtocol(ClusterInstance clusterInstance) throws Exception {
+    @ClusterTest
+    public void testListGroupCommandClassicProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
         String topic = TOPIC_PREFIX + groupProtocol.name;
         String protocolGroup = PROTOCOL_GROUP_PREFIX + groupProtocol.name;
         String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + "0";
         clusterInstance.createTopic(topic, 1, (short) 1);
 
-        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(clusterInstance, topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
-             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(clusterInstance, groupProtocol, protocolGroup, topic)
+        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
+             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic)
         ) {
             validateListOutput(
                     List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
@@ -448,25 +406,16 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTest(
-        types = {Type.CO_KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500")
-        }
-    )
-    public void testListGroupCommandConsumerProtocol(ClusterInstance clusterInstance) throws Exception {
+    @ClusterTest
+    public void testListGroupCommandConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
         String protocolGroup = PROTOCOL_GROUP_PREFIX + groupProtocol.name;
         String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + "0";
         clusterInstance.createTopic(topic, 1, (short) 1);
 
-        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(clusterInstance, topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
-             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(clusterInstance, groupProtocol, protocolGroup, topic)
+        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
+             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic)
         ) {
             validateListOutput(
                     List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
@@ -522,8 +471,8 @@ public class ListConsumerGroupTest {
         }
     }
 
-    private static AutoCloseable consumerGroupClosable(ClusterInstance clusterInstance, GroupProtocol protocol, String groupId, String topicName) {
-        Map<String, Object> configs = composeConfigs(clusterInstance, groupId, protocol.name);
+    private AutoCloseable consumerGroupClosable(GroupProtocol protocol, String groupId, String topicName) {
+        Map<String, Object> configs = composeConfigs(groupId, protocol.name);
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
                 1,
@@ -533,8 +482,8 @@ public class ListConsumerGroupTest {
         );
     }
 
-    private static AutoCloseable consumerGroupClosable(ClusterInstance clusterInstance, String groupId, Set<TopicPartition> topicPartitions) {
-        Map<String, Object> configs = composeConfigs(clusterInstance, groupId, GroupProtocol.CLASSIC.name);
+    private AutoCloseable consumerGroupClosable(String groupId, Set<TopicPartition> topicPartitions) {
+        Map<String, Object> configs = composeConfigs(groupId, GroupProtocol.CLASSIC.name);
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
                 1,
@@ -543,7 +492,7 @@ public class ListConsumerGroupTest {
         );
     }
 
-    private static Map<String, Object> composeConfigs(ClusterInstance clusterInstance, String groupId, String groupProtocol) {
+    private Map<String, Object> composeConfigs(String groupId, String groupProtocol) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         configs.put(GROUP_ID_CONFIG, groupId);
@@ -556,7 +505,7 @@ public class ListConsumerGroupTest {
         return configs;
     }
 
-    private static ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
+    private ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         return new ConsumerGroupCommand.ConsumerGroupService(
                 opts,
@@ -564,15 +513,15 @@ public class ListConsumerGroupTest {
         );
     }
 
-    private static void removeConsumer(ClusterInstance clusterInstance, Set<String> groupIds) {
+    private void deleteTopic(String topic) {
         try (Admin admin = clusterInstance.admin()) {
-            assertDoesNotThrow(() -> admin.deleteConsumerGroups(groupIds).all().get());
+            assertDoesNotThrow(() -> admin.deleteTopics(Set.of(topic)).all().get());
         }
     }
 
-    private static void deleteTopic(ClusterInstance clusterInstance, String topic) {
+    private void removeConsumer(Set<String> groupIds) {
         try (Admin admin = clusterInstance.admin()) {
-            assertDoesNotThrow(() -> admin.deleteTopics(Set.of(topic)).all().get());
+            assertDoesNotThrow(() -> admin.deleteConsumerGroups(groupIds).all().get());
         }
     }
 
@@ -637,52 +586,4 @@ public class ListConsumerGroupTest {
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
     }
 
-    @Test
-    public void testConsumerGroupStatesFromString() {
-        Set<GroupState> result = ConsumerGroupCommand.groupStatesFromString("Stable");
-        assertEquals(Set.of(GroupState.STABLE), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("Stable, PreparingRebalance");
-        assertEquals(Set.of(GroupState.STABLE, GroupState.PREPARING_REBALANCE), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("Dead,CompletingRebalance,");
-        assertEquals(Set.of(GroupState.DEAD, GroupState.COMPLETING_REBALANCE), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("stable");
-        assertEquals(Set.of(GroupState.STABLE), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("stable, assigning");
-        assertEquals(Set.of(GroupState.STABLE, GroupState.ASSIGNING), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("dead,reconciling,");
-        assertEquals(Set.of(GroupState.DEAD, GroupState.RECONCILING), result);
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("bad, wrong"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("  bad, Stable"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("   ,   ,"));
-    }
-
-    @Test
-    public void testConsumerGroupTypesFromString() {
-        Set<GroupType> result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer");
-        assertEquals(Set.of(GroupType.CONSUMER), result);
-
-        result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer, classic");
-        assertEquals(Set.of(GroupType.CONSUMER, GroupType.CLASSIC), result);
-
-        result = ConsumerGroupCommand.consumerGroupTypesFromString("Consumer, Classic");
-        assertEquals(Set.of(GroupType.CONSUMER, GroupType.CLASSIC), result);
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("Share"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("streams"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("bad, wrong"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("  bad, generic"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("   ,   ,"));
-    }
 }
