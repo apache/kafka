@@ -360,7 +360,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
             // configure rlmm without bootstrap servers, so it will fail to initialize admin client.
             Map<String, Object> configs = Map.of(
                 TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR, TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath(),
-                TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID, 0
+                TopicBasedRemoteLogMetadataManagerConfig.NODE_ID, 0
             );
             rlmm.configure(configs);
             rlmm.onBrokerReady();

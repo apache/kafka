@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
 
 /**
  * Refines the task assignor's target assignment into the <em>intermediate</em> assignment that the reconciler
@@ -44,11 +45,17 @@ import java.util.Set;
  *     the decisions of a step are taken once, when the epoch is minted, and do not change while the members reconcile
  *     towards it. See {@link StreamsGroup#refinedAssignment(int)}.</li>
  * </ul>
+ * <p>
+ * An implementation need not be thread-safe, and holds no per-group state: the two per-group configurations a
+ * refinement depends on are passed on every call.
+ * <p>
+ * An internal broker configuration ({@code GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG})
+ * selects the implementation, defaulting to {@link NoOpAssignmentRefiner}. It exists so that tests can put a warm-up
+ * assignment in front of a real client while the derivation itself is still being built, and is not a public extension
+ * point. An implementation that also implements {@link org.apache.kafka.common.Configurable} is handed the broker
+ * configuration, so a test implementation can be steered through broker properties.
  */
-public class AssignmentRefiner {
-
-    private AssignmentRefiner() {
-    }
+public interface AssignmentRefiner {
 
     /**
      * Derives the intermediate assignment for all members of the group.
@@ -59,28 +66,29 @@ public class AssignmentRefiner {
      * @param taskOffsets           The latest changelog offsets/end-offsets reported by the members via heartbeats,
      *                              from which the lag of a warm-up task is derived. Not populated for a member that
      *                              has not reported any offsets yet, for example right after a coordinator failover.
-     * @param configuredTopology    The configured topology, which tells whether a subtopology is stateful. Only
-     *                              stateful tasks are warmed up; a stateless task has no state to restore.
-     * @param numWarmupReplicas     The maximum number of warm-up tasks the group may run at a time. Zero disables
-     *                              warm-up tasks altogether, in which case the intermediate assignment is the target
-     *                              assignment.
+     * @param subtopologies         The group's resolved subtopologies, keyed by subtopology ID, which tell whether a
+     *                              subtopology is stateful. Only stateful tasks are warmed up; a stateless task has no
+     *                              state to restore. The coordinator resolves the topology and never invokes a refiner
+     *                              until it is ready, so an implementation does not deal with topology readiness.
+     * @param numWarmupReplicas     The maximum number of warm-up tasks the group may run at a time. Never zero: with
+     *                              warm-up tasks disabled, the intermediate assignment is the target assignment and
+     *                              the refiner is not called at all.
      * @param acceptableRecoveryLag The lag at or below which a warm-up task is considered caught up.
      *
-     * @return The intermediate assignment, keyed by member ID.
+     * @return The intermediate assignment, keyed by member ID. It must hand out the same active tasks as the target
+     *         assignment, only possibly to different members; an implementation that drops or duplicates one is
+     *         ignored in favour of the target assignment (see {@link #preservesActiveTaskCount}).
      */
-    public static Map<String, TasksTuple> refine(
+    Map<String, TasksTuple> refine(
         Map<String, StreamsGroupMember> members,
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
-        ConfiguredTopology configuredTopology,
+        SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag
-    ) {
-        // No warm-up tasks are inserted yet, so the intermediate assignment is the target assignment.
-        return targetAssignment;
-    }
+    );
 
-    public static boolean preservesActiveTaskCount(
+    static boolean preservesActiveTaskCount(
         Map<String, TasksTuple> targetAssignment,
         Map<String, TasksTuple> refinedAssignment
     ) {

@@ -15,22 +15,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
-import subprocess
-from HTMLTestRunner import HTMLTestRunner
-import test.constants as constants
 import os
+import subprocess
+import unittest
+
+import pytest
+import test.constants as constants
 
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
     FIXTURES_DIR="."
     MODE="jvm"
-    
+    CONTAINER_RUNTIME="docker"
+
+    def compose_command(self):
+        return [f"{self.CONTAINER_RUNTIME}-compose"]
+
     def resume_container(self):
-        subprocess.run(["docker", "start", constants.BROKER_CONTAINER])
+        subprocess.run([self.CONTAINER_RUNTIME, "start", constants.BROKER_CONTAINER])
 
     def stop_container(self) -> None:
-        subprocess.run(["docker", "stop", constants.BROKER_CONTAINER])
+        subprocess.run([self.CONTAINER_RUNTIME, "stop", constants.BROKER_CONTAINER])
 
     def update_file(self, filename, old_string, new_string):
         with open(filename) as f:
@@ -42,10 +47,10 @@ class DockerSanityTest(unittest.TestCase):
     def start_compose(self, filename) -> None:
         self.update_file(filename, "image: {$IMAGE}", f"image: {self.IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", "{$DIR}", self.FIXTURES_DIR)
-        subprocess.run(["docker-compose", "-f", filename, "up", "-d"])
-    
+        subprocess.run(self.compose_command() + ["-f", filename, "up", "-d"])
+
     def destroy_compose(self, filename) -> None:
-        subprocess.run(["docker-compose", "-f", filename, "down"])
+        subprocess.run(self.compose_command() + ["-f", filename, "down"])
         self.update_file(filename, f"image: {self.IMAGE}", "image: {$IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", self.FIXTURES_DIR, "{$DIR}")
 
@@ -221,27 +226,26 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
-def run_tests(image, mode, fixtures_dir):
+def run_tests(image, mode, fixtures_dir, container_runtime="docker"):
     DockerSanityTest.IMAGE = image
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
     DockerSanityTest.MODE = mode
+    DockerSanityTest.CONTAINER_RUNTIME = container_runtime
 
-    test_classes_to_run = []
-    if mode == "jvm" or mode == "native":
-        test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
-    
-    loader = unittest.TestLoader()
-    suites_list = []
-    for test_class in test_classes_to_run:
-        suite = loader.loadTestsFromTestCase(test_class)
-        suites_list.append(suite)
-    combined_suite = unittest.TestSuite(suites_list)
     cur_directory = os.path.dirname(os.path.realpath(__file__))
-    outfile = open(f"{cur_directory}/report_{mode}.html", "w")
-    runner = HTMLTestRunner.HTMLTestRunner(
-                stream=outfile,
-                title=f'Test Report: Apache Kafka {mode.capitalize()} Docker Image',
-                description='This demonstrates the report output.'
-                )
-    result = runner.run(combined_suite)
-    return result.failure_count
+    report_path = f"{cur_directory}/report_{mode}.html"
+
+    class ReportTitlePlugin:
+        @pytest.hookimpl(optionalhook=True)
+        def pytest_html_report_title(self, report):
+            report.title = f"Test Report: Apache Kafka {mode.capitalize()} Docker Image"
+
+    return pytest.main([
+        "--pyargs",
+        __name__,
+        f"--html={report_path}",
+        "--self-contained-html",
+        "--capture=tee-sys",
+        "-p",
+        "no:cacheprovider",
+    ], plugins=[ReportTitlePlugin()])

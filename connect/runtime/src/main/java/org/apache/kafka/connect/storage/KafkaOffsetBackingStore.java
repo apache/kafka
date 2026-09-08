@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -101,6 +102,11 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         ignored -> true
                 );
             }
+
+            @Override
+            protected String getTopicConfig() {
+                return SourceConnectorConfig.OFFSETS_TOPIC_CONFIG;
+            }
         };
     }
 
@@ -133,6 +139,11 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM),
                         ignored -> true
                 );
+            }
+
+            @Override
+            protected String getTopicConfig() {
+                return SourceConnectorConfig.OFFSETS_TOPIC_CONFIG;
             }
         };
     }

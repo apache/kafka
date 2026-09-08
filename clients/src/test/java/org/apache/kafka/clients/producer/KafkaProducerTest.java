@@ -730,10 +730,7 @@ public class KafkaProducerTest {
             });
 
             // Close producer should not complete until send succeeds
-            try {
-                future.get(100, TimeUnit.MILLISECONDS);
-                fail("Close completed without waiting for send");
-            } catch (java.util.concurrent.TimeoutException expected) { /* ignore */ }
+            assertThrows(java.util.concurrent.TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS), "Close completed without waiting for send");
 
             // Ensure send has started
             client.waitForRequests(1, 1000);
@@ -2112,7 +2109,7 @@ public class KafkaProducerTest {
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        var time = new MockTime(1);
+        var time = new MockTime();
         var metadata = newMetadata(0, 0, Long.MAX_VALUE);
         var client = new MockClient(time, metadata);
         // Seed the metadata cache with a known topic id so the producer can
@@ -2187,7 +2184,7 @@ public class KafkaProducerTest {
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        var time = new MockTime(1);
+        var time = new MockTime();
         var metadata = newMetadata(0, 0, Long.MAX_VALUE);
         var client = new MockClient(time, metadata);
         // The initial metadata snapshot contains the topic so the producer can
@@ -2976,7 +2973,7 @@ public class KafkaProducerTest {
             RecordAccumulator.AppendCallbacks callbacks =
                 (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
             callbacks.setPartition(initialSelectedPartition.partition());
-            return new RecordAccumulator.RecordAppendResult(
+            return RecordAccumulator.RecordAppendResult.appended(
                 futureRecordMetadata,
                 false,
                 false,
@@ -3483,7 +3480,8 @@ public class KafkaProducerTest {
             new TopicPartition("test-topic", 0),
             new OffsetAndMetadata(0L)
         );
-        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("test-group");
+        ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
+        when(groupMetadata.groupId()).thenReturn("test-group");
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs)) {
             assertThrows(BootstrapResolutionException.class,
@@ -3493,5 +3491,21 @@ public class KafkaProducerTest {
             assertThrows(BootstrapResolutionException.class,
                 () -> producer.sendOffsetsToTransaction(offsets, groupMetadata));
         }
+    }
+
+    @Test
+    public void testProducerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero() {
+        // Default bootstrap.resolve.timeout.ms=0 resolves DNS synchronously in the constructor;
+        // any failure surfaces as ConfigException (wrapped in KafkaException by the constructor's
+        // outer try/catch), so no producer instance is created.
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost
+        );
+
+        KafkaException e = assertThrows(KafkaException.class, () -> new KafkaProducer<>(configs));
+        assertInstanceOf(ConfigException.class, e.getCause());
     }
 }

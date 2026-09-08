@@ -4976,13 +4976,7 @@ public class TransactionManagerTest {
 
     private void assertProduceFutureFailed(Future<RecordMetadata> future) throws InterruptedException {
         assertTrue(future.isDone());
-
-        try {
-            future.get();
-            fail("Expected produce future to throw");
-        } catch (ExecutionException e) {
-            // expected
-        }
+        assertThrows(ExecutionException.class, () -> future.get());
     }
 
     private void runUntil(Supplier<Boolean> condition) {

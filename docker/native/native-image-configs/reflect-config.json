@@ -1093,10 +1093,6 @@
   "queryAllPublicMethods":true
 },
 {
-  "name":"org.apache.kafka.server.share.persister.DefaultStatePersister",
-  "methods":[{"name":"<init>","parameterTypes":["org.apache.kafka.server.share.persister.PersisterStateManager"] }]
-},
-{
   "name":"org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler$Content",
   "allDeclaredFields":true,
   "queryAllDeclaredMethods":true,

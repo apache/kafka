@@ -156,6 +156,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStat
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
@@ -263,6 +264,8 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
+import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG;
+import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG;
 
 
 /**
@@ -328,6 +331,7 @@ public class GroupMetadataManager {
         private GroupCoordinatorMetricsShard metrics;
         private Optional<Plugin<Authorizer>> authorizerPlugin = null;
         private List<TaskAssignor> streamsGroupAssignors = null;
+        private AssignmentRefiner streamsGroupAssignmentRefiner = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -366,6 +370,11 @@ public class GroupMetadataManager {
 
         Builder withStreamsGroupAssignors(List<TaskAssignor> streamsGroupAssignors) {
             this.streamsGroupAssignors = streamsGroupAssignors;
+            return this;
+        }
+
+        Builder withStreamsGroupAssignmentRefiner(AssignmentRefiner streamsGroupAssignmentRefiner) {
+            this.streamsGroupAssignmentRefiner = streamsGroupAssignmentRefiner;
             return this;
         }
 
@@ -410,6 +419,8 @@ public class GroupMetadataManager {
                 throw new IllegalArgumentException("GroupConfigManager must be set.");
             if (streamsGroupAssignors == null)
                 streamsGroupAssignors = List.of(new StickyTaskAssignor());
+            if (streamsGroupAssignmentRefiner == null)
+                streamsGroupAssignmentRefiner = new NoOpAssignmentRefiner();
 
             return new GroupMetadataManager(
                 snapshotRegistry,
@@ -423,7 +434,8 @@ public class GroupMetadataManager {
                 groupConfigManager,
                 shareGroupAssignor,
                 authorizerPlugin,
-                streamsGroupAssignors
+                streamsGroupAssignors,
+                streamsGroupAssignmentRefiner
             );
         }
     }
@@ -517,6 +529,11 @@ public class GroupMetadataManager {
     private final TaskAssignor defaultStreamsGroupAssignor;
 
     /**
+     * Derives the intermediate assignment that the members of a streams group are reconciled towards.
+     */
+    private final AssignmentRefiner streamsGroupAssignmentRefiner;
+
+    /**
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage;
@@ -565,7 +582,8 @@ public class GroupMetadataManager {
         GroupConfigManager groupConfigManager,
         ShareGroupPartitionAssignor shareGroupAssignor,
         Optional<Plugin<Authorizer>> authorizerPlugin,
-        List<TaskAssignor> streamsGroupAssignors
+        List<TaskAssignor> streamsGroupAssignors,
+        AssignmentRefiner streamsGroupAssignmentRefiner
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -588,6 +606,7 @@ public class GroupMetadataManager {
         this.shareGroupAssignor = shareGroupAssignor;
         this.defaultStreamsGroupAssignor = streamsGroupAssignors.get(0);
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+        this.streamsGroupAssignmentRefiner = streamsGroupAssignmentRefiner;
         this.topicRegexResolver = new TopicRegexResolver(() -> authorizerPlugin, this.time);
         this.topicHashCache = new HashMap<>();
     }
@@ -2398,7 +2417,7 @@ public class GroupMetadataManager {
                 )
         ));
 
-        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "").trim();
+        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "").trim();
         // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
         // throw on unknown status codes, so it must not be sent to them.
         if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
@@ -4536,11 +4555,21 @@ public class GroupMetadataManager {
             // Warm-up tasks are disabled, so there is nothing to refine and no state to keep for the group.
             return targetAssignment;
         }
-        final Map<String, TasksTuple> refinedAssignment = AssignmentRefiner.refine(
+        if (!configuredTopology.isReady()) {
+            // A refiner is handed the resolved subtopologies, never an unresolved topology, so it does not have to
+            // reason about readiness; the topology must be ready to allow the refiner to identify stateless vs
+            // stateful tasks.
+            // If the topology is not ready, the assignor computes an empty assignment, which we can just fall back to.
+            // Even if the assignor fall-back would be a non-empty assignment, it's still reasonable to not refine and
+            // just apply the target assignment directly. It's a robust fall back, ensuring that we converge to the new
+            // target assignment, trading off availability.
+            return targetAssignment;
+        }
+        final Map<String, TasksTuple> refinedAssignment = streamsGroupAssignmentRefiner.refine(
             group.members(),
             targetAssignment,
             group.taskOffsets(),
-            configuredTopology,
+            Collections.unmodifiableSortedMap(configuredTopology.subtopologies().get()),
             numWarmupReplicas,
             streamsGroupAcceptableRecoveryLag(group.groupId())
         );
@@ -9434,6 +9463,12 @@ public class GroupMetadataManager {
         final ShareGroup group = getOrMaybeCreateShareGroup(groupId, true);
         throwIfShareGroupIsNotEmpty(group);
 
+        // Per KIP-932, altering share group offsets must bump the group epoch and write a
+        // ShareGroupMetadata record before the InitializeShareGroupState request is sent to the
+        // share coordinator, so that the persisted state epoch reflects the new group epoch.
+        final int groupEpoch = group.groupEpoch() + 1;
+        records.add(newShareGroupEpochRecord(groupId, groupEpoch, group.metadataHash()));
+
         AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection alterShareGroupOffsetsResponseTopics = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection();
 
         Map<Uuid, InitMapValue> initializingTopics = new HashMap<>();
@@ -9498,7 +9533,7 @@ public class GroupMetadataManager {
             Map.entry(
                 new AlterShareGroupOffsetsResponseData()
                     .setResponses(alterShareGroupOffsetsResponseTopics),
-                buildInitializeShareGroupState(groupId, group.groupEpoch(), offsetByTopicPartitions)
+                buildInitializeShareGroupState(groupId, groupEpoch, offsetByTopicPartitions)
             )
         );
     }
@@ -9934,9 +9969,9 @@ public class GroupMetadataManager {
         final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
             .orElse(config.streamsGroupRackAwareAssignmentTags());
         Map<String, String> configs = new TreeMap<>();
-        configs.put("num.standby.replicas", numStandbyReplicas.toString());
+        configs.put(NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas.toString());
         if (!rackAwareAssignmentTags.isEmpty()) {
-            configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
+            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
         }
         return configs;
     }

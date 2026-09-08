@@ -19,11 +19,11 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentState;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of both the {@link MemberAssignmentMetadata} and the {@link MemberAssignmentState}
@@ -55,12 +55,24 @@ public record MemberMetadataAndStateImpl(
         Objects.requireNonNull(instanceId);
         Objects.requireNonNull(rackId);
         Objects.requireNonNull(processId);
-        clientTags = Collections.unmodifiableMap(Objects.requireNonNull(clientTags));
-        activeTasks = Collections.unmodifiableMap(Objects.requireNonNull(activeTasks));
-        standbyTasks = Collections.unmodifiableMap(Objects.requireNonNull(standbyTasks));
-        warmupTasks = Collections.unmodifiableMap(Objects.requireNonNull(warmupTasks));
-        taskOffsets = Collections.unmodifiableMap(Objects.requireNonNull(taskOffsets));
-        taskEndOffsets = Collections.unmodifiableMap(Objects.requireNonNull(taskEndOffsets));
+        clientTags = Map.copyOf(Objects.requireNonNull(clientTags));
+        // These collections belong to the coordinator (the member's current assignment and the offsets reported in
+        // the last heartbeat), so deep-copy them: what the assignor sees is a snapshot it cannot reach through.
+        activeTasks = deepCopyTasks(activeTasks);
+        standbyTasks = deepCopyTasks(standbyTasks);
+        warmupTasks = deepCopyTasks(warmupTasks);
+        taskOffsets = deepCopyOffsets(taskOffsets);
+        taskEndOffsets = deepCopyOffsets(taskEndOffsets);
+    }
+
+    private static Map<String, Set<Integer>> deepCopyTasks(Map<String, Set<Integer>> tasks) {
+        return Objects.requireNonNull(tasks).entrySet().stream()
+            .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, entry -> Set.copyOf(entry.getValue())));
+    }
+
+    private static Map<String, Map<Integer, Long>> deepCopyOffsets(Map<String, Map<Integer, Long>> offsets) {
+        return Objects.requireNonNull(offsets).entrySet().stream()
+            .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, entry -> Map.copyOf(entry.getValue())));
     }
 
 }

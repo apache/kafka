@@ -330,7 +330,6 @@ public class OffsetsApiIntegrationTest {
         alterAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
     }
 
-    @Flaky("KAFKA-15914")
     @Test
     public void testAlterSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();

@@ -29,6 +29,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -636,6 +640,62 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         } finally {
             store.close();
         }
+    }
+
+    @Test
+    public void shouldNotDeadlockOnConcurrentPutAndQuery() throws Exception {
+        // KAFKA-19629: put() takes the store monitor and then the position lock, so IQ queries
+        // must take the two locks in the same order.
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig())
+        );
+        final InMemoryKeyValueStore store = new InMemoryKeyValueStore("concurrency-store");
+        store.init(ctx, store);
+        ctx.setRecordContext(new ProcessorRecordContext(0, 1, 0, "topic", new RecordHeaders()));
+
+        final int iterations = 5000;
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        final Thread writer = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    store.put(bytesKey("key" + (i % 100)), bytesValue("value" + i));
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "writer");
+
+        final Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    final QueryResult<KeyValueIterator<Bytes, byte[]>> result = store.query(
+                        RangeQuery.withNoBounds(),
+                        PositionBound.unbounded(),
+                        new QueryConfig(false));
+                    result.getResult().close();
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "iq-reader");
+
+        writer.setDaemon(true);
+        reader.setDaemon(true);
+        writer.start();
+        reader.start();
+        final long deadlineMs = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(60);
+        writer.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+        reader.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        assertFalse(writer.isAlive() || reader.isAlive(),
+            "deadlock between concurrent put and IQ query");
     }
 
     private InMemoryKeyValueStore openTransactionalStore() {

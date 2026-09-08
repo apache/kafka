@@ -70,8 +70,4 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
         return new AlterReplicaLogDirsResponse(new AlterReplicaLogDirsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
 }

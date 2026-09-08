@@ -19,16 +19,17 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -71,7 +72,7 @@ public class TargetAssignmentBuilder {
     /**
      * The assignment configs.
      */
-    private final Map<String, String> assignmentConfigs;
+    private final AssignmentConfigs assignmentConfigs;
 
     /**
      * The members in the group.
@@ -115,7 +116,7 @@ public class TargetAssignmentBuilder {
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
-        this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
+        this.assignmentConfigs = AssignmentConfigsImpl.fromMap(Objects.requireNonNull(assignmentConfigs));
     }
 
     static MemberMetadataAndStateImpl createMemberMetadataAndState(
@@ -241,7 +242,7 @@ public class TargetAssignmentBuilder {
             }
             newGroupAssignment = assignor.assign(
                 new GroupSpecImpl(
-                    Collections.unmodifiableMap(memberMetadataMap),
+                    memberMetadataMap,
                     assignmentConfigs
                 ),
                 new TopologyMetadata(metadataImage, topology.subtopologies().get())

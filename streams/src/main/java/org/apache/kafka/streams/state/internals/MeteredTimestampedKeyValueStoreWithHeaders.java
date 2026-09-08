@@ -657,48 +657,9 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(store.reverseAll(), allSensor);
     }
 
-    /**
-     * Shared scaffolding for the metered iterators below: tracks {@code num-open-iterators},
-     * {@code oldest-iterator-open-since-ms}, and per-operation iterator duration, and delegates
-     * closing the wrapped raw iterator. Subclasses only need to implement the deserializing
-     * {@code next()}/{@code hasNext()} (and, where applicable, {@code peekNextKey()}).
-     */
-    private abstract class AbstractMeteredIterator implements MeteredIterator {
-
-        final KeyValueIterator<Bytes, byte[]> iter;
-        private final Sensor sensor;
-        private final long startNs;
-        private final long startTimestampMs;
-
-        AbstractMeteredIterator(final KeyValueIterator<Bytes, byte[]> iter, final Sensor sensor) {
-            this.iter = iter;
-            this.sensor = sensor;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
-        }
-
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                sensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
-        }
-    }
-
     @SuppressWarnings("unchecked")
-    private class MeteredTimestampedKeyValueStoreWithHeadersQueryIterator extends AbstractMeteredIterator implements KeyValueIterator<K, V> {
+    private class MeteredTimestampedKeyValueStoreWithHeadersQueryIterator
+        extends AbstractMeteredIterator<Bytes> implements KeyValueIterator<K, V> {
 
         private final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer;
 
@@ -711,7 +672,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer,
             final boolean returnPlainValue
         ) {
-            super(iter, sensor);
+            super(iter, sensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
             this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
             this.returnPlainValue = returnPlainValue;
         }
@@ -777,7 +738,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
      * {@code next()} throws.
      */
     private class MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator
-        extends AbstractMeteredIterator implements ReadOnlyRecordIterator<K, V> {
+        extends AbstractMeteredIterator<Bytes> implements ReadOnlyRecordIterator<K, V> {
 
         private final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer;
 
@@ -786,13 +747,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final Sensor sensor,
             final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer
         ) {
-            super(iter, sensor);
+            super(iter, sensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
             this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iter.hasNext();
         }
 
         @Override
@@ -817,7 +773,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     }
 
     private class MeteredTimestampedKeyValueStoreWithHeadersIterator
-        extends AbstractMeteredIterator implements KeyValueIterator<K, ValueTimestampHeaders<V>> {
+        extends AbstractMeteredIterator<Bytes> implements KeyValueIterator<K, ValueTimestampHeaders<V>> {
 
         private KeyValue<K, ValueTimestampHeaders<V>> cachedNext;
 
@@ -825,7 +781,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final KeyValueIterator<Bytes, byte[]> iter,
             final Sensor sensor
         ) {
-            super(iter, sensor);
+            super(iter, sensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
         }
 
         @Override
