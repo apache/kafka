@@ -52,15 +52,9 @@ import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableSet;
-import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -104,9 +98,7 @@ public class MeteredKeyValueStore<K, V>
     private TaskId taskId;
     private Sensor restoreSensor;
 
-    protected LongAdder numOpenIterators = new LongAdder();
-    protected NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
-
+    protected final MeteredIteratorTracker iteratorTracker = new MeteredIteratorTracker();
 
     private final Map<Class<?>, QueryHandler<?>> queryHandlers =
         mkMap(
@@ -169,21 +161,14 @@ public class MeteredKeyValueStore<K, V>
             metricsScope,
             name(),
             streamsMetrics,
-            (config, now) -> numOpenIterators.sum()
+            (config, now) -> iteratorTracker.numOpenIterators()
         );
         StateStoreMetrics.addOldestOpenIteratorGauge(
             taskId.toString(),
             metricsScope,
             name(),
             streamsMetrics,
-            (config, now) -> {
-                try {
-                    final Iterator<MeteredIterator> iter = openIterators.iterator();
-                    return iter.hasNext() ? iter.next().startTimestamp() : 0L;
-                } catch (final NoSuchElementException e) {
-                    return 0L;
-                }
-            }
+            (config, now) -> iteratorTracker.oldestIteratorStartTimestamp()
         );
         if (!persistent()) {
             StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
@@ -576,8 +561,7 @@ public class MeteredKeyValueStore<K, V>
             this.sensor = sensor;
             this.startTimestamp = time.milliseconds();
             this.startNs = time.nanoseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
+            iteratorTracker.add(this);
         }
 
         @Override
@@ -609,8 +593,7 @@ public class MeteredKeyValueStore<K, V>
                 final long duration = time.nanoseconds() - startNs;
                 sensor.record(duration);
                 iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
+                iteratorTracker.remove(this);
             }
         }
 

@@ -20,7 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-import java.util.Set;
+import java.util.NavigableSet;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
@@ -47,8 +47,7 @@ abstract class AbstractMeteredIterator<RawKey> implements MeteredIterator {
     private final Sensor operationSensor;
     private final Sensor iteratorSensor;
     private final Time time;
-    private final LongAdder numOpenIterators;
-    private final Set<MeteredIterator> openIterators;
+    private final MeteredIteratorTracker iteratorTracker;
     private final long startNs;
     private final long startTimestampMs;
 
@@ -57,20 +56,32 @@ abstract class AbstractMeteredIterator<RawKey> implements MeteredIterator {
                             final Sensor iteratorSensor,
                             final Time time,
                             final LongAdder numOpenIterators,
-                            final Set<MeteredIterator> openIterators) {
+                            final NavigableSet<MeteredIterator> openIterators) {
+        this(
+            iter,
+            operationSensor,
+            iteratorSensor,
+            time,
+            new MeteredIteratorTracker(numOpenIterators, openIterators)
+        );
+    }
+
+    AbstractMeteredIterator(final KeyValueIterator<RawKey, byte[]> iter,
+                            final Sensor operationSensor,
+                            final Sensor iteratorSensor,
+                            final Time time,
+                            final MeteredIteratorTracker iteratorTracker) {
         this.iter = iter;
         this.operationSensor = operationSensor;
         this.iteratorSensor = iteratorSensor;
         this.time = time;
-        this.numOpenIterators = numOpenIterators;
-        this.openIterators = openIterators;
+        this.iteratorTracker = iteratorTracker;
         this.startNs = time.nanoseconds();
         this.startTimestampMs = time.milliseconds();
-        numOpenIterators.increment();
-        openIterators.add(this);
+        iteratorTracker.add(this);
     }
 
-    // Final: the constructor's openIterators.add(this) sorts through this via the set's
+    // Final: the constructor's iteratorTracker.add(this) sorts through this via the set's
     // startTimestamp comparator, i.e. on a not-yet-fully-constructed object. Keeping it final stops a
     // subclass from overriding it with something that reads its own not-yet-assigned state.
     @Override
@@ -96,8 +107,7 @@ abstract class AbstractMeteredIterator<RawKey> implements MeteredIterator {
             final long duration = time.nanoseconds() - startNs;
             operationSensor.record(duration);
             iteratorSensor.record(duration);
-            numOpenIterators.decrement();
-            openIterators.remove(this);
+            iteratorTracker.remove(this);
         }
     }
 }
