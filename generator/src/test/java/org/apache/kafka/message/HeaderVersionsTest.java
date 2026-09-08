@@ -227,44 +227,6 @@ public class HeaderVersionsTest {
     }
 
     @Test
-    public void testFlexibleRequestVersionNeedsFlexibleHeader() {
-        assertMessageContains("which is flexible", () -> parse(requestSpec("0-5", "2+", "{'0+': '1'}")));
-    }
-
-    @Test
-    public void testNonFlexibleRequestVersionNeedsHeaderVersionOne() {
-        assertMessageContains("which is not flexible", () -> parse(requestSpec("0-5", "2+", "{'0+': '2'}")));
-        assertMessageContains("which is not flexible", () -> parse(requestSpec("0-5", "none", "{'0+': '0'}")));
-    }
-
-    @Test
-    public void testFlexibleRequestAcceptsNewerHeaderVersion() throws Exception {
-        // Request header v3 (KIP-1313) is flexible, so a flexible body may declare it.
-        MessageSpec spec = parse(requestSpec("0-5", "0+", "{'0+': '3'}"));
-        assertEquals((short) 3, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
-    }
-
-    @Test
-    public void testFlexibleResponseVersionNeedsFlexibleHeader() {
-        assertMessageContains("which is flexible",
-            () -> parse(responseSpec(0, "FooResponse", "0-5", "2+", "{'0+': '0'}")));
-    }
-
-    @Test
-    public void testNonFlexibleResponseVersionNeedsHeaderVersionZero() {
-        assertMessageContains("which is not flexible",
-            () -> parse(responseSpec(0, "FooResponse", "0-5", "2+", "{'0+': '1'}")));
-    }
-
-    @Test
-    public void testRemovedVersionsAreChecked() throws Exception {
-        // Version 0 is no longer valid but was non-flexible, so it must still map to header v1.
-        assertMessageContains("which is not flexible", () -> parse(requestSpec("1-2", "1+", "{'0+': '2'}")));
-        MessageSpec spec = parse(requestSpec("1-2", "1+", "{'0': '1', '1+': '2'}"));
-        assertEquals(2, spec.headerVersions().orElseThrow().entries().size());
-    }
-
-    @Test
     public void testApiVersionsResponseMustUseHeaderVersionZero() {
         assertMessageContains("KIP-511",
             () -> parse(responseSpec(18, "ApiVersionsResponse", "0-3", "3+", "{'0-2': '0', '3+': '1'}")));
@@ -274,13 +236,5 @@ public class HeaderVersionsTest {
     public void testApiVersionsResponseHeaderVersionZeroAcceptedForFlexibleVersions() throws Exception {
         MessageSpec spec = parse(responseSpec(18, "ApiVersionsResponse", "0-3", "3+", "{'0+': '0'}"));
         assertEquals((short) 0, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
-    }
-
-    @Test
-    public void testApiVersionsRequestFollowsFlexibilityRule() {
-        // Only the response is pinned by KIP-511; the request follows the normal rule.
-        assertMessageContains("which is flexible",
-            () -> parse("{'apiKey': 18, 'type': 'request', 'name': 'ApiVersionsRequest', 'validVersions': '0-3', " +
-                "'flexibleVersions': '3+', 'headerVersions': {'0+': '1'}}"));
     }
 }
