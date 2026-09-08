@@ -291,18 +291,17 @@ public class FetcherTest {
 
     @Test
     public void testCloseShouldBeIdempotent() {
-        final int[] closeCount = {0};
-
         LogContext logContext = new LogContext();
         buildDependencies(new MetricConfig(), Long.MAX_VALUE, new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST), logContext);
         FetchConfig fetchConfig = new FetchConfig(minBytes, maxBytes, maxWaitMs, fetchSize, Integer.MAX_VALUE,
             true, CommonClientConfigs.DEFAULT_CLIENT_RACK, IsolationLevel.READ_UNCOMMITTED);
-        fetcher = new Fetcher<>(logContext, consumerClient, metadata, subscriptions, fetchConfig,
+        var fetcher = new Fetcher<>(logContext, consumerClient, metadata, subscriptions, fetchConfig,
             new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer(), metrics),
             metricsManager, time, apiVersions) {
+                int closeCount = 0;
                 @Override
                 protected void closeInternal(Timer timer) {
-                    closeCount[0]++;
+                    closeCount++;
                     super.closeInternal(timer);
                 }
             };
@@ -311,7 +310,7 @@ public class FetcherTest {
         fetcher.close();
         fetcher.close();
 
-        assertEquals(1, closeCount[0]);
+        assertEquals(1, fetcher.closeCount);
     }
 
     @Test
