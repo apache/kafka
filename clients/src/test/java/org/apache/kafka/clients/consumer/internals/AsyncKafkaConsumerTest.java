@@ -259,6 +259,15 @@ public class AsyncKafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors,
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
         SubscriptionState subscriptions) {
+        return newConsumer(fetchBuffer, interceptors, rebalanceListenerInvoker, subscriptions, 100L);
+    }
+
+    private AsyncKafkaConsumer<String, String> newConsumer(
+        FetchBuffer fetchBuffer,
+        ConsumerInterceptors<String, String> interceptors,
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
+        SubscriptionState subscriptions,
+        long retryBackoffMs) {
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
         return new AsyncKafkaConsumer<>(
@@ -278,7 +287,7 @@ public class AsyncKafkaConsumerTest {
             metrics,
             subscriptions,
             metadata,
-            100L,
+            retryBackoffMs,
             requestTimeoutMs,
             defaultApiTimeoutMs,
             "group-id",
@@ -2164,6 +2173,34 @@ public class AsyncKafkaConsumerTest {
             "Expected poll wait timer to use the full user timeout (no busy loop), but was " + awaitTimerInitialMs.get());
 
         // Only a single wait cycle should have happened
+        verify(fetchBuffer, times(1)).awaitWakeup(any(Timer.class));
+    }
+
+    @Test
+    public void testPollDoesNotBusyLoopWhenRetryBackoffIsZero() {
+        FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(fetchBuffer, mock(ConsumerInterceptors.class),
+                mock(ConsumerRebalanceListenerInvoker.class), subscriptions, 0L);
+
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        subscriptions.assignFromUser(singleton(tp));
+        doReturn(Long.MAX_VALUE).when(applicationEventHandler).maximumTimeToWait();
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        AtomicReference<Long> awaitTimerInitialMs = new AtomicReference<>();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            awaitTimerInitialMs.compareAndSet(null, pollTimer.remainingMs());
+            time.sleep(500);
+            pollTimer.update();
+            return null;
+        }).when(fetchBuffer).awaitWakeup(any(Timer.class));
+
+        consumer.poll(Duration.ofMillis(500));
+
+        assertEquals(1L, awaitTimerInitialMs.get(),
+                "Expected a positive minimum wait when retry.backoff.ms is 0");
         verify(fetchBuffer, times(1)).awaitWakeup(any(Timer.class));
     }
 
