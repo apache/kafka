@@ -2469,10 +2469,10 @@ public class UnifiedLogTest {
     }
 
     @Test
-    public void testLogRollAfterLogHandlerClosed() throws IOException {
+    public void testLogRollAfterCloseQuietly() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder().build();
         UnifiedLog log = createLog(logDir, logConfig);
-        log.closeHandlers();
+        log.closeQuietly();
         assertThrows(KafkaStorageException.class, () -> log.roll(Optional.of(1L)));
     }
 
