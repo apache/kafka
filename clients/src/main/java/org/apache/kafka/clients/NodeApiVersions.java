@@ -234,9 +234,7 @@ public class NodeApiVersions {
                 bld.append(" [unusable: node too old]");
             } else {
                 short latestUsableVersion = Utils.min(apiKey.latestVersion(), supportedVersion.maxVersion());
-                bld.append(" [usable: ").append(latestUsableVersion)
-                    .append(", request header: ").append(apiKey.requestHeaderVersion(latestUsableVersion))
-                    .append("]");
+                bld.append(" [usable: ").append(latestUsableVersion).append("]");
             }
         }
         return bld.toString();
