@@ -31,12 +31,12 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class OffsetMapTest {
+public class OffsetMapTest {
 
     private static final int MEMORY_SIZE = 4096;
 
     static Stream<String> hashAlgorithms() {
-        return Stream.of("MD5", "SHA-1", "SHA-256", "SHA-512");
+        return Stream.of("MD2", "MD5", "SHA-1", "SHA-256", "SHA-384", "SHA-512");
     }
 
     static Stream<Arguments> algorithmsAndItems() {
@@ -46,7 +46,7 @@ class OffsetMapTest {
 
     @ParameterizedTest
     @MethodSource("algorithmsAndItems")
-    void testBasicValidation(String algorithm, int items) throws Exception {
+    public void testBasicValidation(String algorithm, int items) throws Exception {
         int bytesPerEntry = MessageDigest.getInstance(algorithm).getDigestLength() + 8;
         SkimpyOffsetMap map = new SkimpyOffsetMap(items * bytesPerEntry * 2, algorithm);
         IntStream.range(0, items).forEach(i -> assertDoesNotThrow(() -> map.put(key(i), i)));
@@ -56,7 +56,7 @@ class OffsetMapTest {
     }
 
     @Test
-    void testClear() throws Exception {
+    public void testClear() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         IntStream.range(0, 10).forEach(i -> assertDoesNotThrow(() -> map.put(key(i), i)));
         for (int i = 0; i < 10; i++) {
@@ -70,7 +70,7 @@ class OffsetMapTest {
 
     @ParameterizedTest
     @MethodSource("hashAlgorithms")
-    void testGetWhenFull(String algorithm) throws Exception {
+    public void testGetWhenFull(String algorithm) throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE, algorithm);
         int i = 37;
         while (map.size() < map.slots()) {
@@ -82,7 +82,7 @@ class OffsetMapTest {
     }
 
     @Test
-    void testUpdateLatestOffset() throws Exception {
+    public void testUpdateLatestOffset() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         int i = 37;
         while (map.size() < map.slots()) {
@@ -96,7 +96,7 @@ class OffsetMapTest {
     }
 
     @Test
-    void testLatestOffset() throws Exception {
+    public void testLatestOffset() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         int i = 37;
         while (map.size() < map.slots()) {
@@ -107,7 +107,7 @@ class OffsetMapTest {
     }
 
     @Test
-    void testUtilization() throws Exception {
+    public void testUtilization() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         int i = 37;
         assertEquals(0.0, map.utilization());
