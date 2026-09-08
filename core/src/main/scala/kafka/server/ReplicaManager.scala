@@ -2194,7 +2194,7 @@ class ReplicaManager(val config: KafkaConfig,
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
     logManager.handleLogDirFailure(dir)
-    if (dir == new File(config.metadataLogDir).getAbsolutePath && config.processRoles.nonEmpty) {
+    if (dir == new File(config.metadataLogDir).getAbsolutePath && !config.processRoles.isEmpty) {
       fatal(s"Shutdown broker because the metadata log dir $dir has failed")
       Exit.halt(1)
     }
@@ -2257,7 +2257,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def createReplicaSelector(metrics: Metrics): Option[Plugin[ReplicaSelector]] = {
-    config.replicaSelectorClassName.asScala.map { className =>
+    config.replicaSelectorClassName.toScala.map { className =>
       val tmpReplicaSelector: ReplicaSelector = Utils.newInstance(className, classOf[ReplicaSelector])
       tmpReplicaSelector.configure(config.originals())
       Plugin.wrapInstance(tmpReplicaSelector, metrics, ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG)

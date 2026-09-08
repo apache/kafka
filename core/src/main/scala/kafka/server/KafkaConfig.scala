@@ -121,7 +121,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
-  val processRoles: Set[ProcessRole] = parseProcessRoles().asScala.toSet
   private[server] val dynamicConfig = new DynamicBrokerConfig(this)
 
   private[server] def updateCurrentConfig(newConfig: KafkaConfig): Unit = {
@@ -171,10 +170,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
   def shareCoordinatorConfig: ShareCoordinatorConfig = _shareCoordinatorConfig
 
   val controllerMaxRecordsPerBatch: Int = getInt(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG)
-
-  def isKRaftCombinedMode: Boolean = {
-    super.isKRaftCombinedMode(processRoles.asJava)
-  }
 
   /************* Authorizer Configuration ***********/
   def createNewAuthorizer(metrics: Metrics, role: String): Option[Plugin[Authorizer]] = {
@@ -361,10 +356,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
     }
     def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String, extraMessage: String = ""): Unit = {
       if (originals.containsKey(configName)) {
-        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role. $extraMessage")
+        warn(s"$configName is defined in ${processRoles.asScala.mkString(", ")}. It should be defined in the $expectedRole role. $extraMessage")
       }
     }
-    if (processRoles == Set(ProcessRole.BrokerRole)) {
+    if (processRoles.asScala == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
       // nodeId must not appear in controller.quorum.voters
@@ -398,7 +393,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
       val ignoredIn5 = "This configuration will be ignored in the broker role in 5.0."
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.NUM_PARTITIONS_CONFIG, ignoredIn5)
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, ignoredIn5)
-    } else if (processRoles == Set(ProcessRole.ControllerRole)) {
+    } else if (processRoles.asScala == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
       // listeners should only contain listeners also enumerated in the controller listener
@@ -416,7 +411,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
-    } else if (isKRaftCombinedMode(processRoles.asJava)) {
+    } else if (isKRaftCombinedMode(processRoles)) {
       // KRaft combined broker and controller
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()

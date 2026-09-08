@@ -99,6 +99,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     ));
 
     private volatile QuotaConfig quotaConfig;
+    private volatile Set<ProcessRole> processRoles;
     private final boolean doLog;
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
@@ -698,18 +699,22 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS);
     }
 
-    public Set<ProcessRole> parseProcessRoles() {
-        List<String> roles = getList(KRaftConfigs.PROCESS_ROLES_CONFIG);
-        Set<ProcessRole> result = new HashSet<>();
-        for (String role : roles) {
-            switch (role) {
-                case "broker" -> result.add(ProcessRole.BrokerRole);
-                case "controller" -> result.add(ProcessRole.ControllerRole);
-                default -> throw new ConfigException("Unknown process role '" + role +
-                            "' (only 'broker' and 'controller' are allowed roles)");
+    public Set<ProcessRole> processRoles() {
+        Set<ProcessRole> value = processRoles;
+        if (value == null) {
+            Set<ProcessRole> result = new HashSet<>();
+            for (String role : getList(KRaftConfigs.PROCESS_ROLES_CONFIG)) {
+                switch (role) {
+                    case "broker" -> result.add(ProcessRole.BrokerRole);
+                    case "controller" -> result.add(ProcessRole.ControllerRole);
+                    default -> throw new ConfigException("Unknown process role '" + role +
+                                "' (only 'broker' and 'controller' are allowed roles)");
+                }
             }
+            value = Collections.unmodifiableSet(result);
+            processRoles = value;
         }
-        return Collections.unmodifiableSet(result);
+        return value;
     }
 
     public boolean isKRaftCombinedMode(Set<ProcessRole> processRoles) {

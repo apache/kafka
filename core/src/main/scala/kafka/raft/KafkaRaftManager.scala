@@ -117,7 +117,7 @@ class KafkaRaftManager[T](
     val differentMetadataLogDir = KafkaRaftManager.hasDifferentLogDir(config)
 
     // Or this node is only a controller
-    val isOnlyController = config.processRoles == Set(ProcessRole.ControllerRole)
+    val isOnlyController = config.processRoles.asScala == Set(ProcessRole.ControllerRole)
 
     if (differentMetadataLogDir || isOnlyController) {
       Some(KafkaRaftManager.lockDataDir(new File(config.metadataLogDir)))
