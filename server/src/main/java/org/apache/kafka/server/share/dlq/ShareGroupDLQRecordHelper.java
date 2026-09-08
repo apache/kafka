@@ -40,8 +40,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /**
- * Shared helper for DLQ record building and source-record fetching.
- * Used by both the K1 ({@link ShareGroupDLQStateManager}) and K2 DLQ manager implementations.
+ * Helper for DLQ record building and source-record fetching.
  */
 public class ShareGroupDLQRecordHelper {
 
@@ -51,7 +50,7 @@ public class ShareGroupDLQRecordHelper {
      * would be fruitless in most cases. Therefore, the value of 1 MB has been chosen
      * for the DLQ-related log reads.
      */
-    public static final int DLQ_MAX_FETCH_BYTES = 1024 * 1024;
+    private static final int DLQ_MAX_FETCH_BYTES = 1024 * 1024;
 
     public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
     public static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
@@ -63,9 +62,9 @@ public class ShareGroupDLQRecordHelper {
     /**
      * Result of building DLQ records for a range of offsets, respecting maxMessageBytes.
      *
-     * @param records         The built MemoryRecords containing DLQ records with headers
+     * @param records            The built MemoryRecords containing DLQ records with headers
      * @param lastOffsetIncluded The last source offset included in this batch
-     * @param recordCount     The number of individual records in the batch
+     * @param recordCount        The number of individual records in the batch
      */
     public record BuildResult(MemoryRecords records, long lastOffsetIncluded, int recordCount) {
     }
@@ -107,7 +106,7 @@ public class ShareGroupDLQRecordHelper {
     /**
      * Resolves the source topic name from a TopicIdPartition, falling back to the topic ID string.
      *
-     * @param topicIdPartition The source topic-partition
+     * @param topicIdPartition  The source topic-partition
      * @param topicNameResolver Resolver that maps topic ID to name
      * @return The resolved topic name
      */
@@ -220,7 +219,7 @@ public class ShareGroupDLQRecordHelper {
      * @param logReader          Log reader for fetching source records
      * @param time               Time instance
      * @param topicNameResolver  Resolves the raw DLQ topic name to the name used in the metadata
-     *                           cache. K2 prepends the tenant prefix; K1 passes {@link Function#identity()}.
+     *                           cache.
      * @return A future with the fetch result (empty map if copy-record is disabled)
      */
     public static CompletableFuture<ShareGroupDLQRecordFetcher.FetchResult> maybeFetchSourceRecords(

@@ -22,8 +22,7 @@ import org.apache.kafka.common.config.ConfigException;
 import java.util.Optional;
 
 /**
- * Shared validation logic for DLQ managers ({@link ShareGroupDLQStateManager} and
- * {@code K2ShareGroupDLQManager}).
+ * Validation logic for DLQ manager.
  */
 public final class ShareGroupDLQValidator {
 
@@ -68,12 +67,11 @@ public final class ShareGroupDLQValidator {
      * configured prefix.
      *
      * <p>Callers are responsible for checking that the topic name is present in the config (non-empty)
-     * before calling this method, and for any implementation-specific checks (e.g., K1 auto-create).
+     * before calling this method, and for any implementation-specific checks (e.g., auto-create).
      *
      * @param groupId           the share group ID, for error messages
-     * @param userTopicName     the raw DLQ topic name from config (without tenant prefix)
-     * @param resolvedTopicName the topic name used for metadata cache lookups (may include tenant
-     *                          prefix in K2; same as {@code userTopicName} in K1)
+     * @param userTopicName     the raw DLQ topic name from config
+     * @param resolvedTopicName the topic name used for metadata cache lookups
      * @param cacheHelper       metadata cache helper for topic lookups
      * @return an error if validation fails, or empty if valid
      */
