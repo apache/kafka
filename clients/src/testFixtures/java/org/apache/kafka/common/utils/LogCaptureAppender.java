@@ -113,14 +113,12 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
     }
 
     public List<String> getMessages(Level level) {
-        final List<String> result = new LinkedList<>();
         synchronized (events) {
-            events.stream()
+            return events.stream()
                 .filter(event -> level.equals(event.getLevel()))
                 .map(event -> event.getMessage().getFormattedMessage())
                 .collect(Collectors.toList());
         }
-        return result;
     }
 
     public List<String> getMessages() {
