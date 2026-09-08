@@ -388,7 +388,7 @@ public class ActivationRecordsGeneratorTest {
         ControllerResult<Void> result = ActivationRecordsGenerator.recordsForNonEmptyLog(
             logMsg -> assertEquals("Performing controller activation. Loaded ZK migration state of MIGRATION. " +
                 "Cannot complete ZK migration because the following broker(s) are still registered as ZK brokers: [1, 3]" +
-                ". Restart these brokers in KRaft mode before finalizing the migration.", logMsg),
+                ". Restart these brokers in KRaft mode before restarting the controllers to finalize the migration.", logMsg),
             -1L,
             false,
             stillZkRegistered,

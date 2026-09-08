@@ -207,6 +207,112 @@ class TestMigration(ProduceConsumeValidateTest):
         assert saw_expected_error, "Did not see expected ERROR log in the controller logs"
 
     @cluster(num_nodes=5)
+    def test_finalize_blocked_until_brokers_reregister_in_kraft(self):
+        """
+        Regression test for KAFKA-20960. The KRaft controller must not finalize a
+        ZK-to-KRaft migration while any broker is still registered as a ZK broker in the KRaft metadata.
+        Instead it should log a warning naming the offending broker(s) and stay in
+        MIGRATION. Once those brokers have re-registered in KRaft mode, a
+        subsequent activation with 'zookeeper.metadata.migration.enable=false'
+        should finalize the migration.
+        """
+        zk_quorum = partial(ServiceQuorumInfo, zk)
+        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
+        self.kafka = KafkaService(self.test_context,
+                                  num_nodes=3,
+                                  zk=self.zk,
+                                  version=DEV_BRANCH,
+                                  quorum_info_provider=zk_quorum,
+                                  allow_zk_with_kraft=True,
+                                  server_prop_overrides=[
+                                      ["zookeeper.metadata.migration.enable", "false"]])
+
+        remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
+        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
+                                  allow_zk_with_kraft=True,
+                                  isolated_kafka=self.kafka,
+                                  server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
+                                                         ["zookeeper.metadata.migration.enable", "true"]],
+                                  quorum_info_provider=remote_quorum)
+
+        self.kafka.security_protocol = "PLAINTEXT"
+        self.kafka.interbroker_security_protocol = "PLAINTEXT"
+        self.zk.start()
+        self.logger.info("Pre-generating clusterId for ZK.")
+        cluster_id_json = """{"version": "1", "id": "%s"}""" % CLUSTER_ID
+        self.zk.create(path="/cluster")
+        self.zk.create(path="/cluster/id", value=cluster_id_json)
+        self.kafka.start()
+
+        self.kafka.create_topic({
+            "topic": self.topic,
+            "partitions": self.partitions,
+            "replication-factor": self.replication_factor,
+            "configs": {"min.insync.replicas": 2}
+        })
+
+        controller.start()
+        self.logger.info("Restarting ZK brokers in migration mode")
+        self.kafka.reconfigure_zk_for_migration(controller)
+        for node in self.kafka.nodes:
+            self.kafka.stop_node(node)
+            self.kafka.start_node(node)
+            self.wait_until_rejoin()
+
+        controller_node = controller.nodes[0]
+        with controller_node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
+            monitor.offset = 0
+            monitor.wait_until(
+                "Finished initial migration of ZK metadata to KRaft",
+                timeout_sec=60.0, backoff_sec=.25,
+                err_msg="Did not see expected INFO log after initial migration")
+
+        self.logger.info("Restart controller with migration disabled while brokers are still ZK-registered")
+        controller.server_prop_overrides = [
+            ["zookeeper.connect", self.zk.connect_setting()],
+            ["zookeeper.metadata.migration.enable", "false"],
+        ]
+        with controller_node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
+            controller.stop_node(controller_node)
+            controller.start_node(controller_node)
+            monitor.wait_until(
+                "Cannot complete ZK migration because the following broker(s) are still registered as ZK brokers",
+                timeout_sec=60.0, backoff_sec=.25,
+                err_msg="Controller did not log the expected 'Cannot complete ZK migration' warning")
+
+        self.logger.info("Restart controller with migration re-enabled so brokers can migrate to KRaft")
+        controller.server_prop_overrides = [
+            ["zookeeper.connect", self.zk.connect_setting()],
+            ["zookeeper.metadata.migration.enable", "true"],
+        ]
+        controller.stop_node(controller_node)
+        controller.start_node(controller_node)
+
+        self.logger.info("Restarting ZK brokers as KRaft brokers")
+        self.kafka.reconfigure_zk_as_kraft(controller)
+        for node in self.kafka.nodes:
+            self.kafka.stop_node(node)
+            self.kafka.start_node(node)
+            self.wait_until_rejoin()
+
+        self.logger.info("Restart controller with migration disabled; migration should finalize")
+        controller.server_prop_overrides = [
+            ["zookeeper.connect", self.zk.connect_setting()],
+            ["zookeeper.metadata.migration.enable", "false"],
+        ]
+        with controller_node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
+            controller.stop_node(controller_node)
+            controller.start_node(controller_node)
+            monitor.wait_until(
+                "Completing the ZK migration since this controller was configured with",
+                timeout_sec=60.0, backoff_sec=.25,
+                err_msg="Controller did not finalize the ZK migration once brokers re-registered as KRaft")
+
+        self.kafka.stop()
+        controller.stop()
+        self.zk.stop()
+
+    @cluster(num_nodes=5)
     def test_reconcile_kraft_to_zk(self):
         """
         Perform a migration and delete a topic directly from ZK. Ensure that the topic is added back

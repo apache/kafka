@@ -28,7 +28,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.function.Consumer;
 
 public class ActivationRecordsGenerator {
@@ -188,8 +187,8 @@ public class ActivationRecordsGenerator {
                         if (!stillZkRegisteredBrokerIds.isEmpty()) {
                             logMessageBuilder
                                 .append("Cannot complete ZK migration because the following broker(s) are still registered as ZK brokers: ")
-                                .append(new TreeSet<>(stillZkRegisteredBrokerIds))
-                                .append(". Restart these brokers in KRaft mode before finalizing the migration. ");
+                                .append(stillZkRegisteredBrokerIds)
+                                .append(". Restart these brokers in KRaft mode before restarting the controllers to finalize the migration. ");
                         } else {
                             logMessageBuilder
                                 .append("Completing the ZK migration since this controller was configured with ")
