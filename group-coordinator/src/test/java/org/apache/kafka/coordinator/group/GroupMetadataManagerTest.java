@@ -174,6 +174,7 @@ import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.TopicData;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -18841,7 +18842,7 @@ public class GroupMetadataManagerTest {
             assertSame(defaultAssignor, context.groupMetadataManager.streamsGroupAssignor(groupId, true));
 
             // A warning names the unavailable assignor and the fallback.
-            assertEquals(1, appender.getMessages("WARN").stream()
+            assertEquals(1, appender.getMessages(Level.WARN).stream()
                 .filter(msg -> msg.contains("The configured task assignor 'does-not-exist' is not available"))
                 .count());
         }
@@ -18850,7 +18851,7 @@ public class GroupMetadataManagerTest {
             // Read-only paths such as describe resolve the same fallback without warning.
             assertSame(defaultAssignor, context.groupMetadataManager.streamsGroupAssignor(groupId, false));
 
-            assertEquals(List.of(), appender.getMessages("WARN"));
+            assertEquals(List.of(), appender.getMessages(Level.WARN));
         }
     }
 
