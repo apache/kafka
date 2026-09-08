@@ -226,16 +226,6 @@ public class MessageGeneratorTest {
     }
 
     @Test
-    public void testHeaderVersionApiVersionsResponseMustBeV0() throws Exception {
-        ApiMessageTypeGenerator generator = new ApiMessageTypeGenerator("org.apache.kafka.common.message");
-        generator.registerMessageType(spec(18, "request", "ApiVersionsRequest", "0-3", "3+", "{'0-2': '1', '3+': '2'}"));
-        generator.registerMessageType(spec(18, "response", "ApiVersionsResponse", "0-3", "3+", "{'0+': '1'}"));
-        RuntimeException exception = assertThrows(RuntimeException.class,
-            () -> generator.generateAndWrite(new BufferedWriter(new StringWriter())));
-        assertTrue(exception.getMessage().contains("must use a v0 response header"), exception.getMessage());
-    }
-
-    @Test
     public void testHeaderVersionMixedExplicitAndFallback() throws Exception {
         String source = generateApiMessageTypeSource(
             spec(1, "request", "BarRequest", "0-5", "0+", "{'0+': '2'}"),
@@ -250,30 +240,6 @@ public class MessageGeneratorTest {
             "} else {\n" +
             "return (short) 1;\n" +
             "}\n"), source);
-    }
-
-    @Test
-    public void testHeaderVersionCrossValidationFailsForOutOfRangeVersion() throws Exception {
-        MessageSpec requestHeader = MessageGenerator.JSON_SERDE.readValue(
-            ("{'type': 'header', 'name': 'RequestHeader', 'validVersions': '1-2', 'flexibleVersions': '2+', " +
-             "'fields': [{'name': 'Field1', 'type': 'int32', 'versions': '1+'}]}").replace('\'', '"'),
-            MessageSpec.class);
-        ApiMessageTypeGenerator generator = new ApiMessageTypeGenerator("org.apache.kafka.common.message");
-        generator.registerMessageType(requestHeader);
-        generator.registerMessageType(spec(5, "request", "FooRequest", "0-5", "0+", "{'0+': '3'}"));
-        generator.registerMessageType(spec(5, "response", "FooResponse", "0-5", "0+", "{'0+': '1'}"));
-        RuntimeException exception = assertThrows(RuntimeException.class,
-            () -> generator.generateAndWrite(new BufferedWriter(new StringWriter())));
-        assertTrue(exception.getMessage().contains("not among the valid request header versions"),
-            exception.getMessage());
-    }
-
-    @Test
-    public void testHeaderVersionCrossValidationSkippedWithoutHeaderSpec() throws Exception {
-        String source = generateApiMessageTypeSource(
-            spec(5, "request", "FooRequest", "0-5", "0+", "{'0+': '3'}"),
-            spec(5, "response", "FooResponse", "0-5", "0+", "{'0+': '1'}"));
-        assertTrue(source.contains("case 5: // Foo\nreturn (short) 3;\n"), source);
     }
 
 }

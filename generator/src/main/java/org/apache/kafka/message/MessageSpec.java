@@ -42,6 +42,16 @@ public final class MessageSpec {
 
     private final boolean latestVersionUnstable;
 
+    // Fixed by the RequestHeader and ResponseHeader schemas: request header v1 is the non-flexible version
+    // (v0 was removed in Apache Kafka 4.0) and v2 the first flexible one; response header v0 is non-flexible
+    // and v1 the first flexible one.
+    static final short NON_FLEXIBLE_REQUEST_HEADER = 1;
+    static final short FIRST_FLEXIBLE_REQUEST_HEADER = 2;
+    static final short NON_FLEXIBLE_RESPONSE_HEADER = 0;
+    static final short FIRST_FLEXIBLE_RESPONSE_HEADER = 1;
+    // ApiVersionsResponse always uses a v0 header so that older brokers can parse it (KIP-511).
+    static final short API_VERSIONS_API_KEY = 18;
+
     @JsonCreator
     @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
     public MessageSpec(@JsonProperty("name") String name,
@@ -104,6 +114,7 @@ public final class MessageSpec {
             }
             this.headerVersions = Optional.ofNullable(
                     HeaderVersions.parse(name, headerVersions, this.validVersions()));
+            checkHeaderVersionInvariants();
 
             if (type == MessageSpecType.COORDINATOR_KEY) {
                 if (this.apiKey.isEmpty()) {
@@ -120,6 +131,47 @@ public final class MessageSpec {
             if (type == MessageSpecType.COORDINATOR_VALUE) {
                 if (this.apiKey.isEmpty()) {
                     throw new RuntimeException("The ApiKey must be set for messages with type `coordinator-value`");
+                }
+            }
+        }
+    }
+
+    /**
+     * Check that every version up to the highest valid version uses a header version consistent with the
+     * flexibility of the message body: a flexible body needs a flexible header and a non-flexible body uses
+     * the non-flexible header. ApiVersionsResponse is the exception and is pinned to header v0 (KIP-511).
+     */
+    private void checkHeaderVersionInvariants() {
+        if (headerVersions.isEmpty()) {
+            return;
+        }
+        boolean isRequest = type == MessageSpecType.REQUEST;
+        String typeName = isRequest ? "request" : "response";
+        short nonFlexibleHeader = isRequest ? NON_FLEXIBLE_REQUEST_HEADER : NON_FLEXIBLE_RESPONSE_HEADER;
+        short firstFlexibleHeader = isRequest ? FIRST_FLEXIBLE_REQUEST_HEADER : FIRST_FLEXIBLE_RESPONSE_HEADER;
+        boolean apiVersionsResponse = !isRequest && apiKey.isPresent() && apiKey.get() == API_VERSIONS_API_KEY;
+        for (HeaderVersions.Entry entry : headerVersions.get().entries()) {
+            if (apiVersionsResponse) {
+                if (entry.headerVersion() != 0) {
+                    throw new RuntimeException("Message " + name() + " maps versions " + entry.range() +
+                        " to response header version " + entry.headerVersion() + ", but ApiVersionsResponse must " +
+                        "use a v0 response header at every version so that older brokers can parse it (KIP-511).");
+                }
+                continue;
+            }
+            short highest = (short) Math.min(entry.range().highest(), validVersions().highest());
+            for (short version = entry.range().lowest(); version <= highest; version++) {
+                if (flexibleVersions.contains(version)) {
+                    if (entry.headerVersion() < firstFlexibleHeader) {
+                        throw new RuntimeException("Message " + name() + " maps version " + version +
+                            ", which is flexible, to " + typeName + " header version " + entry.headerVersion() +
+                            ", but a flexible " + typeName + " must use header version " + firstFlexibleHeader +
+                            " or higher.");
+                    }
+                } else if (entry.headerVersion() != nonFlexibleHeader) {
+                    throw new RuntimeException("Message " + name() + " maps version " + version +
+                        ", which is not flexible, to " + typeName + " header version " + entry.headerVersion() +
+                        ", but a non-flexible " + typeName + " must use header version " + nonFlexibleHeader + ".");
                 }
             }
         }
