@@ -47,7 +47,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConfigDefTest {
 
@@ -415,12 +414,7 @@ public class ConfigDefTest {
         Set<String> names = configDef.names();
         assertEquals(Set.of("a", "b"), names);
         // should be unmodifiable
-        try {
-            names.add("new");
-            fail();
-        } catch (UnsupportedOperationException e) {
-            // expected
-        }
+        assertThrows(UnsupportedOperationException.class, () -> names.add("new"));
     }
 
     @Test

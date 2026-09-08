@@ -18,7 +18,6 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -26,6 +25,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RangeAssignor;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -75,9 +76,11 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  * events are currently supported:
  *
  * <ul>
- * <li>partitions_revoked: outputs the partitions revoked through {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}.
+ * <li>partitions_revoked: outputs the partitions revoked through
+ *     {@link RebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)}.
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsRevoked}.</li>
- * <li>partitions_assigned: outputs the partitions assigned through {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}
+ * <li>partitions_assigned: outputs the partitions assigned through
+ *     {@link RebalanceListener#onPartitionsAssigned(Collection, RebalanceConsumer)}
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsAssigned}.</li>
  * <li>records_consumed: contains a summary of records consumed in a single call to {@link KafkaConsumer#poll(Duration)}.
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.RecordsConsumed}.</li>
@@ -91,7 +94,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.ShutdownComplete}.</li>
  * </ul>
  */
-public class VerifiableConsumer implements Closeable, OffsetCommitCallback, ConsumerRebalanceListener {
+public class VerifiableConsumer implements Closeable, OffsetCommitCallback, RebalanceListener {
 
     private static final Logger log = LoggerFactory.getLogger(VerifiableConsumer.class);
 
@@ -201,12 +204,12 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     }
 
     @Override
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
         printJson(new PartitionsAssigned(partitions));
     }
 
     @Override
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
         printJson(new PartitionsRevoked(partitions));
     }
 
@@ -236,7 +239,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public void run() {
         try {
             printJson(new StartupComplete());
-            consumer.subscribe(List.of(topic), this);
+            consumer.setRebalanceListener(this);
+            consumer.subscribe(List.of(topic));
 
             while (!isFinished()) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));

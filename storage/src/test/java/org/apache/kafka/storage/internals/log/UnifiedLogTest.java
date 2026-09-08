@@ -550,6 +550,63 @@ public class UnifiedLogTest {
     }
 
     @Test
+    public void shouldDeleteLocalLogSegmentsWithFutureTimestampBasedOnLastModifiedTime() throws IOException {
+        long futureTimestamp = mockTime.milliseconds() + 60_000;
+        Supplier<MemoryRecords> futureRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), futureTimestamp);
+        int recordSize = futureRecords.get().sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(recordSize * 2)
+                .localRetentionMs(5000)
+                .cleanupPolicy("")
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        for (int i = 0; i < 10; i++) {
+            log.appendAsLeader(futureRecords.get(), 0);
+        }
+
+        // Age the segments' lastModified time past the local retention so they become eligible for deletion,
+        // even though their record timestamps are in the future.
+        for (LogSegment segment : log.logSegments()) {
+            segment.setLastModified(mockTime.milliseconds() - 20000);
+        }
+
+        int segmentsBefore = log.numberOfSegments();
+        log.updateHighWatermark(log.logEndOffset());
+        log.updateHighestOffsetInRemoteStorage(log.logEndOffset() - 1);
+        int deletedSegments = log.deleteOldSegments();
+
+        assertTrue(log.numberOfSegments() < segmentsBefore, "Segments with future timestamps should be deleted based on lastModified time");
+        assertTrue(deletedSegments > 0, "At least one segment should be deleted");
+    }
+
+    @Test
+    public void shouldNotDeleteLocalLogSegmentsWithFutureTimestampWhenLastModifiedWithinRetention() throws IOException {
+        long futureTimestamp = mockTime.milliseconds() + 60_000;
+        Supplier<MemoryRecords> futureRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), futureTimestamp);
+        int recordSize = futureRecords.get().sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(recordSize * 2)
+                .localRetentionMs(5000)
+                .cleanupPolicy("")
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        for (int i = 0; i < 10; i++) {
+            log.appendAsLeader(futureRecords.get(), 0);
+        }
+
+        int segmentsBefore = log.numberOfSegments();
+        log.updateHighWatermark(log.logEndOffset());
+        log.updateHighestOffsetInRemoteStorage(log.logEndOffset() - 1);
+
+        assertEquals(0, log.deleteOldSegments(), "Segments should be retained when lastModified time is within local retention");
+        assertEquals(segmentsBefore, log.numberOfSegments());
+    }
+
+    @Test
     public void testLogDeletionAfterDeleteRecords() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()

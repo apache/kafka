@@ -26,7 +26,6 @@ import org.apache.kafka.streams.errors.ErrorHandlerContext;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -60,10 +59,10 @@ public class ExceptionHandlerUtils {
                                                                                  final ErrorHandlerContext context,
                                                                                  final Exception exception) {
         if (!shouldBuildDeadLetterQueueRecord(deadLetterQueueTopicName)) {
-            return Collections.emptyList();
+            return List.of();
         }
 
-        return Collections.singletonList(buildDeadLetterQueueRecord(deadLetterQueueTopicName, key, value, context, exception));
+        return List.of(buildDeadLetterQueueRecord(deadLetterQueueTopicName, key, value, context, exception));
     }
 
 

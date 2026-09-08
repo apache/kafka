@@ -347,7 +347,7 @@ public class ProcessorStateManager implements StateManager {
                                 "treat it as a task corruption error and wipe out the local state of task {} " +
                                 "before re-bootstrapping", store.stateStore.name(), taskId);
 
-                        throw new TaskCorruptedException(Collections.singleton(taskId));
+                        throw new TaskCorruptedException(Set.of(taskId));
                     } else {
                         log.info("State store {} did not find checkpoint offset, hence would " +
                                         "default to the starting offset at changelog {}",
