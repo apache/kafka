@@ -124,10 +124,12 @@ public class ApiMessageTypeTest {
     }
 
     /**
-     * The header versions generated from the headerVersions maps match the versions implied by body
-     * flexibility for every existing API and version: a flexible request/response uses header v2/v1,
-     * a non-flexible one uses header v1/v0. The sole exception is ApiVersionsResponse, which always
-     * uses a v0 header so that older brokers can parse the response header (KIP-511).
+     * The header version generated for every existing API and version is consistent with the flexibility of
+     * the body: a flexible request/response uses a flexible header (v2+/v1+), a non-flexible one uses header
+     * v1/v0, and every header version is one the header schemas define. The sole exception is
+     * ApiVersionsResponse, which always uses a v0 header so that older brokers can parse it (KIP-511).
+     * Flexible versions are checked with {@code >=} so that a newer flexible header version, such as the v3
+     * request header of KIP-1313, can be introduced without changing this test.
      */
     @Test
     public void testHeaderVersionsMatchSchemaFlexibility() {
@@ -136,18 +138,27 @@ public class ApiMessageTypeTest {
                 continue;
             for (short version = type.lowestSupportedVersion();
                     version <= type.highestSupportedVersion(true); version++) {
-                short expectedRequestHeader = isFlexible(type.requestSchemas()[version]) ? (short) 2 : (short) 1;
-                assertEquals(expectedRequestHeader, type.requestHeaderVersion(version),
-                        "Unexpected request header version for " + type.name() + " version " + version);
+                String context = " for " + type.name() + " version " + version;
 
-                short expectedResponseHeader;
-                if (type.apiKey() == ApiKeys.API_VERSIONS.id) {
-                    expectedResponseHeader = 0;
+                short requestHeader = type.requestHeaderVersion(version);
+                assertTrue(requestHeader <= RequestHeaderData.HIGHEST_SUPPORTED_VERSION,
+                        "Request header version " + requestHeader + " does not exist" + context);
+                if (isFlexible(type.requestSchemas()[version])) {
+                    assertTrue(requestHeader >= 2, "Flexible request must use a flexible header" + context);
                 } else {
-                    expectedResponseHeader = isFlexible(type.responseSchemas()[version]) ? (short) 1 : (short) 0;
+                    assertEquals((short) 1, requestHeader, "Non-flexible request must use header v1" + context);
                 }
-                assertEquals(expectedResponseHeader, type.responseHeaderVersion(version),
-                        "Unexpected response header version for " + type.name() + " version " + version);
+
+                short responseHeader = type.responseHeaderVersion(version);
+                assertTrue(responseHeader <= ResponseHeaderData.HIGHEST_SUPPORTED_VERSION,
+                        "Response header version " + responseHeader + " does not exist" + context);
+                if (type.apiKey() == ApiKeys.API_VERSIONS.id) {
+                    assertEquals((short) 0, responseHeader, "ApiVersionsResponse must use header v0" + context);
+                } else if (isFlexible(type.responseSchemas()[version])) {
+                    assertTrue(responseHeader >= 1, "Flexible response must use a flexible header" + context);
+                } else {
+                    assertEquals((short) 0, responseHeader, "Non-flexible response must use header v0" + context);
+                }
             }
         }
     }
