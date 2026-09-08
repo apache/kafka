@@ -1015,6 +1015,7 @@ kafka.raft.RaftManagerTest:
 - testLogDirLockWhenBrokerOnlyWithSeparateMetadataDir
 - testLogDirLockWhenControllerOnly
 - testNodeIdPresent
+- testRaftManagerRegistersSslChannelBuilderForReconfiguration
 kafka.server.AbstractFetcherManagerTest:
 - testAddAndRemovePartition
 - testDeadThreadCountMetric
@@ -1985,6 +1986,8 @@ kafka.server.OffsetFetchRequestTest:
 kafka.server.OffsetsForLeaderEpochRequestTest:
 - testCurrentEpochValidation
 - testOffsetsForLeaderEpochErrorCodes
+kafka.server.RaftManagerSslReconfigIntegrationTest:
+- testDynamicControllerKeystoreReachesRunningRaftChannel
 kafka.server.RemoteLeaderEndPointTest:
 - testBrokerEpochSupplier
 - testFetchEarliestLocalOffset
