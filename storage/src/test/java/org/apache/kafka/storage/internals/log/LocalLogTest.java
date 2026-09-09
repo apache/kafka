@@ -265,33 +265,43 @@ class LocalLogTest {
     }
 
     @Test
-    public void testLogCloseIdempotent() {
+    public void testCloseThrowsIfAlreadyClosed() {
         log.close();
-        // Check that LocalLog.close() is idempotent
-        log.close();
+        assertThrows(KafkaStorageException.class, () -> log.close());
     }
 
     @Test
-    public void testLogCloseFailureWhenAlreadyClosed() throws IOException {
-        List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
-        appendRecords(kvsToRecords(keyValues), 0L);
+    public void testCloseQuietlyThrowsIfAlreadyClosedQuietly() {
+        log.closeQuietly();
+        assertThrows(KafkaStorageException.class, () -> log.closeQuietly());
+    }
+
+    @Test
+    public void testCloseThrowsIfAlreadyClosedQuietly() {
+        log.close();
+        assertThrows(KafkaStorageException.class, () -> log.closeQuietly());
+    }
+
+    @Test
+    public void testCloseQuietlyThrowsIfAlreadyClosed() {
         log.closeQuietly();
         assertThrows(KafkaStorageException.class, () -> log.close());
     }
 
     @Test
-    public void testCloseQuietly() throws IOException {
+    public void testClosePreventsAppend() throws IOException {
         List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
         appendRecords(kvsToRecords(keyValues), 0L);
-        log.closeQuietly();
+        log.close();
         assertThrows(ClosedChannelException.class, () -> appendRecords(kvsToRecords(keyValues), 2L));
     }
 
     @Test
-    public void testCloseQuietlyIdempotent() {
+    public void testCloseQuietlyPreventsAppend() throws IOException {
+        List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
+        appendRecords(kvsToRecords(keyValues), 0L);
         log.closeQuietly();
-        // Check that LocalLog.closeQuietly() is idempotent
-        log.closeQuietly();
+        assertThrows(ClosedChannelException.class, () -> appendRecords(kvsToRecords(keyValues), 2L));
     }
 
     static class TestDeletionReason implements SegmentDeletionReason {

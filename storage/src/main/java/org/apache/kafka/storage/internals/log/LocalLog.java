@@ -309,16 +309,21 @@ public class LocalLog {
     }
 
     /**
-     * Close the log, swallowing any exceptions.
+     * Close the segments of the log, swallowing any exceptions from closing segments.
      * This is called if the log directory is offline.
+     *
+     * @throws KafkaStorageException if the log is already closed
      */
     public void closeQuietly() {
+        checkIfClosed();
         segments.closeQuietly();
         isClosed = true;
     }
 
     /**
-     * Closes the segments of the log.
+     * Close the segments of the log.
+     *
+     * @throws KafkaStorageException if the log is already closed
      */
     public void close() {
         maybeHandleIOException(
@@ -326,6 +331,7 @@ public class LocalLog {
             () -> {
                 checkIfClosed();
                 segments.close();
+                isClosed = true;
                 return null;
             }
         );
