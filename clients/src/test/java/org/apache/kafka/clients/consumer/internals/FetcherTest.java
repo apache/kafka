@@ -2936,6 +2936,7 @@ public class FetcherTest {
         executorService = Executors.newSingleThreadExecutor();
         Future<?> future = executorService.submit(() -> {
             while (fetchesRemaining.get() > 0) {
+                boolean handledRequest = false;
                 synchronized (consumerClient) {
                     if (!client.requests().isEmpty()) {
                         ClientRequest request = client.requests().peek();
@@ -2953,9 +2954,11 @@ public class FetcherTest {
                         }
                         client.respondToRequest(request, FetchResponse.of(Errors.NONE, 0, 123, responseMap, List.of()));
                         consumerClient.poll(time.timer(0));
-                    } else {
-                        Thread.onSpinWait();
+                        handledRequest = true;
                     }
+                }
+                if (!handledRequest) {
+                    Thread.onSpinWait();
                 }
             }
             return fetchesRemaining.get();
