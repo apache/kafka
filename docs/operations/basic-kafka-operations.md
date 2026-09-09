@@ -62,6 +62,18 @@ $ bin/kafka-topics.sh --bootstrap-server localhost:9092 --alter --topic my_topic
 
   * **Key Distribution Changes**: If data is partitioned by `hash(key) % number_of_partitions`, the default partitioner's mapping logic changes when the partition count increases. This means that messages with the same key may be routed to different partitions after the expansion, potentially affecting message ordering guarantees for existing keys. Kafka will not attempt to automatically redistribute existing data.
   * **Potential Data Loss with `auto.offset.reset=latest`**: Existing consumers configured with `auto.offset.reset=latest` might miss messages produced to the new partitions during the window between partition creation and consumer discovery. This occurs because consumers may not immediately detect the new partitions, and any messages produced to those partitions before the consumer rebalances will be skipped.
+    **Recommendation:** Use `auto.offset.reset=by_duration:<duration>` instead of `latest` for consumers that read from topics whose partition count may increase. When a partition has no committed offset, `by_duration` performs a `ListOffsets` lookup for `now() - duration` to determine the starting position. If the target timestamp is earlier than the partition's creation time, the lookup returns the partition's earliest available offset (its log start offset), ensuring that records produced during the partition-discovery gap are still consumed. Consumers with a valid committed offset are unaffected, so restarts do not replay historical data.
+
+    Size `<duration>` to cover the worst-case partition-discovery latency for the group protocol in use:
+
+    | Group protocol       | Discovery mechanism                            | Governing config (default)                                      | Recommended by_duration value                         |
+    |----------------------|------------------------------------------------|-----------------------------------------------------------------|-------------------------------------------------------|
+    | `consumer` (KIP-848) | Server pushes assignment on the next heartbeat | `group.consumer.heartbeat.interval.ms` (`5000` ms, server-side) | `PT5S` or slightly higher than the heartbeat interval |
+    | `classic`            | Client-side periodic metadata refresh          | `metadata.max.age.ms` (`300000` ms, client-side)                | `PT6M` or slightly higher than `metadata.max.age.ms`  |
+
+    If either the heartbeat interval or `metadata.max.age.ms` is tuned away from the default, increase `<duration>` accordingly. **Be aware of the trade-off:** unlike `latest`, `by_duration` makes the consumer read further back into the backlog. Whenever a partition has no committed offset — including a brand-new consumer group or a partition assigned for the first time — the consumer starts at `now() - duration` and therefore replays up to `<duration>` worth of already-produced records instead of skipping straight to the log end. Keep `<duration>` as small as the discovery latency allows so this replay stays bounded; it is still negligible compared with a full historical replay from the partition's log start offset.
+
+    **Clock synchronization requirement:** `by_duration` computes the target timestamp using the client's wall-clock time (`now() - duration`), while the `ListOffsets` lookup compares it against broker-side message timestamps. Accurate clock synchronization between clients and brokers is therefore required. If the client clock runs ahead of the brokers, the consumer may start from a position that is too recent and skip records. If the client clock lags behind, the consumer may start too early and replay historical data.
   * **Metadata Propagation Delay**: New partitions are not immediately visible to producers and consumers due to metadata refresh intervals (controlled by `metadata.max.age.ms`). There will be a brief period where clients are unaware of the new partitions, which may result in uneven distribution of messages or consumer lag.
   * **Risks with Internal Topics**: Users should **never** manually increase partitions for Kafka's internal state topics such as `__consumer_offsets`, `__transaction_state`, `__share_group_state`,  or `__cluster_metadata`. Doing so can break coordinator mapping logic, cause state inconsistencies, and lead to data corruption or system failures. These topics are managed automatically by Kafka and should not be modified manually. 
 
@@ -348,6 +360,50 @@ To delete one or more share groups, use "--delete" option:
 ```bash
 $ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --delete --group my-share-group
 Deletion of requested share groups ('my-share-group') was successful.
+```
+
+## Configuring dead-letter queues (DLQ) on share groups
+
+Share group dead-letter queues are enabled if the `share.version` feature at least 2:
+
+```bash
+$ bin/kafka-features.sh --bootstrap-server localhost:9092 describe | grep share.version
+Feature: share.version                             SupportedMinVersion: 0                SupportedMaxVersion: 2                FinalizedVersionLevel: 2                Epoch: 106
+```
+
+Set DLQ topic on share group:
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.topic.name=dlq.gs1dlqtopic" --entity-type groups --entity-name my-share-group
+Completed updating config for group my-share-group.
+```
+
+To enable share group DLQ topic auto creation (default disabled):
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.auto.create.topics.enable=true" --entity-type brokers --entity-default
+Completed updating default config for brokers in the cluster.
+```
+
+To set your own Kafka topic as share group DLQ topic, you must set certain dynamic configs on the DLQ topic post creation. If cluster dynamic config to auto create share group DLQ topic is enabled (`errors.deadletterqueue.auto.create.topics.enable=true`), the configs are attached automatically to the auto created topics.
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.group.enable=true" --entity-type topics --entity-name dlq.gs1dlqtopic
+Completed updating config for topic dlq.gs1dlqtopic.
+```
+
+To change the default `dlq.` share group DLQ topic prefix, set the dynamic cluster config `errors.deadletterqueue.topic.name.prefix` to desired value. The default value is `dlq.`.
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.topic.name.prefix=com.mycompany.dlq." --entity-type brokers --entity-default
+Completed updating default config for brokers in the cluster.
+```
+
+By default, the records written to the DLQ topic just include metadata about the source records such as the topic, partition and offset. You can set the `errors.deadletterqueue.copy.record.enable` configuration for the share group so the source record key and value are copied to the DLQ topic.
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.copy.record.enable=true" --entity-type groups --entity-name my-share-group
+Completed updating config for group my-share-group.
 ```
 
 ## Expanding your cluster

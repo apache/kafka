@@ -31,6 +31,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
@@ -232,7 +233,10 @@ public class TimeOrderedWindowStoreTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000L);
 
         final Instant initialWallClockTime = Instant.ofEpochMilli(0L);
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
+        final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
+            .withConfig(streamsConfiguration)
+            .withInitialWallClockTime(initialWallClockTime)
+            .build();
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(TOPIC,
             new StringSerializer(),

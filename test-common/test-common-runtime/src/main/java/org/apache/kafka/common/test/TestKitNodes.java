@@ -162,17 +162,6 @@ public class TestKitNodes {
             if (numDisksPerBroker <= 0) {
                 throw new IllegalArgumentException("Invalid value for numDisksPerBroker");
             }
-            var supportedProtocols = List.of(
-                    SecurityProtocol.PLAINTEXT,
-                    SecurityProtocol.SASL_PLAINTEXT,
-                    SecurityProtocol.SASL_SSL,
-                    SecurityProtocol.SSL
-            );
-            if (!supportedProtocols.contains(brokerSecurityProtocol) || !supportedProtocols.contains(controllerSecurityProtocol)) {
-                throw new IllegalArgumentException(String.format("Currently only support %s security protocol",
-                        supportedProtocols.stream().map(sp -> sp.name).collect(Collectors.joining(" / ")))
-                );
-            }
             if ((brokerSecurityProtocol == SecurityProtocol.SSL) != (controllerSecurityProtocol == SecurityProtocol.SSL)) {
                 throw new IllegalArgumentException("Mixed broker and controller SSL security protocol configurations are not yet supported");
             }

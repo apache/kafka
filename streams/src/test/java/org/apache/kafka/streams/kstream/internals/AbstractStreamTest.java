@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
@@ -71,7 +72,7 @@ public class AbstractStreamTest {
 
         stream.randomFilter().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).build()) {
 
             final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
             for (final int expectedKey : expectedKeys) {

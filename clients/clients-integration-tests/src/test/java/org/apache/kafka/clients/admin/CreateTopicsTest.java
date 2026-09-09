@@ -42,8 +42,7 @@ public class CreateTopicsTest {
                 () -> admin.createTopics(newTopics).all().get());
             assertNotNull(executionException.getCause());
             assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
-            assertEquals("Excessively large number of partitions per request.",
-                executionException.getCause().getMessage());
+            assertEquals("Too many partitions in request.", executionException.getCause().getMessage());
         }
     }
 }

@@ -22,14 +22,14 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
@@ -50,7 +50,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord;
-import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createAssignmentMemberSpec;
+import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createMemberMetadataAndState;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -87,45 +87,53 @@ public class TargetAssignmentBuilderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(TaskRole.class)
-    public void testCreateAssignmentMemberSpec(TaskRole taskRole) {
+    // Active, standby and warm-up tasks all come from the member's current assignment, so this
+    // test varies which role the member's current tasks are in.
+    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
+    public void testCreateMemberMetadataAndState(TaskRole taskRole) {
         String fooSubtopologyId = Uuid.randomUuid().toString();
         String barSubtopologyId = Uuid.randomUuid().toString();
 
         final Map<String, String> clientTags = mkMap(mkEntry("tag1", "value1"), mkEntry("tag2", "value2"));
+
+        Map<String, Set<Integer>> activeTasks = taskRole == TaskRole.ACTIVE
+            ? Map.of(fooSubtopologyId, Set.of(1, 2, 3), barSubtopologyId, Set.of(1, 2, 3)) : Map.of();
+        Map<String, Set<Integer>> standbyTasks = taskRole == TaskRole.STANDBY
+            ? Map.of(fooSubtopologyId, Set.of(1, 2, 3), barSubtopologyId, Set.of(1, 2, 3)) : Map.of();
+
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
             .setRackId("rackId")
             .setInstanceId("instanceId")
             .setProcessId("processId")
             .setClientTags(clientTags)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                taskRole == TaskRole.ACTIVE
+                    ? Map.of(fooSubtopologyId, Map.of(1, 0, 2, 0, 3, 0), barSubtopologyId, Map.of(1, 0, 2, 0, 3, 0))
+                    : Map.of(),
+                standbyTasks,
+                Map.of()))
             .build();
 
-        TasksTuple assignment = mkTasksTuple(taskRole,
-            mkTasks(fooSubtopologyId, 1, 2, 3),
-            mkTasks(barSubtopologyId, 1, 2, 3)
-        );
-
-        AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
+        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndState(
             member,
-            assignment,
             MemberTaskOffsets.EMPTY
         );
 
-        assertEquals(new AssignmentMemberSpec(
+        assertEquals(new MemberMetadataAndStateImpl(
             Optional.of("instanceId"),
             Optional.of("rackId"),
-            assignment.activeTasks(),
-            assignment.standbyTasks(),
-            assignment.warmupTasks(),
             "processId",
             clientTags,
+            activeTasks,
+            standbyTasks,
+            Map.of(),
             Map.of(),
             Map.of()
-        ), assignmentMemberSpec);
+        ), memberMetadata);
     }
 
     @Test
-    public void testCreateAssignmentMemberSpecPopulatesTaskOffsets() {
+    public void testCreateMemberMetadataAndStatePopulatesTaskOffsets() {
         String fooSubtopologyId = Uuid.randomUuid().toString();
 
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
@@ -133,19 +141,41 @@ public class TargetAssignmentBuilderTest {
             .setInstanceId("instanceId")
             .setProcessId("processId")
             .setClientTags(Map.of())
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
             .build();
 
-        Map<TaskId, Long> taskOffsets = Map.of(new TaskId(fooSubtopologyId, 0), 10L);
-        Map<TaskId, Long> taskEndOffsets = Map.of(new TaskId(fooSubtopologyId, 0), 20L);
+        Map<String, Map<Integer, Long>> taskOffsets = Map.of(fooSubtopologyId, Map.of(0, 10L));
+        Map<String, Map<Integer, Long>> taskEndOffsets = Map.of(fooSubtopologyId, Map.of(0, 20L));
 
-        AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
+        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndState(
             member,
-            TasksTuple.EMPTY,
             new MemberTaskOffsets(taskOffsets, taskEndOffsets)
         );
 
-        assertEquals(taskOffsets, assignmentMemberSpec.taskOffsets());
-        assertEquals(taskEndOffsets, assignmentMemberSpec.taskEndOffsets());
+        assertEquals(taskOffsets, memberMetadata.taskOffsets());
+        assertEquals(taskEndOffsets, memberMetadata.taskEndOffsets());
+    }
+
+    @Test
+    public void testCreateMemberMetadataAndStateSourcesWarmupTasksFromCurrentAssignment() {
+        String fooSubtopologyId = Uuid.randomUuid().toString();
+
+        // Warm-up tasks are decided during reconciliation and stored in the member's current
+        // assignment; they must be sourced from there, not from the target assignment.
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
+            .setInstanceId("instanceId")
+            .setRackId("rackId")
+            .setProcessId("processId")
+            .setClientTags(Map.of())
+            .setAssignedTasks(new TasksTupleWithEpochs(Map.of(), Map.of(), Map.of(fooSubtopologyId, Set.of(1, 2, 3))))
+            .build();
+
+        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndState(
+            member,
+            MemberTaskOffsets.EMPTY
+        );
+
+        assertEquals(Map.of(fooSubtopologyId, Set.of(1, 2, 3)), memberMetadata.warmupTasks());
     }
 
     @Test
@@ -167,7 +197,9 @@ public class TargetAssignmentBuilderTest {
 
     
     @ParameterizedTest
-    @EnumSource(TaskRole.class)
+    // Warm-up tasks are not produced by the assignor (only active and standby), so they cannot appear
+    // in the resulting target assignment. See MemberAssignment.
+    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
     public void testAssignmentHasNotChanged(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
@@ -221,7 +253,9 @@ public class TargetAssignmentBuilderTest {
 
     
     @ParameterizedTest
-    @EnumSource(TaskRole.class)
+    // Warm-up tasks are not produced by the assignor (only active and standby), so they cannot appear
+    // in the resulting target assignment. See MemberAssignment.
+    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
     public void testAssignmentSwapped(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
@@ -288,7 +322,9 @@ public class TargetAssignmentBuilderTest {
 
     
     @ParameterizedTest
-    @EnumSource(TaskRole.class)
+    // Warm-up tasks are not produced by the assignor (only active and standby), so they cannot appear
+    // in the resulting target assignment. See MemberAssignment.
+    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
     public void testPartialAssignmentUpdate(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
@@ -404,6 +440,7 @@ public class TargetAssignmentBuilderTest {
             memberBuilder.setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090));
             memberBuilder.setInstanceId(null);
             memberBuilder.setRackId(null);
+            memberBuilder.setAssignedTasks(TasksTupleWithEpochs.EMPTY);
             members.put(memberId, memberBuilder.build());
             targetAssignment.put(memberId, targetTasks);
         }
@@ -424,16 +461,15 @@ public class TargetAssignmentBuilderTest {
             String memberId,
             TasksTuple assignment
         ) {
-            memberAssignments.put(memberId, new MemberAssignment(assignment.activeTasks(), assignment.standbyTasks(), assignment.warmupTasks()));
+            memberAssignments.put(memberId, new MemberAssignment(assignment.activeTasks(), assignment.standbyTasks()));
         }
 
         public org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult build() {
             // Prepare expected member specs.
-            Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+            Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
             members.forEach((memberId, member) ->
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
+                memberMetadataMap.put(memberId, createMemberMetadataAndState(
                         member,
-                        targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY),
                         MemberTaskOffsets.EMPTY
                     )
                 ));
@@ -444,7 +480,7 @@ public class TargetAssignmentBuilderTest {
             TopologyMetadata topologyMetadata = new TopologyMetadata(metadataImage, subtopologies);
 
             // Prepare the expected assignment spec.
-            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, new HashMap<>());
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberMetadataMap, AssignmentConfigsImpl.DEFAULT);
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.

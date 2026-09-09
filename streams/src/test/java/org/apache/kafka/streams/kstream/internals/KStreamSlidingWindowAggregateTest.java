@@ -22,13 +22,13 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
@@ -55,7 +55,6 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.hamcrest.Matcher;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -72,20 +71,14 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamSlidingWindowAggregateTest {
@@ -147,7 +140,7 @@ public class KStreamSlidingWindowAggregateTest {
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, materialized);
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("A", "1", 10L);
@@ -247,7 +240,7 @@ public class KStreamSlidingWindowAggregateTest {
             );
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table.toStream().process(supplier);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("A", "1", 10L);
@@ -319,7 +312,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             inputTopic1.pipeInput("A", "1", 10L);
@@ -547,7 +540,7 @@ public class KStreamSlidingWindowAggregateTest {
 
         table1.join(table2, (p1, p2) -> p1 + "%" + p2).toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> inputTopic2 =
@@ -687,7 +680,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -812,7 +805,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -897,7 +890,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1052,7 +1045,7 @@ public class KStreamSlidingWindowAggregateTest {
         table2.toStream().process(supplier);
 
         // all events are considered as early events since record timestamp is less than time difference of the window
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1151,7 +1144,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1247,7 +1240,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1368,7 +1361,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
 
@@ -1485,17 +1478,12 @@ public class KStreamSlidingWindowAggregateTest {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamSlidingWindowAggregate.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "1");
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key or value. topic=[topic] partition=[0] offset=[0]")
-            );
+            assertTrue(appender.getMessages("WARN").contains(
+                "Skipping record due to null key or value. topic=[topic] partition=[0] offset=[0]"));
         }
     }
 
@@ -1524,7 +1512,7 @@ public class KStreamSlidingWindowAggregateTest {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamSlidingWindowAggregate.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
 
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
@@ -1539,9 +1527,9 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic.pipeInput("k", "101", 300L);
             inputTopic.pipeInput("k", "102", 400L);
 
-            assertLatenessMetrics(driver, is(7.0), is(185.0), is(77.0));
+            assertLatenessMetrics(driver, 7.0, 185.0, 77.0);
 
-            assertThat(appender.getMessages(), hasItems(
+            assertTrue(appender.getMessages().containsAll(List.of(
                     // left window for k@100
                     "Skipping record for expired window. topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[90,100] expiration=[110] streamTime=[200]",
                     // left window for k@101
@@ -1556,23 +1544,33 @@ public class KStreamSlidingWindowAggregateTest {
                     "Skipping record for expired window. topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[95,105] expiration=[110] streamTime=[200]",
                     // left window for k@15
                     "Skipping record for expired window. topic=[topic] partition=[0] offset=[7] timestamp=[15] window=[15,25] expiration=[110] streamTime=[200]"
-            ));
+            )));
             final TestOutputTopic<Windowed<String>, String> outputTopic =
                     driver.createOutputTopic("output", new TimeWindowedDeserializer<>(new StringDeserializer(), 10L), new StringDeserializer());
 
             if (emitFinal) {
-                assertThat(outputTopic.readRecord(), equalTo(
-                    new TestRecord<>(new Windowed<>("k", new TimeWindow(190, 200)), "0+100", null, 200L)));
-                assertThat(outputTopic.readRecord(), equalTo(
-                    new TestRecord<>(new Windowed<>("k", new TimeWindow(290, 300)), "0+101", null, 300L)));
+                assertEquals(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(190, 200)), "0+100", null, 200L),
+                    outputTopic.readRecord()
+                );
+                assertEquals(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(290, 300)), "0+101", null, 300L),
+                    outputTopic.readRecord()
+                );
                 assertTrue(outputTopic.isEmpty());
             } else {
-                assertThat(outputTopic.readRecord(), equalTo(
-                    new TestRecord<>(new Windowed<>("k", new TimeWindow(190, 200)), "0+100", null, 200L)));
-                assertThat(outputTopic.readRecord(), equalTo(
-                    new TestRecord<>(new Windowed<>("k", new TimeWindow(290, 300)), "0+101", null, 300L)));
-                assertThat(outputTopic.readRecord(), equalTo(
-                    new TestRecord<>(new Windowed<>("k", new TimeWindow(390, 400)), "0+102", null, 400L)));
+                assertEquals(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(190, 200)), "0+100", null, 200L),
+                    outputTopic.readRecord()
+                );
+                assertEquals(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(290, 300)), "0+101", null, 300L),
+                    outputTopic.readRecord()
+                );
+                assertEquals(
+                    new TestRecord<>(new Windowed<>("k", new TimeWindow(390, 400)), "0+102", null, 400L),
+                    outputTopic.readRecord()
+                );
                 assertTrue(outputTopic.isEmpty());
             }
         }
@@ -1641,7 +1639,7 @@ public class KStreamSlidingWindowAggregateTest {
                 );
 
             Collections.shuffle(input, shuffle);
-            try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
                 final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
                 for (final ValueAndTimestamp<String> i : input) {
@@ -1722,9 +1720,9 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     private void assertLatenessMetrics(final TopologyTestDriver driver,
-                                       final Matcher<Object> dropTotal,
-                                       final Matcher<Object> maxLateness,
-                                       final Matcher<Object> avgLateness) {
+                                       final double expectedDropTotal,
+                                       final double expectedMaxLateness,
+                                       final double expectedAvgLateness) {
 
         final MetricName dropTotalMetric;
         final MetricName dropRateMetric;
@@ -1768,10 +1766,10 @@ public class KStreamSlidingWindowAggregateTest {
                         mkEntry("task-id", "0_0")
                 )
         );
-        assertThat(driver.metrics().get(dropTotalMetric).metricValue(), dropTotal);
-        assertThat(driver.metrics().get(dropRateMetric).metricValue(), not(0.0));
-        assertThat(driver.metrics().get(latenessMaxMetric).metricValue(), maxLateness);
-        assertThat(driver.metrics().get(latenessAvgMetric).metricValue(), avgLateness);
+        assertEquals(expectedDropTotal, driver.metrics().get(dropTotalMetric).metricValue());
+        assertNotEquals(0.0, driver.metrics().get(dropRateMetric).metricValue());
+        assertEquals(expectedMaxLateness, driver.metrics().get(latenessMaxMetric).metricValue());
+        assertEquals(expectedAvgLateness, driver.metrics().get(latenessAvgMetric).metricValue());
     }
 
     private WindowBytesStoreSupplier setupWindowBytesStoreSupplier(final int index) {

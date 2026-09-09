@@ -16,8 +16,8 @@
  */
 package kafka.api
 
-import kafka.security.JaasTestUtils
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.security.JaasTestUtils
 
 class SaslOAuthBearerSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "OAUTHBEARER"

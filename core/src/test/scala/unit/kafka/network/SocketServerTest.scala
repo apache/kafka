@@ -161,7 +161,7 @@ class SocketServerTest {
   }
 
   def processRequest(channel: RequestChannel, request: Request): Unit = {
-    val byteBuffer = request.body(classOf[AbstractRequest]).serializeWithHeader(request.header)
+    val byteBuffer = request.body.serializeWithHeader(request.header)
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
     val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     channel.sendResponse(new SendResponse(request, send, Optional.of(headerLog)))
@@ -641,7 +641,7 @@ class SocketServerTest {
     // Mimic a primitive request handler that fetches the request from RequestChannel and place a response with a
     // throttled channel.
     val request = receiveRequest(server.dataPlaneRequestChannel)
-    val byteBuffer = request.body(classOf[AbstractRequest]).serializeWithHeader(request.header)
+    val byteBuffer = request.body.serializeWithHeader(request.header)
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
 
     val channelThrottlingCallback = new ThrottleCallback {

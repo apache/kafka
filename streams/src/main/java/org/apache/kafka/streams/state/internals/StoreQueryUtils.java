@@ -128,29 +128,35 @@ public final class StoreQueryUtils {
         final QueryResult<R> result;
 
         final QueryHandler<?> handler = QUERY_HANDLER_MAP.get(query.getClass());
-        synchronized (position) {
-            if (handler == null) {
-                result = QueryResult.forUnknownQueryType(query, store);
-            } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
-                result = QueryResult.notUpToBound(
-                    position,
-                    positionBound,
-                    context == null ? null : context.taskId().partition()
-                );
-            } else {
-                result = ((QueryHandler<R>) handler).apply(
-                    query,
-                    positionBound,
-                    config,
-                    store
-                );
+        // Take the store monitor before the position lock, matching the write paths, so a
+        // concurrent put/query cannot deadlock (KAFKA-19629). Callers must not hold the
+        // position lock when calling in, unless nothing else locks their store monitor
+        // (the in-memory window/session stores, whose writers take only the position lock).
+        synchronized (store) {
+            synchronized (position) {
+                if (handler == null) {
+                    result = QueryResult.forUnknownQueryType(query, store);
+                } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
+                    result = QueryResult.notUpToBound(
+                        position,
+                        positionBound,
+                        context == null ? null : context.taskId().partition()
+                    );
+                } else {
+                    result = ((QueryHandler<R>) handler).apply(
+                        query,
+                        positionBound,
+                        config,
+                        store
+                    );
+                }
+                if (config.isCollectExecutionInfo()) {
+                    result.addExecutionInfo(
+                        "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
+                    );
+                }
+                result.setPosition(position.copy());
             }
-            if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
-                );
-            }
-            result.setPosition(position.copy());
         }
         return result;
     }

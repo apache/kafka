@@ -215,8 +215,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
             return;
         }
 
-        flush();
         trim();
+        // flush() must run after trim() so the truncated file length is included in the fsync.
+        // A flush before trim only persists message data, not the smaller size set by trim().
+        flush();
         channel.close();
     }
 
@@ -487,8 +489,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
                         StandardOpenOption.WRITE);
             } else {
                 RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
+                try {
+                    randomAccessFile.setLength(initFileSize);
+                    return randomAccessFile.getChannel();
+                } catch (IOException e) {
+                    randomAccessFile.close();
+                    throw e;
+                }
             }
         } else {
             return FileChannel.open(file.toPath());

@@ -282,6 +282,10 @@ public final class Request implements BaseRequest {
             + ", but found " + bodyAndSize.request.getClass().getName());
     }
 
+    public AbstractRequest body() {
+        return bodyAndSize.request;
+    }
+
     public AbstractRequest loggableRequest() {
         if (bodyAndSize.request instanceof AlterConfigsRequest alterConfigs) {
             var newData = alterConfigs.data().duplicate();

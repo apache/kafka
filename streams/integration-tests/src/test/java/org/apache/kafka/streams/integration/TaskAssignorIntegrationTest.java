@@ -51,10 +51,9 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.sameInstance;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 @Tag("integration")
 @Timeout(600)
@@ -134,7 +133,7 @@ public class TaskAssignorIntegrationTest {
             final Field delegate = KafkaConsumer.class.getDeclaredField("delegate");
             delegate.setAccessible(true);
             final Consumer<?, ?> consumer = (Consumer<?, ?>)  delegate.get(parentConsumer);
-            assertThat(consumer, instanceOf(ClassicKafkaConsumer.class));
+            assertInstanceOf(ClassicKafkaConsumer.class, consumer);
 
             final Field assignors = ClassicKafkaConsumer.class.getDeclaredField("assignors");
             assignors.setAccessible(true);
@@ -155,12 +154,12 @@ public class TaskAssignorIntegrationTest {
                 (Supplier<LegacyTaskAssignor>) taskAssignorSupplierField.get(streamsPartitionAssignor);
             final LegacyTaskAssignor taskAssignor = taskAssignorSupplier.get();
 
-            assertThat(configs.numStandbyReplicas(), is(5));
-            assertThat(configs.acceptableRecoveryLag(), is(6L));
-            assertThat(configs.maxWarmupReplicas(), is(7));
-            assertThat(configs.probingRebalanceIntervalMs(), is(480000L));
-            assertThat(actualAssignmentListener, sameInstance(configuredAssignmentListener));
-            assertThat(taskAssignor, instanceOf(MyLegacyTaskAssignor.class));
+            assertEquals(5, configs.numStandbyReplicas());
+            assertEquals(6L, configs.acceptableRecoveryLag());
+            assertEquals(7, configs.maxWarmupReplicas());
+            assertEquals(480000L, configs.probingRebalanceIntervalMs());
+            assertSame(configuredAssignmentListener, actualAssignmentListener);
+            assertInstanceOf(MyLegacyTaskAssignor.class, taskAssignor);
         }
     }
 }

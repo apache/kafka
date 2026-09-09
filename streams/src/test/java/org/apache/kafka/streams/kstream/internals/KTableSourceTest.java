@@ -23,13 +23,13 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -48,12 +48,9 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,7 +69,7 @@ public class KTableSourceTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, Integer> inputTopic =
                     driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
             inputTopic.pipeInput("A", 1, 10L);
@@ -103,7 +100,7 @@ public class KTableSourceTest {
                .toStream()
                .to("output");
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, Integer> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
             final TestOutputTopic<String, Integer> outputTopic =
@@ -139,7 +136,7 @@ public class KTableSourceTest {
         builder.table(topic, stringConsumed);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
 
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
@@ -151,13 +148,8 @@ public class KTableSourceTest {
                 );
             inputTopic.pipeInput(null, "value");
 
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
-            );
+            assertTrue(appender.getMessages("WARN").contains(
+                "Skipping record due to null key. topic=[topic] partition=[0] offset=[0]"));
         }
     }
 
@@ -168,7 +160,7 @@ public class KTableSourceTest {
         builder.table(topic, stringConsumed, Materialized.as("store"));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
-            final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
 
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
@@ -181,13 +173,8 @@ public class KTableSourceTest {
             inputTopic.pipeInput("key", "value", 10L);
             inputTopic.pipeInput("key", "value", 5L);
 
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1].")
-            );
+            assertTrue(appender.getMessages("WARN").contains(
+                "Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1]."));
         }
     }
 
@@ -260,7 +247,7 @@ public class KTableSourceTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc1", supplier, table1.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(
                     topic1,
@@ -315,7 +302,7 @@ public class KTableSourceTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc1", supplier, table1.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(
                     topic1,

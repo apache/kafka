@@ -547,6 +547,69 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldNotTrackInMemoryStoreOffsetsInStateDirectory() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        contextRegistersStateStore(stateMgr);
+
+        try {
+            stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
+            stateMgr.initializeStoreOffsets(true);
+            stateMgr.updateChangelogOffsets(mkMap(
+                mkEntry(persistentStorePartition, 100L),
+                mkEntry(nonPersistentStorePartition, 200L)));
+
+            // the shared sums outlive this task, so they must only count state that outlives it too (KAFKA-20893);
+            // the in-memory store's 201 is reported from the live task by TaskManager instead
+            assertThat(stateDirectory.taskOffsetSums(), is(mkMap(mkEntry(taskId, 101L))));
+            assertThat(stateMgr.changelogOffsets(), is(mkMap(
+                mkEntry(persistentStorePartition, 101L),
+                mkEntry(nonPersistentStorePartition, 201L))));
+        } finally {
+            stateMgr.close();
+        }
+
+        assertThat(stateDirectory.taskOffsetSums(), is(mkMap(mkEntry(taskId, 101L))));
+    }
+
+    @Test
+    public void shouldNotTrackOffsetsInStateDirectoryWhenNoStoreIsPersistent() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        contextRegistersStateStore(stateMgr);
+
+        try {
+            stateMgr.registerStateStores(Collections.singletonList(nonPersistentStore), context);
+            stateMgr.initializeStoreOffsets(true);
+            stateMgr.updateChangelogOffsets(Collections.singletonMap(nonPersistentStorePartition, 200L));
+
+            assertThat(stateDirectory.taskOffsetSums(), is(Collections.emptyMap()));
+        } finally {
+            stateMgr.close();
+        }
+
+        assertThat(stateDirectory.taskOffsetSums(), is(Collections.emptyMap()));
+    }
+
+    @Test
+    public void shouldTrackPersistentStoreOffsetsInStateDirectory() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        contextRegistersStateStore(stateMgr);
+
+        try {
+            stateMgr.registerStateStores(Arrays.asList(persistentStore, persistentStoreTwo), context);
+            stateMgr.initializeStoreOffsets(true);
+            stateMgr.updateChangelogOffsets(mkMap(
+                mkEntry(persistentStorePartition, 100L),
+                mkEntry(persistentStoreTwoPartition, 200L)));
+
+            assertThat(stateDirectory.taskOffsetSums(), is(mkMap(mkEntry(taskId, 302L))));
+        } finally {
+            stateMgr.close();
+        }
+
+        assertThat(stateDirectory.taskOffsetSums(), is(mkMap(mkEntry(taskId, 302L))));
+    }
+
+    @Test
     public void shouldGetRegisteredStore() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         try {

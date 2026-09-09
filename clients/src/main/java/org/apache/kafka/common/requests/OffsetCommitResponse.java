@@ -119,11 +119,6 @@ public class OffsetCommitResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 4;
-    }
-
     public static boolean useTopicIds(short version) {
         return version >= 10;
     }

@@ -69,7 +69,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -612,7 +611,7 @@ public class ClusterTestExtensionsTest {
     public void testSsl(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         KafkaBroker broker = clusterInstance.brokers().values().iterator().next();
         ControllerServer controller = clusterInstance.controllers().values().iterator().next();
-        Function<SocketServer, String> endpoints = socketServer -> Collections.list(socketServer.dataPlaneAcceptors().keys())
+        Function<SocketServer, String> endpoints = socketServer -> socketServer.dataPlaneAcceptors().keySet()
                 .stream().map(endpoint -> String.format("%s:%s", endpoint.listener(), endpoint.securityProtocol())).collect(Collectors.joining(","));
         assertEquals("EXTERNAL:SSL", endpoints.apply(broker.socketServer()));
         assertEquals("CONTROLLER:SSL", endpoints.apply(controller.socketServer()));

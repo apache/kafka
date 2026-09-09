@@ -1174,7 +1174,7 @@ public class StreamsConfig extends AbstractConfig {
                     RACK_AWARE_ASSIGNMENT_STRATEGY_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
                     Type.LIST,
-                    Collections.emptyList(),
+                    List.of(),
                     atMostOfSize(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
                     Importance.LOW,
                     RACK_AWARE_ASSIGNMENT_TAGS_DOC)
@@ -2277,7 +2277,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     protected boolean isStreamsProtocolEnabled() {
-        return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name());
+        return StreamsConfigUtils.streamsProtocolEnabled(this);
     }
 
     /**

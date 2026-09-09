@@ -855,9 +855,11 @@ public class PlaintextConsumerTest {
         sendRecords(cluster, new TopicPartition(topic1, 0), 1);
 
         try (var consumer = cluster.consumer(consumerConfig)) {
-            // consumer some messages, and we can list the internal topic __consumer_offsets
             consumer.subscribe(List.of(topic1));
-            consumer.poll(Duration.ofMillis(100));
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(100));
+                return consumer.listTopics().size() == 4;
+            }, "Timed out waiting for 4 topics to be visible");
             var topics = consumer.listTopics();
             assertNotNull(topics);
             assertEquals(4, topics.size());

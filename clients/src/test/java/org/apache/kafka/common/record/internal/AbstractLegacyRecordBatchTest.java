@@ -30,7 +30,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class AbstractLegacyRecordBatchTest {
 
@@ -223,32 +222,26 @@ public class AbstractLegacyRecordBatchTest {
         };
 
         // Check V0
-        try {
+        IllegalArgumentException e1 = assertThrows(IllegalArgumentException.class, () -> {
             MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
-                Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
+                    Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
 
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
             batch.setLastOffset(1L);
-
             batch.iterator();
-            fail("Can't reach here");
-        } catch (IllegalArgumentException e) {
-            assertEquals("ZStandard compression is not supported for magic 0", e.getMessage());
-        }
+        });
+        assertEquals("ZStandard compression is not supported for magic 0", e1.getMessage());
 
         // Check V1
-        try {
+        IllegalArgumentException e2 = assertThrows(IllegalArgumentException.class, () -> {
             MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-                Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
+                    Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
 
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
             batch.setLastOffset(1L);
-
             batch.iterator();
-            fail("Can't reach here");
-        } catch (IllegalArgumentException e) {
-            assertEquals("ZStandard compression is not supported for magic 1", e.getMessage());
-        }
+        });
+        assertEquals("ZStandard compression is not supported for magic 1", e2.getMessage());
     }
 
 }

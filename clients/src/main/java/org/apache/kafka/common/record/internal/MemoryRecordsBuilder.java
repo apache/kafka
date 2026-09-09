@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -198,7 +199,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                                 boolean isControlBatch,
                                 int partitionLeaderEpoch,
                                 int writeLimit) {
-        this(new ByteBufferOutputStream(buffer), magic, compression, timestampType, baseOffset, logAppendTime,
+        this(new SingleByteBufferOutputStream(buffer), magic, compression, timestampType, baseOffset, logAppendTime,
                 producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
                 writeLimit);
     }
@@ -209,6 +210,14 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     public int initialCapacity() {
         return bufferStream.initialCapacity();
+    }
+
+    /**
+     * The underlying output stream, exposed so the incremental strategy can manage its
+     * chunk-backed stream.
+     */
+    public ByteBufferOutputStream bufferStream() {
+        return bufferStream;
     }
 
     public double compressionRatio() {
@@ -815,12 +824,36 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @return The estimated number of bytes written
      */
     private int estimatedBytesWritten() {
+        return estimatedBytesWritten(uncompressedRecordsSizeInBytes);
+    }
+
+    /**
+     * Returns the projected number of bytes the builder would write for the given uncompressed
+     * record bytes: exact for uncompressed, a ratio-aware estimate for compressed.
+     */
+    private int estimatedBytesWritten(int uncompressedSize) {
         if (compression.type() == CompressionType.NONE) {
-            return batchHeaderSizeInBytes + uncompressedRecordsSizeInBytes;
+            return batchHeaderSizeInBytes + uncompressedSize;
         } else {
-            // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
-            return batchHeaderSizeInBytes + (int) (uncompressedRecordsSizeInBytes * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
+            return batchHeaderSizeInBytes + (int) (uncompressedSize * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
+    }
+
+    /**
+     * Projected value of {@link #estimatedBytesWritten} after appending one more record with the
+     * given fields, using the record's worst-case (upper-bound) per-record size. Used by the
+     * incremental strategy to size mid-batch chunk extensions.
+     */
+    public int estimatedBytesWrittenAfter(byte[] key, byte[] value, Header[] headers) {
+        ByteBuffer keyBuffer = wrapNullable(key);
+        ByteBuffer valueBuffer = wrapNullable(value);
+        final int recordSize;
+        if (magic < RecordBatch.MAGIC_VALUE_V2) {
+            recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, keyBuffer, valueBuffer);
+        } else {
+            recordSize = DefaultRecord.recordSizeUpperBound(keyBuffer, valueBuffer, headers);
+        }
+        return estimatedBytesWritten(uncompressedRecordsSizeInBytes + recordSize);
     }
 
     /**

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -46,11 +47,10 @@ import java.time.Instant;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("unchecked")
 public class KTableMapValuesTest {
@@ -61,7 +61,7 @@ public class KTableMapValuesTest {
     private void doTestKTable(final StreamsBuilder builder,
                               final String topic1,
                               final MockApiProcessorSupplier<String, Integer, Void, Void> supplier) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic1.pipeInput("A", "1", 5L);
@@ -225,7 +225,7 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, table2.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();
@@ -267,8 +267,8 @@ public class KTableMapValuesTest {
 
         table2.enableSendingOldValues(true);
 
-        assertThat(table1.sendingOldValueEnabled(), is(true));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertTrue(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         testSendingOldValues(builder, topic1, table2);
     }
@@ -290,8 +290,8 @@ public class KTableMapValuesTest {
 
         table2.enableSendingOldValues(true);
 
-        assertThat(table1.sendingOldValueEnabled(), is(false));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertFalse(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         testSendingOldValues(builder, topic1, table2);
     }
@@ -304,7 +304,7 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         builder.build().addProcessor("proc", supplier, table2.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();

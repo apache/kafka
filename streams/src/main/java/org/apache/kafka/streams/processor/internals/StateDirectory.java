@@ -325,7 +325,7 @@ public class StateDirectory implements AutoCloseable {
         taskOffsetSums.remove(taskId);
     }
 
-    private long sumOfChangelogOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
+    static long sumOfChangelogOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
         long offsetSum = 0L;
         for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
             final long offset = changelogEntry.getValue();
@@ -874,7 +874,7 @@ public class StateDirectory implements AutoCloseable {
 
     private List<File> listNamedTopologyDirs() {
         final File[] namedTopologyDirectories = stateDir.listFiles(f -> f.getName().startsWith("__") &&  f.getName().endsWith("__"));
-        return namedTopologyDirectories != null ? Arrays.asList(namedTopologyDirectories) : Collections.emptyList();
+        return namedTopologyDirectories != null ? Arrays.asList(namedTopologyDirectories) : List.of();
     }
 
     private String parseNamedTopologyFromDirectory(final String dirName) {

@@ -20,6 +20,8 @@
   "name": "StreamsGroupHeartbeatRequest",
   // Version 1 is the same as version 0; bumped together with StreamsGroupHeartbeatResponse v1,
   // which adds TopologyDescriptionRequired (KIP-1331). Required so the response v1 is negotiated.
+  // Version 1 is also required for the broker to return the MISSING_CLIENT_TAGS status (code 6),
+  // since version 0 clients do not understand it (KAFKA-20744).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [

@@ -94,9 +94,7 @@ import java.util.stream.Collectors;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -660,7 +658,7 @@ public class IntegrationTestUtils {
                 final List<ConsumerRecord<K, V>> readData =
                     readRecords(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertTrue(accumData.size() >= expectedNumRecords, reason);
             });
         }
         return accumData;
@@ -710,7 +708,8 @@ public class IntegrationTestUtils {
                 final List<KeyValue<K, V>> readData =
                     readKeyValues(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason + ",  currently accumulated data is " + accumData, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertTrue(accumData.size() >= expectedNumRecords,
+                    reason + ",  currently accumulated data is " + accumData);
             });
         }
         return accumData;
@@ -743,7 +742,7 @@ public class IntegrationTestUtils {
                 final List<KeyValueTimestamp<K, V>> readData =
                     readKeyValuesWithTimestamp(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertTrue(accumData.size() >= expectedNumRecords, reason);
             });
         }
         return accumData;
@@ -881,7 +880,7 @@ public class IntegrationTestUtils {
                 final List<V> readData =
                     readValues(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertTrue(accumData.size() >= expectedNumRecords, reason);
             });
         }
         return accumData;
@@ -1363,9 +1362,13 @@ public class IntegrationTestUtils {
 
     public static void waitUntilStreamsHasPolled(final KafkaStreams kafkaStreams, final int pollNumber)
         throws InterruptedException {
-        final Double initialCount = getStreamsPollNumber(kafkaStreams);
+        final double initialCount = getStreamsPollNumber(kafkaStreams);
+        final double expectedCount = initialCount + pollNumber;
         retryOnExceptionWithTimeout(10000, () -> {
-            assertThat(getStreamsPollNumber(kafkaStreams), is(greaterThanOrEqualTo(initialCount + pollNumber)));
+            final double currentCount = getStreamsPollNumber(kafkaStreams);
+            assertTrue(currentCount >= expectedCount,
+                () -> "Expected poll-total to reach at least " + expectedCount
+                    + " (initial " + initialCount + " + " + pollNumber + "), but was " + currentCount);
         });
     }
 

@@ -164,7 +164,8 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
                     coordinator,
                     authorizedOperations,
                     topologyDescription,
-                    topologyDescriptionStatus
+                    topologyDescriptionStatus,
+                    Optional.ofNullable(describedGroup.assignorName())
             );
             completed.put(groupIdKey, streamsGroupDescription);
         }

@@ -74,6 +74,7 @@ public class Metadata implements Closeable {
     private long lastSuccessfulRefreshMs;
     private long attempts;
     private KafkaException fatalException;
+    private KafkaException bootstrapFatalException;
     private Set<String> invalidTopics;
     private Set<String> unauthorizedTopics;
     private volatile MetadataSnapshot metadataSnapshot = MetadataSnapshot.empty();
@@ -616,6 +617,7 @@ public class Metadata implements Closeable {
      * in the last metadata update.
      */
     protected synchronized void maybeThrowFatalException() {
+        maybeThrowBootstrapFatalException();
         KafkaException metadataException = this.fatalException;
         if (metadataException != null) {
             fatalException = null;
@@ -633,6 +635,7 @@ public class Metadata implements Closeable {
     }
 
     private void clearErrorsAndMaybeThrowException(Supplier<KafkaException> recoverableExceptionSupplier) {
+        maybeThrowBootstrapFatalException();
         KafkaException metadataException = Optional.ofNullable(fatalException).orElseGet(recoverableExceptionSupplier);
         fatalException = null;
         clearRecoverableErrors();
@@ -682,6 +685,25 @@ public class Metadata implements Closeable {
      */
     public synchronized void fatalError(KafkaException exception) {
         this.fatalException = exception;
+    }
+
+    /**
+     * Record a permanent bootstrap DNS resolution failure. Unlike {@link #fatalError},
+     * this exception is never cleared after being thrown, so all subsequent API calls
+     * will see it (bootstrap failure is not recoverable without recreating the client).
+     */
+    public synchronized void bootstrapFatalError(KafkaException exception) {
+        this.bootstrapFatalException = exception;
+        notifyAll();
+    }
+
+    /**
+     * Throw the permanent bootstrap fatal exception if one was recorded. The exception is
+     * intentionally not cleared so every API call after bootstrap failure sees it.
+     */
+    public synchronized void maybeThrowBootstrapFatalException() {
+        if (bootstrapFatalException != null)
+            throw bootstrapFatalException;
     }
 
     /**

@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 /**
- * The result of the {@link KafkaAdminClient#describeStreamsGroups(Collection, DescribeStreamsGroupsOptions)}} call.
+ * The result of the {@link KafkaAdminClient#describeStreamsGroups(Collection, DescribeStreamsGroupsOptions)} call.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
