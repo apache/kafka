@@ -199,19 +199,4 @@ public class ClientMetricsTest {
                 eq(value)
         );
     }
-
-    private void setUpAndVerifyImmutableMetric(final String name,
-                                               final String description,
-                                               final int value,
-                                               final Runnable metricAdder) {
-
-        metricAdder.run();
-
-        verify(streamsMetrics).addClientLevelImmutableMetric(
-                eq(name),
-                eq(description),
-                eq(RecordingLevel.INFO),
-                eq(value)
-        );
-    }
 }
