@@ -497,6 +497,7 @@ public class KafkaStreams implements AutoCloseable {
             log.error("Encountered the following exception during processing " +
                     " The streams client is going to shut down now. ", throwable);
             closeToError();
+            return;
         }
 
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
@@ -1312,7 +1313,20 @@ public class KafkaStreams implements AutoCloseable {
                 if (reachedDead) {
                     log.info("Successfully removed {} in {}ms", threadToRemove.getName(), time.milliseconds() - startMs);
                     threads.remove(threadToRemove);
-                    queryableStoreProvider.removeStoreProviderForThread(threadToRemove.getName());
+                    // While the wait above did not hold the lock, a concurrent addStreamThread may have
+                    // trimmed the DEAD thread via nextThreadIndex and reused its name, overwriting the
+                    // store-provider registration with the new thread's. The registrations are keyed by
+                    // name, so removing by name would delete the replacement's provider and break
+                    // interactive queries; only clean up while no live thread carries the name.
+                    final String removedThreadName = threadToRemove.getName();
+                    final boolean nameReused = new ArrayList<>(threads).stream()
+                        .anyMatch(t -> t.getName().equals(removedThreadName));
+                    if (nameReused) {
+                        log.info("Skipping state-store provider cleanup for {} since the name has been reused by a newly added thread",
+                            removedThreadName);
+                    } else {
+                        queryableStoreProvider.removeStoreProviderForThread(removedThreadName);
+                    }
                 } else {
                     log.warn("{} did not shutdown in the allotted time.", threadToRemove.getName());
                     // Don't remove from threads until shutdown is complete. We will trim it from the
