@@ -1041,7 +1041,15 @@
   "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator"
 },
 {
+  "name":"org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
