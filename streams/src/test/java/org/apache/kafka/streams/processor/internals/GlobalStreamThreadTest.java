@@ -299,7 +299,6 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldWipeGlobalStateDirectoryOnTaskCorruptedExceptionDuringStartup() throws Exception {
         final InternalTopologyBuilder builderWithCorruptedStore = new InternalTopologyBuilder();
 
@@ -311,15 +310,10 @@ public class GlobalStreamThreadTest {
             };
 
         final StateStore corruptedStore = mock(StateStore.class);
-        when(corruptedStore.name()).thenReturn(GLOBAL_STORE_NAME);
-        when(corruptedStore.persistent()).thenReturn(true);
-        when(corruptedStore.managesOffsets()).thenReturn(true);
-        doThrow(new TaskCorruptedException(Set.of(new TaskId(-1, -1))))
-            .when(corruptedStore).init(any(), any());
+        doThrow(new TaskCorruptedException(Set.of(new TaskId(-1, -1)))).when(corruptedStore).init(any(), any());
 
         @SuppressWarnings("unchecked")
         final StoreBuilder<StateStore> corruptedStoreBuilder = mock(StoreBuilder.class);
-        when(corruptedStoreBuilder.name()).thenReturn(GLOBAL_STORE_NAME);
         when(corruptedStoreBuilder.build()).thenReturn(corruptedStore);
 
         builderWithCorruptedStore.addGlobalStore(
@@ -350,8 +344,7 @@ public class GlobalStreamThreadTest {
             e -> { }
         );
 
-        final File globalStateDir =
-            new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global");
+        final File globalStateDir = new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global");
 
         initializeConsumer();
 
