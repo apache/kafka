@@ -29,8 +29,7 @@ import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class UniqueTopicSerdeScope {
     private final Map<String, Class<?>> topicTypeRegistry = new TreeMap<>();
@@ -108,7 +107,11 @@ public class UniqueTopicSerdeScope {
             if (data != null) {
                 final String key = topic + (isKey.get() ? "--key" : "--value");
                 if (topicTypeRegistry.containsKey(key)) {
-                    assertThat(String.format("key[%s] data[%s][%s]", key, data, data.getClass()), topicTypeRegistry.get(key), equalTo(data.getClass()));
+                    assertEquals(
+                        data.getClass(),
+                        topicTypeRegistry.get(key),
+                        String.format("key[%s] data[%s][%s]", key, data, data.getClass())
+                    );
                 } else {
                     topicTypeRegistry.put(key, data.getClass());
                 }

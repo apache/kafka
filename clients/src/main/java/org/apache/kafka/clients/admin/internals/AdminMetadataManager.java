@@ -319,7 +319,6 @@ public class AdminMetadataManager {
         this.state = State.QUIESCENT;
 
         if (RequestUtils.isFatalException(exception)) {
-            log.warn("Fatal error during metadata update", exception);
             // avoid unchecked/unconfirmed cast to ApiException
             if (exception instanceof  ApiException) {
                 this.fatalException = (ApiException) exception;
@@ -332,9 +331,11 @@ public class AdminMetadataManager {
                 } else {
                     log.warn("The remote node is not a BROKER that supports the METADATA api.", exception);
                 }
+            } else {
+                log.warn("Fatal error during metadata update", exception);
             }
         } else {
-            log.info("Metadata update failed", exception);
+            log.debug("Metadata update failed", exception);
         }
     }
 

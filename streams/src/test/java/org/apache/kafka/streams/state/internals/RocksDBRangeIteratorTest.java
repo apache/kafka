@@ -29,9 +29,10 @@ import org.rocksdb.RocksIterator;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -78,13 +79,13 @@ public class RocksDBRangeIteratorTest {
             true,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key2Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key1Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key2Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key3Bytes, rocksDBRangeIterator.next().key);
+        assertFalse(rocksDBRangeIterator.hasNext());
         verify(rocksIterator, times(3)).value();
         verify(rocksIterator, times(3)).next();
     }
@@ -112,13 +113,13 @@ public class RocksDBRangeIteratorTest {
             false,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key2Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key3Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key2Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key1Bytes, rocksDBRangeIterator.next().key);
+        assertFalse(rocksDBRangeIterator.hasNext());
         verify(rocksIterator, times(3)).value();
         verify(rocksIterator, times(3)).prev();
     }
@@ -149,15 +150,15 @@ public class RocksDBRangeIteratorTest {
             true,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key2Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key4Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key1Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key2Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key3Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key4Bytes, rocksDBRangeIterator.next().key);
+        assertFalse(rocksDBRangeIterator.hasNext());
         verify(rocksIterator, times(4)).value();
         verify(rocksIterator, times(4)).next();
     }
@@ -188,15 +189,15 @@ public class RocksDBRangeIteratorTest {
             false,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key4Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key2Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key4Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key3Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key2Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key1Bytes, rocksDBRangeIterator.next().key);
+        assertFalse(rocksDBRangeIterator.hasNext());
         verify(rocksIterator, times(4)).value();
         verify(rocksIterator, times(4)).prev();
     }
@@ -216,7 +217,7 @@ public class RocksDBRangeIteratorTest {
             true,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertFalse(rocksDBRangeIterator.hasNext());
     }
 
     @Test
@@ -238,7 +239,7 @@ public class RocksDBRangeIteratorTest {
             false,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertFalse(rocksDBRangeIterator.hasNext());
     }
 
     @Test
@@ -262,11 +263,11 @@ public class RocksDBRangeIteratorTest {
             true,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key2Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key2Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key3Bytes, rocksDBRangeIterator.next().key);
+        assertFalse(rocksDBRangeIterator.hasNext());
         verify(rocksIterator, times(2)).value();
         verify(rocksIterator, times(2)).next();
     }
@@ -294,11 +295,11 @@ public class RocksDBRangeIteratorTest {
             false,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key4Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key4Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key3Bytes, rocksDBRangeIterator.next().key);
+        assertFalse(rocksDBRangeIterator.hasNext());
         verify(rocksIterator, times(2)).value();
         verify(rocksIterator, times(2)).prev();
     }
@@ -324,15 +325,15 @@ public class RocksDBRangeIteratorTest {
             true,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.peekNextKey(), is(key2Bytes));
-        assertThat(rocksDBRangeIterator.peekNextKey(), is(key2Bytes));
-        assertThat(rocksDBRangeIterator.next().key, is(key2Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.peekNextKey(), is(key3Bytes));
-        assertThat(rocksDBRangeIterator.peekNextKey(), is(key3Bytes));
-        assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key2Bytes, rocksDBRangeIterator.peekNextKey());
+        assertEquals(key2Bytes, rocksDBRangeIterator.peekNextKey());
+        assertEquals(key2Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key3Bytes, rocksDBRangeIterator.peekNextKey());
+        assertEquals(key3Bytes, rocksDBRangeIterator.peekNextKey());
+        assertEquals(key3Bytes, rocksDBRangeIterator.next().key);
+        assertFalse(rocksDBRangeIterator.hasNext());
         assertThrows(NoSuchElementException.class, rocksDBRangeIterator::peekNextKey);
         verify(rocksIterator, times(2)).value();
         verify(rocksIterator, times(2)).next();
@@ -360,15 +361,15 @@ public class RocksDBRangeIteratorTest {
             false,
             true
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.peekNextKey(), is(key4Bytes));
-        assertThat(rocksDBRangeIterator.peekNextKey(), is(key4Bytes));
-        assertThat(rocksDBRangeIterator.next().key, is(key4Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.peekNextKey(), is(key3Bytes));
-        assertThat(rocksDBRangeIterator.peekNextKey(), is(key3Bytes));
-        assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key4Bytes, rocksDBRangeIterator.peekNextKey());
+        assertEquals(key4Bytes, rocksDBRangeIterator.peekNextKey());
+        assertEquals(key4Bytes, rocksDBRangeIterator.next().key);
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key3Bytes, rocksDBRangeIterator.peekNextKey());
+        assertEquals(key3Bytes, rocksDBRangeIterator.peekNextKey());
+        assertEquals(key3Bytes, rocksDBRangeIterator.next().key);
+        assertFalse(rocksDBRangeIterator.hasNext());
         assertThrows(NoSuchElementException.class, rocksDBRangeIterator::peekNextKey);
         verify(rocksIterator, times(2)).value();
         verify(rocksIterator, times(2)).prev();
@@ -406,7 +407,7 @@ public class RocksDBRangeIteratorTest {
         final AtomicBoolean callbackCalled = new AtomicBoolean(false);
         rocksDBRangeIterator.onClose(() -> callbackCalled.set(true));
         rocksDBRangeIterator.close();
-        assertThat(callbackCalled.get(), is(true));
+        assertTrue(callbackCalled.get());
     }
 
     @Test
@@ -428,9 +429,9 @@ public class RocksDBRangeIteratorTest {
             true,
             false
         );
-        assertThat(rocksDBRangeIterator.hasNext(), is(true));
-        assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
-        assertThat(rocksDBRangeIterator.hasNext(), is(false));
+        assertTrue(rocksDBRangeIterator.hasNext());
+        assertEquals(key1Bytes, rocksDBRangeIterator.next().key);
+        assertFalse(rocksDBRangeIterator.hasNext());
         verify(rocksIterator, times(2)).value();
         verify(rocksIterator, times(2)).next();
     }

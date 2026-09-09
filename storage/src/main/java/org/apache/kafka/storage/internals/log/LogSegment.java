@@ -521,10 +521,10 @@ public class LogSegment implements Closeable {
             LOGGER.debug("Truncated {} invalid bytes at the end of segment {} during recovery", truncated, log.file().getAbsolutePath());
 
         log.truncateTo(validBytes);
-        offsetIndex().trimToValidSize();
+        offsetIndex().trimToValidSize(false);
         // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
         timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true);
-        timeIndex().trimToValidSize();
+        timeIndex().trimToValidSize(false);
         return truncated;
     }
 
@@ -685,8 +685,8 @@ public class LogSegment implements Closeable {
      */
     public void onBecomeInactiveSegment() throws IOException {
         timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true);
-        offsetIndex().trimToValidSize();
-        timeIndex().trimToValidSize();
+        offsetIndex().trimToValidSize(false);
+        timeIndex().trimToValidSize(false);
         log.trim();
     }
 

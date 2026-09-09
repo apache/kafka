@@ -53,11 +53,6 @@ public class CreatePartitionsResponse extends AbstractResponse {
     }
 
     @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
-
-    @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }

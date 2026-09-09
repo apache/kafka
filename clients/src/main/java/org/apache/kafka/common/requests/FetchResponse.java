@@ -170,11 +170,6 @@ public class FetchResponse extends AbstractResponse {
         return 4 + data.size(cache, version);
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 8;
-    }
-
     public static Optional<FetchResponseData.EpochEndOffset> divergingEpoch(FetchResponseData.PartitionData partitionResponse) {
         return partitionResponse.divergingEpoch().epoch() < 0 ? Optional.empty()
                 : Optional.of(partitionResponse.divergingEpoch());

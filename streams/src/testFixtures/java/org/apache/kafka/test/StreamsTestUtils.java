@@ -49,8 +49,8 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -151,12 +151,12 @@ public final class StreamsTestUtils {
     }
 
     public static <K> void verifyKeyValueList(final List<KeyValue<K, byte[]>> expected, final List<KeyValue<K, byte[]>> actual) {
-        assertThat(actual.size(), equalTo(expected.size()));
+        assertEquals(expected.size(), actual.size());
         for (int i = 0; i < actual.size(); i++) {
             final KeyValue<K, byte[]> expectedKv = expected.get(i);
             final KeyValue<K, byte[]> actualKv = actual.get(i);
-            assertThat(actualKv.key, equalTo(expectedKv.key));
-            assertThat(actualKv.value, equalTo(expectedKv.value));
+            assertEquals(expectedKv.key, actualKv.key);
+            assertArrayEquals(expectedKv.value, actualKv.value);
         }
     }
 
@@ -181,9 +181,9 @@ public final class StreamsTestUtils {
     public static void verifyWindowedKeyValue(final KeyValue<Windowed<Bytes>, byte[]> actual,
                                               final Windowed<Bytes> expectedKey,
                                               final String expectedValue) {
-        assertThat(actual.key.window(), equalTo(expectedKey.window()));
-        assertThat(actual.key.key(), equalTo(expectedKey.key()));
-        assertThat(actual.value, equalTo(expectedValue.getBytes()));
+        assertEquals(expectedKey.window(), actual.key.window());
+        assertEquals(expectedKey.key(), actual.key.key());
+        assertArrayEquals(expectedValue.getBytes(), actual.value);
     }
 
     public static Metric getMetricByName(final Map<MetricName, ? extends Metric> metrics,

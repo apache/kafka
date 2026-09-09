@@ -272,8 +272,10 @@ public class BuiltInPartitioner {
      */
     public void updatePartitionLoadStats(int[] queueSizes, int[] partitionIds, String[] partitionLeaderRacks, int length) {
         if (queueSizes == null) {
-            log.trace("No load stats for topic {}, not using adaptive", topic);
-            partitionLoadStatsHolder = null;
+            if (partitionLoadStatsHolder != null) {
+                log.trace("No load stats for topic {}, not using adaptive", topic);
+                partitionLoadStatsHolder = null;
+            }
             return;
         }
         assert queueSizes.length == partitionIds.length;

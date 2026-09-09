@@ -876,7 +876,7 @@ class KafkaRaftClientTest {
     @ValueSource(booleans = { true, false })
     public void testCannotResignIfObserver(boolean withKip853Rpc) throws Exception {
         int leaderId = randomReplicaId();
-        int otherNodeId = randomReplicaId() + 1;
+        int otherNodeId = leaderId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(leaderId, otherNodeId);
 

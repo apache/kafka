@@ -536,22 +536,24 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final PositionBound positionBound,
         final QueryConfig config) {
 
+        // Snapshot under the position lock only: holding it into handleBasicQueries
+        // would invert its store-then-position order (KAFKA-19629).
+        final Position queryPosition;
         synchronized (position) {
-            final Position queryPosition;
             if (config.getIsolationLevel() == IsolationLevel.READ_COMMITTED) {
                 queryPosition = position;
             } else {
                 queryPosition = position.copy().merge(dbAccessor.uncommittedPositionDeltas());
             }
-            return StoreQueryUtils.handleBasicQueries(
-                query,
-                positionBound,
-                config,
-                this,
-                queryPosition,
-                context
-            );
         }
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            config,
+            this,
+            queryPosition,
+            context
+        );
     }
 
     @Override

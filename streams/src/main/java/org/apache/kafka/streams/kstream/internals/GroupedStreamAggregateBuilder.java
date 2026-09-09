@@ -25,7 +25,6 @@ import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 
-import java.util.Collections;
 import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
@@ -148,7 +147,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         return new KTableImpl<>(aggFunctionName,
                                 keySerde,
                                 valueSerde,
-                                sourceName.equals(this.name) ? subTopologySourceNodes : Collections.singleton(sourceName),
+                                sourceName.equals(this.name) ? subTopologySourceNodes : Set.of(sourceName),
                                 queryableStoreName,
                                 aggregateSupplier,
                                 aggProcessorNode,

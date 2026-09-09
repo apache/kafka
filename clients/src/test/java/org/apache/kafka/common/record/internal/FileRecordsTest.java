@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.File;
@@ -52,13 +53,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -333,12 +334,7 @@ public class FileRecordsTest {
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, Integer.MAX_VALUE);
 
-        try {
-            fileRecords.truncateTo(43);
-            fail("Should throw KafkaException");
-        } catch (KafkaException e) {
-            // expected
-        }
+        assertThrows(KafkaException.class, () -> fileRecords.truncateTo(43));
 
         verify(channelMock, atLeastOnce()).size();
     }
@@ -386,6 +382,26 @@ public class FileRecordsTest {
         assertEquals(0, position);
         assertEquals(0, size);
         assertEquals(0, temp.length());
+    }
+
+    /**
+     * Closing a preallocated file must fsync after trimming so the truncated length is durable.
+     */
+    @Test
+    public void testCloseFlushesAfterTrim() throws IOException {
+        FileChannel channelMock = mock(FileChannel.class);
+
+        when(channelMock.size()).thenReturn(1024L);
+        when(channelMock.isOpen()).thenReturn(true);
+        when(channelMock.truncate(anyLong())).thenReturn(channelMock);
+        when(channelMock.position(anyLong())).thenReturn(channelMock);
+
+        FileRecords records = new FileRecords(tempFile(), channelMock, 100);
+        records.close();
+
+        InOrder inOrder = inOrder(channelMock);
+        inOrder.verify(channelMock).truncate(100L);
+        inOrder.verify(channelMock).force(true);
     }
 
     /**

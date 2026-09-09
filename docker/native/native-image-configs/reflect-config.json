@@ -1081,6 +1081,10 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.metadata.authorizer.StandardAuthorizer",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },

@@ -44,7 +44,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, 
 import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.partition.{AlterPartitionListener, AlterPartitionManager, AssignmentState, CommittedPartitionState, OngoingReassignmentState, PartitionListener, PartitionState, PendingExpandIsr, PendingPartitionChange, PendingShrinkIsr, SimpleAssignmentState}
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, TopicPartitionOperationKey}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedFetch, DelayedOperationPurgatory, DelayedProduce, TopicPartitionOperationKey}
 import org.apache.kafka.server.replica.Replica
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, UnexpectedAppendOffsetException}
@@ -265,6 +265,8 @@ class Partition(val topicPartition: TopicPartition,
   def removeExpiredProducers(currentTimeMs: Long): Unit = log.foreach(_.removeExpiredProducers(currentTimeMs))
 
   def inSyncReplicaIds: Set[Int] = partitionState.isr.asScala.map(_.toInt).toSet
+
+  def isReplicaInSync(replicaId: Int): Boolean = partitionState.isr.contains(replicaId)
 
   def maybeAddListener(listener: PartitionListener): Boolean = {
     inReadLock(leaderIsrUpdateLock, () => {
