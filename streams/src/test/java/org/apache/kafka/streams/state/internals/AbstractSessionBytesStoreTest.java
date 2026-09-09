@@ -52,7 +52,6 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -722,19 +721,16 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>(key2, new SessionWindow(8, 100)), "8");
         sessionStore.put(new Windowed<>(key3, new SessionWindow(9, 100)), "9");
 
-        final List<String> expectedKey1 = asList("1", "4", "7");
         try (KeyValueIterator<Windowed<Bytes>, String> iterator = sessionStore.findSessions(key1, 0L, Long.MAX_VALUE)) {
-            assertEquals(new HashSet<>(expectedKey1), valuesToSet(iterator));
+            assertEquals(Set.of("1", "4", "7"), valuesToSet(iterator));
         }
 
-        final List<String> expectedKey2 = asList("2", "5", "8");
         try (KeyValueIterator<Windowed<Bytes>, String> iterator = sessionStore.findSessions(key2, 0L, Long.MAX_VALUE)) {
-            assertEquals(new HashSet<>(expectedKey2), valuesToSet(iterator));
+            assertEquals(Set.of("2", "5", "8"), valuesToSet(iterator));
         }
 
-        final List<String> expectedKey3 = asList("3", "6", "9");
         try (KeyValueIterator<Windowed<Bytes>, String> iterator = sessionStore.findSessions(key3, 0L, Long.MAX_VALUE)) {
-            assertEquals(new HashSet<>(expectedKey3), valuesToSet(iterator));
+            assertEquals(Set.of("3", "6", "9"), valuesToSet(iterator));
         }
 
         sessionStore.close();
@@ -762,19 +758,16 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>(key3, new SessionWindow(9, 100)), "9");
 
 
-        final List<String> expectedKey1 = asList("7", "4", "1");
         try (KeyValueIterator<Windowed<Bytes>, String> iterator = sessionStore.backwardFindSessions(key1, 0L, Long.MAX_VALUE)) {
-            assertEquals(new HashSet<>(expectedKey1), valuesToSet(iterator));
+            assertEquals(Set.of("7", "4", "1"), valuesToSet(iterator));
         }
 
-        final List<String> expectedKey2 = asList("8", "5", "2");
         try (KeyValueIterator<Windowed<Bytes>, String> iterator = sessionStore.backwardFindSessions(key2, 0L, Long.MAX_VALUE)) {
-            assertEquals(new HashSet<>(expectedKey2), valuesToSet(iterator));
+            assertEquals(Set.of("8", "5", "2"), valuesToSet(iterator));
         }
 
-        final List<String> expectedKey3 = asList("9", "6", "3");
         try (KeyValueIterator<Windowed<Bytes>, String> iterator = sessionStore.backwardFindSessions(key3, 0L, Long.MAX_VALUE)) {
-            assertEquals(new HashSet<>(expectedKey3), valuesToSet(iterator));
+            assertEquals(Set.of("9", "6", "3"), valuesToSet(iterator));
         }
 
         sessionStore.close();
