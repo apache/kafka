@@ -54,16 +54,17 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * Indexes the members' current ownership by task, so that the case analysis can look up what a task's situation is
+     * Indexes the members' current assignment by task, so that the case analysis can look up what a task's situation is
      * without scanning the group again for every task. This is a single pass over the members' task entries.
      *
      * <p>Only stateful tasks are indexed. A stateless task has no state to restore, so it is never staged and never
      * consulted here; it simply flows through from the target assignment.
      *
-     * <p>A task a member has been told to give up is deliberately not indexed at all. Recording that member as the
-     * task's holder would make the case analysis try to keep the task there, undoing a hand-over that is already under
-     * way; and the process it occupies until the revocation completes needs no tracking here either, because the
-     * reconciler already refuses to grant a role for a task the process still holds.
+     * <p>A task a member has been told to give up is deliberately not indexed at all, even though the member may still
+     * be physically running it until the revocation is acknowledged. Recording that member as the task's holder would
+     * make the case analysis try to keep the task there, undoing a hand-over that is already under way; and the
+     * process it occupies until the revocation completes needs no tracking here either, because the reconciler already
+     * refuses to grant a role for a task the process still holds.
      *
      * @param members
      *        All members of the group.
@@ -74,7 +75,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * @param acceptableRecoveryLag
      *        The lag at or below which a replica counts as caught up.
      *
-     * @return The current ownership, indexed by task.
+     * @return The current assignment, indexed by task.
      */
     static CurrentAssignmentIndex indexCurrentAssignment(
         final Map<String, StreamsGroupMember> members,
@@ -121,8 +122,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * That is every member right after a coordinator failover -- the reported offsets are in-memory state that does not
      * survive one -- and a newly joined member until its first report. It is the safe direction: the task is treated as
      * something to protect, so at worst a migration is staged that could have been granted outright, and the next
-     * report corrects it. Reading the absence the other way would strip ownership from a whole group at once after a
-     * failover.
+     * report corrects it. Reading the absence the other way would leave every active task in the group unprotected at
+     * once after a failover.
      */
     private static boolean isRestoring(final MemberTaskOffsets memberTaskOffsets, final TaskId task) {
         return offsetOf(memberTaskOffsets.taskOffsets(), task) != null;
@@ -136,7 +137,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * target owner is somebody else, and there is a warming improvement left to achieve. Everything else completes
      * right away, which needs no patch at all -- the target assignment already places the task on its target owner, and
      * the previous owner's slice already omits it. That is why the two outcomes are so lopsided: staging is the
-     * exception, and the result is proportional to how far the current ownership has diverged from the target rather
+     * exception, and the result is proportional to how far the current assignment has diverged from the target rather
      * than to the group's size.
      *
      * <p>Note it takes <em>processing</em>, not merely holding the active task. A member that has been granted an
@@ -146,7 +147,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * better-placed of two candidates is a placement decision, and placement is the assignor's job.
      *
      * @param currentAssignment
-     *        The indexed current ownership, from {@link #indexCurrentAssignment}.
+     *        The indexed current assignment, from {@link #indexCurrentAssignment}.
      * @param targetAssignment
      *        All members' target assignments, as computed by the task assignor.
      * @param members
@@ -412,7 +413,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * The members' current ownership, indexed by task. Only stateful tasks appear.
+     * The members' current assignment, indexed by task. Only stateful tasks appear.
      *
      * @param activeHolder
      *        The member holding each task as an active task. A task that only sits in some member's pending revocation

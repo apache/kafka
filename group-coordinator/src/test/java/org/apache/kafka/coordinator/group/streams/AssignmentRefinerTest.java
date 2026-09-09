@@ -293,8 +293,9 @@ public class AssignmentRefinerTest {
 
     @Test
     public void shouldNotIndexAnActiveHolderForATaskThatIsPendingRevocation() {
-        // The member was told to give the task up, so it is not ownership to preserve. The process it still occupies
-        // needs no tracking either: the reconciler blocks a colliding placement until the revocation lands.
+        // The member was told to give the task up, so it is not part of the current assignment to preserve, even
+        // though it may still be running physically. The process it still occupies needs no tracking either: the
+        // reconciler blocks a colliding placement until the revocation lands.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member(
                 "memberA",
