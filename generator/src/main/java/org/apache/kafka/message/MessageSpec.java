@@ -71,10 +71,6 @@ public final class MessageSpec {
             this.flexibleVersions = Versions.NONE;
             this.listeners = List.of();
             this.latestVersionUnstable = false;
-            if (headerVersions != null) {
-                throw new RuntimeException("The `headerVersions` property must not be specified for message " +
-                    name + ", which has no valid versions.");
-            }
             this.headerVersions = Optional.empty();
         } else {
             if (flexibleVersions == null) {

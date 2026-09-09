@@ -220,10 +220,11 @@ public class HeaderVersionsTest {
     }
 
     @Test
-    public void testPropertyWithNoValidVersions() {
-        assertMessageContains("no valid versions",
-            () -> parse("{'apiKey': 0, 'type': 'request', 'name': 'FooRequest', 'validVersions': 'none', " +
-                "'headerVersions': {'0+': '1'}}"));
+    public void testPropertyIgnoredWithNoValidVersions() throws Exception {
+        // Like flexibleVersions, the property is ignored for a message with no valid versions.
+        MessageSpec spec = parse("{'apiKey': 0, 'type': 'request', 'name': 'FooRequest', " +
+            "'validVersions': 'none', 'headerVersions': {'0+': '1'}}");
+        assertTrue(spec.headerVersions().isEmpty());
     }
 
     @Test
