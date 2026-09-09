@@ -366,7 +366,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 buffer.printf("// See KIP-511 for details.%n");
             }
             if (headerVersions.isPresent()) {
-                generateHeaderVersionFromMap(headerVersions.get());
+                generateHeaderVersionFromMap(headerVersions.get(), spec.validVersions());
             } else if (type.equals("response") && apiKey == 18) {
                 buffer.printf("return (short) 0;%n");
             } else {
@@ -401,8 +401,15 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateHeaderVersionFromMap(HeaderVersions headerVersions) {
-        List<HeaderVersions.Entry> entries = headerVersions.entries();
+    private void generateHeaderVersionFromMap(HeaderVersions headerVersions, Versions validVersions) {
+        // The map covers every version the schema describes; only the valid ones need code.
+        List<HeaderVersions.Entry> entries = new ArrayList<>();
+        for (HeaderVersions.Entry entry : headerVersions.entries()) {
+            Versions range = entry.range().intersect(validVersions);
+            if (!range.empty()) {
+                entries.add(new HeaderVersions.Entry(range, entry.headerVersion()));
+            }
+        }
         if (entries.size() == 1) {
             buffer.printf("return (short) %d;%n", entries.get(0).headerVersion());
         } else {

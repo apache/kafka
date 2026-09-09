@@ -242,4 +242,29 @@ public class MessageGeneratorTest {
             "}\n"), source);
     }
 
+    @Test
+    public void testHeaderVersionRetiredVersionsGetNoBranch() throws Exception {
+        // v0 is described by the map but is no longer valid, so it gets no code, matching what the
+        // flexibleVersions-derived path emitted.
+        String source = generateApiMessageTypeSource(
+            spec(4, "request", "QuuxRequest", "1-2", "1+", "{'0': '1', '1+': '2'}"),
+            spec(4, "response", "QuuxResponse", "1-2", "1+", "{'0': '0', '1+': '1'}"));
+        assertTrue(source.contains("case 4: // Quux\nreturn (short) 2;\n"), source);
+        assertTrue(source.contains("case 4: // Quux\nreturn (short) 1;\n"), source);
+    }
+
+    @Test
+    public void testHeaderVersionRetiredVersionsKeepBranchInsideValidRange() throws Exception {
+        String source = generateApiMessageTypeSource(
+            spec(5, "request", "CorgeRequest", "3-9", "9+", "{'0-8': '1', '9+': '2'}"),
+            spec(5, "response", "CorgeResponse", "3-9", "9+", "{'0-8': '0', '9+': '1'}"));
+        assertTrue(source.contains(
+            "case 5: // Corge\n" +
+            "if (_version >= 9) {\n" +
+            "return (short) 2;\n" +
+            "} else {\n" +
+            "return (short) 1;\n" +
+            "}\n"), source);
+    }
+
 }
