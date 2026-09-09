@@ -137,7 +137,6 @@ class StreamsSmokeTest(BaseStreamsTest):
         processor = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, 'at_least_once', 'streams')
         processor.set_version(str(LATEST_4_3))
 
-        broker_node = self.kafka.nodes[0]
         broker_log = "%s/server.log" % KafkaService.OPERATIONAL_LOG_INFO_DIR
 
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
@@ -160,8 +159,13 @@ class StreamsSmokeTest(BaseStreamsTest):
 
         self.driver.node.account.ssh("grep SUCCESS %s" % self.driver.STDOUT_FILE, allow_fail=False)
 
-        solicited = broker_node.account.ssh_capture(
-            "grep -c 'Requested topology description push at topology epoch' %s || true" % broker_log,
-            allow_fail=False)
-        assert int(next(solicited).strip()) == 0, \
-            "Broker solicited a topology description push for a pre-KIP-1331 streams client"
+        # BaseStreamsTest runs 3 brokers and the group coordinator for this group can land on
+        # any of them, so every broker's log needs to be checked, not just one.
+        solicited = 0
+        for broker_node in self.kafka.nodes:
+            count = broker_node.account.ssh_capture(
+                "grep -c 'Requested topology description push at topology epoch' %s || true" % broker_log,
+                allow_fail=False)
+            solicited += int(next(count).strip())
+        assert solicited == 0, \
+            "A broker solicited a topology description push for a pre-KIP-1331 streams client"
