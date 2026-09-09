@@ -448,6 +448,7 @@ public class GlobalStreamThread extends Thread {
                 );
 
                 closeStateConsumer(stateConsumer, true);
+                stateConsumer = null;
 
                 throw new StreamsException(
                     "Bootstrapping global state failed. You can restart KafkaStreams to recover from this error.",

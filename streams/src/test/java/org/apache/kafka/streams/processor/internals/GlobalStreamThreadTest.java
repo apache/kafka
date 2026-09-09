@@ -278,6 +278,8 @@ public class GlobalStreamThreadTest {
     public void shouldDieOnInvalidOffsetExceptionDuringStartup() throws Exception {
         final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
         initializeConsumer();
+        // raise the end offset so that restoration polls during initialization and hits the exception there
+        mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 1L));
         mockConsumer.setPollException(new InvalidOffsetException("Try Again!") {
             @Override
             public Set<TopicPartition> partitions() {
@@ -285,15 +287,23 @@ public class GlobalStreamThreadTest {
             }
         });
 
-        startAndSwallowError();
+        try {
+            final StreamsException e = assertThrows(StreamsException.class,
+                () -> globalStreamThread.start(),
+                "Should have thrown StreamsException if start up failed.");
+            assertThat(e.getCause(), instanceOf(InvalidOffsetException.class));
 
-        TestUtils.waitForCondition(
-            () -> globalStreamThread.state() == DEAD,
-            10 * 1000,
-            "GlobalStreamThread should have died."
-        );
-        globalStreamThread.join();
+            TestUtils.waitForCondition(
+                () -> globalStreamThread.state() == DEAD,
+                10 * 1000,
+                "GlobalStreamThread should have died."
+            );
+        } finally {
+            globalStreamThread.shutdown();
+            globalStreamThread.join(10 * 1000);
+        }
 
+        assertFalse(globalStreamThread.isAlive());
         assertThat(globalStore.isOpen(), is(false));
         assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
     }
@@ -355,6 +365,84 @@ public class GlobalStreamThreadTest {
 
         globalStreamThread.join();
 
+        assertFalse(globalStateDir.exists());
+    }
+
+    @Test
+    public void shouldWipeGlobalStateDirectoryOnTaskCorruptedExceptionWithAlreadyRegisteredStore() throws Exception {
+        final String corruptedStoreTopic = "corrupted-topic";
+        final String corruptedStoreName = "corrupted-store";
+
+        final ProcessorSupplier<Object, Object, Void, Void> processorSupplier = () ->
+            new ContextualProcessor<>() {
+                @Override
+                public void process(final Record<Object, Object> record) {
+                }
+            };
+
+        // name() is stubbed because two global stores must be distinguishable by name
+        final StateStore corruptedStore = mock(StateStore.class);
+        when(corruptedStore.name()).thenReturn(corruptedStoreName);
+        doThrow(new TaskCorruptedException(Set.of(new TaskId(-1, -1)))).when(corruptedStore).init(any(), any());
+
+        @SuppressWarnings("unchecked")
+        final StoreBuilder<StateStore> corruptedStoreBuilder = mock(StoreBuilder.class);
+        when(corruptedStoreBuilder.name()).thenReturn(corruptedStoreName);
+        when(corruptedStoreBuilder.build()).thenReturn(corruptedStore);
+
+        // the healthy store added in before() is registered first, then this store fails to initialize
+        builder.addGlobalStore(
+            "corruptedSourceName",
+            null,
+            null,
+            null,
+            corruptedStoreTopic,
+            "corruptedProcessorName",
+            new StoreDelegatingProcessorSupplier<>(processorSupplier, Set.of(corruptedStoreBuilder)),
+            false
+        );
+
+        globalStreamThread = new GlobalStreamThread(
+            builder.rewriteTopology(config).buildGlobalStateTopology(),
+            config,
+            mockConsumer,
+            new StateDirectory(config, time, true, false),
+            0,
+            -1L,
+            new StreamsMetricsImpl(new Metrics(), "test-client", time),
+            time,
+            "clientId",
+            stateRestoreListener,
+            e -> { }
+        );
+
+        final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
+        final File globalStateDir = new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global");
+
+        initializeConsumer();
+        mockConsumer.updatePartitions(
+            corruptedStoreTopic,
+            Collections.singletonList(new PartitionInfo(corruptedStoreTopic, 0, null, new Node[0], new Node[0]))
+        );
+
+        try {
+            final StreamsException e = assertThrows(StreamsException.class,
+                () -> globalStreamThread.start(),
+                "Should have thrown StreamsException if start up failed.");
+            assertThat(e.getCause(), instanceOf(TaskCorruptedException.class));
+
+            TestUtils.waitForCondition(
+                () -> globalStreamThread.state() == DEAD,
+                10 * 1000,
+                "GlobalStreamThread should have died."
+            );
+        } finally {
+            globalStreamThread.shutdown();
+            globalStreamThread.join(10 * 1000);
+        }
+
+        assertFalse(globalStreamThread.isAlive());
+        assertThat(globalStore.isOpen(), is(false));
         assertFalse(globalStateDir.exists());
     }
 
