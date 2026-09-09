@@ -1941,7 +1941,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReadCommittedOffsetAndRethrowTimeoutWhenCompleteRestoration() {
-        when(stateManager.hasRegisteredStores()).thenReturn(true);
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         // Clean up state directory created as part of setup
@@ -2062,7 +2061,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCloseStateManagerEvenDuringFailureOnUncleanTaskClose() {
-        when(stateManager.hasRegisteredStores()).thenReturn(true);
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createFaultyStatefulTask(createConfig("100"));
@@ -2343,7 +2341,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowExceptionOnCloseCleanError() {
-        when(stateManager.hasRegisteredStores()).thenReturn(true);
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 543L;
@@ -2436,7 +2433,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotThrowFromStateManagerCloseInCloseDirty() {
-        when(stateManager.hasRegisteredStores()).thenReturn(true);
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         doThrow(new RuntimeException("KABOOM!")).when(stateManager).close();
