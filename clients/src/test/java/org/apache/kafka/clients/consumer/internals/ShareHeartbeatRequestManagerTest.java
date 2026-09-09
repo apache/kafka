@@ -164,7 +164,7 @@ public class ShareHeartbeatRequestManagerTest
     @Test
     public void testMaximumTimeToWaitWhenHeartbeatShouldBeSkippedDoesNotSpin() {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
-        when(membershipManager.state()).thenReturn(MemberState.FATAL);
+        when(membershipManager.state()).thenReturn(MemberState.FENCED);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         when(heartbeatRequestState.timeToNextHeartbeatMs(anyLong())).thenReturn(0L);
 
@@ -172,7 +172,38 @@ public class ShareHeartbeatRequestManagerTest
 
         assertTrue(result > 0,
             "maximumTimeToWait must be > 0 while heartbeats are skipped to avoid a busy-spin; got " + result);
-        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
+    }
+
+    @Test
+    public void testMaximumTimeToWaitWhenFatalReturnsMaxValue() {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+        when(membershipManager.state()).thenReturn(MemberState.FATAL);
+
+        assertEquals(Long.MAX_VALUE, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()),
+            "maximumTimeToWait should return Long.MAX_VALUE in the terminal FATAL state");
+    }
+
+    /**
+     * While bootstrap DNS resolution is still in progress the coordinator is unknown,
+     * and a member that wants to join has a zero heartbeat interval, since the interval is only
+     * learned from the first heartbeat response. maximumTimeToWait() must wait a retry backoff
+     * rather than the (zero) heartbeat interval; returning 0 busy-spins the application and
+     * network threads.
+     */
+    @Test
+    public void testMaximumTimeToWaitWhenJoiningAndCoordinatorUnknownDoesNotSpin() {
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 while the member is joining and the coordinator is unknown " +
+                "to avoid a busy-spin; got " + result);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
     }
 
     @Test
