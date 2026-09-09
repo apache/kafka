@@ -88,9 +88,6 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_SUSPENDED;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -450,7 +447,7 @@ public class StoreChangelogReaderTest {
             changelogReader.register(tp, stateManager);
             changelogReader.restore(mockTasks);
 
-            assertThat(callback.restoreStartOffset, equalTo(0L));
+            assertEquals(0L, callback.restoreStartOffset);
         }
     }
 
@@ -1461,11 +1458,8 @@ public class StoreChangelogReaderTest {
             appender.setClassLogger(StoreChangelogReader.class, Level.DEBUG);
             changelogReader.unregister(Collections.singletonList(new TopicPartition("unknown", 0)));
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("test-reader Changelog partition unknown-0 could not be found," +
-                    " it could be already cleaned up during the handling of task corruption and never restore again")
-            );
+            assertTrue(appender.getMessages().contains("test-reader Changelog partition unknown-0 could not be found," +
+                " it could be already cleaned up during the handling of task corruption and never restore again"));
         }
     }
 
