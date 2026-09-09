@@ -29,8 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -168,7 +167,7 @@ public class ClientMetricsTest {
         );
 
         final Sensor sensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
-        assertThat(sensor, is(expectedSensor));
+        assertEquals(expectedSensor, sensor);
     }
 
     private <K> void setUpAndVerifyMutableMetric(final String name,
