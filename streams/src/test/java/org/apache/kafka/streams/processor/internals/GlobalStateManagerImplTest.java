@@ -71,16 +71,11 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -211,7 +206,7 @@ public class GlobalStateManagerImplTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(LegacyCheckpointingStateStore.class)) {
             stateManager.commit();
-            assertThat(appender.getMessages(), hasItem(containsString(
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains(
                 "Failed to write offset checkpoint file to [" + storeCheckpointFile.getPath() + "]. " +
                 "This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory. " +
                 "This may also occur due to running multiple instances on the same machine using the same state dir. " +
@@ -246,12 +241,9 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
 
-        try {
-            stateManager.registerStore(new NoOpReadOnlyStore<>("not-in-topology"), stateRestoreCallback, null);
-            fail("should have raised an illegal argument exception as store is not in the topology");
-        } catch (final IllegalArgumentException e) {
-            // pass
-        }
+        assertThrows(IllegalArgumentException.class,
+            () -> stateManager.registerStore(new NoOpReadOnlyStore<>("not-in-topology"), stateRestoreCallback, null),
+            "should have raised an illegal argument exception as store is not in the topology");
     }
 
     @Test
@@ -260,23 +252,16 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         initializeConsumer(2, 0, t1);
         stateManager.registerStore(store1, stateRestoreCallback, null);
-        try {
-            stateManager.registerStore(store1, stateRestoreCallback, null);
-            fail("should have raised an illegal argument exception as store has already been registered");
-        } catch (final IllegalArgumentException e) {
-            // pass
-        }
+        assertThrows(IllegalArgumentException.class, () -> stateManager.registerStore(store1, stateRestoreCallback, null),
+            "should have raised an illegal argument exception as store has already been registered");
     }
 
     @Test
     public void shouldThrowStreamsExceptionIfNoPartitionsFoundForStore() {
-        try {
+        assertThrows(StreamsException.class, () -> {
             stateManager.initialize();
             stateManager.registerStore(store1, stateRestoreCallback, null);
-            fail("Should have raised a StreamsException as there are no partition for the store");
-        } catch (final StreamsException e) {
-            // pass
-        }
+        }, "Should have raised a StreamsException as there are no partition for the store");
     }
 
     @Test
@@ -353,10 +338,10 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
 
-        assertThat(stateRestoreListener.numBatchRestored, equalTo(2L));
-        assertThat(stateRestoreListener.restoreStartOffset, equalTo(1L));
-        assertThat(stateRestoreListener.restoreEndOffset, equalTo(7L));
-        assertThat(stateRestoreListener.totalNumRestored, equalTo(6L));
+        assertEquals(2L, stateRestoreListener.numBatchRestored);
+        assertEquals(1L, stateRestoreListener.restoreStartOffset);
+        assertEquals(7L, stateRestoreListener.restoreEndOffset);
+        assertEquals(6L, stateRestoreListener.totalNumRestored);
     }
 
     @Test
@@ -368,15 +353,15 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
 
-        assertThat(stateRestoreListener.numBatchRestored, equalTo(2L));
-        assertThat(stateRestoreListener.restoreStartOffset, equalTo(1L));
-        assertThat(stateRestoreListener.restoreEndOffset, equalTo(7L));
-        assertThat(stateRestoreListener.totalNumRestored, equalTo(6L));
+        assertEquals(2L, stateRestoreListener.numBatchRestored);
+        assertEquals(1L, stateRestoreListener.restoreStartOffset);
+        assertEquals(7L, stateRestoreListener.restoreEndOffset);
+        assertEquals(6L, stateRestoreListener.totalNumRestored);
 
 
-        assertThat(stateRestoreListener.storeNameCalledStates.get(RESTORE_START), equalTo(store1.name()));
-        assertThat(stateRestoreListener.storeNameCalledStates.get(RESTORE_BATCH), equalTo(store1.name()));
-        assertThat(stateRestoreListener.storeNameCalledStates.get(RESTORE_END), equalTo(store1.name()));
+        assertEquals(store1.name(), stateRestoreListener.storeNameCalledStates.get(RESTORE_START));
+        assertEquals(store1.name(), stateRestoreListener.storeNameCalledStates.get(RESTORE_BATCH));
+        assertEquals(store1.name(), stateRestoreListener.storeNameCalledStates.get(RESTORE_END));
     }
 
     @Test
@@ -486,12 +471,8 @@ public class GlobalStateManagerImplTest {
     public void shouldThrowIllegalArgumentExceptionIfCallbackIsNull() {
         initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
-        try {
-            stateManager.registerStore(store1, null, null);
-            fail("should have thrown due to null callback");
-        } catch (final IllegalArgumentException e) {
-            //pass
-        }
+        assertThrows(IllegalArgumentException.class, () -> stateManager.registerStore(store1, null, null),
+            "should have thrown due to null callback");
     }
 
     @Test
@@ -550,14 +531,17 @@ public class GlobalStateManagerImplTest {
         stateManager.updateChangelogOffsets(offsets);
         stateManager.commit();
 
-        assertThat(readOffsetsCheckpoint(storeName1), equalTo(offsets));
-        assertThat(stateManager.changelogOffsets(), equalTo(mkMap(
-                mkEntry(t1, 25_000L),
-                mkEntry(t2, 0L),
-                mkEntry(t3, 0L),
-                mkEntry(t4, 0L),
-                mkEntry(t5, 0L)
-        )));
+        assertEquals(offsets, readOffsetsCheckpoint(storeName1));
+        assertEquals(
+            Map.of(
+                t1, 25_000L,
+                t2, 0L,
+                t3, 0L,
+                t4, 0L,
+                t5, 0L
+            ),
+            stateManager.changelogOffsets()
+        );
     }
 
     @Test
@@ -574,8 +558,8 @@ public class GlobalStateManagerImplTest {
         stateManager.commit();
 
         final Map<TopicPartition, Long> updatedCheckpoint = stateManager.changelogOffsets();
-        assertThat(updatedCheckpoint.get(t2), equalTo(initialCheckpoint.get(t2)));
-        assertThat(updatedCheckpoint.get(t1), equalTo(101L));
+        assertEquals(initialCheckpoint.get(t2), updatedCheckpoint.get(t2));
+        assertEquals(101L, updatedCheckpoint.get(t1));
     }
 
     @Test
@@ -597,7 +581,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         final KeyValue<byte[], byte[]> restoredKv = stateRestoreCallback.restored.get(0);
-        assertThat(stateRestoreCallback.restored, equalTo(Collections.singletonList(KeyValue.pair(restoredKv.key, restoredKv.value))));
+        assertEquals(List.of(KeyValue.pair(restoredKv.key, restoredKv.value)), stateRestoreCallback.restored);
     }
 
     @Test
@@ -613,16 +597,19 @@ public class GlobalStateManagerImplTest {
 
         final Map<TopicPartition, Long> checkpointMap = stateManager.changelogOffsets();
         // changelogOffsets() returns offsets for *all* stores
-        assertThat(checkpointMap, equalTo(mkMap(
-                mkEntry(t1, 10L),
-                mkEntry(t2, 0L),
-                mkEntry(t3, 0L),
-                mkEntry(t4, 0L),
-                mkEntry(t5, 0L)
-        )));
+        assertEquals(
+            Map.of(
+                t1, 10L,
+                t2, 0L,
+                t3, 0L,
+                t4, 0L,
+                t5, 0L
+            ),
+            checkpointMap
+        );
 
-        assertThat(readOffsetsCheckpoint(storeName1), equalTo(mkMap(mkEntry(t1, 10L))));
-        assertThat(readOffsetsCheckpoint(storeName2), equalTo(mkMap(mkEntry(t2, 0L))));
+        assertEquals(Map.of(t1, 10L), readOffsetsCheckpoint(storeName1));
+        assertEquals(Map.of(t2, 0L), readOffsetsCheckpoint(storeName2));
     }
 
     @Test
@@ -632,7 +619,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         stateManager.close();
 
-        assertThat(readOffsetsCheckpoint(storeName3), equalTo(Collections.emptyMap()));
+        assertTrue(readOffsetsCheckpoint(storeName3).isEmpty());
     }
 
     private Map<TopicPartition, Long> readOffsetsCheckpoint(final String storeName) throws IOException {
@@ -677,8 +664,8 @@ public class GlobalStateManagerImplTest {
             () -> stateManager.initialize()
         );
         final Throwable cause = expected.getCause();
-        assertThat(cause, instanceOf(TimeoutException.class));
-        assertThat(cause.getMessage(), equalTo("KABOOM!"));
+        assertInstanceOf(TimeoutException.class, cause);
+        assertEquals("KABOOM!", cause.getMessage());
 
         assertEquals(1, numberOfCalls.get());
     }
@@ -719,7 +706,7 @@ public class GlobalStateManagerImplTest {
             TimeoutException.class,
             () -> stateManager.initialize()
         );
-        assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 100 ms. Adjust `task.timeout.ms` if needed."));
+        assertEquals("Global task did not make progress to restore state within 100 ms. Adjust `task.timeout.ms` if needed.", expected.getMessage());
 
         assertEquals(2, numberOfCalls.get());
     }
@@ -760,7 +747,7 @@ public class GlobalStateManagerImplTest {
             TimeoutException.class,
             () -> stateManager.initialize()
         );
-        assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 1000 ms. Adjust `task.timeout.ms` if needed."));
+        assertEquals("Global task did not make progress to restore state within 1000 ms. Adjust `task.timeout.ms` if needed.", expected.getMessage());
 
         assertEquals(11, numberOfCalls.get());
     }
@@ -843,8 +830,8 @@ public class GlobalStateManagerImplTest {
             () -> stateManager.initialize()
         );
         final Throwable cause = expected.getCause();
-        assertThat(cause, instanceOf(TimeoutException.class));
-        assertThat(cause.getMessage(), equalTo("KABOOM!"));
+        assertInstanceOf(TimeoutException.class, cause);
+        assertEquals("KABOOM!", cause.getMessage());
 
         assertEquals(1, numberOfCalls.get());
     }
@@ -885,7 +872,7 @@ public class GlobalStateManagerImplTest {
             TimeoutException.class,
             () -> stateManager.initialize()
         );
-        assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 100 ms. Adjust `task.timeout.ms` if needed."));
+        assertEquals("Global task did not make progress to restore state within 100 ms. Adjust `task.timeout.ms` if needed.", expected.getMessage());
 
         assertEquals(2, numberOfCalls.get());
     }
@@ -926,7 +913,7 @@ public class GlobalStateManagerImplTest {
             TimeoutException.class,
             () -> stateManager.initialize()
         );
-        assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 1000 ms. Adjust `task.timeout.ms` if needed."));
+        assertEquals("Global task did not make progress to restore state within 1000 ms. Adjust `task.timeout.ms` if needed.", expected.getMessage());
 
         assertEquals(11, numberOfCalls.get());
     }
@@ -1009,8 +996,8 @@ public class GlobalStateManagerImplTest {
             () -> stateManager.initialize()
         );
         final Throwable cause = expected.getCause();
-        assertThat(cause, instanceOf(TimeoutException.class));
-        assertThat(cause.getMessage(), equalTo("KABOOM!"));
+        assertInstanceOf(TimeoutException.class, cause);
+        assertEquals("KABOOM!", cause.getMessage());
 
         assertEquals(1, numberOfCalls.get());
     }
@@ -1051,7 +1038,7 @@ public class GlobalStateManagerImplTest {
             TimeoutException.class,
             () -> stateManager.initialize()
         );
-        assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 100 ms. Adjust `task.timeout.ms` if needed."));
+        assertEquals("Global task did not make progress to restore state within 100 ms. Adjust `task.timeout.ms` if needed.", expected.getMessage());
 
         assertEquals(2, numberOfCalls.get());
     }
@@ -1092,7 +1079,7 @@ public class GlobalStateManagerImplTest {
             TimeoutException.class,
             () -> stateManager.initialize()
         );
-        assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 1000 ms. Adjust `task.timeout.ms` if needed."));
+        assertEquals("Global task did not make progress to restore state within 1000 ms. Adjust `task.timeout.ms` if needed.", expected.getMessage());
 
         assertEquals(11, numberOfCalls.get());
     }
@@ -1178,11 +1165,8 @@ public class GlobalStateManagerImplTest {
             TimeoutException.class,
             () -> stateManager.initialize()
         );
-        assertThat(
-            exception.getMessage(),
-            equalTo("Global task did not make progress to restore state within 301000 ms. Adjust `task.timeout.ms` if needed.")
-        );
-        assertThat(time.milliseconds() - startTime, equalTo(331_100L));
+        assertEquals("Global task did not make progress to restore state within 301000 ms. Adjust `task.timeout.ms` if needed.", exception.getMessage());
+        assertEquals(331_100L, time.milliseconds() - startTime);
     }
 
     @SuppressWarnings("unchecked")
