@@ -21,6 +21,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -133,5 +135,68 @@ public class HeartbeatRequestStateTest {
 
         assertFalse(heartbeatRequestState.canSendRequest(time.milliseconds()));
         assertTrue(heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()) > 0);
+    }
+
+    /**
+     * retry.backoff.ms and retry.backoff.max.ms both accept 0. The in-flight wait is used as a poll
+     * timeout, so it must stay positive even then.
+     */
+    @Test
+    public void testTimeToNextHeartbeatMsWhileRequestInFlightWithZeroRetryBackoffDoesNotSpin() {
+        final HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
+            LOG_CONTEXT,
+            time,
+            0,
+            0,
+            0,
+            JITTER
+        );
+
+        heartbeatRequestState.onSendAttempt(time.milliseconds());
+        heartbeatRequestState.resetTimer();
+        time.sleep(1);
+
+        final long timeToNextHeartbeatMs = heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds());
+        assertTrue(timeToNextHeartbeatMs > 0,
+            "timeToNextHeartbeatMs must be > 0 while a heartbeat request is in flight even with a zero retry backoff; got "
+                + timeToNextHeartbeatMs);
+        // The 1 ms floor applied when the configured backoff is 0.
+        assertEquals(1L, timeToNextHeartbeatMs);
+    }
+
+    /**
+     * A heartbeat request is in flight and the heartbeat timer is expired. That happens both before the
+     * first heartbeat response, when the interval is still unknown and initialised to 0, and later on,
+     * when a response takes longer than the interval. No heartbeat can be sent until the in-flight one
+     * completes, so the wait must stay positive; returning the remaining backoff gives 0 and busy-spins
+     * the callers that use it as a poll timeout.
+     */
+    @ParameterizedTest
+    @ValueSource(longs = {0, 5000})
+    public void testTimeToNextHeartbeatMsWhileRequestInFlightDoesNotSpin(final long heartbeatIntervalMs) {
+        final HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
+            LOG_CONTEXT,
+            time,
+            heartbeatIntervalMs,
+            RETRY_BACKOFF_MS,
+            RETRY_BACKOFF_MAX_MS,
+            JITTER
+        );
+        if (heartbeatIntervalMs > 0) {
+            // A non-zero interval is only known after a heartbeat response, which also arms the backoff.
+            heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
+        }
+
+        heartbeatRequestState.onSendAttempt(time.milliseconds());
+        heartbeatRequestState.resetTimer();
+        time.sleep(heartbeatIntervalMs + 1);
+
+        assertFalse(heartbeatRequestState.canSendRequest(time.milliseconds()),
+            "No request should be sendable while one is in flight");
+        final long timeToNextHeartbeatMs = heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds());
+        assertTrue(timeToNextHeartbeatMs > 0,
+            "timeToNextHeartbeatMs must be > 0 while a heartbeat request is in flight to avoid a busy-spin; got "
+                + timeToNextHeartbeatMs);
+        assertEquals(RETRY_BACKOFF_MS, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
     }
 }

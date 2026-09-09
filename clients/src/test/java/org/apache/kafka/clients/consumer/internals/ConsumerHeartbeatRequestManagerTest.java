@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
@@ -25,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.Loc
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager.HeartbeatState;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
@@ -32,6 +37,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -42,10 +48,12 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.Builder;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.test.MockSelector;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -147,10 +155,14 @@ public class ConsumerHeartbeatRequestManagerTest
     }
 
     private void createHeartbeatRequestStateWithZeroHeartbeatInterval() {
+        createHeartbeatRequestStateWithHeartbeatInterval(0);
+    }
+
+    private void createHeartbeatRequestStateWithHeartbeatInterval(final long heartbeatIntervalMs) {
         this.heartbeatRequestState = spy(new HeartbeatRequestState(
                 logContext,
                 time,
-                0,
+                heartbeatIntervalMs,
                 DEFAULT_RETRY_BACKOFF_MS,
                 DEFAULT_RETRY_BACKOFF_MAX_MS,
                 DEFAULT_HEARTBEAT_JITTER_MS));
@@ -324,6 +336,348 @@ public class ConsumerHeartbeatRequestManagerTest
         assertTrue(result > 0,
             "maximumTimeToWait must be > 0 when the coordinator is unavailable to avoid a busy-spin; got " + result);
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result);
+    }
+
+    /**
+     * A heartbeat request is in flight and the heartbeat timer is already expired. That happens both
+     * while the very first heartbeat is in flight, when the interval is still unknown (it is initialised
+     * to 0 and only learned from the first heartbeat response), and later on, when a response takes
+     * longer than the interval. In that window no heartbeat can be sent until the in-flight one
+     * completes, so both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
+     * {@link AbstractHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay;
+     * returning 0 busy-spins the consumer network thread and the application thread until the in-flight
+     * request completes, which can be as long as request.timeout.ms when the coordinator is unreachable.
+     */
+    @ParameterizedTest
+    @ValueSource(longs = {0, 5000})
+    public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin(final long heartbeatIntervalMs) {
+        createHeartbeatRequestStateWithHeartbeatInterval(heartbeatIntervalMs);
+        // The member keeps joining for both intervals, so the heartbeat below is sent without waiting for
+        // the interval and the total simulated time stays under max.poll.interval.ms.
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        if (heartbeatIntervalMs > 0) {
+            // A non-zero interval is only known after a heartbeat response, which also arms the backoff.
+            heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
+        }
+
+        NetworkClientDelegate.PollResult firstResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, firstResult.unsentRequests.size(),
+            "A heartbeat should be sent as soon as the coordinator is known");
+
+        // Deliberately do not complete the request, so it stays in flight while the heartbeat timer expires.
+        time.sleep(heartbeatIntervalMs + 1);
+
+        NetworkClientDelegate.PollResult secondResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, secondResult.unsentRequests.size(),
+            "No heartbeat should be sent while another one is in flight");
+        assertTrue(secondResult.timeUntilNextPollMs > 0,
+            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy-spin; got "
+                + secondResult.timeUntilNextPollMs);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, secondResult.timeUntilNextPollMs);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy-spin; got " + result);
+        // maximumTimeToWait is min(pollTimer.remainingMs() / 2, retry backoff), and half of the remaining
+        // max.poll.interval.ms is still larger than the backoff at this point.
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
+    }
+
+    /**
+     * The "response slower than the interval" way of reaching the same window, driven end to end through the
+     * manager instead of by priming the request state directly. The member joins, learns its heartbeat interval
+     * from a real successful heartbeat response, becomes STABLE, and then sends its steady-state heartbeat when
+     * the interval elapses. That response never arrives, so the heartbeat timer expires again while the request
+     * is still in flight. This complements
+     * {@link #testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin(long)}, which constructs the request state
+     * with a known interval, by proving that the interval learned through
+     * {@code onResponse -> updateHeartbeatIntervalMs} lands the manager in exactly the same state: no heartbeat
+     * can be sent, and both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
+     * {@link AbstractHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay rather than
+     * busy-spinning the application and network threads.
+     */
+    @Test
+    public void testMaximumTimeToWaitWhenResponseIsSlowerThanIntervalDoesNotSpin() {
+        // The interval is unknown until the first heartbeat response, exactly as on a freshly created consumer.
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+
+        NetworkClientDelegate.PollResult joinResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, joinResult.unsentRequests.size(),
+            "A heartbeat should be sent as soon as the coordinator is known");
+
+        // A real successful response teaches the manager the interval and clears the in-flight flag.
+        joinResult.unsentRequests.get(0).handler().onComplete(
+            createHeartbeatResponse(joinResult.unsentRequests.get(0), Errors.NONE, DEFAULT_HEARTBEAT_INTERVAL_MS));
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestState.heartbeatIntervalMs(),
+            "The heartbeat interval should have been learned from the heartbeat response");
+
+        // The membership manager is a mock, so onHeartbeatSuccess does not move it; stub the joined member state.
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(false);
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+
+        // The interval elapses, so the steady-state heartbeat is sent. Deliberately leave it in flight.
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult heartbeatResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, heartbeatResult.unsentRequests.size(),
+            "A heartbeat should be sent once the heartbeat interval has expired");
+
+        // The response is slower than the interval, so the heartbeat timer expires again while it is in flight.
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS + 1);
+
+        NetworkClientDelegate.PollResult inFlightResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, inFlightResult.unsentRequests.size(),
+            "No heartbeat should be sent while another one is in flight");
+        assertTrue(inFlightResult.timeUntilNextPollMs > 0,
+            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy-spin; got "
+                + inFlightResult.timeUntilNextPollMs);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, inFlightResult.timeUntilNextPollMs);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy-spin; got " + result);
+        // maximumTimeToWait is min(pollTimer.remainingMs() / 2, retry backoff), and half of the remaining
+        // max.poll.interval.ms is still larger than the backoff at this point.
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
+    }
+
+    /**
+     * The same busy-spin, driven through a real {@link NetworkClient} on a {@link MockSelector} and a real
+     * {@link NetworkClientDelegate}, so that the heartbeat really is in flight rather than only marked as such.
+     * Both ways of reaching the "heartbeat timer expired while a request is in flight" window are covered:
+     * an interval of 0, which is the very first heartbeat (the interval is initialised to 0 and only learned
+     * from the first heartbeat response), and a known interval of 5000 ms whose response never arrives, so the
+     * timer expires while the request is still on the wire.
+     *
+     * <p>The loop mirrors {@link ConsumerNetworkThread#runOnce()}: the network client is polled for
+     * {@code min(MAX_POLL_TIMEOUT_MS, result.timeUntilNextPollMs)} and {@link MockSelector#poll(long)} advances
+     * {@link MockTime} by exactly that timeout. The manager's own return value therefore drives the clock, which
+     * turns "does it busy-spin?" into a count of iterations: with the fix every in-flight iteration advances the
+     * clock by the retry backoff, so a bounded number of iterations covers the whole request timeout. Without it
+     * the manager returns 0 and the clock stops moving, which is caught twice over: by the per-iteration assertion
+     * on the wait itself, and, should that ever be relaxed, by the iteration cap and the in-flight iteration count.
+     *
+     * <p>The heartbeat is never answered, so it is finally failed by the request timeout. The last phase asserts
+     * that the manager recovers from that: the failure clears the in-flight flag and the member, which is still
+     * JOINING, sends a second heartbeat.
+     */
+    @ParameterizedTest
+    @ValueSource(longs = {0, 5000})
+    public void testMaximumTimeToWaitDoesNotSpinWhileHeartbeatInFlightOnRealNetworkClient(final long heartbeatIntervalMs) throws Exception {
+        // The request must outlive the heartbeat timer, otherwise the "timer expired while a request is in flight"
+        // window would never exist for the non-zero interval. Keeping it just above the interval also keeps the
+        // simulated run short (it is all MockTime, so there is no wall-clock cost) and, more importantly, well
+        // below max.poll.interval.ms, so the poll timer never expires and turns the heartbeat into a leave request.
+        long requestTimeoutMs = heartbeatIntervalMs + 1000;
+
+        ConsumerConfig config = new ConsumerConfig(Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.GROUP_ID_CONFIG, DEFAULT_GROUP_ID,
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092",
+            ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS),
+            ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs),
+            ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS),
+            ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MAX_MS)
+        ));
+
+        ConsumerMetadata consumerMetadata = new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners());
+        // Seed the metadata so that the client neither bootstraps nor sends a metadata request of its own,
+        // which would make the heartbeat impossible to single out among the in-flight requests.
+        consumerMetadata.updateWithCurrentRequestVersion(
+            RequestTestUtils.metadataUpdateWith(1, Map.of()), false, time.milliseconds());
+        Node coordinator = consumerMetadata.fetch().nodes().get(0);
+
+        MockSelector selector = new MockSelector(time);
+        NetworkClient networkClient = new NetworkClient(selector, consumerMetadata, "test-client",
+            Integer.MAX_VALUE, 50, 1000, 64 * 1024, 64 * 1024, (int) requestTimeoutMs, 1000, 5000,
+            time, false, new ApiVersions(), logContext,
+            MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false);
+
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinator));
+        createHeartbeatRequestStateWithHeartbeatInterval(heartbeatIntervalMs);
+        if (heartbeatIntervalMs > 0) {
+            // A non-zero interval is only known after a heartbeat response, which also arms the backoff.
+            heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
+        }
+        // The member keeps joining for both intervals, so the heartbeat below is sent without waiting for the
+        // interval and the total simulated time stays under max.poll.interval.ms. A real HeartbeatState is
+        // needed so the request can be serialized.
+        mockJoiningMemberData(null);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        ConsumerHeartbeatRequestManager realHeartbeatRequestManager = createHeartbeatRequestManager(
+            coordinatorRequestManager,
+            membershipManager,
+            new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS),
+            heartbeatRequestState,
+            backgroundEventHandler);
+
+        try (NetworkClientDelegate networkClientDelegate = new NetworkClientDelegate(time, config, logContext, networkClient,
+                consumerMetadata, mock(BackgroundEventHandler.class), false, mock(AsyncConsumerMetrics.class))
+        ) {
+            // The request timeout is measured from the moment the request is enqueued on the delegate, which is
+            // also the moment the heartbeat timer is re-armed, so both deadlines are anchored on createdAtMs.
+            long createdAtMs = -1L;
+            long deadlineMs = Long.MAX_VALUE;
+            long sentAtMs = -1L;
+            long timedOutAtMs = -1L;
+            long resentAtMs = -1L;
+            boolean requestInFlightAtTimeout = true;
+            boolean assertedWhileInFlight = false;
+            int heartbeatsSent = 0;
+            int previousCompletedSends = 0;
+            int iterations = 0;
+            int inFlightIterations = 0;
+            int preSendIterations = 0;
+            long lastTimeUntilNextPollMs = -1L;
+            // One iteration per retry backoff covers the request timeout plus the tail; the spare 100 covers the
+            // connection handshake and the 1 ms steps taken while the client waits out its reconnect backoff
+            // after the timeout. Hitting this cap means the clock stopped moving, i.e. the manager kept asking to
+            // be polled again immediately.
+            int maxIterations = (int) ((requestTimeoutMs + 500) / DEFAULT_RETRY_BACKOFF_MS) + 100;
+
+            while (time.milliseconds() < deadlineMs) {
+                assertClockKeepsMoving(++iterations, maxIterations, deadlineMs, time.milliseconds(), lastTimeUntilNextPollMs);
+
+                long pollStartMs = time.milliseconds();
+                boolean inFlight = networkClient.hasInFlightRequests();
+                NetworkClientDelegate.PollResult result = realHeartbeatRequestManager.poll(pollStartMs);
+                lastTimeUntilNextPollMs = result.timeUntilNextPollMs;
+                if (createdAtMs < 0 && result.unsentRequests.size() == 1) {
+                    // The heartbeat has just been built, which is where HeartbeatRequestState re-arms its timer
+                    // and where NetworkClientDelegate starts counting request.timeout.ms.
+                    createdAtMs = pollStartMs;
+                    deadlineMs = createdAtMs + requestTimeoutMs + 500;
+                }
+
+                if (inFlight && timedOutAtMs < 0) {
+                    // The first heartbeat is on the wire and has not been failed yet: this is the window the fix
+                    // is about. Once it has timed out the manager starts a fresh heartbeat cycle, whose timer is
+                    // re-armed with the interval again, so the assertions below no longer apply.
+                    inFlightIterations++;
+                    assertedWhileInFlight |= assertHeartbeatInFlightWaitDoesNotSpin(
+                        realHeartbeatRequestManager, result, pollStartMs, pollStartMs >= createdAtMs + heartbeatIntervalMs);
+                } else if (sentAtMs < 0) {
+                    // Before the heartbeat is on the wire the manager legitimately returns 0, asking to be polled
+                    // again so that the request it just built can be sent. Those iterations say nothing about the
+                    // busy-spin, so they are counted and bounded separately instead of feeding inFlightIterations.
+                    preSendIterations++;
+                }
+
+                networkClientDelegate.addAll(result);
+                // ConsumerNetworkThread.runOnce polls for min(MAX_POLL_TIMEOUT_MS, timeUntilNextPollMs), and
+                // MockSelector.poll advances MockTime by exactly that timeout, so the manager's own answer drives
+                // the clock: a zero wait freezes it, which is precisely the busy-spin this test is about. The
+                // floor of 1 ms is only applied when nothing is in flight, where a zero wait is legitimate (the
+                // manager is asking to be re-polled so the request it just built can be sent, and after the
+                // timeout while the client sits in its reconnect backoff); it keeps those phases moving without
+                // hiding a spin in the in-flight window.
+                networkClientDelegate.poll(networkPollTimeoutMs(inFlight, result.timeUntilNextPollMs), pollStartMs);
+
+                // MockSelector.close(nodeId), which NetworkClient calls when it times a request out, drops that
+                // node's entries from completedSends(), so the sends have to be accumulated as they happen.
+                int completedSends = selector.completedSends().size();
+                heartbeatsSent += Math.max(0, completedSends - previousCompletedSends);
+                previousCompletedSends = completedSends;
+
+                if (sentAtMs < 0 && heartbeatsSent == 1) {
+                    sentAtMs = pollStartMs;
+                } else if (sentAtMs >= 0 && timedOutAtMs < 0 && !networkClient.hasInFlightRequests()) {
+                    timedOutAtMs = time.milliseconds();
+                    requestInFlightAtTimeout = heartbeatRequestState.requestInFlight();
+                } else if (heartbeatsSent >= 2) {
+                    // The resend that was being waited for has happened; stop before the reconnect storm that
+                    // follows a disconnect can put further heartbeats on the wire.
+                    resentAtMs = time.milliseconds();
+                    deadlineMs = resentAtMs;
+                }
+            }
+
+            assertTrue(assertedWhileInFlight, "The heartbeat was never in flight with an expired timer, so nothing was verified");
+            assertTrue(preSendIterations <= 3,
+                "The manager should only ask to be re-polled a couple of times before the heartbeat is on the wire; got "
+                    + preSendIterations);
+            // One poll per retry backoff is the expected, non-spinning rate while the heartbeat is in flight.
+            long maxInFlightIterations = requestTimeoutMs / DEFAULT_RETRY_BACKOFF_MS + 2;
+            assertTrue(inFlightIterations <= maxInFlightIterations,
+                "Expected about one poll per retry backoff while the heartbeat is in flight (at most "
+                    + maxInFlightIterations + "), got " + inFlightIterations);
+
+            String timeoutMessage = "The in-flight heartbeat should be failed by the request timeout, not earlier or much "
+                + "later; timed out " + (timedOutAtMs - createdAtMs) + " ms after the request was built, request.timeout.ms="
+                + requestTimeoutMs;
+            assertTrue(timedOutAtMs >= createdAtMs + requestTimeoutMs, timeoutMessage);
+            assertTrue(timedOutAtMs < createdAtMs + requestTimeoutMs + 100, timeoutMessage);
+            assertFalse(requestInFlightAtTimeout, "The request timeout should have cleared the in-flight heartbeat");
+            // The failure resets the heartbeat timer and clears the in-flight flag, so the still JOINING member
+            // sends the next heartbeat as soon as the coordinator is reachable again. coordinatorRequestManager is
+            // a mock, so handleCoordinatorDisconnect is a no-op and coordinator() keeps returning the same node;
+            // the resend therefore only has to wait for the network client's reconnect backoff.
+            assertEquals(2, heartbeatsSent,
+                "A second heartbeat should have been sent after the first one timed out, within "
+                    + (requestTimeoutMs + 500) + " ms of the first one; resent at " + (resentAtMs - createdAtMs));
+        }
+    }
+
+    /**
+     * Fails once the loop has run more iterations than the clock could possibly need, which is what a manager that
+     * asks to be polled again immediately looks like when {@link MockSelector} drives {@link MockTime}.
+     */
+    private static void assertClockKeepsMoving(final int iterations,
+                                               final int maxIterations,
+                                               final long deadlineMs,
+                                               final long currentTimeMs,
+                                               final long lastTimeUntilNextPollMs) {
+        if (iterations <= maxIterations) {
+            return;
+        }
+        throw new AssertionError("The network thread would have spun: " + iterations
+            + " iterations without the clock reaching " + deadlineMs + " (now " + currentTimeMs
+            + "); last timeUntilNextPollMs=" + lastTimeUntilNextPollMs);
+    }
+
+    /**
+     * The poll timeout {@link ConsumerNetworkThread#runOnce()} would use, floored at 1 ms while nothing is in
+     * flight. {@link MockSelector#poll(long)} advances {@link MockTime} by exactly the timeout, so a zero wait
+     * freezes the clock; that is the busy-spin under test while a heartbeat is in flight, but it is expected
+     * before the request is on the wire and while the client waits out its reconnect backoff after a timeout.
+     */
+    private static long networkPollTimeoutMs(final boolean inFlight, final long timeUntilNextPollMs) {
+        long pollTimeoutMs = Math.min(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, timeUntilNextPollMs);
+        return inFlight ? pollTimeoutMs : Math.max(1, pollTimeoutMs);
+    }
+
+    /**
+     * Asserts the wait the manager asks for while a heartbeat is in flight. Once the heartbeat timer is expired
+     * nothing can be sent until the in-flight request completes, so the wait must be exactly the retry backoff;
+     * before that it is the timer's remaining time, which only has to be positive.
+     *
+     * @return true if the expired-timer case was asserted
+     */
+    private boolean assertHeartbeatInFlightWaitDoesNotSpin(final ConsumerHeartbeatRequestManager manager,
+                                                           final NetworkClientDelegate.PollResult result,
+                                                           final long pollStartMs,
+                                                           final boolean heartbeatTimerExpired) {
+        assertTrue(result.timeUntilNextPollMs > 0,
+            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy-spin; got "
+                + result.timeUntilNextPollMs);
+        if (!heartbeatTimerExpired) {
+            // Only reachable with a non-zero interval: the request is in flight but the timer has not expired yet,
+            // so the wait is the timer's remaining time rather than the backoff.
+            return false;
+        }
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result.timeUntilNextPollMs);
+
+        long waitMs = manager.maximumTimeToWait(pollStartMs);
+        assertTrue(waitMs > 0,
+            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy-spin; got " + waitMs);
+        // maximumTimeToWait is min(pollTimer.remainingMs() / 2, retry backoff), and half of the remaining
+        // max.poll.interval.ms is still larger than the backoff at this point.
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, waitMs);
+        return true;
     }
 
     @Test

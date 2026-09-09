@@ -29,6 +29,13 @@ import org.apache.kafka.common.utils.internals.LogContext;
 public class HeartbeatRequestState extends RequestState {
 
     /**
+     * Lower bound for the wait returned while a heartbeat is in flight. retry.backoff.ms and
+     * retry.backoff.max.ms both accept 0, and callers use this value as a poll timeout, so it must
+     * never be 0.
+     */
+    private static final long MIN_IN_FLIGHT_WAIT_MS = 1L;
+
+    /**
      * The heartbeat timer tracks the time since the last heartbeat was sent
      */
     private final Timer heartbeatTimer;
@@ -66,6 +73,17 @@ public class HeartbeatRequestState extends RequestState {
 
     public long timeToNextHeartbeatMs(final long currentTimeMs) {
         if (heartbeatTimer.isExpired()) {
+            if (requestInFlight()) {
+                // The timer can be expired while a request is in flight both for the first heartbeat (the
+                // interval is initialised to 0 and only learned from the first response) and for any later
+                // heartbeat whose response takes longer than the interval. No heartbeat can be sent until
+                // the in-flight one completes. The remaining backoff is measured from the last response and,
+                // with default settings, is already 0 here, which would busy-spin both the application and
+                // network threads. Wait the initial retry backoff (floored at 1 ms) instead of waiting forever: the network thread still has to notice a request timeout promptly
+                // (NetworkClient only checks timed-out requests after selector.poll returns, and
+                // ConsumerNetworkThread caps the poll at 5s), so it must come back and re-check.
+                return Math.max(MIN_IN_FLIGHT_WAIT_MS, exponentialBackoff.initialInterval());
+            }
             return remainingBackoffMs(currentTimeMs);
         }
         return heartbeatTimer.remainingMs();
