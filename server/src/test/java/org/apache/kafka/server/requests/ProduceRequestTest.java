@@ -82,13 +82,13 @@ public class ProduceRequestTest {
         sendAndCheckProduceResponse(leaderId, partition,
             MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord(System.currentTimeMillis(), "key".getBytes(), "value".getBytes())),
-            0L);
+            0L, Errors.NONE);
 
         sendAndCheckProduceResponse(leaderId, partition,
             MemoryRecords.withRecords(Compression.gzip().build(),
                 new SimpleRecord(System.currentTimeMillis(), "key1".getBytes(), "value1".getBytes()),
                 new SimpleRecord(System.currentTimeMillis(), "key2".getBytes(), "value2".getBytes())),
-            1L);
+            1L, Errors.NONE);
     }
 
     @ClusterTest
@@ -224,6 +224,44 @@ public class ProduceRequestTest {
         assertEquals(-1L, partitionResponse.logAppendTimeMs());
     }
 
+    @ClusterTest
+    public void testIdempotentProduceWithNonZeroFirstSequenceOnNewPartition() throws Exception {
+        // KAFKA-15591: A producer with no state on a partition which has never contained any records
+        // must start at sequence 0. A non-zero first sequence means the requests were reordered
+        // (such as an earlier in-flight request failing with NOT_LEADER_OR_FOLLOWER while the partition
+        // creation was completing, and then being retried), and accepting the non-zero first sequence
+        // would permanently prevent the retried first request from being appended to the log.
+        cluster.createTopic(TOPIC, 1, (short) 1);
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+
+        long producerId = 1000L;
+        short producerEpoch = 0;
+
+        // The later in-flight request (sequences 17-18) arrives first and is rejected.
+        sendAndCheckProduceResponse(leaderId, 0,
+            idempotentRecords(producerId, producerEpoch, 17, 2),
+            -1L, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER);
+
+        // The retry of the earlier request (sequences 0-16) is accepted.
+        sendAndCheckProduceResponse(leaderId, 0,
+            idempotentRecords(producerId, producerEpoch, 0, 17),
+            0L, Errors.NONE);
+
+        // The retry of the later request is then accepted in order.
+        sendAndCheckProduceResponse(leaderId, 0,
+            idempotentRecords(producerId, producerEpoch, 17, 2),
+            17L, Errors.NONE);
+    }
+
+    private MemoryRecords idempotentRecords(long producerId, short producerEpoch, int baseSequence, int recordCount) {
+        SimpleRecord[] records = new SimpleRecord[recordCount];
+        for (int i = 0; i < recordCount; i++) {
+            records[i] = new SimpleRecord(System.currentTimeMillis(), ("key" + (baseSequence + i)).getBytes(),
+                ("value" + (baseSequence + i)).getBytes());
+        }
+        return MemoryRecords.withIdempotentRecords(Compression.NONE, producerId, producerEpoch, baseSequence, records);
+    }
+
     private ProduceResponse sendProduceRequest(int brokerId, ProduceRequest request) throws IOException {
         KafkaBroker broker = cluster.brokers().get(brokerId);
         int port = broker.socketServer().boundPort(cluster.clientListener());
@@ -231,7 +269,7 @@ public class ProduceRequestTest {
     }
 
     private void sendAndCheckProduceResponse(int leaderId, int partition,
-                                             MemoryRecords records, long expectedOffset) throws IOException, ExecutionException, InterruptedException {
+                                             MemoryRecords records, long expectedOffset, Errors expectedError) throws IOException, ExecutionException, InterruptedException {
         Uuid topicId = getTopicId();
         ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
@@ -254,7 +292,7 @@ public class ProduceRequestTest {
         var partitionResponse = topicResponse.partitionResponses().get(0);
         assertEquals(topicId, topicResponse.topicId());
         assertEquals(partition, partitionResponse.index());
-        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(expectedError, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(expectedOffset, partitionResponse.baseOffset());
         assertEquals(-1L, partitionResponse.logAppendTimeMs());
         assertTrue(partitionResponse.recordErrors().isEmpty());
