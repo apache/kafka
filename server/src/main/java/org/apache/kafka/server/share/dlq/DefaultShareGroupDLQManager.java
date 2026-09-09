@@ -72,7 +72,7 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
     @Override
     public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
         try {
-            validate(param);
+            ShareGroupDLQValidator.validateParam(param);
             return stateManager.dlq(param);
         } catch (Exception e) {
             log.error("Unable to enqueue DLQ request", e);
@@ -87,9 +87,5 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         } catch (Exception e) {
             log.error("Unable to stop DLQ state manager", e);
         }
-    }
-
-    private static void validate(ShareGroupDLQRecordParameter param) {
-        ShareGroupDLQValidator.validateParam(param);
     }
 }

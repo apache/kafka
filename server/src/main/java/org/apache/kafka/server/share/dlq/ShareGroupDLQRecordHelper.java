@@ -42,7 +42,9 @@ import java.util.function.Function;
 /**
  * Helper for DLQ record building and source-record fetching.
  */
-public class ShareGroupDLQRecordHelper {
+public final class ShareGroupDLQRecordHelper {
+
+    private ShareGroupDLQRecordHelper() {}
 
     /**
      * In most cases we expect the records getting DLQ'ed will be single offsets and
@@ -114,7 +116,7 @@ public class ShareGroupDLQRecordHelper {
      * @param topicNameResolver Resolver that maps topic ID to name
      * @return The resolved topic name
      */
-    public static String resolveSourceTopicName(TopicIdPartition topicIdPartition, java.util.function.Function<Uuid, Optional<String>> topicNameResolver) {
+    public static String resolveSourceTopicName(TopicIdPartition topicIdPartition, Function<Uuid, Optional<String>> topicNameResolver) {
         String recordTopicName = topicIdPartition.topic();
         if (recordTopicName == null || recordTopicName.isEmpty()) {
             // If topic name lookup fails, use topic id as a String in the header.
