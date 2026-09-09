@@ -27,7 +27,6 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 
-import org.hamcrest.core.IsInstanceOf;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,10 +35,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -88,7 +86,7 @@ public class GlobalProcessorContextImplTest {
     @Test
     public void shouldReturnGlobalOrNullStore() {
         when(stateManager.globalStore(GLOBAL_STORE_NAME)).thenReturn(mock(StateStore.class));
-        assertThat(globalContext.getStateStore(GLOBAL_STORE_NAME), new IsInstanceOf(StateStore.class));
+        assertInstanceOf(StateStore.class, globalContext.getStateStore(GLOBAL_STORE_NAME));
         assertNull(globalContext.getStateStore(UNKNOWN_STORE));
     }
 
@@ -120,100 +118,70 @@ public class GlobalProcessorContextImplTest {
     public void shouldNotAllowInitForKeyValueStore() {
         when(stateManager.globalStore(GLOBAL_KEY_VALUE_STORE_NAME)).thenReturn(mock(KeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_KEY_VALUE_STORE_NAME);
-        try {
-            store.init(null, null);
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, () -> store.init(null, null), "Should have thrown UnsupportedOperationException.");
     }
 
     @Test
     public void shouldNotAllowInitForTimestampedKeyValueStore() {
         when(stateManager.globalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).thenReturn(mock(TimestampedKeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME);
-        try {
-            store.init(null, null);
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, () -> store.init(null, null), "Should have thrown UnsupportedOperationException.");
     }
 
     @Test
     public void shouldNotAllowInitForWindowStore() {
         when(stateManager.globalStore(GLOBAL_WINDOW_STORE_NAME)).thenReturn(mock(WindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_WINDOW_STORE_NAME);
-        try {
-            store.init(null, null);
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, () -> store.init(null, null), "Should have thrown UnsupportedOperationException.");
     }
 
     @Test
     public void shouldNotAllowInitForTimestampedWindowStore() {
         when(stateManager.globalStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).thenReturn(mock(TimestampedWindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME);
-        try {
-            store.init(null, null);
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, () -> store.init(null, null), "Should have thrown UnsupportedOperationException.");
     }
 
     @Test
     public void shouldNotAllowInitForSessionStore() {
         when(stateManager.globalStore(GLOBAL_SESSION_STORE_NAME)).thenReturn(mock(SessionStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_SESSION_STORE_NAME);
-        try {
-            store.init(null, null);
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, () -> store.init(null, null), "Should have thrown UnsupportedOperationException.");
     }
 
     @Test
     public void shouldNotAllowCloseForKeyValueStore() {
         when(stateManager.globalStore(GLOBAL_KEY_VALUE_STORE_NAME)).thenReturn(mock(KeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_KEY_VALUE_STORE_NAME);
-        try {
-            store.close();
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, store::close, "Should have thrown UnsupportedOperationException.");
     }
 
     @Test
     public void shouldNotAllowCloseForTimestampedKeyValueStore() {
         when(stateManager.globalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).thenReturn(mock(TimestampedKeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME);
-        try {
-            store.close();
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, store::close, "Should have thrown UnsupportedOperationException.");
     }
 
     @Test
     public void shouldNotAllowCloseForWindowStore() {
         when(stateManager.globalStore(GLOBAL_WINDOW_STORE_NAME)).thenReturn(mock(WindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_WINDOW_STORE_NAME);
-        try {
-            store.close();
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, store::close, "Should have thrown UnsupportedOperationException.");
     }
 
     @Test
     public void shouldNotAllowCloseForTimestampedWindowStore() {
         when(stateManager.globalStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).thenReturn(mock(TimestampedWindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME);
-        try {
-            store.close();
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, store::close, "Should have thrown UnsupportedOperationException.");
     }
 
     @Test
     public void shouldNotAllowCloseForSessionStore() {
         when(stateManager.globalStore(GLOBAL_SESSION_STORE_NAME)).thenReturn(mock(SessionStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_SESSION_STORE_NAME);
-        try {
-            store.close();
-            fail("Should have thrown UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) { }
+        assertThrows(UnsupportedOperationException.class, store::close, "Should have thrown UnsupportedOperationException.");
     }
 
     @Test

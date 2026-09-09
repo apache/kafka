@@ -550,6 +550,63 @@ public class UnifiedLogTest {
     }
 
     @Test
+    public void shouldDeleteLocalLogSegmentsWithFutureTimestampBasedOnLastModifiedTime() throws IOException {
+        long futureTimestamp = mockTime.milliseconds() + 60_000;
+        Supplier<MemoryRecords> futureRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), futureTimestamp);
+        int recordSize = futureRecords.get().sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(recordSize * 2)
+                .localRetentionMs(5000)
+                .cleanupPolicy("")
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        for (int i = 0; i < 10; i++) {
+            log.appendAsLeader(futureRecords.get(), 0);
+        }
+
+        // Age the segments' lastModified time past the local retention so they become eligible for deletion,
+        // even though their record timestamps are in the future.
+        for (LogSegment segment : log.logSegments()) {
+            segment.setLastModified(mockTime.milliseconds() - 20000);
+        }
+
+        int segmentsBefore = log.numberOfSegments();
+        log.updateHighWatermark(log.logEndOffset());
+        log.updateHighestOffsetInRemoteStorage(log.logEndOffset() - 1);
+        int deletedSegments = log.deleteOldSegments();
+
+        assertTrue(log.numberOfSegments() < segmentsBefore, "Segments with future timestamps should be deleted based on lastModified time");
+        assertTrue(deletedSegments > 0, "At least one segment should be deleted");
+    }
+
+    @Test
+    public void shouldNotDeleteLocalLogSegmentsWithFutureTimestampWhenLastModifiedWithinRetention() throws IOException {
+        long futureTimestamp = mockTime.milliseconds() + 60_000;
+        Supplier<MemoryRecords> futureRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), futureTimestamp);
+        int recordSize = futureRecords.get().sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(recordSize * 2)
+                .localRetentionMs(5000)
+                .cleanupPolicy("")
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        for (int i = 0; i < 10; i++) {
+            log.appendAsLeader(futureRecords.get(), 0);
+        }
+
+        int segmentsBefore = log.numberOfSegments();
+        log.updateHighWatermark(log.logEndOffset());
+        log.updateHighestOffsetInRemoteStorage(log.logEndOffset() - 1);
+
+        assertEquals(0, log.deleteOldSegments(), "Segments should be retained when lastModified time is within local retention");
+        assertEquals(segmentsBefore, log.numberOfSegments());
+    }
+
+    @Test
     public void testLogDeletionAfterDeleteRecords() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
@@ -1307,6 +1364,63 @@ public class UnifiedLogTest {
                 List.of(new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())),
                 pid, epoch, 2, 0L);
         assertThrows(OutOfOrderSequenceException.class, () -> log.appendAsLeader(nextRecords, 0));
+    }
+
+    @Test
+    public void testRejectOutOfOrderFirstRequestOnNewlyCreatedLog() throws IOException {
+        // KAFKA-15591: A producer with multiple in-flight produce requests on a newly created partition sends
+        // request A (sequences 0-3) and request B (sequences 4-5). Because topic creation occurs asynchronously,
+        // request A can fail with NOT_LEADER_OR_FOLLOWER briefly because the broker has not yet completed
+        // the topic creation, so request B is the first to reach the log. If B were accepted, every retry of A
+        // would fail with OUT_OF_ORDER_SEQUENCE_NUMBER until it expires, losing its records.
+        UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
+        long pid = 1L;
+        short epoch = 0;
+
+        MemoryRecords requestB = LogTestUtils.records(
+            List.of(new SimpleRecord("a".getBytes(), "b".getBytes()),
+                    new SimpleRecord("a".getBytes(), "b".getBytes())),
+            pid, epoch, 4, 0L);
+        assertThrows(OutOfOrderSequenceException.class, () -> log.appendAsLeader(requestB, 0));
+
+        MemoryRecords requestA = LogTestUtils.records(
+            List.of(new SimpleRecord("a".getBytes(), "b".getBytes()),
+                    new SimpleRecord("a".getBytes(), "b".getBytes()),
+                    new SimpleRecord("a".getBytes(), "b".getBytes()),
+                    new SimpleRecord("a".getBytes(), "b".getBytes())),
+            pid, epoch, 0, 0L);
+        log.appendAsLeader(requestA, 0);
+
+        log.appendAsLeader(requestB, 0);
+        assertEquals(6L, log.logEndOffset());
+    }
+
+    @Test
+    public void testNonZeroFirstSequenceAcceptedAfterProducerStateExpiration() throws IOException {
+        // KAFKA-15591: Once records exist in the log, a producer with no state may start at a non-zero sequence.
+        // Its state may have legitimately been lost, such as through producer expiration.
+        int producerIdExpirationCheckIntervalMs = 100;
+        int producerIdExpirationMs = 200;
+        ProducerStateManagerConfig customPSMConfig = new ProducerStateManagerConfig(producerIdExpirationMs, false);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
+        UnifiedLog log = createLog(logDir, logConfig, 0L, 0L, brokerTopicStats,
+            mockTime.scheduler, mockTime, customPSMConfig, true, Optional.empty(), false,
+            producerIdExpirationCheckIntervalMs);
+        long pid = 1L;
+        short epoch = 0;
+
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes())),
+            pid, epoch, 0, 0L), 0);
+        assertEquals(Set.of(pid), log.activeProducersWithLastSequence().keySet());
+
+        mockTime.sleep(producerIdExpirationMs);
+        assertEquals(Set.of(), log.activeProducersWithLastSequence().keySet());
+
+        // The producer continues from sequence 1 with no state, which is accepted because the log is not empty
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes())),
+            pid, epoch, 1, 0L), 0);
+        assertEquals(2L, log.logEndOffset());
     }
 
     @Test
@@ -5403,8 +5517,7 @@ public class UnifiedLogTest {
 
         long producerId = 23L;
         short producerEpoch = 1;
-        // For TV1, can start with non-zero sequences even with non-zero epoch when no existing producer state
-        int sequence = appendOrigin == AppendOrigin.CLIENT ? 3 : 0;
+        int sequence = 0;
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
         UnifiedLog log = createLog(logDir, logConfig, psmConfig);
         assertFalse(log.hasOngoingTransaction(producerId, producerEpoch));
@@ -5572,6 +5685,10 @@ public class UnifiedLogTest {
         UnifiedLog log = createLog(logDir, logConfig, psmConfig);
         assertFalse(log.hasOngoingTransaction(producerId, producerEpoch));
         assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId));
+
+        // Seed the log so that it is non-empty. Producer state can only have been lost on a partition which
+        // has had records at some point, and a non-zero first sequence is rejected on an empty log (KAFKA-15591).
+        log.appendAsLeader(singletonRecords("seed".getBytes()), 0);
 
         MemoryRecords transactionalRecords = MemoryRecords.withTransactionalRecords(
                 Compression.NONE, producerId, producerEpoch, sequence,

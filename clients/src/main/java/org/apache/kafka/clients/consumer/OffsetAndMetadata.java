@@ -27,6 +27,18 @@ import java.util.Optional;
  * The Kafka offset commit API allows users to provide additional metadata (in the form of a string)
  * when an offset is committed. This can be useful (for example) to store information about which
  * node made the commit, what time the commit was made, etc.
+ * <p>
+ * Besides the offset and the metadata string, this class carries the <i>leader epoch</i> of the consumed
+ * record, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
+ * {@link ConsumerRecords#nextOffsets()}. The consumer uses the committed leader epoch to validate that
+ * the committed offset still exists in the partition when resuming from it, and to correct the position
+ * if the log was truncated after a partition leader change. If an offset is committed without a leader
+ * epoch, this validation is skipped: should the committed offset no longer exist, the consumer resuming
+ * from it fails with an {@code OFFSET_OUT_OF_RANGE} error and falls back to the
+ * {@code auto.offset.reset} policy, which may cause duplicate processing (reset to earliest) or data
+ * loss (reset to latest). For this reason, prefer
+ * {@link #OffsetAndMetadata(long, Optional, String)} and include the leader epoch of the consumed
+ * record whenever it is available.
  */
 @InterfaceAudience.Public
 public class OffsetAndMetadata implements Serializable {
@@ -42,6 +54,10 @@ public class OffsetAndMetadata implements Serializable {
 
     /**
      * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}.
+     * This is the preferred constructor for manually committed offsets: including the leader epoch of the
+     * consumed record enables the consumer to validate the committed offset when resuming from it
+     * (see the class-level documentation), e.g.
+     * {@code new OffsetAndMetadata(record.offset() + 1, record.leaderEpoch(), "")}.
      *
      * @param offset The offset to be committed
      * @param leaderEpoch Optional leader epoch of the last consumed record
@@ -61,6 +77,14 @@ public class OffsetAndMetadata implements Serializable {
 
     /**
      * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}.
+     * <p>
+     * Note that the leader epoch of the committed offset will be empty, which disables offset validation
+     * when the consumer resumes from it: if the offset no longer exists in the partition (e.g. due to log
+     * truncation after a partition leader change), the consumer resets the position according to the
+     * {@code auto.offset.reset} policy rather than correcting it. Prefer
+     * {@link #OffsetAndMetadata(long, Optional, String)} and include the leader epoch of the consumed
+     * record whenever it is available.
+     *
      * @param offset The offset to be committed
      * @param metadata Non-null metadata
      */
@@ -71,6 +95,14 @@ public class OffsetAndMetadata implements Serializable {
     /**
      * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}. The metadata
      * associated with the commit will be empty.
+     * <p>
+     * Note that the leader epoch of the committed offset will be empty, which disables offset validation
+     * when the consumer resumes from it: if the offset no longer exists in the partition (e.g. due to log
+     * truncation after a partition leader change), the consumer resets the position according to the
+     * {@code auto.offset.reset} policy rather than correcting it. Prefer
+     * {@link #OffsetAndMetadata(long, Optional, String)} and include the leader epoch of the consumed
+     * record whenever it is available.
+     *
      * @param offset The offset to be committed
      */
     public OffsetAndMetadata(long offset) {

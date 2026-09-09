@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.transaction;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
@@ -89,6 +88,7 @@ public class TransactionLog {
         if (logValueVersion >= 1) {
             value.setPreviousProducerId(txnMetadata.prevProducerId());
             value.setNextProducerId(txnMetadata.nextProducerId());
+            value.setLastProducerEpoch(txnMetadata.lastProducerEpoch());
         }
 
         return MessageUtil.toVersionPrefixedBytes(logValueVersion, value);
@@ -149,7 +149,7 @@ public class TransactionLog {
                     value.previousProducerId(),
                     value.nextProducerId(),
                     value.producerEpoch(),
-                    RecordBatch.NO_PRODUCER_EPOCH,
+                    value.lastProducerEpoch(),
                     value.transactionTimeoutMs(),
                     state,
                     tps,

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.internal.CompressionType;
@@ -33,7 +34,13 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
+import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +49,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1231,6 +1239,78 @@ public class GroupCoordinatorConfigTest {
         StreamsGroupTopologyDescriptionPlugin second =
             config.streamsGroupTopologyDescriptionPlugin(Map.of());
         assertNotSame(first, second);
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerDefaultsToNoOp() {
+        GroupCoordinatorConfig config = createConfig(new HashMap<>());
+        assertInstanceOf(NoOpAssignmentRefiner.class, config.streamsGroupAssignmentRefiner());
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerLoadedAndConfigured() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG,
+            TestAssignmentRefiner.class.getName());
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        AssignmentRefiner refiner = config.streamsGroupAssignmentRefiner();
+        assertInstanceOf(TestAssignmentRefiner.class, refiner);
+        // A refiner is handed the broker configuration, so a test implementation can be steered through broker
+        // properties rather than static state.
+        assertEquals(TestAssignmentRefiner.class.getName(),
+            ((TestAssignmentRefiner) refiner).configs.get(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG));
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerReturnsFreshInstancePerCall() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG,
+            TestAssignmentRefiner.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        // Every coordinator shard asks for its own refiner, so they must not share one instance.
+        assertNotSame(config.streamsGroupAssignmentRefiner(), config.streamsGroupAssignmentRefiner());
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerRejectsUnknownClassAtStartup() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG, "not.a.Class");
+        // The class is resolved while the configuration is parsed, so a typo fails the broker rather than the
+        // coordinator shard that first tries to use it.
+        assertThrows(ConfigException.class, () -> createConfig(configs));
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerRejectsClassOfWrongType() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        assertThrows(KafkaException.class, config::streamsGroupAssignmentRefiner);
+    }
+
+    public static class TestAssignmentRefiner implements AssignmentRefiner, Configurable {
+        public Map<String, ?> configs;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+        }
+
+        @Override
+        public Map<String, TasksTuple> refine(
+            Map<String, StreamsGroupMember> members,
+            Map<String, TasksTuple> targetAssignment,
+            Map<String, MemberTaskOffsets> taskOffsets,
+            SortedMap<String, ConfiguredSubtopology> subtopologies,
+            int numWarmupReplicas,
+            long acceptableRecoveryLag
+        ) {
+            return targetAssignment;
+        }
     }
 
     public static class TestTopologyDescriptionPlugin implements StreamsGroupTopologyDescriptionPlugin {

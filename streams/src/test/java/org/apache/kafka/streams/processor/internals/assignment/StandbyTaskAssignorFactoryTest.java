@@ -25,10 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Collections;
 import java.util.List;
 
-import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -67,7 +65,7 @@ public class StandbyTaskAssignorFactoryTest {
     @EnumSource(State.class)
     public void shouldReturnClientTagAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsSet(final State state) {
         setUp(state, false);
-        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(singletonList("az")), rackAwareTaskAssignor);
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(List.of("az")), rackAwareTaskAssignor);
         assertInstanceOf(ClientTagAwareStandbyTaskAssignor.class, standbyTaskAssignor);
         if (state != State.NULL) {
             verify(rackAwareTaskAssignor, never()).racksForProcess();
@@ -79,7 +77,7 @@ public class StandbyTaskAssignorFactoryTest {
     @EnumSource(State.class)
     public void shouldReturnDefaultOrRackAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsEmpty(final State state) {
         setUp(state, true);
-        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(Collections.emptyList()), rackAwareTaskAssignor);
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(List.of()), rackAwareTaskAssignor);
         if (state == State.ENABLED) {
             assertInstanceOf(ClientTagAwareStandbyTaskAssignor.class, standbyTaskAssignor);
             verify(rackAwareTaskAssignor, times(1)).racksForProcess();

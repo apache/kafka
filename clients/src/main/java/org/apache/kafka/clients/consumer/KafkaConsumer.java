@@ -287,8 +287,19 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * <b>Note: The committed offset should always be the offset of the next message that your application will read.</b>
  * Thus, when calling {@link #commitSync(Map) commitSync(offsets)} you should use {@code nextRecordToBeProcessed.offset()}
  * or if {@link ConsumerRecords} is exhausted already {@link ConsumerRecords#nextOffsets()} instead.
- * You should also add the leader epoch as commit metadata, which can be obtained from
- * {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
+ * <p>
+ * <b>You should also include the leader epoch of the consumed record in the committed
+ * {@link OffsetAndMetadata}</b>, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
+ * {@link ConsumerRecords#nextOffsets()}, e.g.
+ * {@code new OffsetAndMetadata(record.offset() + 1, record.leaderEpoch(), "")}. The consumer uses the
+ * committed leader epoch to validate that the committed offset still exists in the partition when
+ * resuming from it, and to correct the position if the log was truncated after a partition leader
+ * change. Offsets committed without a leader epoch (e.g. constructed with
+ * {@link OffsetAndMetadata#OffsetAndMetadata(long)}) skip this validation: should such an offset no
+ * longer exist, the consumer resuming from it fails with an {@code OFFSET_OUT_OF_RANGE} error and falls
+ * back to the {@code auto.offset.reset} policy, which may cause duplicate processing (reset to earliest)
+ * or data loss (reset to latest). The offsets returned by {@link ConsumerRecords#nextOffsets()}, as used
+ * in the example above, already include the leader epoch.
  *
  * <h4><a name="manualassignment">Manual Partition Assignment</a></h4>
  *
@@ -1076,8 +1087,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
      * i.e. {@code nextRecordToBeProcessed.offset()} (or {@link ConsumerRecords#nextOffsets()}).
-     * You should also add the leader epoch as commit metadata, which can be obtained from
-     * {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
+     * You should also include the leader epoch of the consumed record in the committed
+     * {@link OffsetAndMetadata}, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
+     * {@link ConsumerRecords#nextOffsets()}. Without it, the consumer cannot validate the committed
+     * offset when resuming from it and falls back to the {@code auto.offset.reset} policy if the offset
+     * no longer exists in the partition; see the "Manual Offset Control" section of the class
+     * documentation for details.
      * If automatic group management with {@link #subscribe(Collection)} is used,
      * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
@@ -1130,8 +1145,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
      * i.e. {@code nextRecordToBeProcessed.offset()} (or {@link ConsumerRecords#nextOffsets()}).
-     * You should also add the leader epoch as commit metadata, which can be obtained from
-     * {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
+     * You should also include the leader epoch of the consumed record in the committed
+     * {@link OffsetAndMetadata}, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
+     * {@link ConsumerRecords#nextOffsets()}. Without it, the consumer cannot validate the committed
+     * offset when resuming from it and falls back to the {@code auto.offset.reset} policy if the offset
+     * no longer exists in the partition; see the "Manual Offset Control" section of the class
+     * documentation for details.
      * If automatic group management with {@link #subscribe(Collection)} is used,
      * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
@@ -1219,8 +1238,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
      * i.e. {@code nextRecordToBeProcessed.offset()} (or {@link ConsumerRecords#nextOffsets()}).
-     * You should also add the leader epoch as commit metadata, which can be obtained from
-     * {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
+     * You should also include the leader epoch of the consumed record in the committed
+     * {@link OffsetAndMetadata}, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
+     * {@link ConsumerRecords#nextOffsets()}. Without it, the consumer cannot validate the committed
+     * offset when resuming from it and falls back to the {@code auto.offset.reset} policy if the offset
+     * no longer exists in the partition; see the "Manual Offset Control" section of the class
+     * documentation for details.
      * If automatic group management with {@link #subscribe(Collection)} is used,
      * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
@@ -1266,6 +1289,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * Note that, the seek offset won't change to the in-flight fetch request, it will take effect in next fetch request.
      * So, the consumer might wait for {@code fetch.max.wait.ms} before starting to fetch the records from desired offset.
+     * <p>
+     * Note that this method clears the leader epoch of the consumer position, so offsets committed before any
+     * further records are consumed (e.g. via {@link #commitSync()}) will not include a leader epoch and cannot
+     * be validated when a consumer resumes from them. Use {@link #seek(TopicPartition, OffsetAndMetadata)} to
+     * seek with a leader epoch; see the "Manual Offset Control" section of the class documentation for details.
      *
      * @param partition the TopicPartition on which the seek will be performed.
      * @param offset the next offset returned by poll().

@@ -69,7 +69,7 @@ import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedFetch, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets}
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.server.{HostedPartition, PartitionFetchState}
 import org.apache.kafka.server.partition.AlterPartitionManager
@@ -705,7 +705,7 @@ class ReplicaManagerTest {
       // Start a transaction
       val producerId = 234L
       val epoch = 5.toShort
-      val sequence = 9
+      val sequence = 0
       val records = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, epoch, sequence,
         new SimpleRecord(time.milliseconds(), s"message $sequence".getBytes))
       handleProduceAppend(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
@@ -1870,7 +1870,7 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
-    val sequence = 6
+    val sequence = 0
     val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
     val brokerList = Seq[Integer](0, 1).asJava
 
@@ -2072,7 +2072,7 @@ class ReplicaManagerTest {
     val producerId        = 24L
     val producerEpoch     = 5.toShort
     val lowerProducerEpoch= 4.toShort
-    val sequence          = 6
+    val sequence          = 0
     val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
     val brokerList = Seq[Integer](0, 1).asJava
 
@@ -2282,7 +2282,7 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
-    val sequence = 6
+    val sequence = 0
     val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
     val brokerList = Seq[Integer](0, 1).asJava
 

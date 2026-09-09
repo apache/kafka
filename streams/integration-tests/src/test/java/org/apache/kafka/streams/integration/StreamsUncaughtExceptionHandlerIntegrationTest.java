@@ -81,8 +81,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.pu
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("integration")
@@ -169,7 +168,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             produceMessages(NOW, inputTopic, "A");
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
-            assertThat(processorValueCollector.size(), equalTo(1));
+            assertEquals(1, processorValueCollector.size());
         }
     }
 
@@ -261,7 +260,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             produceMessages(NOW, inputTopic2, "A");
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
-            assertThat(processorValueCollector.size(), equalTo(1));
+            assertEquals(1, processorValueCollector.size());
         }
     }
 
@@ -377,9 +376,10 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             produceMessages(NOW, inputTopic, "A");
             waitForApplicationState(asList(kafkaStreams1, kafkaStreams2), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
-            assertThat(processorValueCollector.size(), equalTo(1));
-            assertThat("Shutdown warning log message should be exported exactly once",
-                    logCaptureAppender.getMessages("WARN").stream().filter(msg -> msg.contains("Detected that shutdown was requested")).count(), equalTo(1L));
+            assertEquals(1, processorValueCollector.size());
+            assertEquals(1L,
+                logCaptureAppender.getMessages("WARN").stream().filter(msg -> msg.contains("Detected that shutdown was requested")).count(),
+                "Shutdown warning log message should be exported exactly once");
         }
     }
 
@@ -401,8 +401,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             kafkaStreams.close();
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
 
-            assertThat("All initial threads have failed and the replacement thread had processed on record",
-                processorValueCollector.size(), equalTo(numThreads + 1));
+            assertEquals(numThreads + 1, processorValueCollector.size(),
+                "All initial threads have failed and the replacement thread had processed on record");
         }
     }
 }
