@@ -960,7 +960,6 @@ public class UnifiedLog implements AutoCloseable {
 
     /**
      * Close this log.
-     * The memory mapped buffer for index files of this log will be left open until the log is deleted.
      */
     @Override
     public void close() {
@@ -2298,7 +2297,6 @@ public class UnifiedLog implements AutoCloseable {
             () -> "Error while deleting log for " + topicPartition() + " in dir " + dir().getParent(),
             () -> {
                 synchronized (lock) {
-                    localLog.checkIfClosed();
                     producerExpireCheck.cancel(true);
                     leaderEpochCache.clear();
                     List<LogSegment> deletedSegments = localLog.deleteAllSegments();

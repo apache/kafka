@@ -34,7 +34,6 @@ import com.yammer.metrics.core.Timer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.event.Level;
 
 import java.io.Closeable;
 import java.io.File;
@@ -769,10 +768,10 @@ public class LogSegment implements Closeable {
      * Close the log segment, swallowing any exceptions. This is used when the disk may have failed.
      */
     void closeQuietly() {
-        Utils.swallow(LOGGER, Level.WARN, "offsetIndex", lazyOffsetIndex::close);
-        Utils.swallow(LOGGER, Level.WARN, "timeIndex", lazyTimeIndex::close);
-        Utils.swallow(LOGGER, Level.WARN, "log", log::close);
-        Utils.swallow(LOGGER, Level.WARN, "txnIndex", txnIndex::close);
+        Utils.closeQuietly(lazyOffsetIndex, "offsetIndex", LOGGER);
+        Utils.closeQuietly(lazyTimeIndex, "timeIndex", LOGGER);
+        Utils.closeQuietly(log, "log", LOGGER);
+        Utils.closeQuietly(txnIndex, "txnIndex", LOGGER);
     }
 
     /**
