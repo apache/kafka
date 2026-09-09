@@ -100,11 +100,9 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     private volatile QuotaConfig quotaConfig;
     private volatile Set<ProcessRole> processRoles;
-    private final boolean doLog;
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
-        this.doLog = doLog;
     }
 
     public List<String> logDirs() {
@@ -700,25 +698,16 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public Set<ProcessRole> processRoles() {
-        Set<ProcessRole> value = processRoles;
-        if (value == null) {
-            Set<ProcessRole> result = new HashSet<>();
-            for (String role : getList(KRaftConfigs.PROCESS_ROLES_CONFIG)) {
-                switch (role) {
-                    case "broker" -> result.add(ProcessRole.BrokerRole);
-                    case "controller" -> result.add(ProcessRole.ControllerRole);
-                    default -> throw new ConfigException("Unknown process role '" + role +
-                                "' (only 'broker' and 'controller' are allowed roles)");
-                }
+        Set<ProcessRole> result = new HashSet<>();
+        for (String role : getList(KRaftConfigs.PROCESS_ROLES_CONFIG)) {
+            switch (role) {
+                case "broker" -> result.add(ProcessRole.BrokerRole);
+                case "controller" -> result.add(ProcessRole.ControllerRole);
+                default -> throw new ConfigException("Unknown process role '" + role +
+                            "' (only 'broker' and 'controller' are allowed roles)");
             }
-            value = Collections.unmodifiableSet(result);
-            processRoles = value;
         }
-        return value;
-    }
-
-    public boolean isKRaftCombinedMode(Set<ProcessRole> processRoles) {
-        return processRoles.equals(Set.of(ProcessRole.BrokerRole, ProcessRole.ControllerRole));
+        return Collections.unmodifiableSet(result);
     }
 
     public String metadataLogDir() {
@@ -849,7 +838,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     @SuppressWarnings("removal")
-    protected void validateGroupCoordinatorRebalanceProtocols() {
+    protected void validateGroupCoordinatorRebalanceProtocols(boolean doLog) {
         Set<GroupType> protocols = groupCoordinatorRebalanceProtocols();
 
         if (!protocols.contains(GroupType.CLASSIC)) {
@@ -915,7 +904,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     // retrieved using KafkaConfig#valuesWithPrefixOverride
 
     @SuppressWarnings("unchecked")
-    public Set<String> saslEnabledMechanisms(ListenerName listenerName) {
+    protected Set<String> saslEnabledMechanisms(ListenerName listenerName) {
         Object value = valuesWithPrefixOverride(listenerName.configPrefix())
                 .get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
         if (value != null) {

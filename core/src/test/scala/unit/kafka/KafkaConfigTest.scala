@@ -29,6 +29,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.internals.Exit
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -221,7 +222,7 @@ class KafkaConfigTest {
     propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
     setListenerProps(propertiesFile)
     val config = KafkaConfig.fromProps(propertiesFile)
-    assertTrue(config.isKRaftCombinedMode(config.processRoles))
+    assertTrue(config.processRoles() == util.Set.of(ProcessRole.BrokerRole, ProcessRole.ControllerRole))
   }
 
   @Test
