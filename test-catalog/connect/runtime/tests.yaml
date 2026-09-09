@@ -663,6 +663,7 @@ org.apache.kafka.connect.runtime.WorkerTest:
 - testOffsetStoreForExactlyOnceSourceTask
 - testOffsetStoreForRegularSourceConnector
 - testOffsetStoreForRegularSourceTask
+- testProducerConfigsIgnoreUserSpecifiedBootstrapResolveTimeout
 - testProducerConfigsWithClientOverrides
 - testProducerConfigsWithOverrides
 - testProducerConfigsWithoutOverrides
@@ -715,6 +716,7 @@ org.apache.kafka.connect.runtime.distributed.DistributedConfigTest:
 - shouldFailWithInvalidKeyAlgorithm
 - shouldFailWithInvalidKeySize
 - shouldIdentifyNeedForTransactionalLeader
+- shouldIgnoreUserSpecifiedBootstrapResolveTimeout
 - shouldNotAllowNegativePartitionsLessThanNegativeOne
 - shouldNotAllowNegativeReplicationFactorLessThanNegativeOne
 - shouldNotAllowZeroPartitions
