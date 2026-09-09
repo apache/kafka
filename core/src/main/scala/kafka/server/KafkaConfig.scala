@@ -300,7 +300,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
   validateValues()
 
   private def validateValues(): Unit = {
-    validateGroupCoordinatorRebalanceProtocols()
+    validateGroupCoordinatorRebalanceProtocols(doLog)
     if (nodeId != brokerId) {
       throw new ConfigException(s"`${KRaftConfigs.NODE_ID_CONFIG}` and `${ServerConfigs.BROKER_ID_CONFIG}` must be set to the same value. " +
         s"`${ServerConfigs.BROKER_ID_CONFIG}` is deprecated, please use `${KRaftConfigs.NODE_ID_CONFIG}` instead.")
@@ -411,7 +411,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
-    } else if (isKRaftCombinedMode(processRoles)) {
+    } else if (processRoles == util.Set.of(ProcessRole.BrokerRole, ProcessRole.ControllerRole)) {
       // KRaft combined broker and controller
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
