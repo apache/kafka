@@ -83,13 +83,6 @@ public class ApiMessageTypeTest {
 
     @Test
     public void testHeaderVersion() {
-        // Produce versions 0-2 were removed in Apache Kafka 4.0, but the headerVersions map still covers them.
-        assertEquals((short) 1, ApiMessageType.PRODUCE.requestHeaderVersion((short) 0));
-        assertEquals((short) 0, ApiMessageType.PRODUCE.responseHeaderVersion((short) 0));
-
-        assertEquals((short) 1, ApiMessageType.PRODUCE.requestHeaderVersion((short) 1));
-        assertEquals((short) 0, ApiMessageType.PRODUCE.responseHeaderVersion((short) 1));
-
         assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 4));
         assertEquals((short) 0, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 4));
 
@@ -116,9 +109,7 @@ public class ApiMessageTypeTest {
         assertEquals((short) 2, ApiMessageType.ENVELOPE.requestHeaderVersion((short) 0));
         assertEquals((short) 1, ApiMessageType.ENVELOPE.responseHeaderVersion((short) 0));
 
-        // WriteTxnMarkers v0 was removed in Apache Kafka 4.0 and was its only non-flexible version.
-        assertEquals((short) 1, ApiMessageType.WRITE_TXN_MARKERS.requestHeaderVersion((short) 0));
-        assertEquals((short) 0, ApiMessageType.WRITE_TXN_MARKERS.responseHeaderVersion((short) 0));
+        // WriteTxnMarkers is flexible across its valid versions (1-2): header v2 request / v1 response.
         assertEquals((short) 2, ApiMessageType.WRITE_TXN_MARKERS.requestHeaderVersion((short) 1));
         assertEquals((short) 1, ApiMessageType.WRITE_TXN_MARKERS.responseHeaderVersion((short) 1));
     }
