@@ -36,6 +36,7 @@ import java.security.Provider;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -409,8 +410,9 @@ public final class DistributedConfig extends WorkerConfig {
                     ConfigDef.Type.LONG,
                     CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
                     atLeast(0L),
-                    ConfigDef.Importance.HIGH,
-                    CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
+                    ConfigDef.Importance.LOW,
+                    "Kafka Connect does not support asynchronous bootstrap resolution;" +
+                            " this configuration is ignored and always treated as <code>0</code> (synchronous resolution).")
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
@@ -624,7 +626,15 @@ public final class DistributedConfig extends WorkerConfig {
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
         warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs();
-        return super.postProcessParsedConfig(parsedValues);
+        Map<String, Object> configUpdates = new HashMap<>(super.postProcessParsedConfig(parsedValues));
+        Object bootstrapResolveTimeoutMs = parsedValues.get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
+        if (bootstrapResolveTimeoutMs != null && !bootstrapResolveTimeoutMs.equals(0L)) {
+            log.warn("The value {} for the {} property will be ignored as Kafka Connect does not support" +
+                            " asynchronous bootstrap resolution. The value 0 will be used instead.",
+                    bootstrapResolveTimeoutMs, CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
+            configUpdates.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, 0L);
+        }
+        return configUpdates;
     }
 
     private void warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs() {

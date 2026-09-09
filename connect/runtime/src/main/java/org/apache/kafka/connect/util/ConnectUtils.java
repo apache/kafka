@@ -54,6 +54,19 @@ public final class ConnectUtils {
     }
 
     /**
+     * Force synchronous bootstrap DNS resolution ({@code bootstrap.resolve.timeout.ms=0}) for a client
+     * created by the Connect framework, logging a warning if a user-supplied value is overridden.
+     * Kafka Connect does not support the asynchronous bootstrap resolution mode.
+     */
+    public static void enforceSynchronousBootstrapResolution(Map<String, Object> clientProps) {
+        ensureProperty(
+                clientProps, CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "0",
+                "in Kafka Connect, which does not support asynchronous bootstrap resolution",
+                true
+        );
+    }
+
+    /**
      * Ensure that the {@link Map properties} contain an expected value for the given key, inserting the
      * expected value into the properties if necessary.
      *
