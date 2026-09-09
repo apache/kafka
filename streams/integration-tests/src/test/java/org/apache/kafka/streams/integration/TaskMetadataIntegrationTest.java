@@ -54,8 +54,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 @Timeout(600)
@@ -116,7 +115,7 @@ public class TaskMetadataIntegrationTest {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
-            assertThat(taskMetadata.committedOffsets().size(), equalTo(1));
+            assertEquals(1, taskMetadata.committedOffsets().size());
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
 
             produceMessages(0L, inputTopic, "test");
@@ -142,7 +141,7 @@ public class TaskMetadataIntegrationTest {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
-            assertThat(taskMetadata.endOffsets().size(), equalTo(1));
+            assertEquals(1, taskMetadata.endOffsets().size());
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
             commit.set(false);
 
@@ -151,7 +150,7 @@ public class TaskMetadataIntegrationTest {
                 TestUtils.waitForCondition(() -> !process.get(), "The record was not processed");
                 process.set(true);
             }
-            assertThat(taskMetadata.endOffsets().get(topicPartition), equalTo(9L));
+            assertEquals(9L, taskMetadata.endOffsets().get(topicPartition));
 
         } catch (final Exception e) {
             e.printStackTrace();
