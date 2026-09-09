@@ -131,10 +131,10 @@ public final class ConsumerUtils {
         return IsolationLevel.valueOf(s);
     }
 
-    public static SubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
+    public static ConsumerSubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
         String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.fromString(s);
-        return new SubscriptionState(logContext, strategy);
+        return new ConsumerSubscriptionState(logContext, strategy);
     }
 
     public static Metrics createMetrics(ConsumerConfig config, Time time) {
@@ -191,7 +191,7 @@ public final class ConsumerUtils {
      */
     public static void refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
                                                final ConsumerMetadata metadata,
-                                               final SubscriptionState subscriptions) {
+                                               final ConsumerSubscriptionState subscriptions) {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
@@ -203,7 +203,7 @@ public final class ConsumerUtils {
                 // so we need to ignore seeking if that's the case
                 if (subscriptions.isAssigned(tp)) {
                     final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
-                    final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                    final ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(
                             offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
                             leaderAndEpoch);
 

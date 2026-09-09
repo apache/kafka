@@ -57,7 +57,7 @@ public class ShareConsumerDelegateCreator {
                                                      final Deserializer<V> valueDeserializer,
                                                      final Time time,
                                                      final KafkaClient client,
-                                                     final SubscriptionState subscriptions,
+                                                     final ShareSubscriptionState subscriptions,
                                                      final ShareConsumerMetadata metadata) {
         try {
             return new ShareConsumerImpl<>(

@@ -22,10 +22,10 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState.FetchPosition;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
 import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochUtils.OffsetForEpochResult;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -64,7 +64,7 @@ public class OffsetFetcher {
 
     private final Logger log;
     private final ConsumerMetadata metadata;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final ConsumerNetworkClient client;
     private final Time time;
     private final int requestTimeoutMs;
@@ -76,7 +76,7 @@ public class OffsetFetcher {
     public OffsetFetcher(LogContext logContext,
                          ConsumerNetworkClient client,
                          ConsumerMetadata metadata,
-                         SubscriptionState subscriptions,
+                         ConsumerSubscriptionState subscriptions,
                          Time time,
                          long retryBackoffMs,
                          int requestTimeoutMs,
@@ -115,7 +115,7 @@ public class OffsetFetcher {
      * Validate offsets for all assigned partitions for which a leader change has been detected.
      */
     public void validatePositionsIfNeeded() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> partitionsToValidate =
                 offsetFetcherUtils.refreshAndGetPartitionsToValidate();
 
         validatePositionsAsync(partitionsToValidate);

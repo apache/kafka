@@ -65,7 +65,7 @@ public class Fetcher<K, V> extends AbstractFetch {
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
                    ConsumerMetadata metadata,
-                   SubscriptionState subscriptions,
+                   ConsumerSubscriptionState subscriptions,
                    FetchConfig fetchConfig,
                    Deserializers<K, V> deserializers,
                    FetchMetricsManager metricsManager,

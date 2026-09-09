@@ -19,10 +19,9 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ShareSubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
@@ -94,7 +93,7 @@ public class KafkaShareConsumerTest {
     private final int heartbeatIntervalMs = 1000;
 
     private final Time time = new MockTime();
-    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+    private final ShareSubscriptionState subscription = new ShareSubscriptionState(new LogContext());
 
     @Test
     public void testVerifyHeartbeats() throws InterruptedException {

@@ -19,10 +19,9 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerImpl;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ShareSubscriptionState;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
@@ -76,7 +75,7 @@ public class KafkaShareConsumerMetricsTest {
                     new AbstractMap.SimpleEntry<>(topic, topicId))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     private final Time time = new MockTime();
-    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+    private final ShareSubscriptionState subscription = new ShareSubscriptionState(new LogContext());
     private final String groupId = "mock-group";
 
     @Test
@@ -311,14 +310,14 @@ public class KafkaShareConsumerMetricsTest {
         customMetrics.forEach((name, metric) -> assertDoesNotThrow(() -> consumer.unregisterMetricFromSubscription(metric)));
     }
 
-    private ShareConsumerMetadata createMetadata(SubscriptionState subscription) {
+    private ShareConsumerMetadata createMetadata(ShareSubscriptionState subscription) {
         return new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,
                 subscription, new LogContext(), new ClusterResourceListeners());
     }
 
     private KafkaShareConsumer<String, String> newShareConsumer(Time time,
                                                                 KafkaClient client,
-                                                                SubscriptionState subscription,
+                                                                ShareSubscriptionState subscription,
                                                                 ShareConsumerMetadata metadata) {
         return newShareConsumer(
                 time,
@@ -332,7 +331,7 @@ public class KafkaShareConsumerMetricsTest {
 
     private KafkaShareConsumer<String, String> newShareConsumer(Time time,
                                                                 KafkaClient client,
-                                                                SubscriptionState subscriptions,
+                                                                ShareSubscriptionState subscriptions,
                                                                 ShareConsumerMetadata metadata,
                                                                 String groupId,
                                                                 Optional<Deserializer<String>> valueDeserializerOpt) {

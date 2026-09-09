@@ -203,7 +203,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * Returns the {@link AbstractMembershipManager} that this request manager is using to track the state of the group.
      * This is provided so that the {@link ApplicationEventProcessor} can access the state for querying or updating.
      */
-    public abstract AbstractMembershipManager<R> membershipManager();
+    public abstract AbstractMembershipManager<R, ?> membershipManager();
 
     /**
      * @return the member should send leave heartbeat immediately or not
