@@ -238,4 +238,38 @@ public class HeaderVersionsTest {
         MessageSpec spec = parse(responseSpec(18, "ApiVersionsResponse", "0-3", "3+", "{'0+': '0'}"));
         assertEquals((short) 0, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
     }
+
+    @Test
+    public void testFlexibleRequestVersionNeedsFlexibleHeader() {
+        assertMessageContains("which is flexible", () -> parse(requestSpec("0-5", "2+", "{'0+': '1'}")));
+    }
+
+    @Test
+    public void testFlexibleRequestAcceptsNewerHeaderVersion() throws Exception {
+        // Request header v3 (KIP-1313) is flexible, so a flexible body may declare it.
+        MessageSpec spec = parse(requestSpec("0-5", "0+", "{'0+': '3'}"));
+        assertEquals((short) 3, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
+    }
+
+    @Test
+    public void testFlexibleResponseVersionNeedsFlexibleHeader() {
+        assertMessageContains("which is flexible",
+            () -> parse(responseSpec(0, "FooResponse", "0-5", "2+", "{'0+': '0'}")));
+    }
+
+    @Test
+    public void testNonFlexibleVersionsAreNotCheckedAtParseTime() throws Exception {
+        // The non-flexible side of the invariant is enforced against the generated code by
+        // ApiMessageTypeTest, so parsing accepts a non-flexible version mapped to any header version.
+        MessageSpec spec = parse(requestSpec("1-2", "1+", "{'0': '1', '1+': '2'}"));
+        assertEquals(2, spec.headerVersions().orElseThrow().entries().size());
+    }
+
+    @Test
+    public void testApiVersionsRequestFollowsFlexibilityRule() {
+        // Only the response is pinned by KIP-511; the request follows the normal rule.
+        assertMessageContains("which is flexible",
+            () -> parse("{'apiKey': 18, 'type': 'request', 'name': 'ApiVersionsRequest', 'validVersions': '0-3', " +
+                "'flexibleVersions': '3+', 'headerVersions': {'0+': '1'}}"));
+    }
 }

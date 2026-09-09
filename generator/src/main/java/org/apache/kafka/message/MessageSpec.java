@@ -42,6 +42,11 @@ public final class MessageSpec {
 
     private final boolean latestVersionUnstable;
 
+    // Fixed by the RequestHeader and ResponseHeader schemas: request header v2 is the first flexible version
+    // and response header v1 the first flexible one.
+    static final short FIRST_FLEXIBLE_REQUEST_HEADER = 2;
+    static final short FIRST_FLEXIBLE_RESPONSE_HEADER = 1;
+
     // ApiVersionsResponse always uses a v0 header so that older brokers can parse it (KIP-511).
     static final short API_VERSIONS_API_KEY = 18;
 
@@ -103,7 +108,7 @@ public final class MessageSpec {
             }
             this.headerVersions = Optional.ofNullable(
                     HeaderVersions.parse(name, headerVersions, this.validVersions()));
-            checkApiVersionsResponseHeaderVersion();
+            checkHeaderVersionInvariants();
 
             if (type == MessageSpecType.COORDINATOR_KEY) {
                 if (this.apiKey.isEmpty()) {
@@ -126,21 +131,36 @@ public final class MessageSpec {
     }
 
     /**
-     * ApiVersionsResponse must use a v0 response header at every version so that older brokers can always
-     * parse the response header (KIP-511). Checking that the header versions implied by flexibleVersions are
-     * actually enacted is left to ApiMessageTypeTest, and to the follow-up that makes headerVersions mandatory.
+     * Check that a flexible body maps to a flexible header: request header v2 or response header v1 and
+     * above. ApiVersionsResponse is the exception and is pinned to header v0 (KIP-511). The rest of the
+     * invariant (that non-flexible bodies use the fixed non-flexible header, and that every header version
+     * exists) is enforced against the generated code by ApiMessageTypeTest.
      */
-    private void checkApiVersionsResponseHeaderVersion() {
-        boolean apiVersionsResponse = type == MessageSpecType.RESPONSE &&
-                apiKey.isPresent() && apiKey.get() == API_VERSIONS_API_KEY;
-        if (headerVersions.isEmpty() || !apiVersionsResponse) {
+    private void checkHeaderVersionInvariants() {
+        if (headerVersions.isEmpty()) {
             return;
         }
+        boolean isRequest = type == MessageSpecType.REQUEST;
+        String typeName = isRequest ? "request" : "response";
+        short firstFlexibleHeader = isRequest ? FIRST_FLEXIBLE_REQUEST_HEADER : FIRST_FLEXIBLE_RESPONSE_HEADER;
+        boolean apiVersionsResponse = !isRequest && apiKey.isPresent() && apiKey.get() == API_VERSIONS_API_KEY;
         for (HeaderVersions.Entry entry : headerVersions.get().entries()) {
-            if (entry.headerVersion() != 0) {
-                throw new RuntimeException("Message " + name() + " maps versions " + entry.range() +
-                    " to response header version " + entry.headerVersion() + ", but ApiVersionsResponse must " +
-                    "use a v0 response header at every version so that older brokers can parse it (KIP-511).");
+            if (apiVersionsResponse) {
+                if (entry.headerVersion() != 0) {
+                    throw new RuntimeException("Message " + name() + " maps versions " + entry.range() +
+                        " to response header version " + entry.headerVersion() + ", but ApiVersionsResponse must " +
+                        "use a v0 response header at every version so that older brokers can parse it (KIP-511).");
+                }
+                continue;
+            }
+            short highest = (short) Math.min(entry.range().highest(), validVersions().highest());
+            for (short version = entry.range().lowest(); version <= highest; version++) {
+                if (flexibleVersions.contains(version) && entry.headerVersion() < firstFlexibleHeader) {
+                    throw new RuntimeException("Message " + name() + " maps version " + version +
+                        ", which is flexible, to " + typeName + " header version " + entry.headerVersion() +
+                        ", but a flexible " + typeName + " must use header version " + firstFlexibleHeader +
+                        " or higher.");
+                }
             }
         }
     }
