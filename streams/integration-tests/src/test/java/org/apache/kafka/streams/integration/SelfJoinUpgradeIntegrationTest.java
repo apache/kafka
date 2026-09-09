@@ -57,8 +57,7 @@ import static java.time.Duration.ofMinutes;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
 @Tag("integration")
@@ -290,7 +289,7 @@ public class SelfJoinUpgradeIntegrationTest {
             expected.size(),
             60 * 1000);
 
-        assertThat(actual, is(expected));
+        assertEquals(expected, actual);
 
         return actual.equals(expected);
     }

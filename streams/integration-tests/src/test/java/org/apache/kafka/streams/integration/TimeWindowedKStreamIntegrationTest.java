@@ -77,8 +77,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings({"unchecked"})
@@ -214,7 +213,7 @@ public class TimeWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
@@ -291,7 +290,7 @@ public class TimeWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
@@ -390,7 +389,7 @@ public class TimeWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
 
         // Leave the group on close so the immediate restart below does not have to wait for the
         // previous member to be evicted via session timeout (~45s) before its rebalance completes.
@@ -438,7 +437,7 @@ public class TimeWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
