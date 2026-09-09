@@ -182,6 +182,9 @@ org.apache.kafka.clients.admin.EndpointTypeTest:
 - testRoundTripController
 - testUnknown
 org.apache.kafka.clients.admin.GroupListingTest:
+- testNullGroupStateConstructor
+- testNullProtocolConstructor
+- testNullTypeConstructor
 - testSimpleConsumerGroup
 org.apache.kafka.clients.admin.KafkaAdminClientConfigTest:
 - testAlterClientQuotas
@@ -3385,6 +3388,7 @@ org.apache.kafka.clients.producer.internals.SenderTest:
 - testEpochBumpOnOutOfOrderSequenceForNextBatch
 - testEpochBumpOnOutOfOrderSequenceForNextBatchWhenBatchInFlightFails
 - testEpochBumpOnOutOfOrderSequenceForNextBatchWhenThereIsNoBatchInFlight
+- testEpochBumpWhenOutOfOrderBatchesRetriedAndFirstBatchExpires
 - testExpiredBatchDoesNotRetry
 - testExpiredBatchDoesNotSplitOnMessageTooLargeError
 - testExpiredBatchesInMultiplePartitions

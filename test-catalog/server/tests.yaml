@@ -571,6 +571,7 @@ org.apache.kafka.server.replica.ReplicaTest:
 - testUpdateFetchState
 org.apache.kafka.server.requests.ProduceRequestTest:
 - testCorruptLz4ProduceRequest
+- testIdempotentProduceWithNonZeroFirstSequenceOnNewPartition
 - testProduceToNonReplica
 - testProduceWithTimestampTooNew
 - testProduceWithTimestampTooOld

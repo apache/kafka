@@ -632,6 +632,7 @@ org.apache.kafka.storage.internals.log.OffsetMapTest:
 org.apache.kafka.storage.internals.log.ProducerStateManagerTest:
 - testAcceptAppendWithSequenceGapsOnReplica
 - testAcceptAppendWithoutProducerStateOnReplica
+- testAllowNonZeroFirstSequenceWithEmptyStateOnNonEmptyLog
 - testAllowNonZeroSequenceForTransactionsV1WithEmptyState
 - testAppendEmptyControlBatch
 - testAppendTxnMarkerWithNoProducerState
@@ -660,6 +661,7 @@ org.apache.kafka.storage.internals.log.ProducerStateManagerTest:
 - testOutOfSequenceAfterControlRecordEpochBump
 - testPidExpirationTimeout
 - testPrepareUpdateDoesNotMutate
+- testPrepareUpdateRequiresZeroSequenceOnlyBeforeFirstAppend
 - testProducerSequenceInvalidWrapAround
 - testProducerSequenceWithWrapAroundBatchRecord
 - testProducerSequenceWrapAround
@@ -669,6 +671,7 @@ org.apache.kafka.storage.internals.log.ProducerStateManagerTest:
 - testRecoverFromSnapshotEmptyTransaction
 - testRecoverFromSnapshotFinishedTransaction
 - testRecoverFromSnapshotUnfinishedTransaction
+- testRejectNonZeroFirstSequenceWithEmptyStateOnEmptyLog
 - testRejectNonZeroSequenceForDirectEpochBump
 - testRejectNonZeroSequenceForTransactionsV2WithEmptyState
 - testReloadSnapshots
@@ -857,6 +860,7 @@ org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - testNextTransactionVerificationGuardNotCleared
 - testNoOpWhenRemoteLogStorageIsDisabled
 - testNonSequentialAppend
+- testNonZeroFirstSequenceAcceptedAfterProducerStateExpiration
 - testNonZeroSequenceOnFirstAppendNonZeroEpoch
 - testOffsetFromProducerSnapshotFile
 - testOffsetSnapshot
@@ -879,6 +883,7 @@ org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - testRebuildProducerStateWithEmptyCompactedBatch
 - testRebuildTransactionalState
 - testRecoveryPointNotIncrementedOnProducerStateSnapshotFlushFailure
+- testRejectOutOfOrderFirstRequestOnNewlyCreatedLog
 - testRemoteLogStorageIsDisabledOnInternalAndRemoteLogMetadataTopic
 - testRenamingDirWithoutReinitialization
 - testReplicationWithTVUnknownAllowed
