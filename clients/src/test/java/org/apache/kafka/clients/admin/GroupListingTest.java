@@ -59,4 +59,10 @@ public class GroupListingTest {
         assertThrows(NullPointerException.class,
                 () -> new GroupListing(GROUP_ID, Optional.of(GroupType.CLASSIC), "", null));
     }
+
+    @Test
+    public void testNullProtocolConstructor() {
+        assertThrows(NullPointerException.class,
+                () -> new GroupListing(GROUP_ID, Optional.of(GroupType.CLASSIC), null, Optional.of(GroupState.EMPTY)));
+    }
 }

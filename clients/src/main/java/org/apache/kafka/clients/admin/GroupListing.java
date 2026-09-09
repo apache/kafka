@@ -45,7 +45,7 @@ public class GroupListing {
     public GroupListing(String groupId, Optional<GroupType> type, String protocol, Optional<GroupState> groupState) {
         this.groupId = groupId;
         this.type = Objects.requireNonNull(type);
-        this.protocol = protocol;
+        this.protocol = Objects.requireNonNull(protocol);
         this.groupState = Objects.requireNonNull(groupState);
     }
 
