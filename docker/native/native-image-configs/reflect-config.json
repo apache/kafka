@@ -1035,10 +1035,32 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
-  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever"
+  "name":"org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
-  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator"
+  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.FileJwtRetriever",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.ClientJwtValidator",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
   "name":"org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler",
