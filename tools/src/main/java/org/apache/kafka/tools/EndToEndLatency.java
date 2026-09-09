@@ -126,7 +126,7 @@ public class EndToEndLatency {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(POLL_TIMEOUT_MS));
                 long elapsed = System.nanoTime() - begin;
 
-                validate(consumer, recordValue, records, recordKey, headers);
+                validate(recordValue, records, recordKey, headers);
 
                 //Report progress
                 if (i % 1000 == 0)
@@ -140,7 +140,7 @@ public class EndToEndLatency {
     }
 
     // Visible for testing
-    static void validate(KafkaConsumer<byte[], byte[]> consumer, byte[] sentRecordValue, ConsumerRecords<byte[], byte[]> records, byte[] sentRecordKey, Iterable<Header> sentHeaders) {
+    static void validate(byte[] sentRecordValue, ConsumerRecords<byte[], byte[]> records, byte[] sentRecordKey, Iterable<Header> sentHeaders) {
         if (records.isEmpty()) {
             throw new RuntimeException("poll() timed out before finding a result (timeout:[" + POLL_TIMEOUT_MS + "ms])");
         }
@@ -166,7 +166,7 @@ public class EndToEndLatency {
             throw new RuntimeException("Expected null message key but received [" + new String(record.key(), StandardCharsets.UTF_8) + "]");
         }
 
-        validateHeaders(consumer, sentHeaders, record);
+        validateHeaders(sentHeaders, record);
 
         //Check we only got the one message
         if (records.count() != 1) {
@@ -174,7 +174,7 @@ public class EndToEndLatency {
         }
     }
 
-    private static void validateHeaders(KafkaConsumer<byte[], byte[]> consumer, Iterable<Header> sentHeaders, ConsumerRecord<byte[], byte[]> record) {
+    private static void validateHeaders(Iterable<Header> sentHeaders, ConsumerRecord<byte[], byte[]> record) {
         if (sentHeaders != null && sentHeaders.iterator().hasNext()) {
             if (!record.headers().iterator().hasNext()) {
                 throw new RuntimeException("Expected message headers but received none");
