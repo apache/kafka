@@ -1665,21 +1665,23 @@ object LogManager {
       })
     })
     logs.flatMap { log =>
-      val topicId = log.topicId.getOrElse {
-        throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
-          "which is not allowed when running in KRaft mode.")
-      }
-      Option(partitions.get(log.topicPartition)) match {
-        case Some(id) =>
-          if (id.equals(topicId)) {
-            None
-          } else {
-            info(s"Found stray log dir $log: this partition now exists with topic ID $id not $topicId.")
+      if (log.topicId.isEmpty) {
+        info(s"The topicId does not exist in $log, treat it as a stray log")
+        Some(log.topicPartition)
+      } else {
+        val topicId = log.topicId.get
+        Option(partitions.get(log.topicPartition)) match {
+          case Some(id) =>
+            if (id.equals(topicId)) {
+              None
+            } else {
+              info(s"Found stray log dir $log: this partition now exists with topic ID $id not $topicId.")
+              Some(log.topicPartition)
+            }
+          case None =>
+            info(s"Found stray log dir $log: this partition does not exist in the new full LeaderAndIsrRequest.")
             Some(log.topicPartition)
-          }
-        case None =>
-          info(s"Found stray log dir $log: this partition does not exist in the new full LeaderAndIsrRequest.")
-          Some(log.topicPartition)
+        }
       }
     }
   }
