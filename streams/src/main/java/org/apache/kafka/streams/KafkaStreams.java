@@ -1322,10 +1322,20 @@ public class KafkaStreams implements AutoCloseable {
                     // trimmed the DEAD thread via nextThreadIndex and reused its name, overwriting the
                     // store-provider registration with the new thread's. The registrations are keyed by
                     // name, so removing by name would delete the replacement's provider and break
-                    // interactive queries; only clean up while no live thread carries the name.
+                    // interactive queries. Only a thread that can still serve queries counts as active
+                    // name reuse: a replacement already in PENDING_SHUTDOWN or DEAD serves none (its
+                    // provider throws InvalidStateStoreException or returns no stores), will be
+                    // trimmed from `threads`, and would leave its provider registered forever, so its
+                    // registration is cleaned up here like the removed thread's own.
                     final String removedThreadName = threadToRemove.getName();
                     final boolean nameReused = new ArrayList<>(threads).stream()
-                        .anyMatch(t -> t.getName().equals(removedThreadName));
+                        .anyMatch(t -> {
+                            if (!t.getName().equals(removedThreadName)) {
+                                return false;
+                            }
+                            final StreamThread.State reusingThreadState = t.state();
+                            return reusingThreadState.isAlive() || reusingThreadState == StreamThread.State.CREATED;
+                        });
                     if (nameReused) {
                         log.info("Skipping state-store provider cleanup for {} since the name has been reused by a newly added thread",
                             removedThreadName);

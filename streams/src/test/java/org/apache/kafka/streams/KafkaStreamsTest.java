@@ -75,6 +75,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -921,13 +923,16 @@ public class KafkaStreamsTest {
         }
     }
 
-    @Test
-    public void shouldNotRemoveReplacementThreadStoreProviderWhenThreadNameIsReused() throws Exception {
+    @ParameterizedTest
+    @EnumSource(value = StreamThread.State.class, names = {"RUNNING", "PENDING_SHUTDOWN", "DEAD"})
+    public void shouldRemoveStoreProviderForReusedThreadNameUnlessReplacementCanServeQueries(final StreamThread.State replacementStateAtBookkeeping) throws Exception {
         // While a removal waits for its victim to reach DEAD it does not hold `changeThreadCount`,
         // so a concurrent addStreamThread can trim the DEAD thread from `threads`, reuse its name,
         // and register the replacement's state-store provider under that name. The removal's
-        // bookkeeping must not delete that registration, or interactive queries on the
-        // replacement thread would break.
+        // bookkeeping must not delete that registration while the replacement can serve
+        // interactive queries — but a replacement that is itself already shutting down or dead
+        // serves none and may be trimmed from `threads` at any time, so its useless provider must
+        // be removed to avoid leaking it.
         prepareStreams();
         final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
@@ -948,6 +953,7 @@ public class KafkaStreamsTest {
             // and let a concurrent add trim it and reuse its name before the removal's bookkeeping.
             state1.set(StreamThread.State.DEAD);
             assertEquals(Optional.of("processId-StreamThread-1"), streamsRef.get().addStreamThread());
+            replacementState.set(replacementStateAtBookkeeping);
             return true;
         });
 
@@ -985,8 +991,12 @@ public class KafkaStreamsTest {
 
             final QueryableStoreProvider queryableStoreProvider =
                 queryableStoreProviderMockedConstruction.constructed().get(0);
-            verify(queryableStoreProvider, never()).removeStoreProviderForThread("processId-StreamThread-1");
-            assertTrue(streams.threads.contains(replacementThread));
+            if (replacementStateAtBookkeeping == StreamThread.State.RUNNING) {
+                verify(queryableStoreProvider, never()).removeStoreProviderForThread("processId-StreamThread-1");
+                assertTrue(streams.threads.contains(replacementThread));
+            } else {
+                verify(queryableStoreProvider).removeStoreProviderForThread("processId-StreamThread-1");
+            }
         }
     }
 
