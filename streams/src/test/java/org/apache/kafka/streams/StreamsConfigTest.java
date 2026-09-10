@@ -65,6 +65,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.nCopies;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
@@ -295,6 +296,60 @@ public class StreamsConfigTest {
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertEquals(groupId, returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
         assertEquals("50", returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
+    }
+
+    @Test
+    public void shouldEnforceSynchronousBootstrapResolutionForAllClientsByDefault() {
+        assertEquals(0L, streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getRestoreConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getGlobalConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getProducerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getAdminConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
+    public void shouldIgnoreUserSpecifiedBootstrapResolveTimeout() {
+        props.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "120000");
+        props.put(StreamsConfig.consumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.mainConsumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.restoreConsumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.globalConsumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.producerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.adminClientPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertEquals(0L, streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getRestoreConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getGlobalConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getProducerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(0L, streamsConfig.getAdminConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
+    public void shouldLogWarningWhenIgnoringUserSpecifiedBootstrapResolveTimeout() {
+        props.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "120000");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            streamsConfig.getRestoreConsumerConfigs(clientId);
+            streamsConfig.getGlobalConsumerConfigs(clientId);
+            streamsConfig.getProducerConfigs(clientId);
+            streamsConfig.getAdminConfigs(clientId);
+
+            final List<String> warnings = appender.getMessages().stream()
+                .filter(msg -> msg.contains("config 'bootstrap.resolve.timeout.ms' found") && msg.contains("User setting (120000) will be ignored"))
+                .collect(Collectors.toList());
+            assertEquals(5, warnings.size(), "Should log exactly one warning per client type, got: " + warnings);
+            for (final String clientType : List.of("consumer", "restore consumer", "global consumer", "producer", "admin")) {
+                assertTrue(
+                    warnings.stream().anyMatch(msg -> msg.contains("Unexpected user-specified " + clientType + " config")),
+                    "Missing warning for " + clientType + " in: " + warnings
+                );
+            }
+        }
     }
 
     @Test
