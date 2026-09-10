@@ -111,7 +111,7 @@ public class TaskMetadataIntegrationTest {
     }
 
     @Test
-    public void shouldReportCorrectCommittedOffsetInformation() {
+    public void shouldReportCorrectCommittedOffsetInformation() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
@@ -131,13 +131,11 @@ public class TaskMetadataIntegrationTest {
             produceMessages(0L, inputTopic, "test1");
             TestUtils.waitForCondition(() -> !process.get(), "The record was not processed");
             TestUtils.waitForCondition(() -> taskMetadata.committedOffsets().get(topicPartition) == 3L, "the record was processed");
-        } catch (final Exception e) {
-            e.printStackTrace();
         }
     }
 
     @Test
-    public void shouldReportCorrectEndOffsetInformation() {
+    public void shouldReportCorrectEndOffsetInformation() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
@@ -151,9 +149,6 @@ public class TaskMetadataIntegrationTest {
                 process.set(true);
             }
             assertEquals(9L, taskMetadata.endOffsets().get(topicPartition));
-
-        } catch (final Exception e) {
-            e.printStackTrace();
         }
     }
 
