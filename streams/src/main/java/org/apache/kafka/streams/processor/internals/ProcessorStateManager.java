@@ -99,8 +99,8 @@ public class ProcessorStateManager implements StateManager {
         //      update to the last restore record's offset
         //   3. when checkpointing with the given written offsets from record collector,
         //      update blindly with the given offset
-        //   4. when restoration reaches a confirmed catch-up boundary with no further records to apply
-        //      (KAFKA-14302), as last-applied = next-fetch - 1, never moving backwards
+        // 4. when restoration reaches the end offset (the limit offset for standbys) with no further
+        //    records to apply, update to next offset to fetch minus one (last-applied); never moves backwards
         private Long offset;
 
         // Will be updated on batch restored
@@ -536,10 +536,10 @@ public class ProcessorStateManager implements StateManager {
     }
 
     /**
-     * Records that restoration has conclusively reached {@code nextOffsetToFetch} (Kafka next-offset-to-fetch
-     * semantics: log-end offset / restore boundary), converting to last-applied as
-     * {@code nextOffsetToFetch - 1}. Used when a catch-up boundary is confirmed with no further records
-     * to apply (KAFKA-14302). Does not change {@link #changelogOffsets()} mapping of {@code null -> 0}.
+     * Advances the store's restored offset once restoration has reached the end offset (the limit
+     * offset for standbys): {@code nextOffsetToFetch} is a next offset to fetch (exclusive end),
+     * stored as last-applied {@code nextOffsetToFetch - 1} (KAFKA-14302). Never moves backwards;
+     * a non-positive value is a no-op, so the stored offset stays non-negative.
      */
     void advanceRestoredOffsetTo(final StateStoreMetadata storeMetadata, final long nextOffsetToFetch) {
         if (!stores.containsValue(storeMetadata)) {
