@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -3780,6 +3781,72 @@ public class RemoteLogManagerTest {
             // Verify that the byte buffer has capacity equal to the size of the first batch
             assertEquals(recordBatchSizeInBytes, capture.getValue().capacity());
 
+        }
+    }
+
+    @Test
+    public void testReadClosesRemoteSegmentInputStreamWhenReadingBatchFails() throws RemoteStorageException, IOException {
+        FileInputStream fileInputStream = mock(FileInputStream.class);
+        RemoteLogInputStream remoteLogInputStream = mock(RemoteLogInputStream.class);
+        ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
+        RemoteLogSegmentMetadata segmentMetadata = mock(RemoteLogSegmentMetadata.class);
+        LeaderEpochFileCache cache = mock(LeaderEpochFileCache.class);
+        when(cache.epochForOffset(anyLong())).thenReturn(OptionalInt.of(1));
+        when(mockLog.leaderEpochCache()).thenReturn(cache);
+
+        int fetchOffset = 0;
+        int fetchMaxBytes = 10;
+
+        FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(
+                Uuid.randomUuid(), fetchOffset, 0, fetchMaxBytes, Optional.empty()
+        );
+
+        when(rsmManager.fetchLogSegment(any(), anyInt())).thenReturn(fileInputStream);
+        when(segmentMetadata.topicIdPartition()).thenReturn(new TopicIdPartition(Uuid.randomUuid(), tp));
+        // Reading the batch fails, as it would for a corrupted remote segment or when the remote
+        // storage plugin hits an I/O error part-way through the segment.
+        when(remoteLogInputStream.nextBatch()).thenThrow(new CorruptRecordException("Simulated corrupt batch"));
+
+        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
+                0, true, tpId, partitionData, FetchIsolation.HIGH_WATERMARK
+        );
+
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(
+                config,
+                brokerId,
+                logDir,
+                clusterId,
+                time,
+                tp -> Optional.of(mockLog),
+                (topicPartition, offset) -> {
+                },
+                brokerTopicStats,
+                metrics,
+                endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return rsmManager;
+            }
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+            @Override
+            public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition, int epochForOffset, long offset) {
+                return Optional.of(segmentMetadata);
+            }
+            @Override
+            public RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
+                return remoteLogInputStream;
+            }
+            @Override
+            int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+                return 1;
+            }
+        }) {
+            assertThrows(CorruptRecordException.class, () -> remoteLogManager.read(fetchInfo));
+            // The segment stream must be closed even though no batch was successfully read from it.
+            verify(fileInputStream).close();
         }
     }
 
