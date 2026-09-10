@@ -30,11 +30,13 @@ import static org.apache.kafka.common.record.internal.Records.SIZE_OFFSET;
 
 public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
     private final InputStream inputStream;
+    private final int maxMessageSize;
     // LogHeader buffer up to magic.
     private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(HEADER_SIZE_UP_TO_MAGIC);
 
-    public RemoteLogInputStream(InputStream inputStream) {
+    public RemoteLogInputStream(InputStream inputStream, int maxMessageSize) {
         this.inputStream = inputStream;
+        this.maxMessageSize = maxMessageSize;
     }
 
     @Override
@@ -52,6 +54,10 @@ public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
         if (size < LegacyRecord.RECORD_OVERHEAD_V0)
             throw new CorruptRecordException(String.format("Found record size %d smaller than minimum record " +
                                                                    "overhead (%d).", size, LegacyRecord.RECORD_OVERHEAD_V0));
+
+        if (size > maxMessageSize)
+            throw new CorruptRecordException(String.format("Found record size %d larger than the maximum allowable " +
+                                                                   "message size (%d).", size, maxMessageSize));
 
         // Total size is: "LOG_OVERHEAD + the size of the rest of the content"
         int bufferSize = LOG_OVERHEAD + size;
