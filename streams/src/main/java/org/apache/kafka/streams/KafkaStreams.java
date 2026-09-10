@@ -1251,13 +1251,20 @@ public class KafkaStreams implements AutoCloseable {
             //
             // `shutdown()` moves a thread to PENDING_SHUTDOWN synchronously while the underlying
             // Thread stays alive until `run()` returns, so filtering on the Streams state (not
-            // Thread liveness) is what keeps two concurrent removals from picking the same thread.
+            // Thread liveness alone) is what keeps two concurrent removals from picking the same
+            // thread.
             //
-            // Threads in CREATED are skipped deliberately: `addStreamThread` publishes a thread
-            // to `threads` before starting it, and a thread that never ran cannot reach DEAD.
+            // A thread in CREATED is removable only once started: `addStreamThread` publishes the
+            // thread to `threads` before starting it, and a thread that never ran cannot reach
+            // DEAD. A started thread stays in CREATED until `run()` begins executing, so Thread
+            // liveness covers that scheduling window; shutting such a thread down completes
+            // inline within shutdown().
             for (final StreamThread streamThread : new ArrayList<>(threads)) {
                 final boolean isNotCurrentThread = !streamThread.getName().equals(Thread.currentThread().getName());
-                if (streamThread.state().isAlive() && (isNotCurrentThread || numLiveStreamThreads() == 1)) {
+                final StreamThread.State threadState = streamThread.state();
+                final boolean removable = threadState.isAlive()
+                    || (threadState == StreamThread.State.CREATED && streamThread.isThreadAlive());
+                if (removable && (isNotCurrentThread || numLiveStreamThreads() == 1)) {
                     // shutdown() returns false if another caller requested this thread's shutdown
                     // between the isAlive() check above and this call: either its uncaught-exception
                     // handler, which will spawn a replacement, or a concurrent client close. In both

@@ -804,6 +804,35 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldRemoveStartedThreadStillInCreatedState() throws Exception {
+        // addStreamThread starts the new thread and returns immediately, but the thread's Streams
+        // state stays CREATED until run() begins executing. A removal in that scheduling window
+        // must still find the thread: it is started (Thread liveness), and shutting down a thread
+        // in CREATED completes inline within shutdown().
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadTwo, state2);
+        when(streamThreadOne.isThreadAlive()).thenReturn(true);
+        when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        doAnswer(invocation -> {
+            // The real shutdown() completes the shutdown inline for a thread in CREATED.
+            state1.set(StreamThread.State.DEAD);
+            return true;
+        }).when(streamThreadOne).shutdown(any());
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(
+                () -> streams.state() == KafkaStreams.State.RUNNING || streams.state() == KafkaStreams.State.REBALANCING,
+                15L,
+                "Kafka Streams client did not reach state RUNNING or REBALANCING");
+            assertEquals(Optional.of("processId-StreamThread-1"), streams.removeStreamThread());
+        }
+    }
+
+    @Test
     @Timeout(60)
     public void shouldNotBlockOtherThreadChangesWhileRemovalWaitsForShutdown() throws Exception {
         // A removal waits for the removed thread to reach DEAD without holding `changeThreadCount`,
