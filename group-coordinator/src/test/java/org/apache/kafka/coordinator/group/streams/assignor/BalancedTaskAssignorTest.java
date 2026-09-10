@@ -33,6 +33,7 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -142,10 +143,8 @@ public class BalancedTaskAssignorTest {
             statefulTopology(2, SUBTOPOLOGY_1)
         );
 
-        assertEquals(1, activeTaskCount(result, "member1"));
-        assertEquals(1, activeTaskCount(result, "member2"));
-        assertEquals(0, activeTaskCount(result, "member3"));
-        assertEquals(0, activeTaskCount(result, "member4"));
+        // Which two of the four interchangeable processes receive a task is a tie-break, not a property.
+        assertEquals(List.of(0, 0, 1, 1), sortedActiveTaskCounts(result, "member1", "member2", "member3", "member4"));
         assertAllTasksAssignedOnce(result, statefulTopology(2, SUBTOPOLOGY_1));
     }
 
@@ -157,14 +156,9 @@ public class BalancedTaskAssignorTest {
         );
 
         // Each process gets one partition of each subtopology, never both partitions of the same subtopology.
-        assertEquals(
-            mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0)), mkEntry(SUBTOPOLOGY_2, Set.of(0))),
-            result.members().get("member1").activeTasks()
-        );
-        assertEquals(
-            mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(1)), mkEntry(SUBTOPOLOGY_2, Set.of(1))),
-            result.members().get("member2").activeTasks()
-        );
+        assertOnePartitionOfEachSubtopology(result, "member1", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
+        assertOnePartitionOfEachSubtopology(result, "member2", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
+        assertAllTasksAssignedOnce(result, statefulTopology(2, SUBTOPOLOGY_1, SUBTOPOLOGY_2));
     }
 
     @Test
@@ -182,14 +176,9 @@ public class BalancedTaskAssignorTest {
         assertEquals(mkMap(mkEntry(SUBTOPOLOGY_2, Set.of(0, 1))), sticky.members().get("member2").activeTasks());
 
         final GroupAssignment balanced = assignor.assign(new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT), topology);
-        assertEquals(
-            mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0)), mkEntry(SUBTOPOLOGY_2, Set.of(0))),
-            balanced.members().get("member1").activeTasks()
-        );
-        assertEquals(
-            mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(1)), mkEntry(SUBTOPOLOGY_2, Set.of(1))),
-            balanced.members().get("member2").activeTasks()
-        );
+        assertOnePartitionOfEachSubtopology(balanced, "member1", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
+        assertOnePartitionOfEachSubtopology(balanced, "member2", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
+        assertAllTasksAssignedOnce(balanced, topology);
     }
 
     @Test
@@ -223,8 +212,12 @@ public class BalancedTaskAssignorTest {
             statefulTopology(4, SUBTOPOLOGY_1)
         );
 
-        assertEquals(mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0, 1))), result.members().get("member1").activeTasks());
-        assertEquals(mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(2, 3))), result.members().get("member2").activeTasks());
+        // member1 keeps two of its current tasks -- which two is a tie-break -- and member2 receives the other two.
+        final Set<Integer> keptByMember1 = result.members().get("member1").activeTasks().get(SUBTOPOLOGY_1);
+        final Set<Integer> movedToMember2 = result.members().get("member2").activeTasks().get(SUBTOPOLOGY_1);
+        assertEquals(2, keptByMember1.size());
+        assertEquals(2, movedToMember2.size());
+        assertAllTasksAssignedOnce(result, statefulTopology(4, SUBTOPOLOGY_1));
     }
 
     @Test
@@ -473,6 +466,20 @@ public class BalancedTaskAssignorTest {
         final MemberAssignment member = result.members().get(memberId);
         assertNotNull(member);
         return member.activeTasks().values().stream().mapToInt(Set::size).sum();
+    }
+
+    private static List<Integer> sortedActiveTaskCounts(final GroupAssignment result, final String... memberIds) {
+        return Stream.of(memberIds).map(memberId -> activeTaskCount(result, memberId)).sorted().toList();
+    }
+
+    /** The member holds exactly one partition of each of the given subtopologies and nothing else. */
+    private static void assertOnePartitionOfEachSubtopology(final GroupAssignment result,
+                                                            final String memberId,
+                                                            final String... subtopologies) {
+        final Map<String, Set<Integer>> activeTasks = result.members().get(memberId).activeTasks();
+        assertEquals(Set.of(subtopologies), activeTasks.keySet(), memberId + " holds " + activeTasks);
+        activeTasks.forEach((subtopology, partitions) ->
+            assertEquals(1, partitions.size(), memberId + " holds " + partitions + " of " + subtopology));
     }
 
     private static int standbyTaskCount(final GroupAssignment result, final String memberId) {
