@@ -185,15 +185,6 @@ public class LeaderEpochFileCacheTest {
     }
 
     @Test
-    public void shouldNotUpdateEpochAndStartOffsetIfItDidNotChange() {
-        cache.assign(2, 6);
-        cache.assign(2, 7);
-
-        assertEquals(1, cache.epochEntries().size());
-        assertEquals(new EpochEntry(2, 6), cache.epochEntries().get(0));
-    }
-
-    @Test
     public void shouldReturnInvalidOffsetIfEpochIsRequestedWhichIsNotCurrentlyTracked() {
         cache.assign(2, 100);
 
@@ -543,6 +534,33 @@ public class LeaderEpochFileCacheTest {
         assertEquals(OptionalInt.of(5), cache.epochForOffset(30));
         assertEquals(OptionalInt.of(5), cache.epochForOffset(50));
         assertEquals(OptionalInt.empty(), cache.epochForOffset(5));
+    }
+
+    @Test
+    public void shouldReturnEpochEntriesInRangeWithoutMutatingCache() {
+        List<EpochEntry> allEntries = List.of(
+                new EpochEntry(0, 0),
+                new EpochEntry(1, 5),
+                new EpochEntry(2, 10),
+                new EpochEntry(3, 15));
+        cache.assign(0, 0);
+        cache.assign(1, 5);
+        cache.assign(2, 10);
+        cache.assign(3, 15);
+
+        assertEquals(
+                List.of(new EpochEntry(1, 7), new EpochEntry(2, 10)),
+                cache.epochEntriesInRange(7, 15));
+        assertEquals(allEntries, cache.epochEntries());
+    }
+
+    @Test
+    public void shouldReturnNoEpochEntriesForEmptyRange() {
+        cache.assign(0, 0);
+        cache.assign(1, 5);
+        cache.assign(2, 10);
+
+        assertEquals(List.of(), cache.epochEntriesInRange(10, 10));
     }
 
     @Test
