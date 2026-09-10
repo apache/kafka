@@ -1863,10 +1863,11 @@ public class StreamThreadTest {
         thread.start();
         assertTrue(pollEntered.await(10, TimeUnit.SECONDS), "StreamThread never reached poll");
 
-        // A removal or replacement wins the shutdown; the close path loses and records its operation.
+        // A removal or replacement wins the shutdown; the close path loses and records its
+        // operation, which must succeed while the thread has not consumed the operation yet.
         assertTrue(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT));
         assertFalse(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
-        thread.updateGroupMembershipOperation(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+        assertTrue(thread.updateGroupMembershipOperation(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
 
         releasePoll.countDown();
         TestUtils.waitForCondition(
@@ -1881,6 +1882,10 @@ public class StreamThreadTest {
             GroupMembershipOperation.LEAVE_GROUP,
             captor.getValue().groupMembershipOperation()
         );
+
+        // Once the thread has consumed the operation for its consumer shutdown, updates are
+        // rejected: they could no longer influence anything.
+        assertFalse(thread.updateGroupMembershipOperation(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
     }
 
     @ParameterizedTest

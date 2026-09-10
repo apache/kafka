@@ -377,6 +377,10 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
         new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
+    // Guards the hand-off of leaveGroupRequested to completeShutdown: an update is applied if and
+    // only if it acquires the lock before the shutting-down thread consumes the operation.
+    private final Object leaveGroupRequestedLock = new Object();
+    private boolean leaveGroupRequestedConsumed = false;
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean processingThreadsEnabled;
@@ -1928,13 +1932,16 @@ public class StreamThread extends Thread implements ProcessingThread {
      */
     public boolean shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         log.info("Informed to shut down");
-        final State oldState = setState(State.PENDING_SHUTDOWN);
-        if (oldState == null) {
-            // Shutdown was already requested by another caller (a concurrent removal, thread
-            // replacement, or client close); that caller owns this thread's death.
-            return false;
+        final State oldState;
+        synchronized (leaveGroupRequestedLock) {
+            oldState = setState(State.PENDING_SHUTDOWN);
+            if (oldState == null) {
+                // Shutdown was already requested by another caller (a concurrent removal, thread
+                // replacement, or client close); that caller owns this thread's death.
+                return false;
+            }
+            leaveGroupRequested.set(operation);
         }
-        leaveGroupRequested.set(operation);
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);
@@ -1942,8 +1949,25 @@ public class StreamThread extends Thread implements ProcessingThread {
         return true;
     }
 
-    public void updateGroupMembershipOperation(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
-        leaveGroupRequested.set(operation);
+    /**
+     * Update the group membership operation of an already-initiated shutdown, without affecting
+     * who initiated it. Synchronized against the consumption of the operation in
+     * {@code completeShutdown}: an update that runs before the shutting-down thread consumes the
+     * operation is guaranteed to be applied; afterwards the update is rejected, since the
+     * consumer is already closing with the earlier operation.
+     *
+     * @param operation the group membership operation to apply on shutdown
+     * @return true if the operation was recorded; false if the thread has already consumed the
+     *         operation for its consumer shutdown, in which case the earlier operation applies
+     */
+    public boolean updateGroupMembershipOperation(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
+        synchronized (leaveGroupRequestedLock) {
+            if (leaveGroupRequestedConsumed) {
+                return false;
+            }
+            leaveGroupRequested.set(operation);
+            return true;
+        }
     }
 
     private void completeShutdown(final boolean cleanRun) {
@@ -1972,7 +1996,13 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
-            final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation streamsOperation = leaveGroupRequested.get();
+            final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation streamsOperation;
+            synchronized (leaveGroupRequestedLock) {
+                // Consume the operation: from here on, updateGroupMembershipOperation rejects
+                // changes, since they could no longer influence the consumer shutdown below.
+                leaveGroupRequestedConsumed = true;
+                streamsOperation = leaveGroupRequested.get();
+            }
             final GroupMembershipOperation membershipOperation;
             if (streamsOperation == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP) {
                 membershipOperation = LEAVE_GROUP;

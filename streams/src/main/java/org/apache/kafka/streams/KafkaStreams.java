@@ -1620,8 +1620,10 @@ public class KafkaStreams implements AutoCloseable {
             // who initiated its shutdown.
             int numStreamThreads = processStreamThread(
                 streamThread -> {
-                    if (!streamThread.shutdown(operation)) {
-                        streamThread.updateGroupMembershipOperation(operation);
+                    if (!streamThread.shutdown(operation)
+                        && !streamThread.updateGroupMembershipOperation(operation)) {
+                        log.info("{} already started closing its consumer, so it shuts down with the "
+                            + "group membership operation of the earlier shutdown request", streamThread.getName());
                     }
                 }
             );
