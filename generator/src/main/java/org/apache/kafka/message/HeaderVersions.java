@@ -122,7 +122,13 @@ public final class HeaderVersions {
                 "covers every version the schema describes, including versions that are no longer valid.");
         }
         for (int i = 1; i < entries.size(); i++) {
-            int expected = entries.get(i - 1).range.highest() + 1;
+            Versions previous = entries.get(i - 1).range;
+            if (previous.highest() == Short.MAX_VALUE) {
+                throw new RuntimeException("Message " + messageName + " has an open-ended headerVersions range " +
+                    previous + " that is followed by " + entries.get(i).range + "; only the last range may be " +
+                    "open-ended.");
+            }
+            int expected = previous.highest() + 1;
             if (entries.get(i).range.lowest() != expected) {
                 throw new RuntimeException("Message " + messageName + " has non-contiguous headerVersions: the " +
                     "range after " + entries.get(i - 1).range + " must start at version " + expected +

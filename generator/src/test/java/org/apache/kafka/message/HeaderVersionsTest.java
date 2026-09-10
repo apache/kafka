@@ -207,6 +207,22 @@ public class HeaderVersionsTest {
     }
 
     @Test
+    public void testOpenEndedRangeNotLast() {
+        assertMessageContains("only the last range may be open-ended",
+            () -> parse(responseSpec(0, "FooResponse", "0-1", "none", "{'0+': '0', '1+': '1'}")));
+        // Open-ended in the middle of three ranges.
+        assertMessageContains("only the last range may be open-ended",
+            () -> parse(requestSpec("0-9", "2+", "{'0-1': '1', '2+': '2', '5+': '2'}")));
+        // Sorting is by lowest version, not JSON order, so an open-ended range that is last in the
+        // JSON but not last by version is still rejected.
+        assertMessageContains("only the last range may be open-ended",
+            () -> parse(requestSpec("0-9", "2+", "{'2+': '2', '0+': '1'}")));
+        // Two ranges starting at the same version, the open-ended one first.
+        assertMessageContains("only the last range may be open-ended",
+            () -> parse(requestSpec("0-9", "2+", "{'0+': '2', '0-1': '1'}")));
+    }
+
+    @Test
     public void testRangeBeyondValidVersions() {
         assertMessageContains("above the highest valid version",
             () -> parse(requestSpec("0-2", "3+", "{'0-2': '1', '3+': '2'}")));
@@ -245,10 +261,25 @@ public class HeaderVersionsTest {
     }
 
     @Test
-    public void testFlexibleRequestAcceptsNewerHeaderVersion() throws Exception {
-        // Request header v3 (KIP-1313) is flexible, so a flexible body may declare it.
-        MessageSpec spec = parse(requestSpec("0-5", "0+", "{'0+': '3'}"));
-        assertEquals((short) 3, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
+    public void testRequestHeaderVersionMustExist() {
+        // Request header v3 does not exist yet, so a schema may not declare it.
+        assertMessageContains("does not exist", () -> parse(requestSpec("0-5", "0+", "{'0+': '3'}")));
+        assertMessageContains("does not exist",
+            () -> parse(requestSpec("0-6", "3+", "{'0-2': '1', '3-5': '2', '6+': '3'}")));
+    }
+
+    @Test
+    public void testResponseHeaderVersionMustExist() {
+        assertMessageContains("does not exist",
+            () -> parse(responseSpec(0, "FooResponse", "0-5", "0+", "{'0+': '2'}")));
+    }
+
+    @Test
+    public void testHighestExistingHeaderVersionsAccepted() throws Exception {
+        MessageSpec spec = parse(requestSpec("0-5", "0+", "{'0+': '2'}"));
+        assertEquals((short) 2, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
+        spec = parse(responseSpec(0, "FooResponse", "0-5", "0+", "{'0+': '1'}"));
+        assertEquals((short) 1, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
     }
 
     @Test

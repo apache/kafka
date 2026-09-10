@@ -43,9 +43,12 @@ public final class MessageSpec {
     private final boolean latestVersionUnstable;
 
     // Fixed by the RequestHeader and ResponseHeader schemas: request header v2 is the first flexible version
-    // and response header v1 the first flexible one.
+    // and response header v1 the first flexible one. The highest versions must be bumped when a new header
+    // version is added to those schemas.
     static final short FIRST_FLEXIBLE_REQUEST_HEADER = 2;
     static final short FIRST_FLEXIBLE_RESPONSE_HEADER = 1;
+    static final short HIGHEST_REQUEST_HEADER = 2;
+    static final short HIGHEST_RESPONSE_HEADER = 1;
 
     // ApiVersionsResponse always uses a v0 header so that older brokers can parse it (KIP-511).
     static final short API_VERSIONS_API_KEY = 18;
@@ -131,10 +134,10 @@ public final class MessageSpec {
     }
 
     /**
-     * Check that a flexible body maps to a flexible header: request header v2 or response header v1 and
-     * above. ApiVersionsResponse is the exception and is pinned to header v0 (KIP-511). The rest of the
-     * invariant (that non-flexible bodies use the fixed non-flexible header, and that every header version
-     * exists) is enforced against the generated code by ApiMessageTypeTest.
+     * Check that every header version exists, and that a flexible body maps to a flexible header: request
+     * header v2 or response header v1 and above. ApiVersionsResponse is the exception and is pinned to
+     * header v0 (KIP-511). The rest of the invariant (that non-flexible bodies use the fixed non-flexible
+     * header) is enforced against the generated code by ApiMessageTypeTest.
      */
     private void checkHeaderVersionInvariants() {
         if (headerVersions.isEmpty()) {
@@ -143,8 +146,14 @@ public final class MessageSpec {
         boolean isRequest = type == MessageSpecType.REQUEST;
         String typeName = isRequest ? "request" : "response";
         short firstFlexibleHeader = isRequest ? FIRST_FLEXIBLE_REQUEST_HEADER : FIRST_FLEXIBLE_RESPONSE_HEADER;
+        short highestHeader = isRequest ? HIGHEST_REQUEST_HEADER : HIGHEST_RESPONSE_HEADER;
         boolean apiVersionsResponse = !isRequest && apiKey.isPresent() && apiKey.get() == API_VERSIONS_API_KEY;
         for (HeaderVersions.Entry entry : headerVersions.get().entries()) {
+            if (entry.headerVersion() > highestHeader) {
+                throw new RuntimeException("Message " + name() + " maps versions " + entry.range() + " to " +
+                    typeName + " header version " + entry.headerVersion() + ", which does not exist; the highest " +
+                    typeName + " header version is " + highestHeader + ".");
+            }
             if (apiVersionsResponse) {
                 if (entry.headerVersion() != 0) {
                     throw new RuntimeException("Message " + name() + " maps versions " + entry.range() +
