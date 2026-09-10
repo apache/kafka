@@ -526,7 +526,7 @@ org.apache.kafka.streams.errors.ExceptionHandlerUtilsTest:
 - checkDeadLetterQueueRecords
 - doNotBuildDeadLetterQueueRecordsIfNotConfigured
 org.apache.kafka.streams.internals.ApiUtilsTest:
-- shouldContainsNameAndValueInFailMsgPrefix
+- shouldContainNameAndValueInFailMsgPrefix
 - shouldReturnMillisecondsOnValidDuration
 - shouldReturnMillisecondsOnValidInstant
 - shouldThrowIllegalArgumentExceptionForMaxDuration
@@ -766,7 +766,7 @@ org.apache.kafka.streams.kstream.internals.CogroupedKStreamImplTest:
 - shouldNotHaveNullMaterializedOnAggregate
 - shouldNotHaveNullMaterializedOnAggregateWithNames
 - shouldNotHaveNullNamedOnAggregate
-- shouldNotHaveNullNamedOnAggregateWithMateriazlied
+- shouldNotHaveNullNamedOnAggregateWithMaterialized
 - shouldNotHaveNullWindowOnWindowedBySession
 - shouldNotHaveNullWindowOnWindowedBySliding
 - shouldNotHaveNullWindowOnWindowedByTime
@@ -802,7 +802,7 @@ org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest:
 - shouldAddTopicToLatestAutoOffsetResetList
 - shouldAddTopicToNoneAutoOffsetResetList
 - shouldBuildGlobalTableWithNonQueryableStoreName
-- shouldBuildGlobalTableWithQueryaIbleStoreName
+- shouldBuildGlobalTableWithQueryableStoreName
 - shouldBuildGlobalTopologyWithAllGlobalTables
 - shouldBuildSimpleGlobalTableTopology
 - shouldFindMatchingAncestorWhenLaterParentHasNoMatch
@@ -811,8 +811,8 @@ org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest:
 - shouldMapStateStoresToCorrectSourceTopics
 - shouldMarkAllStreamStreamJoinsAsSelfJoin
 - shouldMarkFirstStreamStreamJoinAsSelfJoin3WayJoin
-- shouldMarkFirstStreamStreamJoinAsSelfJoinNway
-- shouldMarkFirstStreamStreamJoinAsSelfJoinNwaySameSource
+- shouldMarkFirstStreamStreamJoinAsSelfJoinNWay
+- shouldMarkFirstStreamStreamJoinAsSelfJoinNWaySameSource
 - shouldMarkStreamStreamJoinAsSelfJoinMergeTwoStreams
 - shouldMarkStreamStreamJoinAsSelfJoinSingleStream
 - shouldMarkStreamStreamJoinAsSelfJoinTwoJoinsSameSource
