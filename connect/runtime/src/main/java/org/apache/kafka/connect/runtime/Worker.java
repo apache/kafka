@@ -870,6 +870,8 @@ public final class Worker {
                                            connectorClientConfigOverridePolicy);
         producerProps.putAll(producerOverrides);
 
+        ConnectUtils.enforceSynchronousBootstrapResolution(producerProps);
+
         return producerProps;
     }
 
@@ -938,6 +940,8 @@ public final class Worker {
                                            connectorClientConfigOverridePolicy);
         consumerProps.putAll(consumerOverrides);
 
+        ConnectUtils.enforceSynchronousBootstrapResolution(consumerProps);
+
         return consumerProps;
     }
 
@@ -976,6 +980,8 @@ public final class Worker {
 
         //add client metrics.context properties
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
+
+        ConnectUtils.enforceSynchronousBootstrapResolution(adminProps);
 
         return adminProps;
     }

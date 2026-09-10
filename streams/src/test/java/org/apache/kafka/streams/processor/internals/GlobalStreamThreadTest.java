@@ -63,15 +63,12 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
 import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -157,7 +154,7 @@ public class GlobalStreamThreadTest {
             "Should have thrown StreamsException if start up failed.");
 
         globalStreamThread.join();
-        assertThat(globalStore.isOpen(), is(false));
+        assertFalse(globalStore.isOpen());
         assertFalse(globalStreamThread.stillRunning());
     }
 
@@ -184,15 +181,14 @@ public class GlobalStreamThreadTest {
             e -> { }
         );
 
-        try {
-            globalStreamThread.start();
-            fail("Should have thrown StreamsException if start up failed");
-        } catch (final StreamsException e) {
-            assertThat(e.getCause(), instanceOf(RuntimeException.class));
-            assertThat(e.getCause().getMessage(), equalTo("KABOOM!"));
-        }
+        final StreamsException exception = assertThrows(
+            StreamsException.class,
+            globalStreamThread::start,
+            "Should have thrown StreamsException if start up failed");
+        assertInstanceOf(RuntimeException.class, exception.getCause());
+        assertEquals("KABOOM!", exception.getCause().getMessage());
         globalStreamThread.join();
-        assertThat(globalStore.isOpen(), is(false));
+        assertFalse(globalStore.isOpen());
         assertFalse(globalStreamThread.stillRunning());
     }
 
@@ -291,7 +287,7 @@ public class GlobalStreamThreadTest {
             final StreamsException e = assertThrows(StreamsException.class,
                 () -> globalStreamThread.start(),
                 "Should have thrown StreamsException if start up failed.");
-            assertThat(e.getCause(), instanceOf(InvalidOffsetException.class));
+            assertInstanceOf(InvalidOffsetException.class, e.getCause());
 
             TestUtils.waitForCondition(
                 () -> globalStreamThread.state() == DEAD,
@@ -304,7 +300,7 @@ public class GlobalStreamThreadTest {
         }
 
         assertFalse(globalStreamThread.isAlive());
-        assertThat(globalStore.isOpen(), is(false));
+        assertFalse(globalStore.isOpen());
         assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
     }
 
@@ -361,7 +357,7 @@ public class GlobalStreamThreadTest {
         final StreamsException e = assertThrows(StreamsException.class,
             () -> globalStreamThread.start(),
             "Should have thrown StreamsException if start up failed.");
-        assertThat(e.getCause(), instanceOf(TaskCorruptedException.class));
+        assertInstanceOf(TaskCorruptedException.class, e.getCause());
 
         globalStreamThread.join();
 
@@ -429,7 +425,7 @@ public class GlobalStreamThreadTest {
             final StreamsException e = assertThrows(StreamsException.class,
                 () -> globalStreamThread.start(),
                 "Should have thrown StreamsException if start up failed.");
-            assertThat(e.getCause(), instanceOf(TaskCorruptedException.class));
+            assertInstanceOf(TaskCorruptedException.class, e.getCause());
 
             TestUtils.waitForCondition(
                 () -> globalStreamThread.state() == DEAD,
@@ -442,7 +438,7 @@ public class GlobalStreamThreadTest {
         }
 
         assertFalse(globalStreamThread.isAlive());
-        assertThat(globalStore.isOpen(), is(false));
+        assertFalse(globalStore.isOpen());
         assertFalse(globalStateDir.exists());
     }
 
@@ -479,7 +475,7 @@ public class GlobalStreamThreadTest {
         );
         globalStreamThread.join();
 
-        assertThat(globalStore.isOpen(), is(false));
+        assertFalse(globalStore.isOpen());
         assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
     }
 
@@ -495,7 +491,7 @@ public class GlobalStreamThreadTest {
             final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ZERO);
             final Uuid result = future.get();
 
-            assertThat(result, equalTo(instanceId));
+            assertEquals(instanceId, result);
         } finally {
             globalStreamThread.shutdown();
             globalStreamThread.join();
@@ -515,7 +511,7 @@ public class GlobalStreamThreadTest {
             final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ZERO);
             final Uuid result = future.get();
 
-            assertThat(result, equalTo(instanceId));
+            assertEquals(instanceId, result);
         } finally {
             globalStreamThread.shutdown();
             globalStreamThread.join();
@@ -532,7 +528,7 @@ public class GlobalStreamThreadTest {
             final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ZERO);
             final Uuid result = future.get();
 
-            assertThat(result, equalTo(null));
+            assertNull(result);
         } finally {
             globalStreamThread.shutdown();
             globalStreamThread.join();
@@ -548,8 +544,8 @@ public class GlobalStreamThreadTest {
             final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ZERO);
 
             final ExecutionException error = assertThrows(ExecutionException.class, future::get);
-            assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
-            assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
+            assertInstanceOf(UnsupportedOperationException.class, error.getCause());
+            assertEquals("clientInstanceId not set", error.getCause().getMessage());
         } finally {
             globalStreamThread.shutdown();
             globalStreamThread.join();
@@ -570,11 +566,8 @@ public class GlobalStreamThreadTest {
             time.sleep(1L);
 
             final ExecutionException error = assertThrows(ExecutionException.class, future::get);
-            assertThat(error.getCause(), instanceOf(TimeoutException.class));
-            assertThat(
-                error.getCause().getMessage(),
-                equalTo("Could not retrieve global consumer client instance id.")
-            );
+            assertInstanceOf(TimeoutException.class, error.getCause());
+            assertEquals("Could not retrieve global consumer client instance id.", error.getCause().getMessage());
         } finally {
             globalStreamThread.shutdown();
             globalStreamThread.join();
@@ -605,15 +598,14 @@ public class GlobalStreamThreadTest {
                 e -> { }
         );
 
-        try {
-            globalStreamThread.start();
-            fail("Should have thrown StreamsException if start up failed");
-        } catch (final StreamsException e) {
-            assertThat(e.getCause(), instanceOf(Throwable.class));
-            assertThat(e.getCause().getMessage(), equalTo(exceptionMessage));
-        }
+        final StreamsException exception = assertThrows(
+            StreamsException.class,
+            globalStreamThread::start,
+            "Should have thrown StreamsException if start up failed");
+        assertInstanceOf(Throwable.class, exception.getCause());
+        assertEquals(exceptionMessage, exception.getCause().getMessage());
         globalStreamThread.join();
-        assertThat(globalStore.isOpen(), is(false));
+        assertFalse(globalStore.isOpen());
         assertFalse(globalStreamThread.stillRunning());
     }
 

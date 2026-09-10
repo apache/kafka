@@ -74,12 +74,7 @@ public class KafkaMbeanTest {
     @Test
     public void testGetAttributeUnknown() throws Exception {
         sensor.record(2.5);
-        try {
-            getAttribute(sumMetricName, "name");
-            fail("Should have gotten attribute not found");
-        } catch (AttributeNotFoundException e) {
-            // Expected
-        }
+        assertThrows(AttributeNotFoundException.class, () -> getAttribute(sumMetricName, "name"));
     }
 
     @Test

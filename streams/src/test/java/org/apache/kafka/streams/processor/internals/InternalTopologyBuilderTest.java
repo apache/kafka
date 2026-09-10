@@ -77,20 +77,13 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_2;
 import static org.apache.kafka.streams.utils.TestUtils.dummyStreamsConfigMap;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class InternalTopologyBuilderTest {
 
@@ -112,11 +105,11 @@ public class InternalTopologyBuilderTest {
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.byDuration(Duration.ofSeconds(42))), "source3", null, null, null, durationTopic);
         builder.initializeSubscription();
 
-        assertThat(builder.offsetResetStrategy(noneTopic), equalTo(AutoOffsetResetStrategy.NONE));
-        assertThat(builder.offsetResetStrategy(earliestTopic), equalTo(AutoOffsetResetStrategy.EARLIEST));
-        assertThat(builder.offsetResetStrategy(latestTopic), equalTo(AutoOffsetResetStrategy.LATEST));
-        assertThat(builder.offsetResetStrategy(durationTopic).type(), equalTo(AutoOffsetResetStrategy.StrategyType.BY_DURATION));
-        assertThat(builder.offsetResetStrategy(durationTopic).duration().orElseThrow().toSeconds(), equalTo(42L));
+        assertEquals(AutoOffsetResetStrategy.NONE, builder.offsetResetStrategy(noneTopic));
+        assertEquals(AutoOffsetResetStrategy.EARLIEST, builder.offsetResetStrategy(earliestTopic));
+        assertEquals(AutoOffsetResetStrategy.LATEST, builder.offsetResetStrategy(latestTopic));
+        assertEquals(AutoOffsetResetStrategy.StrategyType.BY_DURATION, builder.offsetResetStrategy(durationTopic).type());
+        assertEquals(42L, builder.offsetResetStrategy(durationTopic).duration().orElseThrow().toSeconds());
     }
 
     @Test
@@ -133,11 +126,11 @@ public class InternalTopologyBuilderTest {
 
         builder.initializeSubscription();
 
-        assertThat(builder.offsetResetStrategy("noneTestTopic"), equalTo(AutoOffsetResetStrategy.NONE));
-        assertThat(builder.offsetResetStrategy("earliestTestTopic"), equalTo(AutoOffsetResetStrategy.EARLIEST));
-        assertThat(builder.offsetResetStrategy("latestTestTopic"), equalTo(AutoOffsetResetStrategy.LATEST));
-        assertThat(builder.offsetResetStrategy("durationTestTopic").type(), equalTo(AutoOffsetResetStrategy.StrategyType.BY_DURATION));
-        assertThat(builder.offsetResetStrategy("durationTestTopic").duration().orElseThrow().toSeconds(), equalTo(42L));
+        assertEquals(AutoOffsetResetStrategy.NONE, builder.offsetResetStrategy("noneTestTopic"));
+        assertEquals(AutoOffsetResetStrategy.EARLIEST, builder.offsetResetStrategy("earliestTestTopic"));
+        assertEquals(AutoOffsetResetStrategy.LATEST, builder.offsetResetStrategy("latestTestTopic"));
+        assertEquals(AutoOffsetResetStrategy.StrategyType.BY_DURATION, builder.offsetResetStrategy("durationTestTopic").type());
+        assertEquals(42L, builder.offsetResetStrategy("durationTestTopic").duration().orElseThrow().toSeconds());
     }
 
     @Test
@@ -147,7 +140,7 @@ public class InternalTopologyBuilderTest {
 
         assertEquals(Collections.singletonList("test-topic"), builder.fullSourceTopicNames());
 
-        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(null));
+        assertNull(builder.offsetResetStrategy("test-topic"));
     }
 
     @Test
@@ -157,9 +150,9 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
         builder.initializeSubscription();
 
-        assertThat(expectedPattern.pattern(), builder.sourceTopicPatternString(), equalTo("test-.*"));
+        assertEquals("test-.*", builder.sourceTopicPatternString(), expectedPattern.pattern());
 
-        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(null));
+        assertNull(builder.offsetResetStrategy("test-topic"));
     }
 
     @Test
@@ -171,38 +164,34 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldNotAllowOffsetResetSourceWithDuplicateSourceName() {
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.earliest()), "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
-        try {
-            builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
-            fail("Should throw TopologyException for duplicate source name");
-        } catch (final TopologyException expected) { /* ok */ }
+        assertThrows(TopologyException.class,
+            () -> builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-2"),
+            "Should throw TopologyException for duplicate source name");
     }
 
     @Test
     public void testAddSourceWithSameName() {
         builder.addSource(null, "source", null, null, null, "topic-1");
-        try {
-            builder.addSource(null, "source", null, null, null, "topic-2");
-            fail("Should throw TopologyException with source name conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        assertThrows(TopologyException.class,
+            () -> builder.addSource(null, "source", null, null, null, "topic-2"),
+            "Should throw TopologyException with source name conflict");
     }
 
     @Test
     public void testAddSourceWithSameTopic() {
         builder.addSource(null, "source", null, null, null, "topic-1");
-        try {
-            builder.addSource(null, "source-2", null, null, null, "topic-1");
-            fail("Should throw TopologyException with topic conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        assertThrows(TopologyException.class,
+            () -> builder.addSource(null, "source-2", null, null, null, "topic-1"),
+            "Should throw TopologyException with topic conflict");
     }
 
     @Test
     public void testAddProcessorWithSameName() {
         builder.addSource(null, "source", null, null, null, "topic-1");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        try {
-            builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-            fail("Should throw TopologyException with processor name conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        assertThrows(TopologyException.class,
+            () -> builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source"),
+            "Should throw TopologyException with processor name conflict");
     }
 
     @Test
@@ -233,7 +222,7 @@ public class InternalTopologyBuilderTest {
                 IllegalArgumentException.class,
             () -> builder.addProcessor("processor", () -> processor, (String) null)
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -252,17 +241,16 @@ public class InternalTopologyBuilderTest {
                 false
             )
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
     public void testAddSinkWithSameName() {
         builder.addSource(null, "source", null, null, null, "topic-1");
         builder.addSink("sink", "topic-2", null, null, null, "source");
-        try {
-            builder.addSink("sink", "topic-3", null, null, null, "source");
-            fail("Should throw TopologyException with sink name conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        assertThrows(TopologyException.class,
+            () -> builder.addSink("sink", "topic-3", null, null, null, "source"),
+            "Should throw TopologyException with sink name conflict");
     }
 
     @Test
@@ -392,7 +380,7 @@ public class InternalTopologyBuilderTest {
         );
         builder.initializeSubscription();
 
-        assertThat(builder.fullSourceTopicNames(), equalTo(asList("topic-1", "topic-2")));
+        assertEquals(List.of("topic-1", "topic-2"), builder.fullSourceTopicNames());
     }
 
     @Test
@@ -430,19 +418,17 @@ public class InternalTopologyBuilderTest {
     @Test
     public void testPatternMatchesAlreadyProvidedTopicSource() {
         builder.addSource(null, "source-1", null, null, null, "foo");
-        try {
-            builder.addSource(null, "source-2", null, null, null, Pattern.compile("f.*"));
-            fail("Should throw TopologyException with topic name/pattern conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        assertThrows(TopologyException.class,
+            () -> builder.addSource(null, "source-2", null, null, null, Pattern.compile("f.*")),
+            "Should throw TopologyException with topic name/pattern conflict");
     }
 
     @Test
     public void testNamedTopicMatchesAlreadyProvidedPattern() {
         builder.addSource(null, "source-1", null, null, null, Pattern.compile("f.*"));
-        try {
-            builder.addSource(null, "source-2", null, null, null, "foo");
-            fail("Should throw TopologyException with topic name/pattern conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        assertThrows(TopologyException.class,
+            () -> builder.addSource(null, "source-2", null, null, null, "foo"),
+            "Should throw TopologyException with topic name/pattern conflict");
     }
 
     @Test
@@ -453,20 +439,18 @@ public class InternalTopologyBuilderTest {
     @Test
     public void testAddStateStoreWithSource() {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
-        try {
-            builder.addStateStore(storeFactory, "source-1");
-            fail("Should throw TopologyException with store cannot be added to source");
-        } catch (final TopologyException expected) { /* ok */ }
+        assertThrows(TopologyException.class,
+            () -> builder.addStateStore(storeFactory, "source-1"),
+            "Should throw TopologyException with store cannot be added to source");
     }
 
     @Test
     public void testAddStateStoreWithSink() {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSink("sink-1", "topic-1", null, null, null, "source-1");
-        try {
-            builder.addStateStore(storeFactory, "sink-1");
-            fail("Should throw TopologyException with store cannot be added to sink");
-        } catch (final TopologyException expected) { /* ok */ }
+        assertThrows(TopologyException.class,
+            () -> builder.addStateStore(storeFactory, "sink-1"),
+            "Should throw TopologyException with store cannot be added to sink");
     }
 
     @Test
@@ -481,10 +465,7 @@ public class InternalTopologyBuilderTest {
             () -> builder.addStateStore(otherBuilder)
         );
 
-        assertThat(
-            exception.getMessage(),
-            equalTo("Invalid topology: A different StateStore has already been added with the name testStore")
-        );
+        assertEquals("Invalid topology: A different StateStore has already been added with the name testStore", exception.getMessage());
     }
 
     @Test
@@ -508,10 +489,7 @@ public class InternalTopologyBuilderTest {
             () -> builder.addStateStore(storeFactory)
         );
 
-        assertThat(
-            exception.getMessage(),
-            equalTo("Invalid topology: A different GlobalStateStore has already been added with the name testStore")
-        );
+        assertEquals("Invalid topology: A different GlobalStateStore has already been added with the name testStore", exception.getMessage());
     }
 
     @Test
@@ -535,10 +513,7 @@ public class InternalTopologyBuilderTest {
             )
         );
 
-        assertThat(
-            exception.getMessage(),
-            equalTo("Invalid topology: A different StateStore has already been added with the name testStore")
-        );
+        assertEquals("Invalid topology: A different StateStore has already been added with the name testStore", exception.getMessage());
     }
 
     @Test
@@ -573,10 +548,7 @@ public class InternalTopologyBuilderTest {
             )
         );
 
-        assertThat(
-            exception.getMessage(),
-            equalTo("Invalid topology: A different GlobalStateStore has already been added with the name testStore")
-        );
+        assertEquals("Invalid topology: A different GlobalStateStore has already been added with the name testStore", exception.getMessage());
     }
 
     @Test
@@ -609,13 +581,13 @@ public class InternalTopologyBuilderTest {
 
         builder.buildTopology();
         final Set<String> stateStoreNames = builder.stateStoreNamesForSubtopology(0);
-        assertThat(stateStoreNames, equalTo(Set.of(storeFactory.storeName())));
+        assertEquals(Set.of(storeFactory.storeName()), stateStoreNames);
 
         final Set<String> emptyStoreNames = builder.stateStoreNamesForSubtopology(1);
-        assertThat(emptyStoreNames, equalTo(Set.of()));
+        assertTrue(emptyStoreNames.isEmpty());
 
         final Set<String> stateStoreNamesUnknownSubtopology = builder.stateStoreNamesForSubtopology(13);
-        assertThat(stateStoreNamesUnknownSubtopology, nullValue());
+        assertNull(stateStoreNamesUnknownSubtopology);
     }
 
     @Test
@@ -1048,8 +1020,8 @@ public class InternalTopologyBuilderTest {
         globalProps.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 100L);
         final StreamsConfig globalStreamsConfig = new StreamsConfig(globalProps);
         final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(globalStreamsConfig);
-        assertThat(topologyBuilder.topologyConfigs(), equalTo(new TopologyConfig(null, globalStreamsConfig, new Properties())));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, equalTo(100L));
+        assertEquals(new TopologyConfig(null, globalStreamsConfig, new Properties()), topologyBuilder.topologyConfigs());
+        assertEquals(100L, topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs);
     }
 
     @Test
@@ -1060,8 +1032,8 @@ public class InternalTopologyBuilderTest {
         globalProps.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 100L);
         final StreamsConfig globalStreamsConfig = new StreamsConfig(globalProps);
         final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(globalStreamsConfig);
-        assertThat(topologyBuilder.topologyConfigs(), equalTo(new TopologyConfig(null, globalStreamsConfig, new Properties())));
-        assertThat(topologyBuilder.topologyConfigs().cacheSize, equalTo(200L));
+        assertEquals(new TopologyConfig(null, globalStreamsConfig, new Properties()), topologyBuilder.topologyConfigs());
+        assertEquals(200L, topologyBuilder.topologyConfigs().cacheSize);
     }
 
     @SuppressWarnings("deprecation")
@@ -1084,13 +1056,13 @@ public class InternalTopologyBuilderTest {
                 topologyOverrides)
         );
 
-        assertThat(topologyBuilder.topologyConfigs().cacheSize, is(12345L));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, equalTo(500L));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().taskTimeoutMs, equalTo(1000L));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, equalTo(15));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().timestampExtractor.getClass(), equalTo(MockTimestampExtractor.class));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), equalTo(LogAndContinueExceptionHandler.class));
-        assertThat(topologyBuilder.topologyConfigs().parseStoreType(), equalTo(Materialized.StoreType.IN_MEMORY));
+        assertEquals(12345L, topologyBuilder.topologyConfigs().cacheSize);
+        assertEquals(500L, topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs);
+        assertEquals(1000L, topologyBuilder.topologyConfigs().getTaskConfig().taskTimeoutMs);
+        assertEquals(15, topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize);
+        assertEquals(MockTimestampExtractor.class, topologyBuilder.topologyConfigs().getTaskConfig().timestampExtractor.getClass());
+        assertEquals(LogAndContinueExceptionHandler.class, topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass());
+        assertEquals(Materialized.StoreType.IN_MEMORY, topologyBuilder.topologyConfigs().parseStoreType());
     }
 
     @SuppressWarnings("deprecation")
@@ -1108,7 +1080,7 @@ public class InternalTopologyBuilderTest {
                 topologyOverrides)
         );
 
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), equalTo(LogAndContinueExceptionHandler.class));
+        assertEquals(LogAndContinueExceptionHandler.class, topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass());
     }
 
     @SuppressWarnings("deprecation")
@@ -1129,19 +1101,19 @@ public class InternalTopologyBuilderTest {
                 config,
                 new Properties())
         );
-        assertThat(topologyBuilder.topologyConfigs().cacheSize, is(12345L));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, is(500L));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().taskTimeoutMs, is(1000L));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(15));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().timestampExtractor.getClass(), is(MockTimestampExtractor.class));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), is(LogAndContinueExceptionHandler.class));
+        assertEquals(12345L, topologyBuilder.topologyConfigs().cacheSize);
+        assertEquals(500L, topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs);
+        assertEquals(1000L, topologyBuilder.topologyConfigs().getTaskConfig().taskTimeoutMs);
+        assertEquals(15, topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize);
+        assertEquals(MockTimestampExtractor.class, topologyBuilder.topologyConfigs().getTaskConfig().timestampExtractor.getClass());
+        assertEquals(LogAndContinueExceptionHandler.class, topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass());
     }
 
     @Test
     public void shouldAddTimestampExtractorPerSource() {
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
         final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
-        assertThat(processorTopology.source("topic").timestampExtractor(), instanceOf(MockTimestampExtractor.class));
+        assertInstanceOf(MockTimestampExtractor.class, processorTopology.source("topic").timestampExtractor());
     }
 
     @Test
@@ -1149,7 +1121,7 @@ public class InternalTopologyBuilderTest {
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
         final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
-        assertThat(processorTopology.source(pattern.pattern()).timestampExtractor(), instanceOf(MockTimestampExtractor.class));
+        assertInstanceOf(MockTimestampExtractor.class, processorTopology.source(pattern.pattern()).timestampExtractor());
     }
 
     @Test
@@ -1259,7 +1231,7 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
         final InternalTopologyBuilder.Source sameAsBase = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
 
-        assertThat(base, equalTo(sameAsBase));
+        assertEquals(sameAsBase, base);
     }
 
     @Test
@@ -1267,7 +1239,7 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
         final InternalTopologyBuilder.Source sameAsBase = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
 
-        assertThat(base, equalTo(sameAsBase));
+        assertEquals(sameAsBase, base);
     }
 
     @Test
@@ -1275,7 +1247,7 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
         final InternalTopologyBuilder.Source differentName = new InternalTopologyBuilder.Source("name2", Collections.singleton("topic"), null);
 
-        assertThat(base, not(equalTo(differentName)));
+        assertNotEquals(differentName, base);
     }
 
     @Test
@@ -1283,7 +1255,7 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
         final InternalTopologyBuilder.Source differentName = new InternalTopologyBuilder.Source("name2", null, Pattern.compile("topic"));
 
-        assertThat(base, not(equalTo(differentName)));
+        assertNotEquals(differentName, base);
     }
 
     @Test
@@ -1292,8 +1264,8 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.Source differentTopicList = new InternalTopologyBuilder.Source("name", Collections.emptySet(), null);
         final InternalTopologyBuilder.Source differentTopic = new InternalTopologyBuilder.Source("name", Collections.singleton("topic2"), null);
 
-        assertThat(base, not(equalTo(differentTopicList)));
-        assertThat(base, not(equalTo(differentTopic)));
+        assertNotEquals(differentTopicList, base);
+        assertNotEquals(differentTopic, base);
     }
 
     @Test
@@ -1302,8 +1274,8 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.Source differentPattern = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic2"));
         final InternalTopologyBuilder.Source overlappingPattern = new InternalTopologyBuilder.Source("name", null, Pattern.compile("top*"));
 
-        assertThat(base, not(equalTo(differentPattern)));
-        assertThat(base, not(equalTo(overlappingPattern)));
+        assertNotEquals(differentPattern, base);
+        assertNotEquals(overlappingPattern, base);
     }
 
     @Test
@@ -1387,7 +1359,7 @@ public class InternalTopologyBuilderTest {
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf")
         ))));
 
-        assertThat(builder.buildGlobalStateTopology().storeToChangelogTopic().get(globalStoreName), is(globalTopic));
+        assertEquals(globalTopic, builder.buildGlobalStateTopology().storeToChangelogTopic().get(globalStoreName));
     }
 
     @Test
