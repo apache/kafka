@@ -149,7 +149,7 @@ public class CogroupedKStreamImplTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void shouldNotHaveNullNamedOnAggregateWithMateriazlied(final boolean withHeaders) {
+    public void shouldNotHaveNullNamedOnAggregateWithMaterialized(final boolean withHeaders) {
         setup(withHeaders);
         assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(STRING_INITIALIZER,  null,  Materialized.as("store")));
     }
