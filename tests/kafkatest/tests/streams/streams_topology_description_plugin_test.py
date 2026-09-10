@@ -24,6 +24,7 @@ from kafkatest.services.streams import (
     INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS,
     StreamsTopologyDescriptionPluginService,
 )
+from kafkatest.version import DEV_BRANCH, LATEST_4_3, KafkaVersion
 
 
 class StreamsTopologyDescriptionPluginTest(Test):
@@ -45,7 +46,7 @@ class StreamsTopologyDescriptionPluginTest(Test):
             self.SINK_TOPIC: {"partitions": 1, "replication-factor": 1},
         }
 
-    def setup_kafka(self, plugin_enabled):
+    def setup_kafka(self, plugin_enabled, broker_version=None):
         server_prop_overrides = [
             ["group.streams.min.session.timeout.ms", "10000"],
             ["group.streams.session.timeout.ms", "10000"],
@@ -61,6 +62,8 @@ class StreamsTopologyDescriptionPluginTest(Test):
             use_streams_groups=True,
             server_prop_overrides=server_prop_overrides,
         )
+        if broker_version is not None:
+            self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
         self.kafka.run_features_command("upgrade", "streams.version", 1)
 
@@ -164,6 +167,67 @@ class StreamsTopologyDescriptionPluginTest(Test):
         assert int(next(pushed).strip()) == 0, \
             "Client logged a successful push despite no plugin being configured on the broker"
         processor.stop()
+
+    @cluster(num_nodes=2)
+    @matrix(metadata_quorum=[quorum.combined_kraft])
+    def test_topology_description_not_stored_with_pre_kip_1331_broker(self, metadata_quorum):
+        """
+        Test the situation when a streams client built from this branch (topology description
+        push enabled by default) talks to a broker that predates KIP-1331. Such a broker only
+        negotiates StreamsGroupHeartbeat down to version 0, which carries no
+        topologyDescriptionRequired field, so it can never solicit a push and the client must
+        never attempt one.
+        """
+        self.setup_kafka(plugin_enabled=False, broker_version=str(LATEST_4_3))
+
+        processor = StreamsTopologyDescriptionPluginService(self.test_context, self.kafka)
+        with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
+            processor.start()
+            monitor.wait_until(self.STREAMS_RUNNING_LOG,
+                               timeout_sec=60,
+                               err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account))
+
+        solicited = processor.node.account.ssh_capture(
+            "grep -c '%s' %s || true" % (self.PUSH_REQUESTED_LOG, processor.LOG_FILE),
+            allow_fail=False)
+        assert int(next(solicited).strip()) == 0, \
+            "Client saw a topology push solicitation from a broker that predates KIP-1331"
+
+        sent = processor.node.account.ssh_capture(
+            "grep -c '%s' %s || true" % (self.PUSH_SENDING_LOG, processor.LOG_FILE),
+            allow_fail=False)
+        assert int(next(sent).strip()) == 0, \
+            "Client sent a topology description to a broker that predates KIP-1331"
+        processor.stop()
+
+    @cluster(num_nodes=1)
+    @matrix(metadata_quorum=[quorum.combined_kraft])
+    def test_describe_topology_fails_against_pre_kip_1331_broker(self, metadata_quorum):
+        """
+        Test the situation when kafka-streams-groups.sh --describe --topology (built from this
+        branch) is pointed at a broker that predates KIP-1331. StreamsGroupDescribe only
+        negotiates to version 0 against such a broker, and IncludeTopologyDescription is not a
+        version-0 field, so the admin client must refuse to send the request with
+        UnsupportedVersionException instead of silently describing the group without the
+        topology.
+        """
+        self.setup_kafka(plugin_enabled=False, broker_version=str(LATEST_4_3))
+
+        node = self.kafka.nodes[0]
+        # Always run the CLI tool from this branch, not the old broker's bundled version, since
+        # the --topology flag and the client-side version-gating it relies on postdate KIP-1331.
+        streams_group_script = self.kafka.path.script("kafka-streams-groups.sh", DEV_BRANCH)
+        cmd = "%s --bootstrap-server %s --describe --topology --group nonexistent-group" % (
+            streams_group_script, self.kafka.bootstrap_servers())
+
+        exit_code = node.account.ssh(cmd, allow_fail=True)
+        assert exit_code != 0, \
+            "kafka-streams-groups.sh --describe --topology unexpectedly succeeded against a broker that predates KIP-1331"
+
+        output = node.account.ssh_output(cmd, allow_fail=True).decode("utf-8")
+        assert "UnsupportedVersionException" in output, \
+            "Expected an UnsupportedVersionException when requesting a topology description from a broker " \
+            "that predates KIP-1331, got: " + output
 
     @cluster(num_nodes=2)
     @matrix(metadata_quorum=[quorum.combined_kraft])
