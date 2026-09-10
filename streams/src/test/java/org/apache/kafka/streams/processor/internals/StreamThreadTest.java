@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -132,7 +133,9 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -1731,7 +1734,7 @@ public class StreamThreadTest {
         // buildStreamThread passes consumer as mainConsumer, so close() is called on consumer
         verify(consumer).close(captor.capture());
         assertEquals(
-                org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP,
+                GroupMembershipOperation.REMAIN_IN_GROUP,
                 captor.getValue().groupMembershipOperation()
         );
     }
@@ -1764,7 +1767,7 @@ public class StreamThreadTest {
                 ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
         verify(mainConsumer).close(captor.capture());
         assertEquals(
-                org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT,
+                GroupMembershipOperation.DEFAULT,
                 captor.getValue().groupMembershipOperation()
         );
     }
@@ -1797,8 +1800,86 @@ public class StreamThreadTest {
                 ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
         verify(mainConsumer).close(captor.capture());
         assertEquals(
-                org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP,
+                GroupMembershipOperation.REMAIN_IN_GROUP,
                 captor.getValue().groupMembershipOperation()
+        );
+    }
+
+    @Test
+    public void shouldApplyGroupMembershipOperationUpdatedAfterShutdownWasInitiated() throws InterruptedException {
+        // A client-level close can find the thread already shutting down because a removal or
+        // replacement initiated the shutdown first: the close's shutdown() call returns false and
+        // the close path records its operation via updateGroupMembershipOperation instead. The
+        // consumer must then be closed with that operation.
+        final Time mockTime = new MockTime(1);
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, APPLICATION_ID, mockTime);
+
+        final CountDownLatch pollEntered = new CountDownLatch(1);
+        final CountDownLatch releasePoll = new CountDownLatch(1);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        // Park the run loop inside poll so the shutdown interleaving below is deterministic: the
+        // thread cannot complete its shutdown before the operation update has been applied.
+        when(consumer.poll(any())).thenAnswer(invocation -> {
+            pollEntered.countDown();
+            releasePoll.await(30, TimeUnit.SECONDS);
+            return ConsumerRecords.empty();
+        });
+        final MockConsumerClientSupplier mockClientSupplier = new MockConsumerClientSupplier(consumer);
+        mockClientSupplier.setCluster(createCluster());
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, config),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        @SuppressWarnings("unchecked")
+        final BiConsumer<Throwable, Boolean> mockExceptionHandler = mock(BiConsumer.class);
+        thread = StreamThread.create(
+            topologyMetadata,
+            config,
+            mockClientSupplier,
+            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            PROCESS_ID,
+            CLIENT_ID,
+            streamsMetrics,
+            mockTime,
+            streamsMetadataState,
+            0,
+            -1L,
+            stateDirectory,
+            new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
+            threadIdx,
+            null,
+            mockExceptionHandler
+        );
+
+        thread.start();
+        assertTrue(pollEntered.await(10, TimeUnit.SECONDS), "StreamThread never reached poll");
+
+        // A removal or replacement wins the shutdown; the close path loses and records its operation.
+        assertTrue(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT));
+        assertFalse(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+        thread.updateGroupMembershipOperation(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+
+        releasePoll.countDown();
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.DEAD,
+            10 * 1000,
+            "Thread never shut down.");
+
+        final ArgumentCaptor<org.apache.kafka.clients.consumer.CloseOptions> captor =
+            ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
+        verify(consumer).close(captor.capture());
+        assertEquals(
+            GroupMembershipOperation.LEAVE_GROUP,
+            captor.getValue().groupMembershipOperation()
         );
     }
 

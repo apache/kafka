@@ -1924,6 +1924,7 @@ public class StreamThread extends Thread implements ProcessingThread {
      * @return true if this call initiated the shutdown, i.e., transitioned the thread to
      *         {@code PENDING_SHUTDOWN}; false if the thread was already shutting down or dead,
      *         in which case the group membership operation of the earlier shutdown request is kept
+     *         (use {@link #updateGroupMembershipOperation} to change it)
      */
     public boolean shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         log.info("Informed to shut down");
@@ -1939,6 +1940,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             completeShutdown(true);
         }
         return true;
+    }
+
+    public void updateGroupMembershipOperation(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
+        leaveGroupRequested.set(operation);
     }
 
     private void completeShutdown(final boolean cleanRun) {

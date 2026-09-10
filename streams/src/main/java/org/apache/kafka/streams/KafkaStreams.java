@@ -1249,11 +1249,9 @@ public class KafkaStreams implements AutoCloseable {
             StreamThread candidate = null;
             // Copy the threads list to avoid holding its intrinsic lock during iteration.
             //
-            // Filtering on the Kafka Streams state rather than `java.lang.Thread#isAlive`
-            // matters now that the lock is released during the wait below: `shutdown()` moves
-            // a thread to PENDING_SHUTDOWN synchronously, while the underlying Thread stays
-            // alive until `run()` returns, so two concurrent removals would otherwise choose
-            // the same thread, both report it as removed, and leave the thread count too high.
+            // `shutdown()` moves a thread to PENDING_SHUTDOWN synchronously while the underlying
+            // Thread stays alive until `run()` returns, so filtering on the Streams state (not
+            // Thread liveness) is what keeps two concurrent removals from picking the same thread.
             //
             // Threads in CREATED are skipped deliberately: `addStreamThread` publishes a thread
             // to `threads` before starting it, and a thread that never ran cannot reach DEAD.
@@ -1586,7 +1584,7 @@ public class KafkaStreams implements AutoCloseable {
      * Shutdown this {@code KafkaStreams} instance by signaling all the threads to stop, and then wait for them to join.
      * This will block until all threads have stopped.
      * <p>
-     * Uses {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation#DEFAULT DEFAULT} behavior,
+     * Uses {@link GroupMembershipOperation#DEFAULT DEFAULT} behavior,
      * which adapts based on the active protocol:
      * <ul>
      *   <li>Classic protocol: the consumer remains in the group (no explicit leave).</li>
@@ -1596,13 +1594,13 @@ public class KafkaStreams implements AutoCloseable {
      * </ul>
      */
     public void close() {
-        close(Optional.empty(), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
+        close(Optional.empty(), GroupMembershipOperation.DEFAULT);
     }
 
     private Thread shutdownHelper(
         final boolean error,
         final long timeoutMs,
-        final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation
+        final GroupMembershipOperation operation
     ) {
         stateDirCleaner.shutdownNow();
         if (rocksDBMetricsRecordingService != null) {
@@ -1615,12 +1613,17 @@ public class KafkaStreams implements AutoCloseable {
         return new Thread(() -> {
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down.
-            // The return value of shutdown() is deliberately ignored: a thread whose shutdown was
-            // already requested (by a removal or a thread replacement) keeps the group membership
-            // operation of that earlier request, and we join every thread below regardless of who
-            // initiated its shutdown.
+            // A thread may already be shutting down (initiated by a removal or a thread
+            // replacement), in which case shutdown() returns false. Closing is an explicit
+            // client-level request whose group membership operation applies to every thread,
+            // so record it on those threads too; every thread is joined below regardless of
+            // who initiated its shutdown.
             int numStreamThreads = processStreamThread(
-                streamThread -> streamThread.shutdown(operation)
+                streamThread -> {
+                    if (!streamThread.shutdown(operation)) {
+                        streamThread.updateGroupMembershipOperation(operation);
+                    }
+                }
             );
 
             log.info("Shutting down {} stream threads", numStreamThreads);
@@ -1682,7 +1685,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     // visible for testing
-    boolean close(final Optional<Long> timeout, final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
+    boolean close(final Optional<Long> timeout, final GroupMembershipOperation operation) {
         final long timeoutMs;
         if (timeout.isPresent()) {
             timeoutMs = timeout.get();
@@ -1732,7 +1735,7 @@ public class KafkaStreams implements AutoCloseable {
         if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in {}", state());
         } else {
-            final Thread shutdownThread = shutdownHelper(true, -1, org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+            final Thread shutdownThread = shutdownHelper(true, -1, GroupMembershipOperation.REMAIN_IN_GROUP);
 
             // daemon: the shutdown thread itself must not prevent JVM exit
             shutdownThread.setDaemon(true);
@@ -1746,7 +1749,7 @@ public class KafkaStreams implements AutoCloseable {
      * A {@code timeout} of {@link Duration#ZERO} (or any other zero duration) makes the close operation asynchronous.
      * Negative-duration timeouts are rejected.
      * <p>
-     * Uses {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation#DEFAULT DEFAULT} behavior,
+     * Uses {@link GroupMembershipOperation#DEFAULT DEFAULT} behavior,
      * which adapts based on the active protocol:
      * <ul>
      *   <li>Classic protocol: the consumer remains in the group (no explicit leave).</li>
@@ -1768,7 +1771,7 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
 
-        return close(Optional.of(timeoutMs), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
+        return close(Optional.of(timeoutMs), GroupMembershipOperation.DEFAULT);
     }
 
     /**
@@ -1786,8 +1789,8 @@ public class KafkaStreams implements AutoCloseable {
     public synchronized boolean close(final CloseOptions options) throws IllegalArgumentException {
         final org.apache.kafka.streams.CloseOptions closeOptions = org.apache.kafka.streams.CloseOptions.timeout(options.timeout)
                 .withGroupMembershipOperation(options.leaveGroup ?
-                        org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP :
-                        org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+                        GroupMembershipOperation.LEAVE_GROUP :
+                        GroupMembershipOperation.REMAIN_IN_GROUP);
         return close(closeOptions);
     }
 
@@ -1795,7 +1798,7 @@ public class KafkaStreams implements AutoCloseable {
      * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
      * @param options  contains timeout to specify how long to wait for the threads to shut down,
-     *                 and a {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation}
+     *                 and a {@link GroupMembershipOperation}
      *                 to trigger consumer leave call or remain in the group
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped

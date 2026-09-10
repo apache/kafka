@@ -962,6 +962,36 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldApplyCloseOptionsToThreadsWhoseShutdownWasAlreadyRequested() throws Exception {
+        // close() may find a thread already shutting down (a removal or replacement initiated the
+        // shutdown first), so its shutdown() call returns false. The close operation is an explicit
+        // client-level request and must still be recorded on such threads.
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        doAnswer(invocation -> {
+            state1.set(StreamThread.State.DEAD);
+            return false;
+        }).when(streamThreadOne).shutdown(any());
+        doAnswer(invocation -> {
+            state2.set(StreamThread.State.DEAD);
+            return true;
+        }).when(streamThreadTwo).shutdown(any());
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+                "Kafka Streams client did not reach state RUNNING");
+            streams.close();
+        }
+        verify(streamThreadOne).updateGroupMembershipOperation(CloseOptions.GroupMembershipOperation.DEFAULT);
+        verify(streamThreadTwo, never()).updateGroupMembershipOperation(any());
+    }
+
+    @Test
     public void shouldNotRemoveThreadWhenNotRunning() {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
