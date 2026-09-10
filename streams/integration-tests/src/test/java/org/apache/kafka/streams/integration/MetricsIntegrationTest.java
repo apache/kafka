@@ -65,8 +65,6 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -457,8 +455,8 @@ public class MetricsIntegrationTest {
             .filter(m -> m.metricName().name().equals(ALIVE_STREAM_THREADS) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
-        assertThat(metricsList.size(), is(1));
-        assertThat(metricsList.get(0).metricValue(), is(NUM_THREADS));
+        assertEquals(1, metricsList.size());
+        assertEquals(NUM_THREADS, metricsList.get(0).metricValue());
     }
 
     private void verifyStateMetric(final String state) {
@@ -466,9 +464,9 @@ public class MetricsIntegrationTest {
             .filter(m -> m.metricName().name().equals(STATE) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
-        assertThat(metricsList.size(), is(1));
-        assertThat(metricsList.get(0).metricValue(), is(state));
-        assertThat(metricsList.get(0).metricValue().toString(), is(state));
+        assertEquals(1, metricsList.size());
+        assertEquals(state, metricsList.get(0).metricValue());
+        assertEquals(state, metricsList.get(0).metricValue().toString());
     }
 
     private void verifyTopologyDescriptionMetric(final String topologyDescription) {
@@ -476,8 +474,8 @@ public class MetricsIntegrationTest {
             .filter(m -> m.metricName().name().equals(TOPOLOGY_DESCRIPTION) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
-        assertThat(metricsList.size(), is(1));
-        assertThat(metricsList.get(0).metricValue(), is(topologyDescription));
+        assertEquals(1, metricsList.size());
+        assertEquals(topologyDescription, metricsList.get(0).metricValue());
     }
 
     private void verifyApplicationIdMetric() {
@@ -485,8 +483,8 @@ public class MetricsIntegrationTest {
             .filter(m -> m.metricName().name().equals(APPLICATION_ID) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
-        assertThat(metricsList.size(), is(1));
-        assertThat(metricsList.get(0).metricValue(), is(appId));
+        assertEquals(1, metricsList.size());
+        assertEquals(appId, metricsList.get(0).metricValue());
     }
 
     private void checkClientLevelMetrics() {
@@ -654,7 +652,7 @@ public class MetricsIntegrationTest {
         final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().contains(STREAM_STRING))
             .collect(Collectors.toList());
-        assertThat(listMetricAfterClosingApp.size(), is(0));
+        assertEquals(0, listMetricAfterClosingApp.size());
     }
 
     private void checkCacheMetrics() {

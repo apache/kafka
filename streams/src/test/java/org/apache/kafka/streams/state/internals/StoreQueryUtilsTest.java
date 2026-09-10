@@ -41,8 +41,8 @@ import org.mockito.Mockito;
 
 import java.time.Instant;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,13 +64,11 @@ public class StoreQueryUtilsTest {
             position,
             null
         );
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.NOT_UP_TO_BOUND));
-        assertThat(
-            queryResult.getFailureMessage(),
-            is("The store is not initialized yet, so it is not yet up to the bound"
-                   + " PositionBound{position=Position{position={topic={0=1}}}}")
-        );
+        assertTrue(queryResult.isFailure());
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, queryResult.getFailureReason());
+        assertEquals(
+            "The store is not initialized yet, so it is not yet up to the bound PositionBound{position=Position{position={topic={0=1}}}}",
+            queryResult.getFailureMessage());
     }
 
     @Test
@@ -90,14 +88,13 @@ public class StoreQueryUtilsTest {
             context
         );
 
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.NOT_UP_TO_BOUND));
-        assertThat(
-            queryResult.getFailureMessage(),
-            is("For store partition 0, the current position Position{position={topic={0=0}}}"
-                   + " is not yet up to the bound"
-                   + " PositionBound{position=Position{position={topic={0=1}}}}")
-        );
+        assertTrue(queryResult.isFailure());
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, queryResult.getFailureReason());
+        assertEquals(
+            "For store partition 0, the current position Position{position={topic={0=0}}}"
+                + " is not yet up to the bound"
+                + " PositionBound{position=Position{position={topic={0=1}}}}",
+            queryResult.getFailureMessage());
     }
 
     @Test

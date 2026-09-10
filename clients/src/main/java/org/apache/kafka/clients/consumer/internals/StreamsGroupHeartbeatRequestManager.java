@@ -539,8 +539,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         // shouldNotWaitForHeartbeatInterval() check would return 0 whenever the member wants to
         // (re)join. Because no heartbeat can be sent until the coordinator is discovered, the
         // condition remains true and both the application and network threads end up busy-spinning.
+        // Wait a retry backoff rather than the heartbeat interval, because the interval is zero
+        // until the first heartbeat response is received, which would also busy-spin.
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager.shouldSkipHeartbeat()) {
-            return heartbeatRequestState.heartbeatIntervalMs();
+            return heartbeatRequestState.retryBackoffMs();
         }
         if (membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
             return 0L;

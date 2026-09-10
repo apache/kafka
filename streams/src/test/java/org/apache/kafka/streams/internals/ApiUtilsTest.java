@@ -98,7 +98,7 @@ public class ApiUtilsTest {
     }
 
     @Test
-    public void shouldContainsNameAndValueInFailMsgPrefix() {
+    public void shouldContainNameAndValueInFailMsgPrefix() {
         final String failMsgPrefix = prepareMillisCheckFailMsgPrefix("someValue", "variableName");
 
         assertTrue(failMsgPrefix.contains("variableName"));

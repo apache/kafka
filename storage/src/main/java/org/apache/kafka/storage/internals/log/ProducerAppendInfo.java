@@ -51,6 +51,7 @@ public class ProducerAppendInfo {
     private final ProducerStateEntry currentEntry;
     private final AppendOrigin origin;
     private final VerificationStateEntry verificationStateEntry;
+    private final boolean logEmpty;
 
     private final List<TxnMetadata> transactions = new ArrayList<>();
     private final ProducerStateEntry updatedEntry;
@@ -69,17 +70,21 @@ public class ProducerAppendInfo {
      *                               only producer epoch validation is done. Appends which come through replication are not validated
      *                               (we assume the validation has already been done) and appends from clients require full validation.
      * @param verificationStateEntry The most recent entry used for verification if no append has been completed yet otherwise null
+     * @param logEmpty               True if no records have ever been appended to the log. In this case, no producer state
+     *                               can ever have been lost, so the first sequence for any producer must be 0
      */
     public ProducerAppendInfo(TopicPartition topicPartition,
                               long producerId,
                               ProducerStateEntry currentEntry,
                               AppendOrigin origin,
-                              VerificationStateEntry verificationStateEntry) {
+                              VerificationStateEntry verificationStateEntry,
+                              boolean logEmpty) {
         this.topicPartition = topicPartition;
         this.producerId = producerId;
         this.currentEntry = currentEntry;
         this.origin = origin;
         this.verificationStateEntry = verificationStateEntry;
+        this.logEmpty = logEmpty;
 
         updatedEntry = currentEntry.withProducerId(producerId);
     }
@@ -153,6 +158,7 @@ public class ProducerAppendInfo {
         }
     }
 
+    @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
     private void checkSequence(short producerEpoch, int appendFirstSeq, long offset) {
         // For transactions v2 idempotent producers, reject non-zero sequences when there is no producer ID state
         if (verificationStateEntry != null && verificationStateEntry.supportsEpochBump() &&
@@ -165,6 +171,12 @@ public class ProducerAppendInfo {
             throw new OutOfOrderSequenceException("Out of order sequence number for producer " + producerId + " at " +
                     "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
                     " (incoming seq. number), " + verificationStateEntry.lowestSequence() + " (earliest seen sequence)");
+        }
+        // If no records have ever been appended to the log, reject non-zero sequences when there is no producer ID state (KAFKA-15591)
+        if (logEmpty && appendFirstSeq != 0 && currentEntry.isEmpty()) {
+            throw new OutOfOrderSequenceException("Invalid sequence number for producer " + producerId + " at " +
+                "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
+                " (incoming seq. number). Expected sequence 0 for a producer with no state on a partition with no records.");
         }
         if (producerEpoch != updatedEntry.producerEpoch()) {
             if (appendFirstSeq != 0) {
@@ -308,6 +320,7 @@ public class ProducerAppendInfo {
                 ", coordinatorEpoch=" + updatedEntry.coordinatorEpoch() +
                 ", lastTimestamp=" + updatedEntry.lastTimestamp() +
                 ", startedTransactions=" + transactions +
+                ", logEmpty=" + logEmpty +
                 ')';
     }
 }

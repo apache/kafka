@@ -68,8 +68,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
@@ -209,25 +208,25 @@ public class LagFetchIntegrationTest {
                 WAIT_TIMEOUT_MS);
             // Check the active reports proper lag values.
             Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = getFirstNonEmptyLagMap(activeStreams);
-            assertThat(offsetLagInfoMap.size(), equalTo(1));
-            assertThat(offsetLagInfoMap.keySet(), equalTo(Set.of(stateStoreName)));
-            assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
+            assertEquals(1, offsetLagInfoMap.size());
+            assertEquals(Set.of(stateStoreName), offsetLagInfoMap.keySet());
+            assertEquals(1, offsetLagInfoMap.get(stateStoreName).size());
             LagInfo lagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
-            assertThat(lagInfo.currentOffsetPosition(), equalTo(5L));
-            assertThat(lagInfo.endOffsetPosition(), equalTo(5L));
-            assertThat(lagInfo.offsetLag(), equalTo(0L));
+            assertEquals(5L, lagInfo.currentOffsetPosition());
+            assertEquals(5L, lagInfo.endOffsetPosition());
+            assertEquals(0L, lagInfo.offsetLag());
 
             // start up the standby & make it pause right after it has partition assigned
             standbyStreams.start();
             latchTillStandbyHasPartitionsAssigned.await(60, TimeUnit.SECONDS);
             offsetLagInfoMap = getFirstNonEmptyLagMap(standbyStreams);
-            assertThat(offsetLagInfoMap.size(), equalTo(1));
-            assertThat(offsetLagInfoMap.keySet(), equalTo(Set.of(stateStoreName)));
-            assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
+            assertEquals(1, offsetLagInfoMap.size());
+            assertEquals(Set.of(stateStoreName), offsetLagInfoMap.keySet());
+            assertEquals(1, offsetLagInfoMap.get(stateStoreName).size());
             lagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
-            assertThat(lagInfo.currentOffsetPosition(), equalTo(0L));
-            assertThat(lagInfo.endOffsetPosition(), equalTo(5L));
-            assertThat(lagInfo.offsetLag(), equalTo(5L));
+            assertEquals(0L, lagInfo.currentOffsetPosition());
+            assertEquals(5L, lagInfo.endOffsetPosition());
+            assertEquals(5L, lagInfo.offsetLag());
             // standby thread won't proceed to RUNNING before this barrier is crossed
             lagCheckBarrier.await(60, TimeUnit.SECONDS);
 
@@ -294,20 +293,20 @@ public class LagFetchIntegrationTest {
             // check for proper lag values.
             TestUtils.waitForCondition(() -> {
                 final Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = streams.allLocalStorePartitionLags();
-                assertThat(offsetLagInfoMap.size(), equalTo(1));
-                assertThat(offsetLagInfoMap.keySet(), equalTo(Set.of(stateStoreName)));
-                assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
+                assertEquals(1, offsetLagInfoMap.size());
+                assertEquals(Set.of(stateStoreName), offsetLagInfoMap.keySet());
+                assertEquals(1, offsetLagInfoMap.get(stateStoreName).size());
 
                 final LagInfo zeroLagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
-                assertThat(zeroLagInfo.currentOffsetPosition(), equalTo(5L));
-                assertThat(zeroLagInfo.endOffsetPosition(), equalTo(5L));
-                assertThat(zeroLagInfo.offsetLag(), equalTo(0L));
+                assertEquals(5L, zeroLagInfo.currentOffsetPosition());
+                assertEquals(5L, zeroLagInfo.endOffsetPosition());
+                assertEquals(0L, zeroLagInfo.offsetLag());
                 zeroLagRef.set(zeroLagInfo);
                 return true;
             }, WAIT_TIMEOUT_MS, "Eventually should reach zero lag.");
 
             // Kill instance, delete state to force restoration.
-            assertThat("Streams instance did not close within timeout", streams.close(Duration.ofSeconds(60)));
+            assertTrue(streams.close(Duration.ofSeconds(60)), "Streams instance did not close within timeout");
             IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
             Files.walk(stateDir.toPath()).sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
@@ -355,11 +354,11 @@ public class LagFetchIntegrationTest {
                 WAIT_TIMEOUT_MS,
                 "Standby should eventually catchup and have zero lag.");
             final LagInfo fullLagInfo = restoreStartLagInfo.get(stateStoreName).get(0);
-            assertThat(fullLagInfo.currentOffsetPosition(), equalTo(0L));
-            assertThat(fullLagInfo.endOffsetPosition(), equalTo(5L));
-            assertThat(fullLagInfo.offsetLag(), equalTo(5L));
+            assertEquals(0L, fullLagInfo.currentOffsetPosition());
+            assertEquals(5L, fullLagInfo.endOffsetPosition());
+            assertEquals(5L, fullLagInfo.offsetLag());
 
-            assertThat(restoreEndLagInfo.get(stateStoreName).get(0), equalTo(zeroLagRef.get()));
+            assertEquals(zeroLagRef.get(), restoreEndLagInfo.get(stateStoreName).get(0));
         } finally {
             restartedStreams.close();
             restartedStreams.cleanUp();

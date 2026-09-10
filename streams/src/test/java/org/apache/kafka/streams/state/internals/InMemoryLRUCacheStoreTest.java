@@ -42,8 +42,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,10 +70,10 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         store.putAll(kvPairs);
 
-        assertThat(store.approximateNumEntries(), equalTo(3L));
+        assertEquals(3L, store.approximateNumEntries());
 
         for (final KeyValue<Integer, String> kvPair : kvPairs) {
-            assertThat(store.get(kvPair.key), equalTo(kvPair.value));
+            assertEquals(kvPair.value, store.get(kvPair.key));
         }
     }
 
@@ -94,10 +92,10 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         store.putAll(updatedKvPairs);
 
-        assertThat(store.approximateNumEntries(), equalTo(3L));
+        assertEquals(3L, store.approximateNumEntries());
         
         for (final KeyValue<Integer, String> kvPair : updatedKvPairs) {
-            assertThat(store.get(kvPair.key), equalTo(kvPair.value));
+            assertEquals(kvPair.value, store.get(kvPair.key));
         }
     }
 

@@ -1228,9 +1228,7 @@ public class ClassicGroup implements Group {
         ClassicGroupMember member,
         JoinGroupResponseData response
     ) {
-        if (member.isAwaitingJoin()) {
-            member.awaitingJoinFuture().complete(response);
-            member.setAwaitingJoinFuture(null);
+        if (member.completeJoinFuture(response)) {
             numMembersAwaitingJoinResponse--;
             return true;
         }
@@ -1264,12 +1262,7 @@ public class ClassicGroup implements Group {
         ClassicGroupMember member,
         SyncGroupResponseData response
     ) {
-        if (member.isAwaitingSync()) {
-            member.awaitingSyncFuture().complete(response);
-            member.setAwaitingSyncFuture(null);
-            return true;
-        }
-        return false;
+        return member.completeSyncFuture(response);
     }
 
     /**

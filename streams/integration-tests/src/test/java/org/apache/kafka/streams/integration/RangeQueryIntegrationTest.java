@@ -61,8 +61,7 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Tag("integration")
@@ -221,7 +220,7 @@ public class RangeQueryIntegrationTest {
              final KeyValueIterator<String, String> expectedIterator = forward ? store.all() : store.reverseAll()) {
             final List<KeyValue<String, String>> result = Utils.toList(resultIterator);
             final List<KeyValue<String, String>> expected = filterList(expectedIterator, from, to);
-            assertThat(name, result, is(expected));
+            assertEquals(expected, result, name);
         }
     }
 
