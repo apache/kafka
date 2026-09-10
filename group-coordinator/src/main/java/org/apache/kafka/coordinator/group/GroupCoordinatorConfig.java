@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 
 import org.slf4j.Logger;
@@ -395,7 +396,8 @@ public class GroupCoordinatorConfig {
     // The first entry is the default assignor for groups that do not select one. New built-in
     // assignors must be appended so that the default does not change for existing groups.
     private static final List<TaskAssignor> STREAMS_GROUP_BUILTIN_ASSIGNORS = List.of(
-        new StickyTaskAssignor()
+        new StickyTaskAssignor(),
+        new BalancedTaskAssignor()
     );
     public static final String STREAMS_GROUP_ASSIGNORS_CONFIG = "group.streams.assignors";
     public static final String STREAMS_GROUP_ASSIGNORS_DOC = "The server side task assignors for streams groups as a list of either names for built-in assignors or fully qualified class names for custom assignors. " +
