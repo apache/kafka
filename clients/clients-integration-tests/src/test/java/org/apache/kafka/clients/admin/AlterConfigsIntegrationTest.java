@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.admin;
 
-import kafka.server.KafkaConfig;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigResource;
@@ -233,7 +231,7 @@ public class AlterConfigsIntegrationTest {
         return new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(brokerId()));
     }
 
-    private KafkaConfig brokerConfig() {
+    private AbstractConfig brokerConfig() {
         return clusterInstance.brokers().get(brokerId()).config();
     }
 
