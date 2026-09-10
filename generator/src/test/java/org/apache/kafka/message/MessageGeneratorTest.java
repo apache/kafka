@@ -23,6 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.BufferedWriter;
 import java.io.StringWriter;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
@@ -265,6 +266,79 @@ public class MessageGeneratorTest {
             "} else {\n" +
             "return (short) 1;\n" +
             "}\n"), source);
+    }
+
+    private static final String REQUEST_HEADER_JSON =
+        "{\"type\": \"header\", \"name\": \"RequestHeader\", \"validVersions\": \"1-2\", " +
+        "\"flexibleVersions\": \"2+\", \"fields\": [" +
+        "{\"name\": \"CorrelationId\", \"type\": \"int32\", \"versions\": \"0+\"}]}";
+
+    private static final String RESPONSE_HEADER_JSON =
+        "{\"type\": \"header\", \"name\": \"ResponseHeader\", \"validVersions\": \"0-1\", " +
+        "\"flexibleVersions\": \"1+\", \"fields\": [" +
+        "{\"name\": \"CorrelationId\", \"type\": \"int32\", \"versions\": \"0+\"}]}";
+
+    private static String fooSpec(String type, String headerVersions) {
+        return ("{'apiKey': 99, 'type': '" + type + "', 'name': 'Foo" + capitalize(type) + "', " +
+            "'validVersions': '0-1', 'flexibleVersions': '0+', 'headerVersions': " + headerVersions +
+            ", 'fields': [{'name': 'Field1', 'type': 'int32', 'versions': '0+'}]}").replace('\'', '"');
+    }
+
+    private static String capitalize(String s) {
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private static void runProcessDirectories(Path input, Path output) throws Exception {
+        MessageGenerator.processDirectories("kafka", output.toAbsolutePath().toString(),
+            input.toAbsolutePath().toString(), List.of("ApiMessageTypeGenerator"), List.of("MessageDataGenerator"));
+    }
+
+    @Test
+    public void testProcessDirectoriesChecksHeaderVersions(@TempDir Path input, @TempDir Path output) throws Exception {
+        Files.writeString(input.resolve("RequestHeader.json"), REQUEST_HEADER_JSON);
+        Files.writeString(input.resolve("ResponseHeader.json"), RESPONSE_HEADER_JSON);
+        Files.writeString(input.resolve("FooRequest.json"), fooSpec("request", "{'0+': '2'}"));
+        Files.writeString(input.resolve("FooResponse.json"), fooSpec("response", "{'0+': '1'}"));
+
+        runProcessDirectories(input, output);
+
+        assertTrue(Files.exists(output.resolve("ApiMessageType.java")));
+        assertTrue(Files.exists(output.resolve("RequestHeaderData.java")));
+    }
+
+    @Test
+    public void testProcessDirectoriesRejectsNonExistentHeaderVersion(@TempDir Path input, @TempDir Path output) throws Exception {
+        Files.writeString(input.resolve("RequestHeader.json"), REQUEST_HEADER_JSON);
+        Files.writeString(input.resolve("ResponseHeader.json"), RESPONSE_HEADER_JSON);
+        // FooRequest maps to request header v3, which the RequestHeader schema does not define.
+        Files.writeString(input.resolve("FooRequest.json"), fooSpec("request", "{'0+': '3'}"));
+        Files.writeString(input.resolve("FooResponse.json"), fooSpec("response", "{'0+': '1'}"));
+
+        Exception exception = assertThrows(Exception.class, () -> runProcessDirectories(input, output));
+        StringBuilder messages = new StringBuilder();
+        for (Throwable throwable = exception; throwable != null; throwable = throwable.getCause()) {
+            if (throwable.getMessage() != null) {
+                messages.append(throwable.getMessage()).append(" | ");
+            }
+        }
+        // The per-file wrapper names the offending schema, and the check explains the failure.
+        assertTrue(messages.toString().contains("FooRequest.json"), messages.toString());
+        assertTrue(messages.toString().contains("does not exist"), messages.toString());
+    }
+
+    @Test
+    public void testProcessDirectoriesRejectsMissingHeaderSchema(@TempDir Path input, @TempDir Path output) throws Exception {
+        // No RequestHeader.json in the directory, but FooRequest declares headerVersions.
+        Files.writeString(input.resolve("FooRequest.json"), fooSpec("request", "{'0+': '2'}"));
+
+        Exception exception = assertThrows(Exception.class, () -> runProcessDirectories(input, output));
+        StringBuilder messages = new StringBuilder();
+        for (Throwable throwable = exception; throwable != null; throwable = throwable.getCause()) {
+            if (throwable.getMessage() != null) {
+                messages.append(throwable.getMessage()).append(" | ");
+            }
+        }
+        assertTrue(messages.toString().contains("no RequestHeader schema"), messages.toString());
     }
 
 }
