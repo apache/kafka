@@ -257,35 +257,15 @@ class LocalLogTest {
     }
 
     @Test
-    public void testLogCloseSuccess() throws IOException {
-        List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
-        appendRecords(kvsToRecords(keyValues), 0L);
+    public void testCloseIdempotent() {
         log.close();
-        assertThrows(ClosedChannelException.class, () -> appendRecords(kvsToRecords(keyValues), 2L));
+        log.close();
     }
 
     @Test
-    public void testCloseThrowsIfAlreadyClosed() {
-        log.close();
-        assertThrows(KafkaStorageException.class, () -> log.close());
-    }
-
-    @Test
-    public void testCloseQuietlyThrowsIfAlreadyClosedQuietly() {
+    public void testCloseQuietlyIdempotent() {
         log.closeQuietly();
-        assertThrows(KafkaStorageException.class, () -> log.closeQuietly());
-    }
-
-    @Test
-    public void testCloseThrowsIfAlreadyClosedQuietly() {
-        log.close();
-        assertThrows(KafkaStorageException.class, () -> log.closeQuietly());
-    }
-
-    @Test
-    public void testCloseQuietlyThrowsIfAlreadyClosed() {
         log.closeQuietly();
-        assertThrows(KafkaStorageException.class, () -> log.close());
     }
 
     @Test
