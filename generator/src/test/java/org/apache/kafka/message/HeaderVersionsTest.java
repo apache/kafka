@@ -198,7 +198,25 @@ public class HeaderVersionsTest {
 
     @Test
     public void testOverlap() {
-        assertMessageContains("non-contiguous", () -> parse(requestSpec("0-9", "2+", "{'0-2': '1', '2+': '2'}")));
+        assertMessageContains("overlapping", () -> parse(requestSpec("0-9", "2+", "{'0-2': '1', '2+': '2'}")));
+        // Two bounded ranges that overlap.
+        assertMessageContains("overlapping", () -> parse(requestSpec("0-9", "6+", "{'0-2': '1', '0-5': '2', '6+': '3'}")));
+    }
+
+    @Test
+    public void testDecreasingHeaderVersionRejected() {
+        // Header version must not go down as the body version goes up.
+        assertMessageContains("must not decrease",
+            () -> parse(requestSpec("0-5", "none", "{'0': '2', '1+': '1'}")));
+    }
+
+    @Test
+    public void testEqualAdjacentHeaderVersionsAllowed() throws Exception {
+        // Non-decreasing, not strictly increasing: equal adjacent header versions are permitted.
+        MessageSpec spec = parse(requestSpec("0-5", "none", "{'0': '1', '1+': '1'}"));
+        List<HeaderVersions.Entry> entries = spec.headerVersions().orElseThrow().entries();
+        assertEquals((short) 1, entries.get(0).headerVersion());
+        assertEquals((short) 1, entries.get(1).headerVersion());
     }
 
     @Test

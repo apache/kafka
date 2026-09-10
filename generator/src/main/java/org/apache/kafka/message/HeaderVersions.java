@@ -122,17 +122,32 @@ public final class HeaderVersions {
                 "covers every version the schema describes, including versions that are no longer valid.");
         }
         for (int i = 1; i < entries.size(); i++) {
-            Versions previous = entries.get(i - 1).range;
+            Entry previousEntry = entries.get(i - 1);
+            Entry currentEntry = entries.get(i);
+            Versions previous = previousEntry.range;
+            Versions current = currentEntry.range;
             if (previous.highest() == Short.MAX_VALUE) {
-                throw new RuntimeException("Message " + messageName + " has an open-ended headerVersions range " +
-                    previous + " that is followed by " + entries.get(i).range + "; only the last range may be " +
-                    "open-ended.");
+                throw new RuntimeException("Message " + messageName + " has headerVersions range " + previous +
+                    ", which is open-ended (ends in '+'), but is followed by " + current + "; only the last " +
+                    "range may be open-ended — every earlier range must be bounded, e.g. {\"0-1\": \"1\", " +
+                    "\"2+\": \"2\"}.");
             }
             int expected = previous.highest() + 1;
-            if (entries.get(i).range.lowest() != expected) {
+            if (current.lowest() < expected) {
+                throw new RuntimeException("Message " + messageName + " has overlapping headerVersions ranges " +
+                    previous + " and " + current + ": both cover version " + current.lowest() + ". Ranges must " +
+                    "be contiguous and non-overlapping, e.g. {\"0-1\": \"1\", \"2+\": \"2\"}.");
+            }
+            if (current.lowest() > expected) {
                 throw new RuntimeException("Message " + messageName + " has non-contiguous headerVersions: the " +
-                    "range after " + entries.get(i - 1).range + " must start at version " + expected +
-                    ", but it starts at version " + entries.get(i).range.lowest() + ".");
+                    "range after " + previous + " must start at version " + expected +
+                    ", but it starts at version " + current.lowest() + ".");
+            }
+            if (currentEntry.headerVersion < previousEntry.headerVersion) {
+                throw new RuntimeException("Message " + messageName + " maps the higher body versions " + current +
+                    " to header version " + currentEntry.headerVersion + ", which is lower than header version " +
+                    previousEntry.headerVersion + " used by the earlier range " + previous +
+                    "; header versions must not decrease as body versions increase.");
             }
         }
         Entry last = entries.get(entries.size() - 1);
