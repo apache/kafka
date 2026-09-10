@@ -119,21 +119,21 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val logStartOffset = partition.localLogOrException.logStartOffset
     val epoch = partition.localLogOrException.leaderEpochCache.epochForOffset(logStartOffset)
-    new OffsetAndEpoch(logStartOffset, epoch.orElse(0))
+    new OffsetAndEpoch(logStartOffset, epoch.orElse(UNDEFINED_EPOCH))
   }
 
   override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val logEndOffset = partition.localLogOrException.logEndOffset
     val epoch = partition.localLogOrException.leaderEpochCache.epochForOffset(logEndOffset)
-    new OffsetAndEpoch(logEndOffset, epoch.orElse(0))
+    new OffsetAndEpoch(logEndOffset, epoch.orElse(UNDEFINED_EPOCH))
   }
 
   override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val localLogStartOffset = partition.localLogOrException.localLogStartOffset()
     val epoch = partition.localLogOrException.leaderEpochCache.epochForOffset(localLogStartOffset)
-    new OffsetAndEpoch(localLogStartOffset, epoch.orElse(0))
+    new OffsetAndEpoch(localLogStartOffset, epoch.orElse(UNDEFINED_EPOCH))
   }
 
   override def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
@@ -159,7 +159,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
         case _ =>
           val earliestPendingUploadOffset = Math.max(highestRemoteOffset + 1, Math.max(logStartOffset.offset(), localLogStartOffset.offset()))
           val epoch = log.leaderEpochCache.epochForOffset(earliestPendingUploadOffset)
-          new OffsetAndEpoch(earliestPendingUploadOffset, epoch.orElse(0))
+          new OffsetAndEpoch(earliestPendingUploadOffset, epoch.orElse(UNDEFINED_EPOCH))
       }
     }
   }
