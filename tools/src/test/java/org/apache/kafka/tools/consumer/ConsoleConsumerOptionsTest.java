@@ -23,9 +23,11 @@ import org.apache.kafka.test.MockDeserializer;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -473,6 +475,26 @@ public class ConsoleConsumerOptionsTest {
         assertEquals(1, keyDeserializer.configs.size());
         assertEquals("abc", keyDeserializer.configs.get("my-props"));
         assertTrue(keyDeserializer.isKey);
+    }
+
+    @Test
+    public void shouldInstantiateProtobufMessageFormatterWithItsProperties(@TempDir Path tempDir) throws Exception {
+        Path protoDir = ProtobufMessageFormatterTest.writeProtoDir(tempDir);
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--formatter", "org.apache.kafka.tools.consumer.ProtobufMessageFormatter",
+            "--formatter-property", "proto.dir=" + protoDir,
+            "--formatter-property", "message.type=com.example.MyEvent"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+
+        // This test only proves the --formatter/--formatter-property mechanism can instantiate and
+        // configure ProtobufMessageFormatter. Decoding behavior itself is covered by
+        // ProtobufMessageFormatterTest.
+        assertInstanceOf(ProtobufMessageFormatter.class, config.formatter());
     }
 
     @Test
