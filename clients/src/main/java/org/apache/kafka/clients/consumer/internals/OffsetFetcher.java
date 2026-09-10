@@ -247,8 +247,12 @@ public class OffsetFetcher {
     private void resetPositionsAsync(Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
         Map<TopicPartition, Long> partitionResetTimestamps = partitionAutoOffsetResetStrategyMap.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
+        Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =
-                groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
+                groupListOffsetRequests(partitionResetTimestamps, partitionsToRetry);
+        if (!partitionsToRetry.isEmpty()) {
+            metadata.requestUpdate(false);
+        }
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
             final Map<TopicPartition, ListOffsetsPartition> resetTimestamps = entry.getValue();
@@ -413,7 +417,7 @@ public class OffsetFetcher {
                 }
             }
         }
-        return offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap);
+        return offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap, partitionsToRetry);
     }
 
     /**
