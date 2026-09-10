@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientRequest;
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
@@ -28,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
@@ -1597,21 +1597,7 @@ public class KafkaConsumerTest {
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testWakeupWithFetchDataAvailable(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
-
-        AtomicInteger fetchCorrelationId = new AtomicInteger(-1);
-        AtomicBoolean fetchResponseCompleted = new AtomicBoolean(false);
-        MockClient client = new MockClient(time, metadata) {
-            @Override
-            public List<ClientResponse> poll(long timeoutMs, long now) {
-                List<ClientResponse> completed = super.poll(timeoutMs, now);
-                completed.stream()
-                        .filter(response -> response.requestHeader().apiKey() == ApiKeys.FETCH)
-                        .filter(response -> response.requestHeader().correlationId() == fetchCorrelationId.get())
-                        .findAny()
-                        .ifPresent(response -> fetchResponseCompleted.set(true));
-                return completed;
-            }
-        };
+        MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Map.of(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
@@ -1624,14 +1610,14 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         // respond to the outstanding fetch so that we have data available on the next poll
-        ClientRequest fetchRequest = findRequest(client, ApiKeys.FETCH);
-        fetchCorrelationId.set(fetchRequest.correlationId());
-
         client.respondFrom(fetchResponse(tp0, 0, 5), node);
+
+        ClassicKafkaConsumer<?, ?> delegate = TestUtils.fieldValue(consumer, KafkaConsumer.class, "delegate");
+        Fetcher<?, ?> fetcher = TestUtils.fieldValue(delegate, ClassicKafkaConsumer.class, "fetcher");
         TestUtils.waitForCondition(() -> {
             client.poll(0, time.milliseconds());
-            return fetchResponseCompleted.get();
-        }, "Fetch response was not completed.");
+            return fetcher.hasAvailableFetches();
+        }, "Fetch data was not buffered.");
         
         consumer.wakeup();
 
@@ -2501,12 +2487,11 @@ public class KafkaConsumerTest {
 
             // Close task should not complete until commit succeeds or close times out
             // if close timeout is not zero.
-            try {
+            if (closeTimeoutMs != 0) {
+                assertThrows(TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS), "Close completed without waiting for commit or leave response");
+            } else {
+                // Handle the case where timeout is 0, if needed
                 future.get(100, TimeUnit.MILLISECONDS);
-                if (closeTimeoutMs != 0)
-                    fail("Close completed without waiting for commit or leave response");
-            } catch (TimeoutException swallow) {
-                // Expected exception
             }
 
             // Ensure close has started and queued at least one more request after commitAsync.
@@ -2515,13 +2500,13 @@ public class KafkaConsumerTest {
             // LEAVE_GROUP as part of coordinator close and second is FETCH with epoch=FINAL_EPOCH. At this stage
             // we expect only the first one to have been requested. Hence, waiting for total 2 requests, one for
             // commit and another for LEAVE_GROUP.
-            client.waitForRequests(2, 1000);
+            client.waitForRequests(2, TestUtils.DEFAULT_MAX_WAIT_MS);
 
             // In graceful mode, commit response results in close() completing immediately without a timeout
             // In non-graceful mode, close() times out without an exception even though commit response is pending
             int nonCloseRequests = 1;
             for (int i = 0; i < responses.size(); i++) {
-                client.waitForRequests(1, 1000);
+                client.waitForRequests(1, TestUtils.DEFAULT_MAX_WAIT_MS);
                 if (i == responses.size() - 1 && responses.get(i) instanceof FetchResponse) {
                     // last request is the close session request which is sent to the leader of the partition.
                     client.respondFrom(responses.get(i), node);
@@ -2544,7 +2529,9 @@ public class KafkaConsumerTest {
 
                 assertInstanceOf(InterruptException.class, closeException.get(), "Expected exception not thrown " + closeException);
             } else {
-                future.get(closeTimeoutMs, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+                // The close timeout runs on MockTime, so bound the wait in real time; it should complete without
+                // TimeoutException or ExecutionException.
+                future.get(TestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
                 assertNull(closeException.get(), "Unexpected exception during close");
             }
         } finally {

@@ -67,6 +67,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
@@ -741,9 +742,12 @@ public class CommitRequestManagerTest {
         assertPoll(1, commitRequestManager);
     }
 
-    @Test
-    public void testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin() {
-        CommitRequestManager commitRequestManager = create(true, 100);
+    // The auto-commit interval may be configured to zero, so a retry backoff is used while the
+    // coordinator is unknown, consistently with the fetch and heartbeat request managers.
+    @ParameterizedTest
+    @ValueSource(longs = {0, 5000})
+    public void testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin(long autoCommitInterval) {
+        CommitRequestManager commitRequestManager = create(true, autoCommitInterval);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
 
         time.sleep(100);
@@ -751,7 +755,7 @@ public class CommitRequestManagerTest {
 
         assertTrue(result > 0,
             "maximumTimeToWait must be > 0 when the coordinator is unknown to avoid a busy-spin; got " + result);
-        assertEquals(100, result);
+        assertEquals(retryBackoffMs, result);
     }
 
     @Test

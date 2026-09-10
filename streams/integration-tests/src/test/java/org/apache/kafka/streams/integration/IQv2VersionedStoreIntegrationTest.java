@@ -63,13 +63,11 @@ import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 public class IQv2VersionedStoreIntegrationTest {
@@ -217,17 +215,17 @@ public class IQv2VersionedStoreIntegrationTest {
             throw new AssertionError("The query returned null.");
         }
 
-        assertThat(queryResult.isSuccess(), is(true));
+        assertTrue(queryResult.isSuccess());
         final VersionedRecord<Integer> result1 = queryResult.getResult();
-        assertThat(result1.value(), is(expectedValue));
-        assertThat(result1.timestamp(), is(expectedTimestamp));
-        assertThat(result1.validTo(), is(expectedValidToTime));
-        assertThat(queryResult.getExecutionInfo(), is(empty()));
+        assertEquals(expectedValue, result1.value());
+        assertEquals(expectedTimestamp, result1.timestamp());
+        assertEquals(expectedValidToTime, result1.validTo());
+        assertTrue(queryResult.getExecutionInfo().isEmpty());
     }
 
     private void shouldVerifyGetNullForVersionedKeyQuery(final Integer key, final Instant queryTimestamp) {
         final VersionedKeyQuery<Integer, Integer> query = defineQuery(key, Optional.of(queryTimestamp));
-        assertThat(sendRequestAndReceiveResults(query, kafkaStreams), nullValue());
+        assertNull(sendRequestAndReceiveResults(query, kafkaStreams));
     }
 
     private void shouldHandleMultiVersionedKeyQuery(final Optional<Instant> fromTime, final Optional<Instant> toTime,
@@ -250,14 +248,14 @@ public class IQv2VersionedStoreIntegrationTest {
                     final Integer value = record.value();
 
                     final Optional<Long> expectedValidTo = i < expectedArrayUpperBound ? Optional.of(RECORD_TIMESTAMPS[i + 1]) : Optional.empty();
-                    assertThat(value, is(RECORD_VALUES[i]));
-                    assertThat(timestamp, is(RECORD_TIMESTAMPS[i]));
-                    assertThat(validTo, is(expectedValidTo));
+                    assertEquals(RECORD_VALUES[i], value);
+                    assertEquals(RECORD_TIMESTAMPS[i], timestamp);
+                    assertEquals(expectedValidTo, validTo);
                     i = order.equals(ResultOrder.ASCENDING) ? i + 1 : i - 1;
                     iteratorSize++;
                 }
                 // The number of returned records by query is equal to expected number of records
-                assertThat(iteratorSize, equalTo(expectedArrayUpperBound - expectedArrayLowerBound + 1));
+                assertEquals(expectedArrayUpperBound - expectedArrayLowerBound + 1, iteratorSize);
             }
         }
     }
@@ -301,9 +299,9 @@ public class IQv2VersionedStoreIntegrationTest {
                     final Integer value = record.value();
 
                     final Optional<Long> expectedValidTo = i < LAST_INDEX ? Optional.of(RECORD_TIMESTAMPS[i + 1]) : Optional.empty();
-                    assertThat(value, is(RECORD_VALUES[i]));
-                    assertThat(timestamp, is(RECORD_TIMESTAMPS[i]));
-                    assertThat(validTo, is(expectedValidTo));
+                    assertEquals(RECORD_VALUES[i], value);
+                    assertEquals(RECORD_TIMESTAMPS[i], timestamp);
+                    assertEquals(expectedValidTo, validTo);
                     i--;
                     iteratorSize++;
                     if (i == 2) {
@@ -322,15 +320,15 @@ public class IQv2VersionedStoreIntegrationTest {
                     final Integer value = record.value();
 
                     final Optional<Long> expectedValidTo = Optional.of(RECORD_TIMESTAMPS[i + 1]);
-                    assertThat(value, is(RECORD_VALUES[i]));
-                    assertThat(timestamp, is(RECORD_TIMESTAMPS[i]));
-                    assertThat(validTo, is(expectedValidTo));
+                    assertEquals(RECORD_VALUES[i], value);
+                    assertEquals(RECORD_TIMESTAMPS[i], timestamp);
+                    assertEquals(expectedValidTo, validTo);
                     i--;
                     iteratorSize++;
                 }
 
                 // The number of returned records by query is equal to expected number of records
-                assertThat(iteratorSize, equalTo(RECORD_NUMBER));
+                assertEquals(RECORD_NUMBER, iteratorSize);
             }
         }
     }
@@ -370,11 +368,11 @@ public class IQv2VersionedStoreIntegrationTest {
     }
 
     private static void verifyPartitionResult(final QueryResult<VersionedRecordIterator<Integer>> result) {
-        assertThat(result.getExecutionInfo(), is(empty()));
+        assertTrue(result.getExecutionInfo().isEmpty());
         if (result.isFailure()) {
             throw new AssertionError(result.toString());
         }
-        assertThat(result.isSuccess(), is(true));
+        assertTrue(result.isSuccess());
         assertThrows(IllegalArgumentException.class, result::getFailureReason);
         assertThrows(IllegalArgumentException.class, result::getFailureMessage);
     }
@@ -393,7 +391,7 @@ public class IQv2VersionedStoreIntegrationTest {
         }
 
         inputPosition = inputPosition.withComponent(INPUT_TOPIC_NAME, 0, 4);
-        assertThat(inputPosition, equalTo(Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, 4)));
+        assertEquals(Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, 4), inputPosition);
 
         // make sure that the new value is picked up by the store
         final Properties consumerProps = new Properties();

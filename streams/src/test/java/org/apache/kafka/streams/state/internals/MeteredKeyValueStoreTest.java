@@ -70,11 +70,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -241,7 +237,7 @@ public class MeteredKeyValueStoreTest {
         // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("restore-latency-max");
-        assertThat((Double) metric.metricValue(), equalTo((double) restoreTimeNs));
+        assertEquals((double) restoreTimeNs, (Double) metric.metricValue());
     }
 
     @Test
@@ -262,7 +258,7 @@ public class MeteredKeyValueStoreTest {
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_BYTES);
         init();
 
-        assertThat(metered.get(KEY), equalTo(VALUE));
+        assertEquals(VALUE, metered.get(KEY));
 
         final KafkaMetric metric = metric("get-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -313,7 +309,7 @@ public class MeteredKeyValueStoreTest {
         init();
 
         final KeyValueIterator<String, String> iterator = metered.range(KEY, KEY);
-        assertThat(iterator.next().value, equalTo(VALUE));
+        assertEquals(VALUE, iterator.next().value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -328,7 +324,7 @@ public class MeteredKeyValueStoreTest {
         init();
 
         final KeyValueIterator<String, String> iterator = metered.all();
-        assertThat(iterator.next().value, equalTo(VALUE));
+        assertEquals(VALUE, iterator.next().value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -415,7 +411,7 @@ public class MeteredKeyValueStoreTest {
 
         final Header capturedLastHeader = headersCaptor.getValue().lastHeader(headerKey);
         assertNotNull(capturedLastHeader);
-        assertThat(new String(capturedLastHeader.value(), StandardCharsets.UTF_8), equalTo("new"));
+        assertEquals("new", new String(capturedLastHeader.value(), StandardCharsets.UTF_8));
     }
 
     @Test
@@ -440,9 +436,9 @@ public class MeteredKeyValueStoreTest {
         init(); // replays "inner"
 
         // There's always a "count" metric registered
-        assertThat(storeMetrics(), not(empty()));
+        assertFalse(storeMetrics().isEmpty());
         metered.close();
-        assertThat(storeMetrics(), empty());
+        assertTrue(storeMetrics().isEmpty());
     }
 
     @Test
@@ -451,9 +447,9 @@ public class MeteredKeyValueStoreTest {
         doThrow(new RuntimeException("Oops!")).when(inner).close();
         init(); // replays "inner"
 
-        assertThat(storeMetrics(), not(empty()));
+        assertFalse(storeMetrics().isEmpty());
         assertThrows(RuntimeException.class, metered::close);
-        assertThat(storeMetrics(), empty());
+        assertTrue(storeMetrics().isEmpty());
     }
 
     @Test
@@ -536,7 +532,7 @@ public class MeteredKeyValueStoreTest {
         init();
 
         final KeyValueIterator<String, String> iterator = metered.prefixScan(KEY, mockSerializer);
-        assertThat(iterator.next().value, equalTo(VALUE));
+        assertEquals(VALUE, iterator.next().value);
         iterator.close();
 
         final KafkaMetric metric = metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags));
@@ -550,9 +546,9 @@ public class MeteredKeyValueStoreTest {
         init();
 
         final KafkaMetric numKeysMetric = metric("num-keys");
-        assertThat(numKeysMetric, not(nullValue()));
+        assertNotNull(numKeysMetric);
         // inner store is a mock (not InMemoryKeyValueStore), so returns -1
-        assertThat((Long) numKeysMetric.metricValue(), equalTo(-1L));
+        assertEquals(-1L, (Long) numKeysMetric.metricValue());
     }
 
     @SuppressWarnings({"unused", "unchecked"})
@@ -569,15 +565,15 @@ public class MeteredKeyValueStoreTest {
         init();
 
         final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
-        assertThat(openIteratorsMetric, not(nullValue()));
+        assertNotNull(openIteratorsMetric);
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
 
         try (final KeyValueIterator<String, String> unused = metered.prefixScan(KEY, mockSerializer)) {
-            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+            assertEquals(1L, (Long) openIteratorsMetric.metricValue());
         }
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
         verify(mockSerializer).serialize(null, headers, KEY);
     }
 
@@ -590,27 +586,27 @@ public class MeteredKeyValueStoreTest {
 
         final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
         final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
-        assertThat(iteratorDurationAvgMetric, not(nullValue()));
-        assertThat(iteratorDurationMaxMetric, not(nullValue()));
+        assertNotNull(iteratorDurationAvgMetric);
+        assertNotNull(iteratorDurationMaxMetric);
 
-        assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
-        assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
 
         try (final KeyValueIterator<String, String> unused = metered.all()) {
             // nothing to do, just close immediately
             mockTime.sleep(2);
         }
 
-        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
-        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
 
         try (final KeyValueIterator<String, String> iterator = metered.all()) {
             // nothing to do, just close immediately
             mockTime.sleep(3);
         }
 
-        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.5 * TimeUnit.MILLISECONDS.toNanos(1)));
-        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
     }
 
     @SuppressWarnings("unused")
@@ -621,34 +617,34 @@ public class MeteredKeyValueStoreTest {
         init();
 
         final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
+        assertNotNull(oldestIteratorTimestampMetric);
 
-        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, oldestIteratorTimestampMetric.metricValue());
 
         KeyValueIterator<String, String> second = null;
         final long secondTimestamp;
         try {
             try (final KeyValueIterator<String, String> unused = metered.all()) {
                 final long oldestTimestamp = mockTime.milliseconds();
-                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                assertEquals(oldestTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
                 mockTime.sleep(100);
 
                 // open a second iterator before closing the first to test that we still produce the first iterator's timestamp
                 second = metered.all();
                 secondTimestamp = mockTime.milliseconds();
-                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                assertEquals(oldestTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
                 mockTime.sleep(100);
             }
 
             // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
-            assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
+            assertEquals(secondTimestamp, oldestIteratorTimestampMetric.metricValue());
         } finally {
             if (second != null) {
                 second.close();
             }
         }
         // no open iterators left, timestamp should be reset to 0
-        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, oldestIteratorTimestampMetric.metricValue());
     }
 
     @SuppressWarnings("unchecked")
@@ -661,7 +657,7 @@ public class MeteredKeyValueStoreTest {
         init();
 
         final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
-        assertThat(view.get(KEY), equalTo(VALUE));
+        assertEquals(VALUE, view.get(KEY));
 
         assertTrue((Double) metric("get-rate").metricValue() > 0);
     }
@@ -678,7 +674,7 @@ public class MeteredKeyValueStoreTest {
 
         final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
         try (final KeyValueIterator<String, String> it = view.range(KEY, KEY)) {
-            assertThat(it.next().value, equalTo(VALUE));
+            assertEquals(VALUE, it.next().value);
             assertFalse(it.hasNext());
         }
 
@@ -697,7 +693,7 @@ public class MeteredKeyValueStoreTest {
 
         final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
         try (final KeyValueIterator<String, String> it = view.reverseRange(KEY, KEY)) {
-            assertThat(it.next().value, equalTo(VALUE));
+            assertEquals(VALUE, it.next().value);
             assertFalse(it.hasNext());
         }
 
@@ -716,7 +712,7 @@ public class MeteredKeyValueStoreTest {
 
         final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
         try (final KeyValueIterator<String, String> it = view.all()) {
-            assertThat(it.next().value, equalTo(VALUE));
+            assertEquals(VALUE, it.next().value);
             assertFalse(it.hasNext());
         }
 
@@ -735,7 +731,7 @@ public class MeteredKeyValueStoreTest {
 
         final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
         try (final KeyValueIterator<String, String> it = view.reverseAll()) {
-            assertThat(it.next().value, equalTo(VALUE));
+            assertEquals(VALUE, it.next().value);
             assertFalse(it.hasNext());
         }
 
@@ -759,7 +755,7 @@ public class MeteredKeyValueStoreTest {
 
         final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
         try (final KeyValueIterator<String, String> it = view.prefixScan(KEY, mockSerializer)) {
-            assertThat(it.next().value, equalTo(VALUE));
+            assertEquals(VALUE, it.next().value);
             assertFalse(it.hasNext());
         }
 
@@ -778,7 +774,7 @@ public class MeteredKeyValueStoreTest {
         init();
 
         final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
-        assertThat(view.approximateNumEntries(), equalTo(42L));
+        assertEquals(42L, view.approximateNumEntries());
     }
 
     @SuppressWarnings("unchecked")

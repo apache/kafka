@@ -45,7 +45,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -78,10 +77,8 @@ import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 @Timeout(600)
@@ -160,8 +157,8 @@ public class SuppressionIntegrationTest {
             );
             final boolean rawRecords = waitForAnyRecord(outputRaw);
             final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);
@@ -214,8 +211,8 @@ public class SuppressionIntegrationTest {
             );
             final boolean rawRecords = waitForAnyRecord(outputRaw);
             final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);
@@ -388,10 +385,10 @@ public class SuppressionIntegrationTest {
             final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
             final Properties config = CLUSTER.getLogConfig(changeLog);
 
-            assertThat(config.getProperty("retention.ms"), is(logConfig.get("retention.ms")));
-            assertThat(CLUSTER.getAllTopicsInCluster(), hasItem(changeLog));
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertEquals(logConfig.get("retention.ms"), config.getProperty("retention.ms"));
+            assertTrue(CLUSTER.getAllTopicsInCluster().contains(changeLog));
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);
@@ -446,9 +443,9 @@ public class SuppressionIntegrationTest {
             final boolean rawRecords = waitForAnyRecord(outputRaw);
             final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
 
-            assertThat(CLUSTER.getAllTopicsInCluster(), hasItem(changeLog));
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertTrue(CLUSTER.getAllTopicsInCluster().contains(changeLog));
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);
@@ -508,9 +505,9 @@ public class SuppressionIntegrationTest {
                 .filter(s -> s.contains("KTABLE-SUPPRESS"))
                 .collect(Collectors.toSet());
 
-            assertThat(suppressChangeLog, is(empty()));
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertTrue(suppressChangeLog.isEmpty());
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);

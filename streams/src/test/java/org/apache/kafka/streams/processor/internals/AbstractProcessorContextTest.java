@@ -48,13 +48,10 @@ import java.time.Instant;
 import java.util.Properties;
 
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.emptyIterable;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class AbstractProcessorContextTest {
 
@@ -72,12 +69,8 @@ public class AbstractProcessorContextTest {
     @Test
     public void shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized() {
         context.initialize();
-        try {
-            context.register(stateStore, null);
-            fail("should throw illegal state exception when context already initialized");
-        } catch (final IllegalStateException e) {
-            // pass
-        }
+        assertThrows(IllegalStateException.class, () -> context.register(stateStore, null),
+            "should throw illegal state exception when context already initialized");
     }
 
     @Test
@@ -93,35 +86,35 @@ public class AbstractProcessorContextTest {
     @Test
     public void shouldReturnNullTopicIfNoRecordContext() {
         context.setRecordContext(null);
-        assertThat(context.topic(), is(nullValue()));
+        assertNull(context.topic());
     }
 
     @Test
     public void shouldNotThrowNullPointerExceptionOnTopicIfRecordContextTopicIsNull() {
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, new RecordHeaders()));
-        assertThat(context.topic(), nullValue());
+        assertNull(context.topic());
     }
 
     @Test
     public void shouldReturnTopicFromRecordContext() {
-        assertThat(context.topic(), equalTo(recordContext.topic()));
+        assertEquals(recordContext.topic(), context.topic());
     }
 
     @Test
     public void shouldReturnNullIfTopicEqualsNonExistTopic() {
         context.setRecordContext(null);
-        assertThat(context.topic(), nullValue());
+        assertNull(context.topic());
     }
 
     @Test
     public void shouldReturnDummyPartitionIfNoRecordContext() {
         context.setRecordContext(null);
-        assertThat(context.partition(), is(-1));
+        assertEquals(-1, context.partition());
     }
 
     @Test
     public void shouldReturnPartitionFromRecordContext() {
-        assertThat(context.partition(), equalTo(recordContext.partition()));
+        assertEquals(recordContext.partition(), context.partition());
     }
 
     @Test
@@ -136,45 +129,39 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldReturnOffsetFromRecordContext() {
-        assertThat(context.offset(), equalTo(recordContext.offset()));
+        assertEquals(recordContext.offset(), context.offset());
     }
 
     @Test
     public void shouldReturnDummyTimestampIfNoRecordContext() {
         context.setRecordContext(null);
-        assertThat(context.timestamp(), is(0L));
+        assertEquals(0L, context.timestamp());
     }
 
     @Test
     public void shouldReturnTimestampFromRecordContext() {
-        assertThat(context.timestamp(), equalTo(recordContext.timestamp()));
+        assertEquals(recordContext.timestamp(), context.timestamp());
     }
 
     @Test
     public void shouldReturnHeadersFromRecordContext() {
-        assertThat(context.headers(), equalTo(recordContext.headers()));
+        assertEquals(recordContext.headers(), context.headers());
     }
 
     @Test
     public void shouldReturnEmptyHeadersIfHeadersAreNotSet() {
         context.setRecordContext(null);
-        assertThat(context.headers(), is(emptyIterable()));
+        assertFalse(context.headers().iterator().hasNext());
     }
 
     @Test
     public void appConfigsShouldReturnParsedValues() {
-        assertThat(
-            context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG),
-            equalTo(RocksDBConfigSetter.class)
-        );
+        assertEquals(RocksDBConfigSetter.class, context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG));
     }
 
     @Test
     public void appConfigsShouldReturnUnrecognizedValues() {
-        assertThat(
-            context.appConfigs().get("user.supplied.config"),
-            equalTo("user-supplied-value")
-        );
+        assertEquals("user-supplied-value", context.appConfigs().get("user.supplied.config"));
     }
     @Test
     public void shouldThrowErrorIfSerdeDefaultNotSet() {
