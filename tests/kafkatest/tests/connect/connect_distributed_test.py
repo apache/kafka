@@ -831,7 +831,10 @@ class ConnectDistributedTest(Test):
         self.source.stop()
         self.cc.stop()
 
-        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, message_validator=json.loads, consumer_timeout_ms=1000, isolation_level="read_committed")
+        # The timeout also covers joining the group and fetching the first batch. A short
+        # timeout can report no source records before the consumer has started reading.
+        consumer_timeout_ms = 10000
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, message_validator=json.loads, consumer_timeout_ms=consumer_timeout_ms, isolation_level="read_committed")
         consumer.run()
         src_messages = consumer.messages_consumed[1]
 
@@ -865,7 +868,7 @@ class ConnectDistributedTest(Test):
         if not success:
             self.mark_for_collect(self.cc)
             # Also collect the data in the topic to aid in debugging
-            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True)
+            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=consumer_timeout_ms, print_key=True)
             consumer_validator.run()
             self.mark_for_collect(consumer_validator, "consumer_stdout")
 
