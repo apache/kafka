@@ -1238,6 +1238,66 @@ public class CommitRequestManagerTest {
         assertEquals(memberId, reqData.groups().get(0).memberId());
     }
 
+    // Same as testSyncOffsetFetchFailsWithStaleEpochAndRetriesWithNewEpoch, but with a
+    // duplicated fetch for the same partitions chained onto the in-flight request when the
+    // STALE_MEMBER_EPOCH error is received. The retry of the chained request must not be
+    // deduplicated against the already-completed in-flight request: chaining onto a completed
+    // future fails it again immediately and re-triggers the retry in a tight synchronous loop
+    // that never sends a request with the new epoch and never completes the callers' futures
+    // (KAFKA-20765).
+    @Test
+    public void testDuplicatedOffsetFetchFailsWithStaleEpochAndRetriesWithNewEpoch() {
+        CommitRequestManager commitRequestManager = create(false, 100);
+        Set<TopicPartition> partitions = Collections.singleton(new TopicPartition("t1", 0));
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        // Two callers fetch offsets for the same partitions; the second request is deduplicated
+        // and chained onto the first.
+        long deadlineMs = time.milliseconds() + defaultApiTimeoutMs;
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> firstResult =
+            commitRequestManager.fetchOffsets(partitions, deadlineMs);
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> secondResult =
+            commitRequestManager.fetchOffsets(partitions, deadlineMs);
+
+        // A single deduplicated request goes on the wire.
+        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+
+        // Mock member has a new valid epoch, so STALE_MEMBER_EPOCH is retriable.
+        int newEpoch = 8;
+        String memberId = "member1";
+        commitRequestManager.onMemberEpochUpdated(Optional.of(newEpoch), memberId);
+
+        // Receive error when member already has a newer member epoch. Request should be retried.
+        res.unsentRequests.get(0).handler().onComplete(
+            buildOffsetFetchClientResponse(res.unsentRequests.get(0), partitions, Errors.STALE_MEMBER_EPOCH));
+
+        // The failed request should be removed from the in-flight buffer, a retry should be
+        // enqueued, and the callers' futures should still be waiting for the retry's outcome.
+        assertEquals(0, commitRequestManager.pendingRequests.inflightOffsetFetches.size());
+        assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
+        assertFalse(firstResult.isDone());
+        assertFalse(secondResult.isDone());
+
+        // The deduplicated retry is chained onto the original as a fresh request, so it is sent on
+        // the next poll with no backoff, carrying the latest member ID and epoch.
+        res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        OffsetFetchRequestData reqData =
+            (OffsetFetchRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
+        assertEquals(1, reqData.groups().size());
+        assertEquals(newEpoch, reqData.groups().get(0).memberEpoch());
+        assertEquals(memberId, reqData.groups().get(0).memberId());
+
+        // A successful response should complete both callers' futures.
+        res.unsentRequests.get(0).handler().onComplete(
+            buildOffsetFetchClientResponse(res.unsentRequests.get(0), partitions, Errors.NONE));
+        assertTrue(firstResult.isDone());
+        assertFalse(firstResult.isCompletedExceptionally());
+        assertTrue(secondResult.isDone());
+        assertFalse(secondResult.isCompletedExceptionally());
+    }
+
     // This should be the case of an OffsetFetch that fails because the member is not in the
     // group anymore (left the group, failed with fatal error, or got fenced). In that case the
     // request should fail without retry.
