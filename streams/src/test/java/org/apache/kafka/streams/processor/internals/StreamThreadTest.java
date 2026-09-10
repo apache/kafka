@@ -1805,12 +1805,16 @@ public class StreamThreadTest {
         );
     }
 
-    @Test
-    public void shouldApplyGroupMembershipOperationUpdatedAfterShutdownWasInitiated() throws InterruptedException {
-        // A client-level close can find the thread already shutting down because a removal or
-        // replacement initiated the shutdown first: the close's shutdown() call returns false and
-        // the close path records its operation via updateGroupMembershipOperation instead. The
-        // consumer must then be closed with that operation.
+    /**
+     * Starts a real stream thread (classic protocol) whose run loop is parked inside poll, so a
+     * test can interleave shutdown calls deterministically before releasing it: the thread cannot
+     * consume its group membership operation while parked. On release, poll throws
+     * {@code failureOnRelease} if non-null and returns empty records otherwise. The thread is
+     * stored in {@code this.thread} for the tear-down.
+     *
+     * @return the latch releasing the parked poll
+     */
+    private CountDownLatch startThreadParkedInPoll(final RuntimeException failureOnRelease) throws InterruptedException {
         final Time mockTime = new MockTime(1);
         final StreamsConfig config = new StreamsConfig(configProps(false, false));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, APPLICATION_ID, mockTime);
@@ -1820,11 +1824,12 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        // Park the run loop inside poll so the shutdown interleaving below is deterministic: the
-        // thread cannot complete its shutdown before the operation update has been applied.
         when(consumer.poll(any())).thenAnswer(invocation -> {
             pollEntered.countDown();
             releasePoll.await(30, TimeUnit.SECONDS);
+            if (failureOnRelease != null) {
+                throw failureOnRelease;
+            }
             return ConsumerRecords.empty();
         });
         final MockConsumerClientSupplier mockClientSupplier = new MockConsumerClientSupplier(consumer);
@@ -1862,6 +1867,45 @@ public class StreamThreadTest {
 
         thread.start();
         assertTrue(pollEntered.await(10, TimeUnit.SECONDS), "StreamThread never reached poll");
+        return releasePoll;
+    }
+
+    private void awaitThreadDead() throws InterruptedException {
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.DEAD,
+            10 * 1000,
+            "Thread never shut down.");
+    }
+
+    private void verifyConsumerClosedWith(final GroupMembershipOperation expectedOperation) {
+        final ArgumentCaptor<org.apache.kafka.clients.consumer.CloseOptions> captor =
+            ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
+        verify(consumer).close(captor.capture());
+        assertEquals(expectedOperation, captor.getValue().groupMembershipOperation());
+    }
+
+    @Test
+    public void shouldNotOverrideShutdownOperationWhenThreadFailsAfterShutdownWasInitiated() throws InterruptedException {
+        // A thread that dies with an uncaught exception requests LEAVE_GROUP as the failure
+        // default, but that default must not override the operation of a caller that already
+        // initiated the thread's shutdown, such as a close with an explicit REMAIN_IN_GROUP.
+        final CountDownLatch releasePoll = startThreadParkedInPoll(new RuntimeException("stream thread failure"));
+
+        assertTrue(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+
+        releasePoll.countDown();
+        awaitThreadDead();
+
+        verifyConsumerClosedWith(GroupMembershipOperation.REMAIN_IN_GROUP);
+    }
+
+    @Test
+    public void shouldApplyGroupMembershipOperationUpdatedAfterShutdownWasInitiated() throws InterruptedException {
+        // A client-level close can find the thread already shutting down because a removal or
+        // replacement initiated the shutdown first: the close's shutdown() call returns false and
+        // the close path records its operation via updateGroupMembershipOperation instead. The
+        // consumer must then be closed with that operation.
+        final CountDownLatch releasePoll = startThreadParkedInPoll(null);
 
         // A removal or replacement wins the shutdown; the close path loses and records its
         // operation, which must succeed while the thread has not consumed the operation yet.
@@ -1870,18 +1914,9 @@ public class StreamThreadTest {
         assertTrue(thread.updateGroupMembershipOperation(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
 
         releasePoll.countDown();
-        TestUtils.waitForCondition(
-            () -> thread.state() == StreamThread.State.DEAD,
-            10 * 1000,
-            "Thread never shut down.");
+        awaitThreadDead();
 
-        final ArgumentCaptor<org.apache.kafka.clients.consumer.CloseOptions> captor =
-            ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
-        verify(consumer).close(captor.capture());
-        assertEquals(
-            GroupMembershipOperation.LEAVE_GROUP,
-            captor.getValue().groupMembershipOperation()
-        );
+        verifyConsumerClosedWith(GroupMembershipOperation.LEAVE_GROUP);
 
         // Once the thread has consumed the operation for its consumer shutdown, updates are
         // rejected: they could no longer influence anything.

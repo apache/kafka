@@ -958,7 +958,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            leaveGroupRequested.set(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+            requestLeaveGroupOnFailure();
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
@@ -1967,6 +1967,22 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
             leaveGroupRequested.set(operation);
             return true;
+        }
+    }
+
+    /**
+     * A failing thread leaves the group by default so that its tasks are reassigned promptly.
+     * The write goes through the same protocol as every other operation update: if another
+     * caller already initiated this thread's shutdown, that caller's operation takes precedence
+     * and the default is not applied.
+     */
+    private void requestLeaveGroupOnFailure() {
+        synchronized (leaveGroupRequestedLock) {
+            final State currentState = state();
+            if (currentState == State.PENDING_SHUTDOWN || currentState == State.DEAD) {
+                return;
+            }
+            leaveGroupRequested.set(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
         }
     }
 
