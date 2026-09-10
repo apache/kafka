@@ -624,9 +624,11 @@ org.apache.kafka.storage.internals.log.OffsetIndexTest:
 - truncate
 org.apache.kafka.storage.internals.log.OffsetMapTest:
 - testBasicValidation
+- testBytesPerEntryMatchesDigestLength
 - testClear
 - testGetWhenFull
 - testLatestOffset
+- testUnknownAlgorithmThrows
 - testUpdateLatestOffset
 - testUtilization
 org.apache.kafka.storage.internals.log.ProducerStateManagerTest:
