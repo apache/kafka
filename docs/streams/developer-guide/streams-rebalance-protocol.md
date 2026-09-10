@@ -39,7 +39,7 @@ The following features are available in the current release:
 
 * **Core Streams Group Rebalance Protocol**: The `group.protocol=streams` configuration enables the dedicated streams rebalance protocol. This separates streams groups from consumer groups and provides a streams-specific group membership lifecycle and metadata management on the broker.
 
-* **Sticky Task Assignor**: A basic task assignment strategy that minimizes task movement during rebalances is included. It is registered under the name `sticky` and is the default assignor.
+* **Built-in Task Assignors**: Two task assignment strategies are included. The `sticky` assignor minimizes task movement during rebalances and is the default assignor. The `balanced` assignor spreads the tasks of each subtopology across processes and evens out the per-thread task load, at the price of moving more tasks when the group membership changes; it is the counterpart of the `HighAvailabilityTaskAssignor` of the classic protocol, without the warmup task and rack-aware placement features, which are not assignor features in the streams protocol. A group selects an assignor with the group configuration `streams.assignor.name`.
 
 * **Custom Task Assignors**: Brokers can be configured with custom task assignors via `group.streams.assignors`, which takes a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor. An individual group selects one of the registered assignors by name with the group configuration `streams.assignor.name`; when unset, the group uses the first entry of `group.streams.assignors`. Custom implementations must be thread-safe, since a single instance is shared across all groups on a broker.
 
@@ -61,7 +61,7 @@ The following features are not yet available and should be avoided when using th
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **High Availability Assignor**: The sticky assignor is the only built-in assignor and it does not support rack aware assignment, but a custom assignor registered via `group.streams.assignors` can implement it.
+* **Rack-Aware Assignment**: Neither built-in assignor supports rack aware standby task assignment yet, but a custom assignor registered via `group.streams.assignors` can implement it.
 
 * **Warmup Tasks**: In contrast to the "classic" rebalance protocol, warmup tasks are not an assignor feature, but the group coordinator would inject warmup tasks into an assignment. The benefit is, that warmup tasks can be used independent of the configured assignor. However, warmup task support is not implemented yet.
 
