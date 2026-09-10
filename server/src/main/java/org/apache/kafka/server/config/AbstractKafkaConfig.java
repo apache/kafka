@@ -98,9 +98,6 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         AddPartitionsToTxnConfig.CONFIG_DEF
     ));
 
-    private volatile QuotaConfig quotaConfig;
-    private volatile Set<ProcessRole> processRoles;
-
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
     }
