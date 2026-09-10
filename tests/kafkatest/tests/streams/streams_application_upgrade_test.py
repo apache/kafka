@@ -118,6 +118,11 @@ class StreamsUpgradeTest(Test):
         if from_version == to_version:
             return
 
+        # The driver produces records two days in the past. Older smoke-test clients
+        # use the one-day default, which can expire changelogs before state restoration.
+        extra_configs = dict(extra_configs or {})
+        extra_configs.setdefault("windowstore.changelog.additional.retention.ms", 3 * 24 * 60 * 60 * 1000)
+
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=None, topics={
             'echo' : { 'partitions': 5, 'replication-factor': 1 },
             'data' : { 'partitions': 5, 'replication-factor': 1 },
