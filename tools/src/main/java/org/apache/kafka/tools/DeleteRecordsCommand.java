@@ -143,13 +143,23 @@ public class DeleteRecordsCommand {
         DeleteRecordsResult deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
         out.println("Records delete operation completed:");
 
+        Map<TopicPartition, String> failures = new HashMap<>();
         deleteRecordsResult.lowWatermarks().forEach((tp, partitionResult) -> {
             try {
                 out.printf("partition: %s\tlow_watermark: %s%n", tp, partitionResult.get().lowWatermark());
             } catch (InterruptedException | ExecutionException e) {
                 out.printf("partition: %s\terror: %s%n", tp, e.getMessage());
+                failures.put(tp, e.getMessage());
             }
         });
+
+        if (!failures.isEmpty()) {
+            StringJoiner failed = new StringJoiner(", ");
+            failures.forEach((tp, message) -> failed.add(tp + ": " + message));
+            throw new AdminCommandFailedException(
+                String.format("Failed to delete records for %d partition(s): %s", failures.size(), failed)
+            );
+        }
     }
 
     private static Admin createAdminClient(DeleteRecordsCommandOptions opts) throws IOException {
