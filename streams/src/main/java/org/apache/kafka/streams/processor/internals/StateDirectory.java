@@ -851,12 +851,15 @@ public class StateDirectory implements AutoCloseable {
         final List<TaskDirectory> taskDirectories = new ArrayList<>();
         if (hasPersistentStores && stateDir.exists()) {
             if (hasNamedTopologies) {
-                for (final File namedTopologyDir : listNamedTopologyDirs()) {
-                    final String namedTopology = parseNamedTopologyFromDirectory(namedTopologyDir.getName());
-                    final File[] taskDirs = namedTopologyDir.listFiles(filter);
-                    if (taskDirs != null) {
-                        taskDirectories.addAll(Arrays.stream(taskDirs)
-                            .map(f -> new TaskDirectory(f, namedTopology)).collect(Collectors.toList()));
+                final File[] namedTopologyDirs = stateDir.listFiles(f -> f.getName().startsWith("__") && f.getName().endsWith("__"));
+                if (namedTopologyDirs != null) {
+                    for (final File namedTopologyDir : namedTopologyDirs) {
+                        final String namedTopology = parseNamedTopologyFromDirectory(namedTopologyDir.getName());
+                        final File[] taskDirs = namedTopologyDir.listFiles(filter);
+                        if (taskDirs != null) {
+                            taskDirectories.addAll(Arrays.stream(taskDirs)
+                                .map(f -> new TaskDirectory(f, namedTopology)).collect(Collectors.toList()));
+                        }
                     }
                 }
             } else {
@@ -870,11 +873,6 @@ public class StateDirectory implements AutoCloseable {
         }
 
         return taskDirectories;
-    }
-
-    private List<File> listNamedTopologyDirs() {
-        final File[] namedTopologyDirectories = stateDir.listFiles(f -> f.getName().startsWith("__") &&  f.getName().endsWith("__"));
-        return namedTopologyDirectories != null ? Arrays.asList(namedTopologyDirectories) : List.of();
     }
 
     private String parseNamedTopologyFromDirectory(final String dirName) {
