@@ -33,6 +33,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V>, MeteredIt
     private final Function<byte[], V> valueFrom;
     private final long startNs;
     private final long startTimestampMs;
+    private final long sequenceNumber = SEQUENCE_NUMBERS.getAndIncrement();
     private final Time time;
     private final LongAdder numOpenIterators;
     private final Set<MeteredIterator> openIterators;
@@ -60,6 +61,11 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V>, MeteredIt
     @Override
     public long startTimestamp() {
         return startTimestampMs;
+    }
+
+    @Override
+    public long sequenceNumber() {
+        return sequenceNumber;
     }
 
     @Override
