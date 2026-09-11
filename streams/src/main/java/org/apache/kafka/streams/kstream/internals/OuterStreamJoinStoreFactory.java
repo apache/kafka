@@ -23,15 +23,15 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.AggregationWithHeadersSerde;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 import org.apache.kafka.streams.state.internals.ListValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBListValueHeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
 
 import java.time.Duration;
@@ -96,7 +96,16 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoined.keySerde());
         final LeftOrRightValueSerde<V1, V2> leftOrRightValueSerde = new LeftOrRightValueSerde<>(streamJoined.valueSerde(), streamJoined.otherValueSerde());
 
-        // Once the headers-aware version of ListValueStore is implemented (planned for AK 4.4), replace the PLAIN constant with the dslStoreFormat() method.
+        // We always ask the DslStoreSuppliers for a PLAIN bytes store, even in HEADERS mode. The
+        // value-with-headers stores put one headers section in front of the whole value, which is not
+        // the shape of a list: here each list element carries its own headers inline, so the generic
+        // whole-value converter would corrupt the blob. HEADERS mode instead swaps in the list-aware
+        // dual-column-family supplier below.
+        //
+        // This is a choice about the *local* store only. The changelog keeps the PLAIN element format
+        // regardless of mode -- see ChangeLoggingListValueBytesStoreWithHeaders, which strips the
+        // per-element headers into a record header before logging -- so an older version, or the same
+        // version with dsl.store.format flipped back to PLAIN, can still read the changelog.
         final DslKeyValueParams dslKeyValueParams = new DslKeyValueParams(name, DslStoreFormat.PLAIN);
         final KeyValueBytesStoreSupplier supplier;
 
@@ -121,14 +130,34 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             supplier = dslStoreSuppliers().keyValueStore(dslKeyValueParams);
         }
 
-        final StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>
-                builder =
-                new ListValueStoreBuilder<>(
-                        supplier,
-                        timestampedKeyAndJoinSideSerde,
-                        leftOrRightValueSerde,
-                        Time.SYSTEM
-                );
+        final StoreBuilder<?> builder;
+        // HEADERS mode needs a bytes store that can actually hold the headers element format: only the
+        // dual-column-family RocksDB variant can, so that a store already written by a pre-headers
+        // (PLAIN) version is upgraded in place rather than read as corrupt. In-memory and user-supplied
+        // suppliers stay on PLAIN elements, which is what ordinary key-value stores already do in
+        // HEADERS mode: InMemoryDslStoreSuppliers#keyValueStore ignores the format, and
+        // KeyValueStoreMaterializer picks its builder off the supplier rather than off the format.
+        if (dslStoreFormat() == DslStoreFormat.HEADERS && supplier instanceof RocksDBKeyValueBytesStoreSupplier) {
+            // All three decisions follow this one branch: the element serde here, the changelogger via
+            // ListValueStoreBuilder's HeadersBytesStoreSupplier check, and the processor-side value shape
+            // via OuterJoinStoreWrapper's HeadersAwareListValueStore check. They must not disagree --
+            // headers-format elements written through the PLAIN changelogger would put each element's
+            // empty-headers 0x00 prefix on the changelog, where an old PLAIN reader takes it for the
+            // LeftOrRightValue flag and silently turns left values into right ones.
+            builder = new ListValueStoreBuilder<>(
+                new RocksDBListValueHeadersBytesStoreSupplier(name),
+                timestampedKeyAndJoinSideSerde,
+                new AggregationWithHeadersSerde<>(leftOrRightValueSerde),
+                Time.SYSTEM
+            );
+        } else {
+            builder = new ListValueStoreBuilder<>(
+                supplier,
+                timestampedKeyAndJoinSideSerde,
+                leftOrRightValueSerde,
+                Time.SYSTEM
+            );
+        }
 
         if (loggingEnabled) {
             builder.withLoggingEnabled(streamJoined.logConfig());
