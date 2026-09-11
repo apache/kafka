@@ -92,7 +92,7 @@ The following example `Processor` defines a simple word-count algorithm and the 
     
         @Override
         public void process(final Record<String, String> record) {
-            final String[] words = record.value().toLowerCase(Locale.getDefault()).split("\W+");
+            final String[] words = record.value().toLowerCase(Locale.getDefault()).split("\\W+");
     
             for (final String word : words) {
                 final Integer oldValue = kvStore.get(word);
@@ -429,5 +429,4 @@ Now that you have fully defined your processor topology in your application, you
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
   * [Developer Guide](/documentation/streams/developer-guide/)
-
 

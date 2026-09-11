@@ -118,7 +118,7 @@ public class WordCountApplication {
        StreamsBuilder builder = new StreamsBuilder();
        KStream<String, String> textLines = builder.stream("TextLinesTopic");
        KTable<String, Long> wordCounts = textLines
-           .flatMapValues(textLine -> Arrays.asList(textLine.toLowerCase().split("\W+")))
+           .flatMapValues(textLine -> Arrays.asList(textLine.toLowerCase().split("\\W+")))
            .groupBy((key, word) -> word)
            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"));
        wordCounts.toStream().to("WordsWithCountsTopic", Produced.with(Serdes.String(), Serdes.Long()));
@@ -154,7 +154,7 @@ object WordCountApplication extends App {
   val builder: StreamsBuilder = new StreamsBuilder
   val textLines: KStream[String, String] = builder.stream[String, String]("TextLinesTopic")
   val wordCounts: KTable[String, Long] = textLines
-    .flatMapValues(textLine => textLine.toLowerCase.split("\W+"))
+    .flatMapValues(textLine => textLine.toLowerCase.split("\\W+"))
     .groupBy((_, word) => word)
     .count()(Materialized.as("counts-store"))
   wordCounts.toStream.to("WordsWithCountsTopic")
@@ -169,4 +169,3 @@ object WordCountApplication extends App {
 ```
 {{% /tab %}}
 {{< /tabpane >}}
-
