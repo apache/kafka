@@ -98,6 +98,14 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
             "Partition Count * offset.lag.max = Approximate duplicated record count (Actual value can be lower or even higher depending on timing and consumer lag)";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
+    public static final String OFFSET_VALIDATION_ENABLED = "offset.validation" + ENABLED_SUFFIX;
+    private static final String OFFSET_VALIDATION_ENABLED_DOC = "Whether to fail the task fast when the source consumer's next offset to replicate "
+            + "is no longer available. When enabled, the source consumer's auto.offset.reset is forced to none instead of the default earliest, "
+            + "so that log truncation or a topic reset raises an error instead of silently resuming from the earliest offset. "
+            + "The task then throws " + DataLossException.class.getSimpleName() + " if earlier records were purged by the retention policy, or "
+            + TopicResetException.class.getSimpleName() + " if the topic was deleted and recreated.";
+    public static final boolean OFFSET_VALIDATION_ENABLED_DEFAULT = false;
+
     public static final String HEARTBEATS_REPLICATION_ENABLED = "heartbeats.replication" + ENABLED_SUFFIX;
     private static final String HEARTBEATS_REPLICATION_ENABLED_DOC = "Whether to replicate the heartbeats topics even when the topic filter does not include them." +
             " If set to true, heartbeats topics identified by the replication policy will always be replicated, regardless of the topic filter configuration." +
@@ -221,6 +229,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         return getBoolean(HEARTBEATS_REPLICATION_ENABLED);
     }
 
+    boolean offsetValidationEnabled() {
+        return getBoolean(OFFSET_VALIDATION_ENABLED);
+    }
+
     List<String> metricNamesFormats() {
         return getList(METRIC_NAMES_FORMAT);
     }
@@ -340,6 +352,13 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         HEARTBEATS_REPLICATION_ENABLED_DEFAULT,
                         ConfigDef.Importance.LOW,
                         HEARTBEATS_REPLICATION_ENABLED_DOC
+                )
+                .define(
+                        OFFSET_VALIDATION_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        OFFSET_VALIDATION_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        OFFSET_VALIDATION_ENABLED_DOC
                 )
                 .define(
                         METRIC_NAMES_FORMAT,

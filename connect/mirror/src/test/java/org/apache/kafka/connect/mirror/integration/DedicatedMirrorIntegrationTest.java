@@ -17,16 +17,20 @@
 package org.apache.kafka.connect.mirror.integration;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.mirror.DataLossException;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMaker;
 import org.apache.kafka.connect.mirror.MirrorSourceConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
+import org.apache.kafka.connect.mirror.TopicResetException;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
@@ -374,6 +378,152 @@ public class DedicatedMirrorIntegrationTest {
             awaitTaskConfigurations(mirrorMakers.get("node 0"), MirrorSourceConnector.class, sourceAndTarget,
                     config -> newConfigValue.equals(config.get(MirrorSourceConfig.REFRESH_TOPICS_INTERVAL_SECONDS)));
         }
+    }
+
+    /**
+     * Verifies that, with offset.validation.enabled turned on, a source task fails fast with a
+     * {@link DataLossException} when unreplicated records are purged from the source topic before
+     * the task could replicate them (e.g. by an aggressive retention policy), instead of silently
+     * resuming replication from a later offset.
+     */
+    @Test
+    public void testTaskFailsOnDataLossFromPurgedRecords() throws Exception {
+        Properties brokerProps = new Properties();
+        EmbeddedKafkaCluster clusterA = startKafkaCluster("A", 1, brokerProps);
+        EmbeddedKafkaCluster clusterB = startKafkaCluster("B", 1, brokerProps);
+
+        try (Admin adminA = clusterA.createAdminClient()) {
+            final String a = "A";
+            final String b = "B";
+            final String ab = a + "->" + b;
+            final String ba = b + "->" + a;
+            final String topic = "test-topic-data-loss";
+            final TopicPartition topicPartition = new TopicPartition(topic, 0);
+            final String mmName = "data-loss";
+
+            Map<String, String> mmProps = new HashMap<>() {{
+                    put("dedicated.mode.enable.internal.rest", "false");
+                    put("listeners", "http://localhost:0");
+                    put("refresh.topics.interval.seconds", "1");
+                    put("clusters", String.join(", ", a, b));
+                    put(a + ".bootstrap.servers", clusterA.bootstrapServers());
+                    put(b + ".bootstrap.servers", clusterB.bootstrapServers());
+                    put(ab + ".enabled", "true");
+                    put(ab + ".topics", topic);
+                    put(ab + "." + MirrorSourceConfig.OFFSET_VALIDATION_ENABLED, "true");
+                    put(ba + ".enabled", "false");
+                    put(ba + ".emit.heartbeats.enabled", "false");
+                    put("replication.factor", "1");
+                    put("checkpoints.topic.replication.factor", "1");
+                    put("heartbeats.topic.replication.factor", "1");
+                    put("offset-syncs.topic.replication.factor", "1");
+                    put("offset.storage.replication.factor", "1");
+                    put("status.storage.replication.factor", "1");
+                    put("config.storage.replication.factor", "1");
+                }};
+
+            clusterA.createTopic(topic, 1);
+            final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
+
+            startMirrorMaker(mmName, mmProps);
+            awaitMirrorMakerStart(mirrorMakers.get(mmName), sourceAndTarget);
+            awaitConnectorTasksStart(mirrorMakers.get(mmName), MirrorSourceConnector.class, sourceAndTarget);
+
+            // Drain a first batch of records so the task's replicated position is persisted partway through the log
+            writeToTopic(clusterA, topic, 5);
+            awaitTopicContent(clusterB, b, a + "." + topic, 5);
+
+            // Stop the task so its position is frozen while more, unreplicated records are produced and then purged
+            stopMirrorMaker(mmName);
+            writeToTopic(clusterA, topic, 5);
+            long endOffset = clusterA.endOffset(topicPartition);
+            adminA.deleteRecords(Map.of(topicPartition, RecordsToDelete.beforeOffset(endOffset)))
+                    .lowWatermarks().get(topicPartition).get();
+
+            // On restart, the task resumes from its persisted (now-purged) position and should fail fast
+            startMirrorMaker(mmName, mmProps);
+            awaitTaskFailure(mirrorMakers.get(mmName), MirrorSourceConnector.class, sourceAndTarget,
+                    DataLossException.class.getSimpleName());
+        }
+    }
+
+    /**
+     * Verifies that, with offset.validation.enabled turned on, a source task fails fast with a
+     * {@link TopicResetException} when the source topic is deleted and recreated while the task
+     * isn't running, instead of silently resetting to the earliest offset of the new topic.
+     */
+    @Test
+    public void testTaskFailsOnTopicReset() throws Exception {
+        Properties brokerProps = new Properties();
+        EmbeddedKafkaCluster clusterA = startKafkaCluster("A", 1, brokerProps);
+        EmbeddedKafkaCluster clusterB = startKafkaCluster("B", 1, brokerProps);
+
+        final String a = "A";
+        final String b = "B";
+        final String ab = a + "->" + b;
+        final String ba = b + "->" + a;
+        final String topic = "test-topic-reset";
+        final String mmName = "topic-reset";
+
+        Map<String, String> mmProps = new HashMap<>() {{
+                put("dedicated.mode.enable.internal.rest", "false");
+                put("listeners", "http://localhost:0");
+                put("refresh.topics.interval.seconds", "1");
+                put("clusters", String.join(", ", a, b));
+                put(a + ".bootstrap.servers", clusterA.bootstrapServers());
+                put(b + ".bootstrap.servers", clusterB.bootstrapServers());
+                put(ab + ".enabled", "true");
+                put(ab + ".topics", topic);
+                put(ab + "." + MirrorSourceConfig.OFFSET_VALIDATION_ENABLED, "true");
+                put(ba + ".enabled", "false");
+                put(ba + ".emit.heartbeats.enabled", "false");
+                put("replication.factor", "1");
+                put("checkpoints.topic.replication.factor", "1");
+                put("heartbeats.topic.replication.factor", "1");
+                put("offset-syncs.topic.replication.factor", "1");
+                put("offset.storage.replication.factor", "1");
+                put("status.storage.replication.factor", "1");
+                put("config.storage.replication.factor", "1");
+            }};
+
+        clusterA.createTopic(topic, 1);
+        final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
+
+        startMirrorMaker(mmName, mmProps);
+        awaitMirrorMakerStart(mirrorMakers.get(mmName), sourceAndTarget);
+        awaitConnectorTasksStart(mirrorMakers.get(mmName), MirrorSourceConnector.class, sourceAndTarget);
+
+        // Drain a batch of records so the task's persisted position is beyond the start of the log
+        writeToTopic(clusterA, topic, 5);
+        awaitTopicContent(clusterB, b, a + "." + topic, 5);
+
+        // Stop the task, then delete and recreate the topic to simulate an irregular system reset
+        stopMirrorMaker(mmName);
+        clusterA.deleteTopic(topic);
+        clusterA.createTopic(topic, 1);
+
+        // On restart, the task resumes from its persisted (now-invalid) position on the recreated topic
+        startMirrorMaker(mmName, mmProps);
+        awaitTaskFailure(mirrorMakers.get(mmName), MirrorSourceConnector.class, sourceAndTarget,
+                TopicResetException.class.getSimpleName());
+    }
+
+    private <T extends SourceConnector> void awaitTaskFailure(MirrorMaker mm, Class<T> clazz, SourceAndTarget sourceAndTarget,
+            String expectedTraceSubstring) throws InterruptedException {
+        String connName = clazz.getSimpleName();
+        AtomicReference<String> lastTrace = new AtomicReference<>("");
+        waitForCondition(() -> {
+            ConnectorStateInfo connectorStatus = mm.connectorStatus(sourceAndTarget, connName);
+            return connectorStatus.tasks().stream().anyMatch(task -> {
+                if (AbstractStatus.State.FAILED.toString().equals(task.state())) {
+                    lastTrace.set(task.trace());
+                    return true;
+                }
+                return false;
+            });
+        }, MM_START_UP_TIMEOUT_MS, "Task for connector " + connName + " did not fail as expected in time");
+        assertTrue(lastTrace.get().contains(expectedTraceSubstring),
+                "expected task failure trace to mention " + expectedTraceSubstring + " but was: " + lastTrace.get());
     }
 
     private void awaitTopicCreation(String clusterName, Admin admin, String topic) throws Exception {
