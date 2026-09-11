@@ -47,6 +47,7 @@ import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -313,5 +314,49 @@ public class UtilsTest {
         buf.putLong(TIMESTAMP);
         buf.put(value);
         return res;
+    }
+
+    @Test
+    public void shouldReturnLazyHeadersForNonEmptyHeaders() {
+        final RecordHeaders originalHeaders = new RecordHeaders();
+        originalHeaders.add("key1", "val1".getBytes(StandardCharsets.UTF_8));
+        final byte[] serializedHeaders = HeadersSerializer.serialize(originalHeaders);
+        final byte[] storedBytes = headersTimestampValueOf(headersOf(serializedHeaders), VALUE);
+
+        final Headers result = Utils.headers(storedBytes);
+
+        assertInstanceOf(LazyHeaders.class, result);
+        assertFalse(((LazyHeaders) result).isDeserialized());
+    }
+
+    @Test
+    public void shouldReturnRecordHeadersForEmptyHeaders() {
+        final byte[] storedBytes = timestampedValueWithEmptyHeaders(VALUE);
+
+        final Headers result = Utils.headers(storedBytes);
+
+        assertInstanceOf(RecordHeaders.class, result);
+        assertFalse(result instanceof LazyHeaders);
+    }
+
+    @Test
+    public void shouldRemainLazyThroughChangelogFlow() {
+        final RecordHeaders originalHeaders = new RecordHeaders();
+        originalHeaders.add("h1", "v1".getBytes(StandardCharsets.UTF_8));
+        final byte[] serializedHeaders = HeadersSerializer.serialize(originalHeaders);
+        final byte[] storedBytes = headersTimestampValueOf(headersOf(serializedHeaders), VALUE);
+
+        // Step 1: Utils.headers() returns LazyHeaders, not yet parsed
+        final Headers headers = Utils.headers(storedBytes);
+        assertInstanceOf(LazyHeaders.class, headers);
+        assertFalse(((LazyHeaders) headers).isDeserialized());
+
+        // Step 2: add() does not force parsing (simulates addVectorClockToHeaders)
+        headers.add("clock", new byte[]{0x01, 0x02});
+        assertFalse(((LazyHeaders) headers).isDeserialized());
+
+        // Step 3: toArray() forces parsing (simulates producer serialization)
+        headers.toArray();
+        assertTrue(((LazyHeaders) headers).isDeserialized());
     }
 }
