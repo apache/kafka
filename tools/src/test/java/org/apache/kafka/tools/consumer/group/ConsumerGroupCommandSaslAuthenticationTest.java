@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
+import kafka.server.KafkaBroker;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsResult;
 import org.apache.kafka.clients.admin.ScramCredentialInfo;
@@ -25,6 +27,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.authenticator.CredentialCache;
+import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -109,6 +113,15 @@ public class ConsumerGroupCommandSaslAuthenticationTest {
     private void testConsumerGroupServiceWithAuthenticationSuccess(GroupProtocol groupProtocol) throws Exception {
         cluster.createTopic(TOPIC, 1, (short) 1);
         createScramCredential(SCRAM_USER, SCRAM_PASSWORD);
+        for (KafkaBroker broker : cluster.brokers().values()) {
+            CredentialCache.Cache<ScramCredential> cache =
+                    broker.credentialProvider().credentialCache
+                            .cache(KAFKA_CLIENT_SASL_MECHANISM, ScramCredential.class);
+            TestUtils.waitForCondition(
+                    () -> cache.get(SCRAM_USER) != null,
+                    "SCRAM credentials not available on broker " + broker.config().nodeId()
+            );
+        }
         try (
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
             AutoCloseable consumerExecutor = ConsumerGroupCommandTestUtils.buildConsumers(
