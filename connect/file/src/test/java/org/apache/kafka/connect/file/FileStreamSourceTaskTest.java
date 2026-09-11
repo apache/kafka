@@ -20,15 +20,16 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +46,8 @@ public class FileStreamSourceTaskTest {
 
     private static final String TOPIC = "test";
 
+    @TempDir
+    private Path tempDir;
     private File tempFile;
     private Map<String, String> config;
     private OffsetStorageReader offsetStorageReader;
@@ -53,7 +56,7 @@ public class FileStreamSourceTaskTest {
 
     @BeforeEach
     public void setup() throws IOException {
-        tempFile = File.createTempFile("file-stream-source-task-test", null);
+        tempFile = Files.createFile(tempDir.resolve("file-stream-source-task-test.tmp")).toFile();
         config = new HashMap<>();
         config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
         config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
@@ -62,11 +65,6 @@ public class FileStreamSourceTaskTest {
         offsetStorageReader = mock(OffsetStorageReader.class);
         context = mock(SourceTaskContext.class);
         task.initialize(context);
-    }
-
-    @AfterEach
-    public void teardown() throws IOException {
-        Files.deleteIfExists(tempFile.toPath());
     }
 
     @Test
