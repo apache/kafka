@@ -260,13 +260,6 @@ licenses. This section summarizes those components and their licenses.
 See licenses/ for text of these licenses.
 
 ---------------------------------------
-Eclipse Distribution License - v 1.0
-see: licenses/eclipse-distribution-license-1.0
-
-- jakarta.activation-api-2.1.0
-- jakarta.xml.bind-api-3.0.1
-
----------------------------------------
 Eclipse Public License - v 2.0
 see: licenses/eclipse-public-license-2.0
 
@@ -288,9 +281,10 @@ see: licenses/eclipse-public-license-2.0
 CDDL 1.1 + GPLv2 with classpath exception
 see: licenses/CDDL+GPL-1.1
 
+- jakarta.activation-api-2.1.0
 - jakarta.servlet-api-6.0.0
+- jakarta.xml.bind-api-3.0.1
 - javax.activation-api-1.2.0
-- javax.annotation-api-1.3.2
 - jaxb-api-2.3.1
 - activation-1.1.1
 
