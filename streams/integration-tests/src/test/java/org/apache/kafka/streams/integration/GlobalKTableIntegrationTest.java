@@ -140,11 +140,11 @@ public class GlobalKTableIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldKStreamGlobalKTableLeftJoin(final boolean withHeaders) throws Exception {
+    private void verifyKStreamGlobalKTableJoin(final boolean withHeaders, final boolean leftJoin) throws Exception {
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
-        final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
+        final KStream<String, String> streamTableJoin = leftJoin
+                ? stream.leftJoin(globalTable, keyMapper, joiner)
+                : stream.join(globalTable, keyMapper, joiner);
         streamTableJoin.process(supplier);
         produceInitialGlobalTableValues();
         startStreams();
@@ -156,7 +156,9 @@ public class GlobalKTableIntegrationTest {
         expected.put("b", ValueAndTimestamp.make("2+B", firstTimestamp + 1L));
         expected.put("c", ValueAndTimestamp.make("3+C", firstTimestamp + 2L));
         expected.put("d", ValueAndTimestamp.make("4+D", firstTimestamp + 3L));
-        expected.put("e", ValueAndTimestamp.make("5+null", firstTimestamp + 4L));
+        if (leftJoin) {
+            expected.put("e", ValueAndTimestamp.make("5+null", firstTimestamp + 4L));
+        }
 
         TestUtils.waitForCondition(
             () -> {
@@ -229,89 +231,14 @@ public class GlobalKTableIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
+    public void shouldKStreamGlobalKTableLeftJoin(final boolean withHeaders) throws Exception {
+        verifyKStreamGlobalKTableJoin(withHeaders, true);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
     public void shouldKStreamGlobalKTableJoin(final boolean withHeaders) throws Exception {
-        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
-        final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
-        streamTableJoin.process(supplier);
-        produceInitialGlobalTableValues();
-        startStreams();
-        long firstTimestamp = mockTime.milliseconds();
-        produceTopicValues(streamTopic);
-
-        final Map<String, ValueAndTimestamp<String>> expected = new HashMap<>();
-        expected.put("a", ValueAndTimestamp.make("1+A", firstTimestamp));
-        expected.put("b", ValueAndTimestamp.make("2+B", firstTimestamp + 1L));
-        expected.put("c", ValueAndTimestamp.make("3+C", firstTimestamp + 2L));
-        expected.put("d", ValueAndTimestamp.make("4+D", firstTimestamp + 3L));
-
-        TestUtils.waitForCondition(
-            () -> {
-                if (supplier.capturedProcessorsCount() < 2) {
-                    return false;
-                }
-                final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
-                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey());
-                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey());
-                return result.equals(expected);
-            },
-            30000L,
-            "waiting for initial values");
-
-
-        firstTimestamp = mockTime.milliseconds();
-        produceGlobalTableValues();
-
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore = IntegrationTestUtils
-            .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
-        assertNotNull(replicatedStore);
-
-        final Map<Long, String> expectedState = new HashMap<>();
-        expectedState.put(1L, "F");
-        expectedState.put(2L, "G");
-        expectedState.put(3L, "H");
-        expectedState.put(4L, "I");
-        expectedState.put(5L, "J");
-
-        final Map<Long, String> globalState = new HashMap<>();
-        TestUtils.waitForCondition(
-            () -> {
-                globalState.clear();
-                try (final KeyValueIterator<Long, String> it = replicatedStore.all()) {
-                    it.forEachRemaining(pair -> globalState.put(pair.key, pair.value));
-                }
-                return globalState.equals(expectedState);
-            },
-            30000,
-            () -> "waiting for data in replicated store" +
-                "\n  expected: " + expectedState +
-                "\n  received: " + globalState);
-
-        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStoreWithTimestamp = IntegrationTestUtils
-            .getStore(globalStore, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
-        assertNotNull(replicatedStoreWithTimestamp);
-        assertEquals(ValueAndTimestamp.make("J", firstTimestamp + 4L), replicatedStoreWithTimestamp.get(5L));
-
-        firstTimestamp = mockTime.milliseconds();
-        produceTopicValues(streamTopic);
-
-        expected.put("a", ValueAndTimestamp.make("1+F", firstTimestamp));
-        expected.put("b", ValueAndTimestamp.make("2+G", firstTimestamp + 1L));
-        expected.put("c", ValueAndTimestamp.make("3+H", firstTimestamp + 2L));
-        expected.put("d", ValueAndTimestamp.make("4+I", firstTimestamp + 3L));
-        expected.put("e", ValueAndTimestamp.make("5+J", firstTimestamp + 4L));
-
-        TestUtils.waitForCondition(
-            () -> {
-                if (supplier.capturedProcessorsCount() < 2) {
-                    return false;
-                }
-                final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
-                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey());
-                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey());
-                return result.equals(expected);
-            },
-            30000L,
-            "waiting for final values");
+        verifyKStreamGlobalKTableJoin(withHeaders, false);
     }
 
     @ParameterizedTest
