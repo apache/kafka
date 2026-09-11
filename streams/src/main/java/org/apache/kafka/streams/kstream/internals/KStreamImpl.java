@@ -23,6 +23,7 @@ import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.BranchedKStream;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
+import org.apache.kafka.streams.kstream.Deduplicated;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
@@ -67,6 +68,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -127,6 +129,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     private static final String TO_KTABLE_NAME = "KSTREAM-TOTABLE-";
 
     private static final String REPARTITION_NAME = "KSTREAM-REPARTITION-";
+
+    static final String DEDUPLICATE_NAME = "KSTREAM-DEDUPLICATE-";
 
     private final boolean repartitionRequired;
 
@@ -714,6 +718,87 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             true,
             selectKeyMapNode,
             builder);
+    }
+
+    @Override
+    public KStream<K, V> deduplicateByKey(final Duration deduplicationInterval) {
+        return doDeduplicate((k, v) -> k, deduplicationInterval, Deduplicated.with(keySerde, valueSerde));
+    }
+
+    @Override
+    public KStream<K, V> deduplicateByKey(final Duration deduplicationInterval,
+                                          final Deduplicated<K, K, V> deduplicated) {
+        Objects.requireNonNull(deduplicated, "deduplicated cannot be null");
+        return doDeduplicate((k, v) -> k, deduplicationInterval, deduplicated);
+    }
+
+    @Override
+    public <KR> KStream<K, V> deduplicateByKeyValue(
+            final KeyValueMapper<? super K, ? super V, ? extends KR> idSelector,
+            final Duration deduplicationInterval,
+            final Deduplicated<K, KR, V> deduplicated) {
+        Objects.requireNonNull(deduplicated, "deduplicated cannot be null");
+        Objects.requireNonNull(new DeduplicatedInternal<>(deduplicated).idSerde(),
+            "deduplicateByKeyValue requires an idSerde; use Deduplicated.withIdSerde(...) " +
+            "to provide the Serde for the computed id type");
+        return doDeduplicate(idSelector, deduplicationInterval, deduplicated);
+    }
+
+    private <KR> KStream<K, V> doDeduplicate(
+            final KeyValueMapper<? super K, ? super V, ? extends KR> idSelector,
+            final Duration deduplicationInterval,
+            final Deduplicated<K, KR, V> deduplicated) {
+
+        Objects.requireNonNull(idSelector, "idSelector cannot be null");
+        Objects.requireNonNull(deduplicationInterval, "deduplicationInterval cannot be null");
+
+        final DeduplicatedInternal<K, KR, V> deduplicatedInternal = new DeduplicatedInternal<>(deduplicated);
+
+        final String name = new NamedInternal(deduplicatedInternal.name())
+            .orElseGenerateWithPrefix(builder, DEDUPLICATE_NAME);
+
+        final Serde<KR> idSerde = deduplicatedInternal.idSerde();
+        final Serde<K> keySerde = deduplicatedInternal.keySerde() != null
+            ? deduplicatedInternal.keySerde()
+            : this.keySerde;
+        final Serde<V> valueSerde = deduplicatedInternal.valueSerde() != null
+            ? deduplicatedInternal.valueSerde()
+            : this.valueSerde;
+
+        final String baseStoreName = deduplicatedInternal.storeName() != null
+            ? deduplicatedInternal.storeName()
+            : name;
+
+        final GraphNode parentNode;
+        final Set<String> sourceNodes;
+        if (repartitionRequired) {
+            final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder =
+                optimizableRepartitionNodeBuilder();
+            final String sourceName = createRepartitionedSource(
+                builder, this.keySerde, this.valueSerde, name, null,
+                repartitionNodeBuilder, deduplicatedInternal.name() != null);
+            final OptimizableRepartitionNode<K, V> repartitionNode = repartitionNodeBuilder.build();
+            builder.addGraphNode(graphNode, repartitionNode);
+            parentNode = repartitionNode;
+            sourceNodes = Collections.singleton(sourceName);
+        } else {
+            parentNode = graphNode;
+            sourceNodes = subTopologySourceNodes;
+        }
+
+        final ProcessorSupplier<K, V, K, V> processorSupplier =
+            new KStreamDeduplicate<>(idSelector, deduplicationInterval, keySerde, idSerde, valueSerde, name, baseStoreName);
+
+        final ProcessorParameters<K, V, K, V> processorParameters =
+            new ProcessorParameters<>(processorSupplier, name);
+
+        final ProcessorGraphNode<K, V> deduplicateNode =
+            new ProcessorGraphNode<>(name, processorParameters);
+
+        builder.addGraphNode(parentNode, deduplicateNode);
+
+        return new KStreamImpl<>(name, this.keySerde, this.valueSerde,
+            sourceNodes, false, deduplicateNode, builder);
     }
 
     public <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> otherStream,
@@ -1335,6 +1420,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             Named.as(builder.newProcessorName(PROCESSOR_NAME)),
             stateStoreNames
         );
+
     }
 
     @Override
