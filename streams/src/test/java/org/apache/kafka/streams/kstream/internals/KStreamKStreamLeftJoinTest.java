@@ -896,6 +896,51 @@ public class KStreamKStreamLeftJoinTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
+    public void testOutOfOrderRecordWithinGracePeriod(final boolean withHeaders) {
+        setDslStoreFormat(withHeaders);
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        joined = stream1.leftJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(10L)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+        );
+        joined.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
+
+            inputTopic2.pipeInput(1, "advance", 105L);
+            processor.checkAndClearProcessResult();
+
+            // The left record's window ends at 100, but the grace period keeps it open until 110.
+            inputTopic1.pipeInput(0, "A0", 0L);
+            processor.checkAndClearProcessResult();
+
+            inputTopic2.pipeInput(0, "a0", 50L);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+a0", 50L)
+            );
+
+            inputTopic2.pipeInput(2, "later", 500L);
+            processor.checkAndClearProcessResult();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
     public void testWindowing(final boolean withHeaders) {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
