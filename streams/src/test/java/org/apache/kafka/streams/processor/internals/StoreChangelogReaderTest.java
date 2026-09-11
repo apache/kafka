@@ -73,6 +73,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -971,6 +972,136 @@ public class StoreChangelogReaderTest {
             Mockito.verify(mockTask, times(2)).clearTaskTimeout();
             Mockito.verify(mockTask).recordRestoration(any(), anyLong(), anyLong(), anyBoolean());
         }
+    }
+
+    @Test
+    public void shouldRestoreFreshSourceChangelogWithMissingCommittedOffsetImmediatelyAtZero() {
+        // KAFKA-20416: for a brand-new group the coordinator legitimately reports no committed offset, and 0 is
+        // the correct restore ceiling. A first-time (never-before-restored) source changelog must take this fast
+        // path immediately and NOT retry — otherwise every fresh source-table app stalls waiting on task.timeout.ms.
+        setupStateManagerMock(ACTIVE);
+        setupStoreMetadata();
+        setupStore();
+
+        final TaskId taskId = new TaskId(0, 0);
+        final Task mockTask = mock(Task.class);
+
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(null);
+        when(stateManager.taskId()).thenReturn(taskId);
+
+        final String groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        final Map<TopicPartition, OffsetAndMetadata> missingCommitted = new HashMap<>();
+        missingCommitted.put(tp, null);
+        final MockAdminClient adminClient = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
+                return AdminClientTestUtils.listConsumerGroupOffsetsResult(Collections.singletonMap(groupId, missingCommitted));
+            }
+        };
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 20L));
+        // fresh store (no restored offset) seeks to the beginning of the changelog
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+
+        changelogReader.register(tp, stateManager);
+
+        // fresh changelog, missing committed offset → initialize immediately at 0 (no retry, no stall); with a
+        // ceiling of 0 there is nothing to restore, so it completes at once and the store starts empty
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp).state());
+        assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
+    }
+
+    @Test
+    public void shouldRetryMissingCommittedOffsetForWipedSourceChangelogThenFallBackToZero() {
+        // KAFKA-20416: a source changelog that has restored before (its task was corrupted and its store wiped)
+        // must NOT be truncated to 0 on a missing committed offset — that would silently empty the store. The
+        // missing offset is retried for up to task.timeout.ms, and only then falls back to 0.
+        final AtomicReference<Map<TopicPartition, OffsetAndMetadata>> committed = new AtomicReference<>();
+        final TaskId taskId = new TaskId(0, 0);
+        final Task mockTask = mock(Task.class);
+        final StoreChangelogReader changelogReader = setupWipedSourceChangelog(committed, taskId, mockTask);
+
+        // after the wipe the committed offset is (transiently) missing → retried, changelog left uninitialized
+        committed.set(committedOf(null));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+
+        // once the retry budget (task.timeout.ms) is exhausted, fall back to 0
+        time.sleep(config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG) + 1);
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
+    }
+
+    @Test
+    public void shouldRecoverWipedSourceChangelogToRealCommittedOffsetWhenTransientlyMissingBeforeTimeout() {
+        // KAFKA-20416: the case the fix exists for — after a wipe the committed offset is missing on the first
+        // pass (transient coordinator unavailability) and the real offset appears before task.timeout.ms elapses.
+        // The ceiling must recover to min(endOffset, committedOffset), not fall to 0.
+        final AtomicReference<Map<TopicPartition, OffsetAndMetadata>> committed = new AtomicReference<>();
+        final TaskId taskId = new TaskId(0, 0);
+        final Task mockTask = mock(Task.class);
+        final StoreChangelogReader changelogReader = setupWipedSourceChangelog(committed, taskId, mockTask);
+
+        // first pass after the wipe: missing → retried, left uninitialized (not truncated to 0)
+        committed.set(committedOf(null));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+
+        // second pass, still within task.timeout.ms: the real committed offset recovers the ceiling to
+        // min(endOffset=20, committedOffset=10) rather than falling back to 0
+        committed.set(committedOf(10L));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
+    }
+
+    private Map<TopicPartition, OffsetAndMetadata> committedOf(final Long offset) {
+        final Map<TopicPartition, OffsetAndMetadata> map = new HashMap<>();
+        map.put(tp, offset == null ? null : new OffsetAndMetadata(offset));
+        return map;
+    }
+
+    // Drives a source changelog through an initial restore (so it is remembered as "previously restored"), then
+    // simulates an EOS corruption wipe by unregistering and re-registering it. The returned reader is positioned
+    // so the next restore() exercises the wiped-store missing-committed-offset path; the caller controls the
+    // committed-offset response via the supplied holder.
+    private StoreChangelogReader setupWipedSourceChangelog(final AtomicReference<Map<TopicPartition, OffsetAndMetadata>> committed,
+                                                           final TaskId taskId,
+                                                           final Task mockTask) {
+        setupStateManagerMock(ACTIVE);
+        setupStoreMetadata();
+        setupStore();
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(stateManager.taskId()).thenReturn(taskId);
+
+        final String groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        final MockAdminClient adminClient = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
+                return AdminClientTestUtils.listConsumerGroupOffsetsResult(Collections.singletonMap(groupId, committed.get()));
+            }
+        };
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 20L));
+
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+
+        // initial restore with a real committed offset → changelog begins restoring and is remembered
+        committed.set(committedOf(10L));
+        changelogReader.register(tp, stateManager);
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+
+        // simulate the corruption wipe: the store is discarded and the changelog re-registered fresh
+        changelogReader.unregister(Collections.singleton(tp));
+        changelogReader.register(tp, stateManager);
+        return changelogReader;
     }
 
     @ParameterizedTest
