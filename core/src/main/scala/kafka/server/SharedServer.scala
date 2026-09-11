@@ -200,10 +200,13 @@ class SharedServer(
   /**
    * The fault handler to use when metadata loading fails.
    */
-  private def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build(
+  private[kafka] def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "metadata loading",
     fatal = sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole),
-    action = () => SharedServer.this.synchronized {
+    // This action can run on the metadata loader event-handler thread. Shutdown holds the
+    // SharedServer monitor while waiting for that thread to terminate, so acquiring the
+    // monitor here would deadlock shutdown after a metadata loading failure.
+    action = () => {
       Option(brokerMetrics).foreach(_.metadataLoadErrorCount.getAndIncrement())
       Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
       snapshotsDisabledReason.compareAndSet(null, "metadata loading fault")
