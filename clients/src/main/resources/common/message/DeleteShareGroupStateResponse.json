@@ -19,6 +19,9 @@
   "name": "DeleteShareGroupStateResponse",
   "validVersions": "0",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   // - NOT_COORDINATOR (version 0+)
   // - COORDINATOR_NOT_AVAILABLE (version 0+)
   // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)

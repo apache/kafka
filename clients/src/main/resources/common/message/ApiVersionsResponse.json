@@ -33,6 +33,11 @@
   // Version 5 introduces ClusterId and NodeId checking and REBOOTSTRAP_REQUIRED error (KIP-1242).
   "validVersions": "0-5",
   "flexibleVersions": "3+",
+  // ApiVersionsResponse always includes a v0 header.
+  // See KIP-511 for details.
+  "headerVersions": {
+    "0+": "0"
+  },
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error code." },

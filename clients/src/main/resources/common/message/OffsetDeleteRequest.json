@@ -20,6 +20,9 @@
   "name": "OffsetDeleteRequest",
   "validVersions": "0",
   "flexibleVersions": "none",
+  "headerVersions": {
+    "0+": "1"
+  },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },

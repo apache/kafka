@@ -27,6 +27,10 @@
   // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   "validVersions": "0-4",
   "flexibleVersions": "3+",
+  "headerVersions": {
+    "0-2": "1",
+    "3+": "2"
+  },
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
       "about": "The transactional id corresponding to the transaction."},

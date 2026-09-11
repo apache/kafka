@@ -24,6 +24,9 @@
   "name": "BrokerRegistrationRequest",
   "validVersions": "0-4",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID." },

@@ -29,6 +29,10 @@
   // Version 6 returns error code GROUP_ID_NOT_FOUND if the group ID is not found (KIP-1043).
   "validVersions": "0-6",
   "flexibleVersions": "5+",
+  "headerVersions": {
+    "0-4": "1",
+    "5+": "2"
+  },
   "fields": [
     { "name": "Groups", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The names of the groups to describe." },

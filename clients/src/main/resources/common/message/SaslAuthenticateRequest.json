@@ -22,6 +22,10 @@
   // Version 2 adds flexible version support
   "validVersions": "0-2",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "0-1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "AuthBytes", "type": "bytes", "versions": "0+",
       "about": "The SASL authentication bytes from the client, as defined by the SASL mechanism." }

@@ -27,6 +27,10 @@
   // Version 5 adds the TypesFilter field (KIP-848).
   "validVersions": "0-5",
   "flexibleVersions": "3+",
+  "headerVersions": {
+    "0-2": "1",
+    "3+": "2"
+  },
   "fields": [
     { "name": "StatesFilter", "type": "[]string", "versions": "4+",
       "about": "The states of the groups we want to list. If empty, all groups are returned with their state." },

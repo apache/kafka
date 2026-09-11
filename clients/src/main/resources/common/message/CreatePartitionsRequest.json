@@ -26,6 +26,10 @@
   // in the response if the partitions creation is throttled (KIP-599).
   "validVersions": "0-3",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "0-1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "Topics", "type": "[]CreatePartitionsTopic", "versions": "0+",
       "about": "Each topic that we want to create new partitions inside.",  "fields": [
