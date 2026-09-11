@@ -111,7 +111,8 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "15000")
     val consumer = createConsumer()
 
-    consumer.subscribe(java.util.List.of(topic), listener)
+    consumer.setRebalanceListener(listener)
+    consumer.subscribe(java.util.List.of(topic))
 
     // the initial subscription should cause a callback execution
     awaitRebalance(consumer, listener)
