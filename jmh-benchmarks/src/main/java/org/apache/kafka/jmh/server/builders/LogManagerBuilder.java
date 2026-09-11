@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server.builders;
+package org.apache.kafka.jmh.server.builders;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.ConfigRepository;
@@ -32,7 +32,6 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
-
 
 public class LogManagerBuilder {
     private static final int PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS = 600000;
