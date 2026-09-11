@@ -1793,6 +1793,68 @@ class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
+    public void testLeaderHandleCommitAppendTimestampStableWhenPoolReusesBuffer(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
+        Set<Integer> voters = Set.of(localId, otherNodeKey.id());
+
+        ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
+        Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
+            .thenReturn(buffer);
+        Mockito.doAnswer(invocation -> {
+            buffer.clear();
+            return null;
+        }).when(memoryPool).release(Mockito.any(ByteBuffer.class));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withMemoryPool(memoryPool)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+        context.poll();
+        assertEquals(1L, context.log.endOffset().offset());
+
+        // Advance HWM through the leader-change batch so later data commits use the
+        // in-memory handleCommit path instead of log replay.
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 1L, epoch, 0));
+        context.pollUntilResponse();
+        assertEquals(OptionalLong.of(1L), context.client.highWatermark());
+        assertEquals(OptionalLong.of(0L), context.listener.lastCommitOffset());
+
+        long firstAppendTimestamp = context.time.milliseconds();
+        long firstOffset = context.client.prepareAppend(epoch, List.of("a"));
+        context.client.schedulePreparedAppend();
+        context.poll();
+
+        context.time.sleep(5_000L);
+        long secondAppendTimestamp = context.time.milliseconds();
+        long secondOffset = context.client.prepareAppend(epoch, List.of("b"));
+        context.client.schedulePreparedAppend();
+        context.poll();
+        assertNotEquals(firstAppendTimestamp, secondAppendTimestamp);
+
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, context.log.endOffset().offset(), epoch, 0));
+        context.pollUntil(() -> context.listener.commitWithLastOffset(secondOffset) != null);
+
+        Batch<String> firstBatch = context.listener.committedBatches().stream()
+            .filter(batch -> List.of("a").equals(batch.records()))
+            .findFirst()
+            .get();
+        Batch<String> secondBatch = context.listener.committedBatches().stream()
+            .filter(batch -> List.of("b").equals(batch.records()))
+            .findFirst()
+            .get();
+        assertEquals(firstOffset, firstBatch.lastOffset());
+        assertEquals(secondOffset, secondBatch.lastOffset());
+        assertEquals(firstAppendTimestamp, firstBatch.appendTimestamp());
+        assertEquals(secondAppendTimestamp, secondBatch.appendTimestamp());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     public void testLeaderImmediatelySendsDivergingEpoch(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
