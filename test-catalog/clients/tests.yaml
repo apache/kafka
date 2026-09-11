@@ -3984,6 +3984,7 @@ org.apache.kafka.common.message.ApiMessageTypeTest:
 - testFromApiKey
 - testHeaderVersion
 - testHeaderVersionWithNoValidVersion
+- testHeaderVersionsMatchSchemaFlexibility
 - testInvalidFromApiKey
 - testUniqueness
 org.apache.kafka.common.message.MessageTest:
