@@ -293,7 +293,7 @@ $ bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cl
 The kafka-metadata-shell.sh tool can be used to interactively inspect the state of the cluster metadata partition:
 
 ```bash
-$ bin/kafka-metadata-shell.sh --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000007228-0000000001.checkpoint
+$ bin/kafka-metadata-shell.sh --checkpoint metadata_log_dir/__cluster_metadata-0/00000000000000007228-0000000001.checkpoint
 >> ls /
 brokers  local  metadataQuorum  topicIds  topics
 >> ls /topics
