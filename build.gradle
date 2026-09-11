@@ -35,7 +35,7 @@ plugins {
   id 'jacoco'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '12.2.2'
-  id 'org.nosphere.apache.rat' version "0.10.0"
+  id 'org.nosphere.apache.rat' version "0.11.0"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
   id "com.github.spotbugs" version '6.5.10' apply false
