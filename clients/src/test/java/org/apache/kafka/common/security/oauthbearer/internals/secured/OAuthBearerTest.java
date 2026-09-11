@@ -37,6 +37,7 @@ import org.jose4j.lang.JoseException;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -46,6 +47,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -72,6 +75,9 @@ import static org.mockito.Mockito.when;
 
 @TestInstance(Lifecycle.PER_CLASS)
 public abstract class OAuthBearerTest {
+
+    @TempDir
+    protected Path tempDir;
 
     protected ObjectMapper mapper = new ObjectMapper();
 
@@ -236,7 +242,7 @@ public abstract class OAuthBearerTest {
     }
 
     protected File generatePrivateKey(PrivateKey privateKey) throws IOException {
-        File file = File.createTempFile("private-", ".key");
+        File file = Files.createFile(tempDir.resolve("private-" + System.nanoTime() + ".key")).toFile();
         byte[] bytes = Base64.getEncoder().encode(privateKey.getEncoded());
 
         try (FileChannel channel = FileChannel.open(file.toPath(), EnumSet.of(StandardOpenOption.WRITE))) {

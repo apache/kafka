@@ -33,8 +33,8 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -54,6 +54,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class AlterConfigsIntegrationTest {
 
     private final ClusterInstance clusterInstance;
+    @TempDir
+    private Path tempDir;
     private Path file;
 
     AlterConfigsIntegrationTest(ClusterInstance clusterInstance) {
@@ -62,13 +64,8 @@ public class AlterConfigsIntegrationTest {
 
     @BeforeEach
     public void setup() throws IOException {
-        file = Files.createTempFile("provider", ".properties");
+        file = Files.createFile(tempDir.resolve("provider.properties"));
         Files.writeString(file, "key=token");
-    }
-
-    @AfterEach
-    public void teardown() throws IOException {
-        Files.deleteIfExists(file);
     }
 
     @ClusterTest
