@@ -572,6 +572,110 @@ class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
+    public void testTransitionToUnattachedWillCompleteFetchPurgatory(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int remoteId = localId + 1;
+        ReplicaKey otherNodeKey = replicaKey(remoteId, withKip853Rpc);
+        Set<Integer> voters = Set.of(localId, otherNodeKey.id());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.unattachedToLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        int epoch = context.currentEpoch();
+
+        // Park a fetch from the other voter in the fetch purgatory: it is caught up, so there is no
+        // data to return yet.
+        context.deliverRequest(
+            context.fetchRequest(epoch, otherNodeKey, context.log.endOffset().offset(), epoch, 1000)
+        );
+        context.poll();
+
+        context.deliverRequest(
+            context.voteRequest(
+                epoch + 1,
+                otherNodeKey,
+                context.log.lastFetchedEpoch(),
+                context.log.endOffset().offset()
+            )
+        );
+        context.poll();
+
+        context.assertSentFetchPartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER, epoch + 1, OptionalInt.empty());
+        assertTrue(context.client.quorum().isUnattached());
+        assertEquals(epoch + 1, context.currentEpoch());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testResignWillCompleteAppendPurgatory(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int remoteId = localId + 1;
+        ReplicaKey otherNodeKey = replicaKey(remoteId, withKip853Rpc);
+        Set<Integer> voters = Set.of(localId, otherNodeKey.id());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withAppendLingerMs(0)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        context.client.prepareAppend(epoch, List.of("a"));
+        context.client.schedulePreparedAppend();
+        context.poll();
+        assertTrue(context.client.appendPurgatoryNumWaiting() > 0, "expected a pending append in purgatory");
+
+        // Resigning must complete the pending append exceptionally rather than leaving it to expire.
+        context.client.shutdown(1000);
+        context.poll();
+
+        assertEquals(0, context.client.appendPurgatoryNumWaiting());
+        context.assertResignedLeader(epoch, localId);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testTransitionToUnattachedWillCompleteAppendPurgatory(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int remoteId = localId + 1;
+        ReplicaKey otherNodeKey = replicaKey(remoteId, withKip853Rpc);
+        Set<Integer> voters = Set.of(localId, otherNodeKey.id());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withAppendLingerMs(0)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        // Park an append in the append purgatory (uncommitted; the other voter never replicates it).
+        context.client.prepareAppend(epoch, List.of("a"));
+        context.client.schedulePreparedAppend();
+        context.poll();
+        assertTrue(context.client.appendPurgatoryNumWaiting() > 0, "expected a pending append in purgatory");
+
+        context.deliverRequest(
+            context.voteRequest(
+                epoch + 1,
+                otherNodeKey,
+                context.log.lastFetchedEpoch(),
+                context.log.endOffset().offset()
+            )
+        );
+        context.poll();
+
+        assertEquals(0, context.client.appendPurgatoryNumWaiting());
+        assertTrue(context.client.quorum().isUnattached());
+        assertEquals(epoch + 1, context.currentEpoch());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     public void testResignInOlderEpochIgnored(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;

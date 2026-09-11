@@ -748,32 +748,32 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         quorum.transitionToUnattached(epoch, leaderId);
         maybeFireLeaderChange();
         resetConnections();
+        completeLeaderPurgatoriesExceptionally();
     }
 
     private void transitionToResigned(List<ReplicaKey> preferredSuccessors) {
-        fetchPurgatory.completeAllExceptionally(
-            Errors.NOT_LEADER_OR_FOLLOWER.exception(
-                "Not handling request since this node is resigning"
-            )
-        );
         quorum.transitionToResigned(preferredSuccessors);
         resetConnections();
+        completeLeaderPurgatoriesExceptionally();
     }
 
     private void onBecomeFollower(long currentTimeMs) {
         kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);
-
         resetConnections();
+        completeLeaderPurgatoriesExceptionally();
+    }
 
-        // After becoming a follower, we need to complete all pending fetches so that
-        // they can be re-sent to the leader without waiting for their expirations
+    /**
+     * Completes pending appends and fetches exceptionally on every leader-exit path (follower,
+     * resigned, unattached) so callers fail fast instead of waiting out their timeout. No-op when not leader.
+     */
+    private void completeLeaderPurgatoriesExceptionally() {
         fetchPurgatory.completeAllExceptionally(
             Errors.NOT_LEADER_OR_FOLLOWER.exception(
                 "Cannot process the fetch request because the node is no longer the leader"
             )
         );
 
-        // Clearing the append purgatory should complete all futures exceptionally since this node is no longer the leader
         appendPurgatory.completeAllExceptionally(
             Errors.NOT_LEADER_OR_FOLLOWER.exception(
                 "Failed to receive sufficient acknowledgments for this append before leader change"
@@ -3927,6 +3927,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     QuorumState quorum() {
         // It's okay to return null since this method is only called by tests
         return quorum;
+    }
+
+    // Visible only for test
+    int appendPurgatoryNumWaiting() {
+        return appendPurgatory.numWaiting();
     }
 
     private boolean isInitialized() {
