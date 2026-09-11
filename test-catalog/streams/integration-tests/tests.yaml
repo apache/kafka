@@ -2,6 +2,7 @@ org.apache.kafka.streams.integration.AdjustStreamThreadCountTest:
 - shouldAddAndRemoveStreamThreadsWhileKeepingNamesCorrect
 - shouldAddAndRemoveThreadsMultipleTimes
 - shouldAddStreamThread
+- shouldNotReplaceFailedThreadWhoseShutdownWasInitiatedByRemoval
 - shouldRemoveStreamThread
 - shouldRemoveStreamThreadWithStaticMembership
 - shouldResizeCacheAfterThreadRemovalTimesOut
