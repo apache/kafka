@@ -37,6 +37,7 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RemoteLogInputStream;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
@@ -702,8 +703,16 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      *    then the search will be performed in the local storage.
      * 2. If the target segment is found only in the remote storage, then the search will be performed in the remote storage.
      *
-     *  <p>
-     * This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
+     * <p>When {@code timestamp} is not {@link ListOffsetsRequest#MAX_TIMESTAMP}, this performs a
+     * regular timestamp search: it walks epochs in order and returns the offset of the first message
+     * whose timestamp is {@code >= timestamp} and whose offset is {@code >= startingOffset}.
+     *
+     * <p>When {@code timestamp} is {@link ListOffsetsRequest#MAX_TIMESTAMP}, this performs a
+     * {@code MAX_TIMESTAMP} search: it scans all remote segments (no epoch filter) to find the one
+     * with the highest {@code maxTimestampMs}, then returns the offset of the record carrying that
+     * maximum timestamp. In this mode {@code startingOffset} and {@code leaderEpochCache} are ignored.
+     *
+     * <p>This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
      * <p>
      * - If there are no messages in the remote storage, return Empty
      * - If all the messages in the remote storage have smaller offsets, return Empty
@@ -712,9 +721,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      * is greater than or equals to the target timestamp and whose offset is greater than or equals to the startingOffset.
      *
      * @param tp               topic partition in which the offset to be found.
-     * @param timestamp        The timestamp to search for.
-     * @param startingOffset   The starting offset to search.
-     * @param leaderEpochCache LeaderEpochFileCache of the topic partition.
+     * @param timestamp        The timestamp to search for. Pass {@link ListOffsetsRequest#MAX_TIMESTAMP} to
+     *                         trigger a MAX_TIMESTAMP search across all remote segments.
+     * @param startingOffset   The starting offset to search. Ignored when {@code timestamp} is
+     *                         {@link ListOffsetsRequest#MAX_TIMESTAMP}.
+     * @param leaderEpochCache LeaderEpochFileCache of the topic partition. Ignored when {@code timestamp} is
+     *                         {@link ListOffsetsRequest#MAX_TIMESTAMP}.
      * @return the timestamp and offset of the first message that meets the requirements. Empty will be returned if there
      * is no such message.
      */
@@ -731,39 +743,76 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             throw new KafkaException("UnifiedLog does not exist for topic partition: " + tp);
         }
         UnifiedLog unifiedLog = unifiedLogOptional.get();
-
-        // Get the respective epoch in which the starting-offset exists.
-        OptionalInt maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
         TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
-        NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
-        while (maybeEpoch.isPresent()) {
-            int epoch = maybeEpoch.getAsInt();
-            // KAFKA-15802: Add a new API for RLMM to choose how to implement the predicate.
-            // currently, all segments are returned and then iterated, and filtered
-            Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManagerPlugin.get().listRemoteLogSegments(topicIdPartition, epoch);
+
+        if (timestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
+            // MAX_TIMESTAMP path: scan all remote segments to find the one with the highest maxTimestampMs.
+            RemoteLogSegmentMetadata maxTsSegment = null;
+            Iterator<RemoteLogSegmentMetadata> iterator =
+                    remoteLogMetadataManagerPlugin.get().listRemoteLogSegments(topicIdPartition);
             while (iterator.hasNext()) {
-                RemoteLogSegmentMetadata rlsMetadata = iterator.next();
-                if (rlsMetadata.maxTimestampMs() >= timestamp
-                    && rlsMetadata.endOffset() >= startingOffset
-                    && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
-                    && rlsMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
-                    // cache to avoid race conditions
-                    List<LogSegment> segmentsCopy = unifiedLog.logSegments();
-                    if (segmentsCopy.isEmpty() || rlsMetadata.startOffset() < segmentsCopy.get(0).baseOffset()) {
-                        // search in remote-log
-                        return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
-                    } else {
-                        // search in local-log
-                        for (LogSegment segment : segmentsCopy) {
-                            if (segment.largestTimestamp() >= timestamp) {
-                                return segment.findOffsetByTimestamp(timestamp, startingOffset);
+                RemoteLogSegmentMetadata candidate = iterator.next();
+                if (!candidate.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
+                    continue;
+                }
+                if (maxTsSegment == null
+                        || candidate.maxTimestampMs() > maxTsSegment.maxTimestampMs()
+                        || (candidate.maxTimestampMs() == maxTsSegment.maxTimestampMs()
+                                && candidate.endOffset() > maxTsSegment.endOffset())) {
+                    maxTsSegment = candidate;
+                }
+            }
+
+            if (maxTsSegment == null) {
+                return Optional.empty();
+            }
+
+            // If the max timestamp segment is in the overlap region, prefer the local copy.
+            List<LogSegment> localSegments = unifiedLogOptional.get().logSegments();
+            if (!localSegments.isEmpty()
+                && maxTsSegment.startOffset() >= localSegments.get(0).baseOffset()) {
+                for (LogSegment segment : localSegments) {
+                    if (segment.largestTimestamp() >= maxTsSegment.maxTimestampMs()) {
+                        return segment.findOffsetByTimestamp(maxTsSegment.maxTimestampMs(), maxTsSegment.startOffset());
+                    }
+                }
+            }
+
+            // The max timestamp segment is purely in remote storage (or local lookup failed).
+            return lookupTimestamp(maxTsSegment, maxTsSegment.maxTimestampMs(), maxTsSegment.startOffset());
+        } else {
+            // Get the respective epoch in which the starting-offset exists.
+            OptionalInt maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
+            NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
+            while (maybeEpoch.isPresent()) {
+                int epoch = maybeEpoch.getAsInt();
+                // KAFKA-15802: Add a new API for RLMM to choose how to implement the predicate.
+                // currently, all segments are returned and then iterated, and filtered
+                Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManagerPlugin.get().listRemoteLogSegments(topicIdPartition, epoch);
+                while (iterator.hasNext()) {
+                    RemoteLogSegmentMetadata rlsMetadata = iterator.next();
+                    if (rlsMetadata.maxTimestampMs() >= timestamp
+                        && rlsMetadata.endOffset() >= startingOffset
+                        && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
+                        && rlsMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
+                        // cache to avoid race conditions
+                        List<LogSegment> segmentsCopy = unifiedLog.logSegments();
+                        if (segmentsCopy.isEmpty() || rlsMetadata.startOffset() < segmentsCopy.get(0).baseOffset()) {
+                            // search in remote-log
+                            return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
+                        } else {
+                            // search in local-log
+                            for (LogSegment segment : segmentsCopy) {
+                                if (segment.largestTimestamp() >= timestamp) {
+                                    return segment.findOffsetByTimestamp(timestamp, startingOffset);
+                                }
                             }
                         }
                     }
                 }
+                // Move to the next epoch if not found with the current epoch.
+                maybeEpoch = leaderEpochCache.nextEpoch(epoch);
             }
-            // Move to the next epoch if not found with the current epoch.
-            maybeEpoch = leaderEpochCache.nextEpoch(epoch);
         }
         return Optional.empty();
     }
