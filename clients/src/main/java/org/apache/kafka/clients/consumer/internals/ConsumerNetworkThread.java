@@ -46,6 +46,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -55,6 +56,7 @@ import java.util.function.Supplier;
 import javax.security.auth.spi.LoginModule;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.isErrorProvablyUnrelated;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
@@ -452,12 +454,18 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             return false;
 
         Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
+        if (metadataError.isEmpty())
+            return false;
 
-        if (metadataError.isPresent()) {
-            filteredEvents.forEach(e -> e.onMetadataError(metadataError.get()));
-            return true;
-        } else {
+        Set<String> relevantTopics = applicationEventProcessor.subscribedAssignedAndTransientTopics();
+        if (isErrorProvablyUnrelated(metadataError.get(), relevantTopics)) {
+            log.debug("Dropping metadata error deemed unrelated to currently relevant topics {}",
+                    relevantTopics, metadataError.get());
             return false;
         }
+
+        filteredEvents.forEach(e -> e.onMetadataError(metadataError.get()));
+        return true;
     }
+
 }

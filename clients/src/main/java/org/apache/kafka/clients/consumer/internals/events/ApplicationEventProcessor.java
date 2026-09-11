@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
@@ -821,6 +822,18 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 );
             }
         };
+    }
+
+    /**
+     * Topics a metadata error may legitimately concern. {@link ConsumerMetadata} also tracks
+     * transient topics, registered temporarily by offset-related APIs (e.g.
+     * {@code offsetsForTimes}/{@code beginningOffsets}/{@code endOffsets}) for topics outside
+     * the subscription, so errors about those must be propagated as well.
+     */
+    public Set<String> subscribedAssignedAndTransientTopics() {
+        if (metadata instanceof ConsumerMetadata)
+            return ((ConsumerMetadata) metadata).subscribedAssignedAndTransientTopics();
+        return subscriptions.subscribedOrAssignedTopics();
     }
 
     private void maybeUpdatePatternSubscription(MembershipManagerShim membershipManager) {

@@ -300,14 +300,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   /**
     * Tests that producer, consumer and adminClient fail to publish messages, consume
     * messages and describe topics respectively when the describe ACL isn't set.
-    * Also verifies that subsequent publish, consume and describe to authorized topic succeeds.
+    * Also verifies that subsequent produce, consume and describe to authorized topic succeeds.
     */
   @ParameterizedTest(name = "{displayName}.groupProtocol={0}.isIdempotenceEnabled={1}")
   @CsvSource(value = Array(
     "classic, true",
-    //"consumer, true",
+    "consumer, true",
     "classic, false",
-    //"consumer, false",
+    "consumer, false",
   ))
   def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(groupProtocol:String, isIdempotenceEnabled:Boolean): Unit = {
     // Set consumer group acls since we are testing topic authorization
@@ -358,8 +358,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       topic2RecordConsumed = true
       false
     }
+    // Must outlast the metadata refresh: an empty poll result would fail the
+    // verifyNoRecords {tp2} partition assertion before the auth exception is thrown.
+    val authFailurePollTimeoutMs = 200
     assertThrows(classOf[TopicAuthorizationException],
-      () => TestUtils.pollRecordsUntilTrue(consumer, verifyNoRecords, "Consumer didn't fail with authorization exception within timeout"))
+      () => TestUtils.pollRecordsUntilTrue(consumer, verifyNoRecords, "Consumer didn't fail with authorization exception within timeout", pollTimeoutMs = authFailurePollTimeoutMs))
 
     // Add ACLs and verify successful produce/consume/describe on first topic
     setReadAndWriteAcls(tp)

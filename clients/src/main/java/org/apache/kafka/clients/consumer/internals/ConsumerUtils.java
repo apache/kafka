@@ -29,7 +29,9 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -50,6 +52,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -260,5 +263,23 @@ public final class ConsumerUtils {
             return (KafkaException) t;
         else
             return new KafkaException(message, t);
+    }
+
+    /**
+     * {@code true} if the error names topics disjoint from {@code currentTopics} — used
+     * to drop exceptions captured before {@code assign()}/{@code subscribe()} from leaking
+     * to a new scope. Conservative on unknown types and empty {@code currentTopics}.
+     */
+    public static boolean isErrorProvablyUnrelated(Throwable t, Set<String> currentTopics) {
+        Throwable error = t;
+        if (error instanceof CompletionException) {
+            error = error.getCause();
+        }
+        Set<String> errorTopics = Collections.emptySet();
+        if (error instanceof TopicAuthorizationException)
+            errorTopics = ((TopicAuthorizationException) error).unauthorizedTopics();
+        else if (error instanceof InvalidTopicException)
+            errorTopics = ((InvalidTopicException) error).invalidTopics();
+        return !errorTopics.isEmpty() && !currentTopics.isEmpty() && Collections.disjoint(errorTopics, currentTopics);
     }
 }
