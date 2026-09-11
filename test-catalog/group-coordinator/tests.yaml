@@ -1675,14 +1675,6 @@ org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImplTest:
 org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImplTest:
 - testCollectionsAreDeeplyUnmodifiable
 - testTaskOffsetsAreDeeplyUnmodifiable
-org.apache.kafka.coordinator.group.streams.assignor.MockAssignorTest:
-- testBasicScenario
-- testDoubleAssignment
-- testSingleMember
-- testToStringReturnsName
-- testTwoMembersTwoSubtopologies
-- testTwoMembersTwoSubtopologiesStickiness
-- testZeroMembers
 org.apache.kafka.coordinator.group.streams.assignor.ProcessStateTest:
 - shouldAddActiveTaskToMember
 - shouldAddStandbyTaskToMember
