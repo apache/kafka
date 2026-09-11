@@ -914,6 +914,33 @@ public class LogManagerTest {
         verify(spyLogManager, times(1)).abortCleaning(tp1);
     }
 
+    @Test
+    public void testTopicConfigChangeRetriesUncleanablePartitions() throws IOException {
+        logManager.shutdown();
+        logManager = LogTestUtils.createLogManager(
+                List.of(logDir),
+                LOG_CONFIG,
+                new MockConfigRepository(),
+                new CleanerConfig(true),
+                time,
+                1,
+                false,
+                Optional.empty(),
+                false,
+                INITIAL_TASK_DELAY_MS);
+        logManager.startup(Set.of());
+
+        String topic = "topic";
+        TopicPartition topicPartition = new TopicPartition(topic, 0);
+        UnifiedLog log = logManager.getOrCreateLog(topicPartition, Optional.empty());
+        LogCleanerManager cleanerManager = logManager.cleaner().cleanerManager();
+        cleanerManager.markPartitionUncleanable(log.parentDir(), topicPartition);
+
+        logManager.updateTopicConfig(topic, new Properties(), false, false);
+
+        assertTrue(cleanerManager.uncleanablePartitions(log.parentDir()).isEmpty());
+    }
+
     /**
      * Test even if no log is getting initialized, if config change events are delivered
      * things continue to work correctly. This test should not throw.

@@ -247,6 +247,21 @@ class LogCleanerManagerTest {
     }
 
     @Test
+    public void testMarkPartitionCleanable() throws IOException {
+        TopicPartition tp0 = new TopicPartition("wishing-well", 0);
+        TopicPartition tp1 = new TopicPartition("wishing-well", 1);
+        ConcurrentMap<TopicPartition, UnifiedLog> logs = setupIncreasinglyFilthyLogs(List.of(tp0, tp1));
+        LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
+        String logDir = logs.get(tp0).dir().getParent();
+
+        cleanerManager.markPartitionUncleanable(logDir, tp0);
+        cleanerManager.markPartitionUncleanable(logDir, tp1);
+        cleanerManager.markPartitionCleanable(tp0);
+
+        assertEquals(Set.of(tp1), cleanerManager.uncleanablePartitions(logDir));
+    }
+
+    @Test
     public void testGrabFilthiestCompactedLogIgnoresInProgressPartitions() throws IOException {
         TopicPartition tp0 = new TopicPartition("wishing-well", 0);
         TopicPartition tp1 = new TopicPartition("wishing-well", 1);

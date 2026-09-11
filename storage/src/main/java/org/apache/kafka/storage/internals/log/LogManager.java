@@ -1208,6 +1208,9 @@ public class LogManager {
         if (!logs.isEmpty()) {
             logs.forEach(log -> {
                 LogConfig oldLogConfig = log.updateConfig(newLogConfig);
+                if (cleaner != null) {
+                    cleaner.retryCleaning(log.topicPartition());
+                }
                 if (oldLogConfig.compact && !newLogConfig.compact) {
                     abortCleaning(log.topicPartition());
                 }
