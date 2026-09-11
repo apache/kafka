@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Future;
@@ -80,6 +81,7 @@ public class OffsetStorageWriter {
     private final Semaphore flushInProgress = new Semaphore(1);
     // Unique ID for each flush request to handle callbacks after timeouts
     private long currentFlushId = 0;
+    private final Map<Map<String, Object>, Map<String, Object>> committableOffsets = new HashMap<>();
 
     public OffsetStorageWriter(OffsetBackingStore backingStore,
                                String namespace, Converter keyConverter, Converter valueConverter) {
@@ -237,9 +239,17 @@ public class OffsetStorageWriter {
             cancelFlush();
         } else {
             currentFlushId++;
+            committableOffsets.putAll(toFlush);
             flushInProgress.release();
             toFlush = null;
         }
         return true;
+    }
+
+    /**
+     * @return the offsets that can be committed
+     */
+    public synchronized Map<Map<String, Object>, Map<String, Object>> getFlushedOffsets() {
+        return Collections.unmodifiableMap(committableOffsets);
     }
 }
