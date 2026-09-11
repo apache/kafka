@@ -863,7 +863,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     self.close_port(controller_listener)
 
         self.security_config.setup_node(node)
-        if self.quorum_info.using_zk or self.quorum_info.has_brokers: # TODO: SCRAM currently unsupported for controller quorum
+        if self.quorum_info.using_zk or self.quorum_info.has_brokers:
             self.maybe_setup_broker_scram_credentials(node)
 
         if self.quorum_info.using_kraft:
@@ -917,6 +917,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 # build (max supported is 4.3-IV0), and Feature.validateVersion() does not enforce
                 # the dependency, so the feature can be bootstrapped on its own.
                 cmd += " --feature share.version=%s" % self.share_version
+            if self.node_quorum_info.has_controller_role:
+                for mechanism in sorted(self.security_config.serves_kraft_sasl):
+                    if self.security_config.is_sasl_scram(mechanism):
+                        cmd += " --add-scram %s=[name=%s,password=%s]" % (
+                            mechanism,
+                            SecurityConfig.SCRAM_BROKER_USER,
+                            SecurityConfig.SCRAM_BROKER_PASSWORD,
+                        )
             self.logger.info("Running log directory format command...\n%s" % cmd)
             node.account.ssh(cmd)
 
