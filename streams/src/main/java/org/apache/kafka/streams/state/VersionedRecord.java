@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -33,6 +35,7 @@ public final class VersionedRecord<V> {
     private final V value;
     private final long timestamp;
     private final Optional<Long> validTo;
+    private final Headers headers;
 
     /**
      * Create a new {@link VersionedRecord} instance. {@code value} cannot be {@code null}.
@@ -41,9 +44,7 @@ public final class VersionedRecord<V> {
      * @param timestamp  The type of the result returned by this query.
      */
     public VersionedRecord(final V value, final long timestamp) {
-        this.value = Objects.requireNonNull(value, "value cannot be null.");
-        this.timestamp = timestamp;
-        this.validTo = Optional.empty();
+        this(value, timestamp, Optional.empty(), new RecordHeaders());
     }
 
     /**
@@ -54,11 +55,38 @@ public final class VersionedRecord<V> {
      * @param validTo    The exclusive upper bound of the validity interval
      */
     public VersionedRecord(final V value, final long timestamp, final long validTo) {
-        this.value = Objects.requireNonNull(value);
-        this.timestamp = timestamp;
-        this.validTo = Optional.of(validTo);
+        this(value, timestamp, Optional.of(validTo), new RecordHeaders());
     }
 
+    /**
+     * Create a new {@link VersionedRecord} instance with headers. {@code value} cannot be {@code null}.
+     *
+     * @param value      The value
+     * @param timestamp  The timestamp
+     * @param headers    The record headers
+     */
+    public VersionedRecord(final V value, final long timestamp, final Headers headers) {
+        this(value, timestamp, Optional.empty(), headers);
+    }
+
+    /**
+     * Create a new {@link VersionedRecord} instance with headers. {@code value} cannot be {@code null}.
+     *
+     * @param value      The value
+     * @param timestamp  The timestamp
+     * @param validTo    The exclusive upper bound of the validity interval
+     * @param headers    The record headers
+     */
+    public VersionedRecord(final V value, final long timestamp, final long validTo, final Headers headers) {
+        this(value, timestamp, Optional.of(validTo), headers);
+    }
+
+    private VersionedRecord(final V value, final long timestamp, final Optional<Long> validTo, final Headers headers) {
+        this.value = Objects.requireNonNull(value, "value cannot be null.");
+        this.timestamp = timestamp;
+        this.validTo = validTo;
+        this.headers = Objects.requireNonNull(headers, "headers cannot be null.");
+    }
 
     public V value() {
         return value;
@@ -72,9 +100,16 @@ public final class VersionedRecord<V> {
         return validTo;
     }
 
+    /**
+     * @return the record headers. Never {@code null} (returns empty headers if none were set).
+     */
+    public Headers headers() {
+        return headers;
+    }
+
     @Override
     public String toString() {
-        return "<" + value + "," + timestamp + "," + validTo + ">";
+        return "<" + value + "," + timestamp + "," + validTo + "," + headers + ">";
     }
 
     @Override
@@ -86,12 +121,13 @@ public final class VersionedRecord<V> {
             return false;
         }
         final VersionedRecord<?> that = (VersionedRecord<?>) o;
-        return timestamp == that.timestamp && validTo == that.validTo &&
-            Objects.equals(value, that.value);
+        return timestamp == that.timestamp && Objects.equals(validTo, that.validTo) &&
+            Objects.equals(value, that.value) &&
+            Objects.equals(headers, that.headers);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, timestamp, validTo);
+        return Objects.hash(value, timestamp, validTo, headers);
     }
 }
