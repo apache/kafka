@@ -23,101 +23,36 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.impl.Arguments;
-import net.sourceforge.argparse4j.inf.Argument;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.TreeMap;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_CIPHER_SUITES_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_CIPHER_SUITES_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_ENABLED_PROTOCOLS_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYMANAGER_ALGORITHM_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_KEY_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_KEY_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_LOCATION_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_PASSWORD_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_TYPE_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEY_PASSWORD_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEY_PASSWORD_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_PROTOCOL_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_PROTOCOL_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_PROVIDER_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_PROVIDER_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_DOC;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_DOC;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_DOC;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_DOC;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_DOC;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils.getConfiguredInstance;
 
 public class OAuthCompatibilityTool {
+
+    private static final String CLIENT_CONFIG_ARG = "client-config";
+    private static final String BROKER_CONFIG_ARG = "broker-config";
+    private static final ConfigDef SASL_CONFIG_DEF = saslConfigs();
+    private static final ConfigDef SSL_CONFIG_DEF = sslConfigs();
 
     public static void main(String[] args) {
         ArgsHandler argsHandler = new ArgsHandler();
@@ -130,24 +65,19 @@ public class OAuthCompatibilityTool {
             return;
         }
 
-        ConfigHandler configHandler = new ConfigHandler(namespace);
+        Properties clientFileProps = loadConfigFile(namespace, CLIENT_CONFIG_ARG);
+        Properties brokerFileProps = loadConfigFile(namespace, BROKER_CONFIG_ARG);
 
-        Map<String, ?> configs = configHandler.getConfigs();
-        List<AppConfigurationEntry> jaasConfigEntries = List.of(
-            new AppConfigurationEntry(
-                OAuthBearerLoginModule.class.getName(),
-                AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
-                configHandler.getJaasOptions()
-            )
-        );
+        ConfigHandler clientConfigHandler = new ConfigHandler(namespace, clientFileProps);
+        ConfigHandler brokerConfigHandler = new ConfigHandler(namespace, brokerFileProps);
 
         try {
             String jwt;
 
             {
                 // Client side...
-                try (JwtRetriever retriever = createRetriever(configs, jaasConfigEntries)) {
-                    try (JwtValidator validator = createValidator(configs, jaasConfigEntries)) {
+                try (JwtRetriever retriever = createRetriever(clientConfigHandler)) {
+                    try (JwtValidator validator = createValidator(clientConfigHandler)) {
                         System.out.println("PASSED 1/5: client configuration");
 
                         jwt = retriever.retrieve();
@@ -161,7 +91,7 @@ public class OAuthCompatibilityTool {
 
             {
                 // Broker side...
-                try (JwtValidator validator = createValidator(configs, jaasConfigEntries)) {
+                try (JwtValidator validator = createValidator(brokerConfigHandler)) {
                     System.out.println("PASSED 4/5: broker configuration");
 
                     validator.validate(jwt);
@@ -184,27 +114,78 @@ public class OAuthCompatibilityTool {
         }
     }
 
-    private static JwtRetriever createRetriever(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
-        return getConfiguredInstance(
-            configs,
-            OAUTHBEARER_MECHANISM,
-            jaasConfigEntries,
-            SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
-            JwtRetriever.class
+    private static Properties loadConfigFile(Namespace namespace, String argName) {
+        String path = namespace.getString(argName);
+
+        try {
+            if (path == null || path.isEmpty())
+                return new Properties();
+
+            return Utils.loadProps(path);
+        } catch (IOException e) {
+            throw new KafkaException("Failed to load config file for --" + argName + ": " + path, e);
+        }
+    }
+
+    private static JwtRetriever createRetriever(ConfigHandler configHandler) {
+        return createConfiguredInstance(
+                configHandler,
+                SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
+                JwtRetriever.class
         );
     }
 
-    private static JwtValidator createValidator(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
-        return getConfiguredInstance(
-            configs,
-            OAUTHBEARER_MECHANISM,
-            jaasConfigEntries,
-            SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
-            JwtValidator.class
+    private static JwtValidator createValidator(ConfigHandler configHandler) {
+        return createConfiguredInstance(
+                configHandler,
+                SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+                JwtValidator.class
         );
     }
 
-    private static class ArgsHandler {
+    private static <T> T createConfiguredInstance(
+            ConfigHandler configHandler,
+            String configKey,
+            Class<T> clazz
+    ) {
+        List<AppConfigurationEntry> jaasConfigEntries = List.of(
+                new AppConfigurationEntry(
+                        OAuthBearerLoginModule.class.getName(),
+                        AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+                        configHandler.getConfigs(SSL_CONFIG_DEF)
+                )
+        );
+
+        return getConfiguredInstance(
+                configHandler.getConfigs(SASL_CONFIG_DEF),
+                OAUTHBEARER_MECHANISM,
+                jaasConfigEntries,
+                configKey,
+                clazz
+        );
+    }
+
+    private static ConfigDef saslConfigs() {
+        ConfigDef allSaslConfigs = new ConfigDef();
+        SaslConfigs.addClientSaslSupport(allSaslConfigs);
+
+        ConfigDef filteredSaslConfigs = new ConfigDef();
+        allSaslConfigs.configKeys().entrySet().stream()
+                .filter(entry -> entry.getKey().startsWith("sasl.oauthbearer") ||
+                        entry.getKey().startsWith("sasl.login"))
+                .forEach(entry -> filteredSaslConfigs.define(entry.getValue()));
+
+        return filteredSaslConfigs;
+    }
+
+    private static ConfigDef sslConfigs() {
+        ConfigDef cd = new ConfigDef();
+        SslConfigs.addClientSslSupport(cd);
+
+        return cd;
+    }
+
+    static class ArgsHandler {
 
         private static final String DESCRIPTION = String.format(
             "This tool is used to verify OAuth/OIDC provider compatibility.%n%n" +
@@ -214,58 +195,30 @@ public class OAuthCompatibilityTool {
 
         private final ArgumentParser parser;
 
-        private ArgsHandler() {
+        ArgsHandler() {
             this.parser = ArgumentParsers
                 .newArgumentParser("oauth-compatibility-tool")
                 .defaultHelp(true)
                 .description(DESCRIPTION);
         }
 
-        private Namespace parseArgs(String[] args) throws ArgumentParserException {
-            // SASL/OAuth
-            addArgument(SASL_LOGIN_CONNECT_TIMEOUT_MS, SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC, Integer.class);
-            addArgument(SASL_LOGIN_READ_TIMEOUT_MS, SASL_LOGIN_READ_TIMEOUT_MS_DOC, Integer.class);
-            addArgument(SASL_LOGIN_RETRY_BACKOFF_MAX_MS, SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC, Long.class);
-            addArgument(SASL_LOGIN_RETRY_BACKOFF_MS, SASL_LOGIN_RETRY_BACKOFF_MS_DOC, Long.class);
-            addArgument(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC, Integer.class);
-            addArgument(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
-                .action(Arguments.append());
-            addArgument(SASL_OAUTHBEARER_EXPECTED_ISSUER, SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC);
-            addArgument(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC, Long.class);
-            addArgument(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC, Long.class);
-            addArgument(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC, Long.class);
-            addArgument(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC);
-            addArgument(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC);
-            addArgument(SASL_OAUTHBEARER_SUB_CLAIM_NAME, SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC);
-            addArgument(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC);
+        Namespace parseArgs(String[] args) throws ArgumentParserException {
+            parser.addArgument("--" + CLIENT_CONFIG_ARG)
+                    .metavar("path")
+                    .dest(CLIENT_CONFIG_ARG)
+                    .help("Path to a .properties file containing the client's OAuth/SSL configuration. " +
+                            "Explicit command line options override any matching keys in this file.");
 
-            // SSL
-            addArgument(SSL_CIPHER_SUITES_CONFIG, SSL_CIPHER_SUITES_DOC)
-                .action(Arguments.append());
-            addArgument(SSL_ENABLED_PROTOCOLS_CONFIG, SSL_ENABLED_PROTOCOLS_DOC)
-                .action(Arguments.append());
-            addArgument(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC);
-            addArgument(SSL_ENGINE_FACTORY_CLASS_CONFIG, SSL_ENGINE_FACTORY_CLASS_DOC);
-            addArgument(SSL_KEYMANAGER_ALGORITHM_CONFIG, SSL_KEYMANAGER_ALGORITHM_DOC);
-            addArgument(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, SSL_KEYSTORE_CERTIFICATE_CHAIN_DOC);
-            addArgument(SSL_KEYSTORE_KEY_CONFIG, SSL_KEYSTORE_KEY_DOC);
-            addArgument(SSL_KEYSTORE_LOCATION_CONFIG, SSL_KEYSTORE_LOCATION_DOC);
-            addArgument(SSL_KEYSTORE_PASSWORD_CONFIG, SSL_KEYSTORE_PASSWORD_DOC);
-            addArgument(SSL_KEYSTORE_TYPE_CONFIG, SSL_KEYSTORE_TYPE_DOC);
-            addArgument(SSL_KEY_PASSWORD_CONFIG, SSL_KEY_PASSWORD_DOC);
-            addArgument(SSL_PROTOCOL_CONFIG, SSL_PROTOCOL_DOC);
-            addArgument(SSL_PROVIDER_CONFIG, SSL_PROVIDER_DOC);
-            addArgument(SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, SSL_SECURE_RANDOM_IMPLEMENTATION_DOC);
-            addArgument(SSL_TRUSTMANAGER_ALGORITHM_CONFIG, SSL_TRUSTMANAGER_ALGORITHM_DOC);
-            addArgument(SSL_TRUSTSTORE_CERTIFICATES_CONFIG, SSL_TRUSTSTORE_CERTIFICATES_DOC);
-            addArgument(SSL_TRUSTSTORE_LOCATION_CONFIG, SSL_TRUSTSTORE_LOCATION_DOC);
-            addArgument(SSL_TRUSTSTORE_PASSWORD_CONFIG, SSL_TRUSTSTORE_PASSWORD_DOC);
-            addArgument(SSL_TRUSTSTORE_TYPE_CONFIG, SSL_TRUSTSTORE_TYPE_DOC);
+            parser.addArgument("--" + BROKER_CONFIG_ARG)
+                    .metavar("path")
+                    .dest(BROKER_CONFIG_ARG)
+                    .help("Path to a .properties file containing the broker's OAuth/SSL configuration. " +
+                            "Explicit command line options override any matching keys in this file.");
 
-            // JAAS options...
-            addArgument(CLIENT_ID_CONFIG, CLIENT_ID_DOC);
-            addArgument(CLIENT_SECRET_CONFIG, CLIENT_SECRET_DOC);
-            addArgument(SCOPE_CONFIG, SCOPE_DOC);
+            Map<String, ConfigDef.ConfigKey> configs = new TreeMap<>();
+            configs.putAll(SASL_CONFIG_DEF.configKeys());
+            configs.putAll(SSL_CONFIG_DEF.configKeys());
+            configs.forEach((key, value) -> addArgument(key, value.documentation));
 
             try {
                 return parser.parseArgs(args);
@@ -275,131 +228,51 @@ public class OAuthCompatibilityTool {
             }
         }
 
-        private Argument addArgument(String option, String help) {
-            return addArgument(option, help, String.class);
-        }
-
-        private Argument addArgument(String option, String help, Class<?> clazz) {
-            // Change foo.bar into --foo.bar.
+        private void addArgument(String option, String help) {
             String name = "--" + option;
 
-            return parser.addArgument(name)
-                .type(clazz)
+            parser.addArgument(name)
+                .type(String.class)
                 .metavar(option)
                 .dest(option)
                 .help(help);
         }
-
     }
 
-    private record ConfigHandler(Namespace namespace) {
+    static class ConfigHandler {
+        private final Namespace namespace;
+        private final Properties fileProps;
 
-        private Map<String, ?> getConfigs() {
+        public ConfigHandler(Namespace namespace, Properties fileProps) {
+            this.namespace = namespace;
+            this.fileProps = fileProps;
+
+            for (String key : fileProps.stringPropertyNames())
+                if (namespace.getString(key) != null)
+                    System.err.println("WARNING: command-line option --" + key + " overrides value from configuration file");
+        }
+
+        Map<String, ?> getConfigs(ConfigDef cd) {
             Map<String, Object> m = new HashMap<>();
 
-            // SASL/OAuth
-            maybeAddInt(m, SASL_LOGIN_CONNECT_TIMEOUT_MS);
-            maybeAddInt(m, SASL_LOGIN_READ_TIMEOUT_MS);
-            maybeAddLong(m, SASL_LOGIN_RETRY_BACKOFF_MS);
-            maybeAddLong(m, SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
-            maybeAddString(m, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
-            maybeAddString(m, SASL_OAUTHBEARER_SUB_CLAIM_NAME);
-            maybeAddString(m, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
-            maybeAddString(m, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
-            maybeAddLong(m, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS);
-            maybeAddLong(m, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
-            maybeAddLong(m, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
-            maybeAddInt(m, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS);
-            maybeAddStringList(m, SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
-            maybeAddString(m, SASL_OAUTHBEARER_EXPECTED_ISSUER);
+            for (Map.Entry<String, ConfigDef.ConfigKey> entry : cd.configKeys().entrySet())
+                maybeAdd(m, entry.getKey());
 
-            // This here is going to fill in all the defaults for the values we don't specify...
-            ConfigDef cd = new ConfigDef();
-            SaslConfigs.addClientSaslSupport(cd);
-            SslConfigs.addClientSslSupport(cd);
-            AbstractConfig config = new AbstractConfig(cd, m);
-            return config.values();
+            return new AbstractConfig(cd, m).values();
         }
 
-        private Map<String, Object> getJaasOptions() {
-            Map<String, Object> m = new HashMap<>();
+        private Optional<String> resolve(String key) {
+            String cmdValue = namespace.getString(key);
+            String fileValue = fileProps.getProperty(key);
 
-            // SASL/OAuth
-            maybeAddString(m, CLIENT_ID_CONFIG);
-            maybeAddString(m, CLIENT_SECRET_CONFIG);
-            maybeAddString(m, SCOPE_CONFIG);
+            if (cmdValue != null)
+                return Optional.of(cmdValue);
 
-            // SSL
-            maybeAddStringList(m, SSL_CIPHER_SUITES_CONFIG);
-            maybeAddStringList(m, SSL_ENABLED_PROTOCOLS_CONFIG);
-            maybeAddString(m, SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
-            maybeAddClass(m, SSL_ENGINE_FACTORY_CLASS_CONFIG);
-            maybeAddString(m, SSL_KEYMANAGER_ALGORITHM_CONFIG);
-            maybeAddPassword(m, SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
-            maybeAddPassword(m, SSL_KEYSTORE_KEY_CONFIG);
-            maybeAddString(m, SSL_KEYSTORE_LOCATION_CONFIG);
-            maybeAddPassword(m, SSL_KEYSTORE_PASSWORD_CONFIG);
-            maybeAddString(m, SSL_KEYSTORE_TYPE_CONFIG);
-            maybeAddPassword(m, SSL_KEY_PASSWORD_CONFIG);
-            maybeAddString(m, SSL_PROTOCOL_CONFIG);
-            maybeAddString(m, SSL_PROVIDER_CONFIG);
-            maybeAddString(m, SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG);
-            maybeAddString(m, SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
-            maybeAddPassword(m, SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
-            maybeAddString(m, SSL_TRUSTSTORE_LOCATION_CONFIG);
-            maybeAddPassword(m, SSL_TRUSTSTORE_PASSWORD_CONFIG);
-            maybeAddString(m, SSL_TRUSTSTORE_TYPE_CONFIG);
-
-            return m;
+            return Optional.ofNullable(fileValue);
         }
 
-        private void maybeAddInt(Map<String, Object> m, String option) {
-            Integer value = namespace.getInt(option);
-
-            if (value != null)
-                m.put(option, value);
+        private void maybeAdd(Map<String, Object> m, String key) {
+            resolve(key).ifPresent(v -> m.put(key, v));
         }
-
-        private void maybeAddLong(Map<String, Object> m, String option) {
-            Long value = namespace.getLong(option);
-
-            if (value != null)
-                m.put(option, value);
-        }
-
-        private void maybeAddString(Map<String, Object> m, String option) {
-            String value = namespace.getString(option);
-
-            if (value != null)
-                m.put(option, value);
-        }
-
-        private void maybeAddPassword(Map<String, Object> m, String option) {
-            String value = namespace.getString(option);
-
-            if (value != null)
-                m.put(option, new Password(value));
-        }
-
-        private void maybeAddClass(Map<String, Object> m, String option) {
-            String value = namespace.getString(option);
-
-            if (value != null) {
-                try {
-                    m.put(option, Class.forName(value));
-                } catch (ClassNotFoundException e) {
-                    throw new KafkaException("Could not find class for " + option, e);
-                }
-            }
-        }
-
-        private void maybeAddStringList(Map<String, Object> m, String option) {
-            List<String> value = namespace.getList(option);
-
-            if (value != null)
-                m.put(option, value);
-        }
-
     }
-
 }
