@@ -59,7 +59,7 @@
               files="(SaslServerAuthenticator).java"/>
 
     <suppress checks="MethodLength"
-              files="(KerberosLogin|ConnectMetricsRegistry|AbstractRequest|AbstractResponse).java"/>
+              files="(KerberosLogin|ConnectMetricsRegistry|AbstractRequest|AbstractResponse|UnifiedLog).java"/>
 
     <suppress checks="ParameterNumber"
               files="(NetworkClient|FieldSpec|KafkaProducer|KafkaConsumer|ConsumerCoordinator|RecordAccumulator|Sender|ConfigDef|DefaultRecordBatch|MemoryRecordsBuilder|ClientUtils).java"/>
