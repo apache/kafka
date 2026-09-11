@@ -235,6 +235,29 @@ public class AuthorizerTest {
     }
 
     @Test
+    public void testAuthorizeByResourceTypeLiteralResourceDenyDominate() throws Exception {
+        KafkaPrincipal user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1");
+        InetAddress host1 = InetAddress.getByName("192.168.1.1");
+
+        ResourcePattern abcd = new ResourcePattern(GROUP, "abcd", PREFIXED);
+        ResourcePattern abcde = new ResourcePattern(GROUP, "abcde", LITERAL);
+
+        RequestContext u1h1Context = newRequestContext(user1, host1);
+
+        AccessControlEntry allowAce = new AccessControlEntry(user1.toString(), host1.getHostAddress(), READ, ALLOW);
+        AccessControlEntry denyAce = new AccessControlEntry(user1.toString(), host1.getHostAddress(), READ, DENY);
+
+        addAcls(authorizer, Set.of(allowAce), abcde);
+
+        assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+                "User1 from host1 should have READ access to at least one group");
+
+        addAcls(authorizer, Set.of(denyAce), abcd);
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+                "User1 from host1 now should not have READ access to any group");
+    }
+
+    @Test
     public void testAuthorizeByResourceTypeDenyTakesPrecedence() throws Exception {
         KafkaPrincipal user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1");
         InetAddress host1 = InetAddress.getByName("192.168.1.1");
