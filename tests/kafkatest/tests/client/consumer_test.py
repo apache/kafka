@@ -27,11 +27,16 @@ import signal
 class OffsetValidationTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
     NUM_PARTITIONS = 1
+    # Assignment-preservation checks need every member to own partitions, which the
+    # single-partition TOPIC cannot provide for a three-member group.
+    MULTI_PARTITION_TOPIC = "multi_partition_test_topic"
+    NUM_MULTI_PARTITIONS = 6
 
     def __init__(self, test_context):
         super(OffsetValidationTest, self).__init__(test_context, num_consumers=3, num_producers=1,
                                                      num_zk=1, num_brokers=2, topics={
-            self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 2 }
+            self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 2 },
+            self.MULTI_PARTITION_TOPIC : { 'partitions': self.NUM_MULTI_PARTITIONS, 'replication-factor': 2 }
         })
 
     def rolling_bounce_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True):
@@ -74,6 +79,12 @@ class OffsetValidationTest(VerifiableConsumerTest):
         consumer = super(OffsetValidationTest, self).setup_consumer(topic, **kwargs)
         self.mark_for_collect(consumer, 'verifiable_consumer_stdout')
         return consumer
+
+    def assignment_by_hostname(self, consumer):
+        # Key by hostname rather than node so the assignment can be compared across a bounce
+        # and reported readably on failure.
+        return {node.account.hostname: sorted(str(tp) for tp in partitions)
+                for node, partitions in consumer.current_assignment().items()}
 
     def await_conflict_consumers_fenced(self, conflict_consumer):
         # Rely on explicit shutdown_complete events from the verifiable consumer to guarantee each conflict member
@@ -258,6 +269,89 @@ class OffsetValidationTest(VerifiableConsumerTest):
             assert consumer.current_position(partition) <= consumer.total_consumed(), \
                 "Current position %d greater than the total number of consumed records %d" % \
                 (consumer.current_position(partition), consumer.total_consumed())
+
+    @cluster(num_nodes=7)
+    @matrix(
+        bounce_mode=["all", "rolling"],
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.classic_group_protocol],
+        assignment_strategy=["org.apache.kafka.clients.consumer.CooperativeStickyAssignor"]
+    )
+    @matrix(
+        bounce_mode=["all", "rolling"],
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        group_remote_assignor=consumer_group.all_remote_assignors
+    )
+    def test_static_consumer_bounce_preserves_assignment_when_not_eager(self, bounce_mode, num_bounces=5,
+                                                                        metadata_quorum=quorum.isolated_kraft,
+                                                                        group_protocol=None,
+                                                                        assignment_strategy=None,
+                                                                        group_remote_assignor=None):
+        """
+        Verify that bouncing static members does not move partitions when the group is not using
+        eager assignment, i.e. with the cooperative sticky assignor or with the new consumer group
+        protocol.
+
+        test_static_consumer_bounce_with_eager_assignment covers the same guarantee for eager
+        assignment, but it can only do so by counting revocations on the member that is kept alive:
+        under eager rebalancing every member revokes everything on any rebalance, so a revocation
+        count distinguishes "a global rebalance happened" from "it did not". That signal does not
+        exist without eager rebalancing, where a member only revokes the partitions that actually
+        move. This test therefore asserts on the assignment itself.
+
+        Setup: single Kafka cluster with one producer and a set of static consumers in one group,
+        subscribed to a topic with more partitions than there are consumers so that every member
+        owns partitions.
+
+        - Start a producer which continues producing new messages throughout the test.
+        - Start up the consumers as static members and wait for a stable, valid assignment.
+        - In a loop, restart every consumer except the first member, and expect that the partition
+          assignment of the whole group is unchanged, and that the member kept alive never revokes.
+        """
+        producer = self.setup_producer(self.MULTI_PARTITION_TOPIC)
+
+        producer.start()
+        self.await_produced_messages(producer)
+
+        consumer = self.setup_consumer(self.MULTI_PARTITION_TOPIC, static_membership=True,
+                                       group_protocol=group_protocol,
+                                       assignment_strategy=assignment_strategy,
+                                       group_remote_assignor=group_remote_assignor)
+
+        consumer.start()
+        self.await_all_members(consumer)
+        self.await_all_members_stabilized(self.MULTI_PARTITION_TOPIC, self.NUM_MULTI_PARTITIONS,
+                                          consumer, timeout_sec=60)
+
+        assert not consumer.is_eager(), \
+            "This test must exercise a non-eager protocol, but the consumer reports eager rebalancing"
+
+        num_keep_alive = 1
+        assignment_before_bounce = self.assignment_by_hostname(consumer)
+        num_revokes_before_bounce = consumer.num_revokes_for_alive(num_keep_alive)
+
+        if bounce_mode == "all":
+            self.bounce_all_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
+        else:
+            self.rolling_bounce_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
+
+        self.await_all_members_stabilized(self.MULTI_PARTITION_TOPIC, self.NUM_MULTI_PARTITIONS,
+                                          consumer, timeout_sec=60)
+
+        num_revokes_after_bounce = consumer.num_revokes_for_alive(num_keep_alive) - num_revokes_before_bounce
+
+        # A static member that is bounced keeps its assignment, so no partition should be taken away
+        # from the member that stayed alive.
+        assert num_revokes_after_bounce == 0, \
+            "Unexpected revocation triggered when bouncing static member. Expecting 0 but had %d revocations" % num_revokes_after_bounce
+
+        # The bounced static members should also get their own partitions back, leaving the
+        # assignment of the whole group exactly as it was before the bounce.
+        assignment_after_bounce = self.assignment_by_hostname(consumer)
+        assert assignment_after_bounce == assignment_before_bounce, \
+            "Partitions were re-assigned while bouncing static members. Before: %s, after: %s" % \
+            (assignment_before_bounce, assignment_after_bounce)
 
     @cluster(num_nodes=7)
     @matrix(
