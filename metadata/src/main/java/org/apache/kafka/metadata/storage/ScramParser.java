@@ -116,7 +116,7 @@ public class ScramParser {
                 try {
                     this.configuredSalt = Optional.of(Base64.getDecoder().decode(saltString));
                 } catch (IllegalArgumentException e) {
-                    throw new FormatterException("Failed to decode given salt: " + saltString, e);
+                    throw new FormatterException("Failed to decode given salt", e);
                 }
             }
             String iterationsString = components.remove("iterations");
@@ -142,8 +142,7 @@ public class ScramParser {
                     this.configuredPasswordString = Optional.empty();
                     this.configuredSaltedPassword = Optional.of(Base64.getDecoder().decode(saltedPasswordString));
                 } catch (IllegalArgumentException e) {
-                    throw new FormatterException("Failed to decode given saltedPassword: " +
-                            saltedPasswordString, e);
+                    throw new FormatterException("Failed to decode given saltedPassword", e);
                 }
             } else {
                 this.configuredPasswordString = Optional.of(passwordString);
