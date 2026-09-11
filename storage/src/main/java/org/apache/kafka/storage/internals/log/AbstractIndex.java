@@ -31,7 +31,6 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.locks.ReentrantLock;
@@ -247,9 +246,7 @@ public abstract class AbstractIndex implements Closeable {
         inLock(() -> {
             if (mmap != null) {
                 mmap.force();
-                try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE)) {
-                    channel.force(true);
-                }
+                Utils.flushFileIfExists(file.toPath());
             }
         });
     }
