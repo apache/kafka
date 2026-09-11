@@ -118,13 +118,9 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnOffsetIfNoRecordContext() {
+    public void shouldReturnDummyOffsetIfNoRecordContext() {
         context.setRecordContext(null);
-        try {
-            context.offset();
-        } catch (final IllegalStateException e) {
-            // pass
-        }
+        assertEquals(-1L, context.offset());
     }
 
     @Test
