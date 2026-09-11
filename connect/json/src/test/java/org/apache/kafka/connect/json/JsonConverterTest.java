@@ -578,6 +578,29 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void slicedByteBufferToJsonUsesRemainingBytes() throws IOException {
+        ByteBuffer bytes = ByteBuffer.wrap(new byte[] {1, 2, 3, 4});
+        bytes.position(1);
+        bytes.limit(3);
+
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, bytes));
+        validateEnvelope(converted);
+        assertArrayEquals(new byte[] {2, 3}, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).binaryValue());
+    }
+
+    @Test
+    public void directByteBufferToJson() throws IOException {
+        ByteBuffer bytes = ByteBuffer.allocateDirect(2);
+        bytes.put((byte) 1);
+        bytes.put((byte) 2);
+        bytes.flip();
+
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, bytes));
+        validateEnvelope(converted);
+        assertArrayEquals(new byte[] {1, 2}, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).binaryValue());
+    }
+
+    @Test
     public void stringToJson() {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, "test-string"));
         validateEnvelope(converted);
