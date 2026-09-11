@@ -23,6 +23,7 @@ org.apache.kafka.connect.transforms.Flatten$Key
 org.apache.kafka.connect.transforms.Flatten$Value
 org.apache.kafka.connect.transforms.HeaderFrom$Key
 org.apache.kafka.connect.transforms.HeaderFrom$Value
+org.apache.kafka.connect.transforms.HeaderRouter
 org.apache.kafka.connect.transforms.HoistField$Key
 org.apache.kafka.connect.transforms.HoistField$Value
 org.apache.kafka.connect.transforms.InsertField$Key
