@@ -22,7 +22,11 @@ import org.apache.kafka.common.protocol.types.RawTaggedField;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.BinaryNode;
+import com.fasterxml.jackson.databind.node.BooleanNode;
+import com.fasterxml.jackson.databind.node.DoubleNode;
 import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.ShortNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
 import org.junit.jupiter.api.Test;
@@ -93,6 +97,36 @@ public final class MessageUtilTest {
     public void testConstants() {
         assertEquals(MessageUtil.UNSIGNED_SHORT_MAX, 0xFFFF);
         assertEquals(MessageUtil.UNSIGNED_INT_MAX, 0xFFFFFFFFL);
+    }
+
+    @Test
+    public void testJsonNodeToInt() {
+        assertEquals(42, MessageUtil.jsonNodeToInt(new ShortNode((short) 42), "Test short"));
+        assertEquals(42, MessageUtil.jsonNodeToInt(new IntNode(42), "Test int"));
+        assertEquals(42, MessageUtil.jsonNodeToInt(new LongNode(42), "Test long"));
+
+        assertThrows(NumberFormatException.class,
+            () -> MessageUtil.jsonNodeToInt(new LongNode((long) Integer.MAX_VALUE + 1), "Test large long"));
+        assertThrows(NumberFormatException.class,
+            () -> MessageUtil.jsonNodeToInt(new DoubleNode(42.0), "Test double"));
+        assertThrows(NumberFormatException.class,
+            () -> MessageUtil.jsonNodeToInt(BooleanNode.TRUE, "Test boolean"));
+        assertThrows(NumberFormatException.class,
+            () -> MessageUtil.jsonNodeToInt(new TextNode("42"), "Test text"));
+    }
+
+    @Test
+    public void testJsonNodeToLong() {
+        assertEquals(42, MessageUtil.jsonNodeToLong(new ShortNode((short) 42), "Test short"));
+        assertEquals(42, MessageUtil.jsonNodeToLong(new IntNode(42), "Test int"));
+        assertEquals(42, MessageUtil.jsonNodeToLong(new LongNode(42), "Test long"));
+
+        assertThrows(NumberFormatException.class,
+            () -> MessageUtil.jsonNodeToLong(new DoubleNode(42.0), "Test double"));
+        assertThrows(NumberFormatException.class,
+            () -> MessageUtil.jsonNodeToLong(BooleanNode.TRUE, "Test boolean"));
+        assertThrows(NumberFormatException.class,
+            () -> MessageUtil.jsonNodeToLong(new TextNode("42"), "Test text"));
     }
 
     @Test
