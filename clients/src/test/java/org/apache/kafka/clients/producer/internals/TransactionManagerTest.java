@@ -24,6 +24,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -89,7 +90,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
@@ -108,10 +111,13 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.producer.ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL;
+import static org.apache.kafka.clients.producer.ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -173,6 +179,28 @@ public class TransactionManagerTest {
         initializeTransactionManager(Optional.of(transactionalId), false, false);
     }
 
+    private static Stream<String> allocationStrategies() {
+        return Stream.of(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL);
+    }
+
+    private static Stream<Arguments> transactionV2AndAllocationStrategies() {
+        return Stream.of(true, false).flatMap(v2 -> allocationStrategies().map(strategy -> Arguments.of(v2, strategy)));
+    }
+
+    private RecordAccumulator createAccumulator(String allocationStrategy, int batchSize, long totalSize,
+                                                int deliveryTimeoutMs, Metrics metrics, String metricGrpName,
+                                                TransactionManager transactionManager) {
+        boolean incremental = allocationStrategy.equals(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL);
+        BufferPool pool = incremental
+            ? new BufferPool(totalSize, 128, metrics, time, metricGrpName, BufferPool.AllocationMode.INCREMENTAL)
+            : new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+        return incremental
+            ? new ChunkedRecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
+                deliveryTimeoutMs, metrics, metricGrpName, time, transactionManager, pool)
+            : new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
+                deliveryTimeoutMs, metrics, metricGrpName, time, transactionManager, pool);
+    }
+
     private void initializeTransactionManager(
         Optional<String> transactionalId,
         boolean transactionV2Enabled
@@ -184,6 +212,15 @@ public class TransactionManagerTest {
         Optional<String> transactionalId,
         boolean transactionV2Enabled,
         boolean enable2pc
+    ) {
+        initializeTransactionManager(transactionalId, transactionV2Enabled, enable2pc, BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL);
+    }
+
+    private void initializeTransactionManager(
+        Optional<String> transactionalId,
+        boolean transactionV2Enabled,
+        boolean enable2pc,
+        String allocationStrategy
     ) {
         Metrics metrics = new Metrics(time);
 
@@ -220,9 +257,8 @@ public class TransactionManagerTest {
         String metricGrpName = "producer-metrics";
 
         this.brokerNode = new Node(0, "localhost", 2211);
-        this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-                deliveryTimeoutMs, metrics, metricGrpName, time, transactionManager,
-                new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
+        this.accumulator = createAccumulator(allocationStrategy, batchSize, totalSize, deliveryTimeoutMs,
+                metrics, metricGrpName, transactionManager);
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, REQUEST_TIMEOUT,
@@ -750,18 +786,17 @@ public class TransactionManagerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDuplicateSequenceAfterProducerReset(boolean transactionV2Enabled) throws Exception {
-        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
+    @MethodSource("transactionV2AndAllocationStrategies")
+    public void testDuplicateSequenceAfterProducerReset(boolean transactionV2Enabled, String allocationStrategy) throws Exception {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled, false, allocationStrategy);
         initializeIdempotentProducerId(producerId, epoch);
 
         Metrics metrics = new Metrics(time);
         final int requestTimeout = 10000;
         final int deliveryTimeout = 15000;
 
-        RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, Compression.NONE, 0, 0L, 0L,
-                deliveryTimeout, metrics, "", time, transactionManager,
-                new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""));
+        RecordAccumulator accumulator = createAccumulator(allocationStrategy, 16 * 1024, 1024 * 1024,
+                deliveryTimeout, metrics, "", transactionManager);
 
         Sender sender = new Sender(logContext, this.client, this.metadata, accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, requestTimeout,
@@ -882,8 +917,10 @@ public class TransactionManagerTest {
         assertEquals(3, transactionManager.sequenceNumber(tp1));
     }
 
-    @Test
-    public void testBasicTransaction() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testBasicTransaction(String allocationStrategy) throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), false, false, allocationStrategy);
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -2421,8 +2458,10 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasAbortableError());
     }
 
-    @Test
-    public void testCancelUnsentAddPartitionsAndProduceOnAbort() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testCancelUnsentAddPartitionsAndProduceOnAbort(String allocationStrategy) throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), false, false, allocationStrategy);
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -2468,8 +2507,10 @@ public class TransactionManagerTest {
         TestUtils.assertFutureThrows(TransactionAbortedException.class, responseFuture);
     }
 
-    @Test
-    public void testAbortResendsProduceRequestIfRetried() throws Exception {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testAbortResendsProduceRequestIfRetried(String allocationStrategy) throws Exception {
+        initializeTransactionManager(Optional.of(transactionalId), false, false, allocationStrategy);
         doInitTransactions(producerId, epoch);
 
         transactionManager.beginTransaction();
@@ -2987,8 +3028,10 @@ public class TransactionManagerTest {
         assertNotNull(responseFuture.get()); // should throw the exception which caused the transaction to be aborted.
     }
 
-    @Test
-    public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testTransitionToAbortableErrorOnBatchExpiry(String allocationStrategy) throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), false, false, allocationStrategy);
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -3026,8 +3069,10 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasAbortableError());
     }
 
-    @Test
-    public void testTransitionToAbortableErrorOnMultipleBatchExpiry() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testTransitionToAbortableErrorOnMultipleBatchExpiry(String allocationStrategy) throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), false, false, allocationStrategy);
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -3082,8 +3127,10 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasAbortableError());
     }
 
-    @Test
-    public void testDropCommitOnBatchExpiry() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testDropCommitOnBatchExpiry(String allocationStrategy) throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), false, false, allocationStrategy);
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -3141,8 +3188,10 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
-    @Test
-    public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testTransitionToFatalErrorWhenRetriedBatchIsExpired(String allocationStrategy) throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), false, false, allocationStrategy);
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
@@ -3651,8 +3700,10 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
 
-    @Test
-    public void testBumpTransactionalEpochOnTimeout() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testBumpTransactionalEpochOnTimeout(String allocationStrategy) throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), false, false, allocationStrategy);
         final short initialEpoch = 1;
         final short bumpedEpoch = 2;
 
@@ -3764,10 +3815,10 @@ public class TransactionManagerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testHealthyPartitionRetriesDuringEpochBump(boolean transactionV2Enabled) throws InterruptedException {
+    @MethodSource("transactionV2AndAllocationStrategies")
+    public void testHealthyPartitionRetriesDuringEpochBump(boolean transactionV2Enabled, String allocationStrategy) throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
-        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled, false, allocationStrategy);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager);
@@ -3889,10 +3940,10 @@ public class TransactionManagerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testFailedInflightBatchAfterEpochBump(boolean transactionV2Enabled) throws InterruptedException {
+    @MethodSource("transactionV2AndAllocationStrategies")
+    public void testFailedInflightBatchAfterEpochBump(boolean transactionV2Enabled, String allocationStrategy) throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
-        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled, false, allocationStrategy);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager);
