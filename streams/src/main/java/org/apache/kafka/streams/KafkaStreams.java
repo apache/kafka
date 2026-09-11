@@ -1136,6 +1136,11 @@ public class KafkaStreams implements AutoCloseable {
      * @return name of the added stream thread or empty if a new stream thread could not be added
      */
     public Optional<String> addStreamThread() {
+        if (topologyMetadata.hasNoLocalTopology()) {
+            log.warn("Cannot add a stream thread to a topology with no local processing tasks");
+            return Optional.empty();
+        }
+
         if (isRunningOrRebalancing()) {
             final StreamThread streamThread;
             synchronized (changeThreadCount) {
