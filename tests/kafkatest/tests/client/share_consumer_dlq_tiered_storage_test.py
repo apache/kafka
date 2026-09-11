@@ -52,6 +52,9 @@ class ShareConsumerDLQTieredStorageTest(VerifiableShareConsumerTest):
         ["rlmm.config.remote.log.metadata.topic.num.partitions", "1"],
         ["log.retention.check.interval.ms", "500"],
         ["log.initial.task.delay.ms", "100"],
+        ["share.coordinator.state.topic.num.partitions", "3"],
+        ["group.share.min.heartbeat.interval.ms", "1500"],
+        ["group.share.heartbeat.interval.ms", "1500"],
     ]
 
     def __init__(self, test_context):
@@ -189,7 +192,7 @@ class ShareConsumerDLQTieredStorageTest(VerifiableShareConsumerTest):
         dlq_topic = "dlq.mixed-tiered-reject"
         source_topic = "dlq-mixed-tiered-source"
         self.create_dlq_topic(dlq_topic)
-        self.create_remote_storage_source_topic(source_topic, retention_ms=45_000, local_retention_ms=10_000)
+        self.create_remote_storage_source_topic(source_topic, retention_ms=45_000, local_retention_ms=15_000)
         self.setup_dlq_group_config(dlq_topic, copy_record_enable=True)
 
         tiered_producer = self.produce_messages(source_topic, self.record_count)
