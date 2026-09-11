@@ -1918,7 +1918,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.incrementalAlterConfigs(configChanges, false, forwarded);
+                configurationControl.incrementalAlterConfigs(configChanges, false, forwarded, context.principal());
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -1965,7 +1965,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.legacyAlterConfigs(newConfigs, false, forwarded);
+                configurationControl.legacyAlterConfigs(newConfigs, false, forwarded, context.principal());
             if (validateOnly) {
                 return result.withoutRecords();
             } else {

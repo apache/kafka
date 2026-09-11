@@ -62,6 +62,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.Lis
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
@@ -76,6 +77,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -121,10 +123,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -964,6 +968,40 @@ public class ReplicationControlManagerTest {
         ctx.createTestTopic("baz", new int[][] {new int[] {2, 1, 0}},
             Map.of(SEGMENT_BYTES_CONFIG, "12300000"), NONE.code());
         ctx.createTestTopic("quux", new int[][] {new int[] {1, 2, 0}}, POLICY_VIOLATION.code());
+    }
+
+    @Test
+    public void testCreateTopicsPassesPrincipalToPolicy() {
+        AtomicReference<Optional<KafkaPrincipal>> captured = new AtomicReference<>();
+        CreateTopicPolicy policy = new CreateTopicPolicy() {
+            @Override
+            public void validate(RequestMetadata requestMetadata) throws PolicyViolationException {
+                captured.set(requestMetadata.principal());
+            }
+
+            @Override
+            public void close() { /* Nothing to do */ }
+
+            @Override
+            public void configure(Map<String, ?> configs) { /* Nothing to do */ }
+        };
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
+                setCreateTopicPolicy(policy).
+                build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+
+        KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "tenant-a");
+        ControllerRequestContext requestContext = new ControllerRequestContext(
+            new RequestHeaderData().setRequestApiKey(ApiKeys.CREATE_TOPICS.id),
+            principal,
+            OptionalLong.empty());
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 1));
+
+        ctx.replicationControl.createTopics(requestContext, request, Set.of("foo"), false);
+        assertEquals(Optional.of(principal), captured.get());
     }
 
     @Test
@@ -2939,19 +2977,19 @@ public class ReplicationControlManagerTest {
                 Map.of(new ConfigResource(ConfigResource.Type.BROKER, ""),
                     Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
-                true, false).records());
+                true, false, KafkaPrincipal.ANONYMOUS).records());
         } else if (uncleanConfig.equals("dynamic_node")) {
             ctx.replay(ctx.configurationControl.incrementalAlterConfigs(
                 Map.of(new ConfigResource(ConfigResource.Type.BROKER, "0"),
                     Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
-                true, false).records());
+                true, false, KafkaPrincipal.ANONYMOUS).records());
         } else if (uncleanConfig.equals("dynamic_topic")) {
             ctx.replay(ctx.configurationControl.incrementalAlterConfigs(
                 Map.of(new ConfigResource(ConfigResource.Type.TOPIC, "foo"),
                     Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
-                true, false).records());
+                true, false, KafkaPrincipal.ANONYMOUS).records());
         }
         ControllerResult<Boolean> balanceResult = replication.maybeElectUncleanLeaders();
         assertFalse(balanceResult.response());
@@ -3544,13 +3582,13 @@ public class ReplicationControlManagerTest {
             ctx.replay(ctx.configurationControl.legacyAlterConfigs(
                 Map.of(configResource,
                     Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "1")),
-                false, false).records());
+                false, false, KafkaPrincipal.ANONYMOUS).records());
         } else {
             ctx.replay(ctx.configurationControl.incrementalAlterConfigs(
                 Map.of(configResource,
                     Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "1"))),
-                false, false).records());
+                false, false, KafkaPrincipal.ANONYMOUS).records());
         }
         assertArrayEquals(new int[]{}, ctx.replicationControl.getPartition(fooId, 0).elr);
         if (clusterLevel) {

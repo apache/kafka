@@ -16,49 +16,23 @@
  */
 package org.apache.kafka.server.policy;
 
-import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
+import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class AlterConfigPolicyTest {
-
-    @Test
-    public void testRequestMetadataEquals() {
-        RequestMetadata requestMetadata = new RequestMetadata(
-            new ConfigResource(Type.BROKER, "0"),
-            Collections.singletonMap("foo", "bar")
-        );
-
-        assertEquals(requestMetadata, requestMetadata);
-
-        assertNotEquals(null, requestMetadata);
-        assertNotEquals(new Object(), requestMetadata);
-        assertNotEquals(requestMetadata, new RequestMetadata(
-            new ConfigResource(Type.BROKER, "1"),
-            Collections.singletonMap("foo", "bar")
-        ));
-        assertNotEquals(requestMetadata, new RequestMetadata(
-            new ConfigResource(Type.BROKER, "0"),
-            Collections.emptyMap()
-        ));
-    }
+public class CreateTopicPolicyTest {
 
     @Test
     public void testPrincipalDefaultsToEmpty() {
         RequestMetadata requestMetadata = new RequestMetadata(
-            new ConfigResource(Type.BROKER, "0"),
-            Collections.singletonMap("foo", "bar")
-        );
+            "topic", 1, (short) 1, null, Map.of());
         assertEquals(Optional.empty(), requestMetadata.principal());
     }
 
@@ -66,25 +40,18 @@ public class AlterConfigPolicyTest {
     public void testPrincipalIsExposed() {
         KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice");
         RequestMetadata requestMetadata = new RequestMetadata(
-            new ConfigResource(Type.BROKER, "0"),
-            Collections.singletonMap("foo", "bar"),
-            principal
-        );
+            "topic", 1, (short) 1, null, Map.of(), principal);
         assertEquals(Optional.of(principal), requestMetadata.principal());
     }
 
     @Test
     public void testPrincipalExcludedFromEqualsAndHashCode() {
         RequestMetadata withoutPrincipal = new RequestMetadata(
-            new ConfigResource(Type.BROKER, "0"),
-            Collections.singletonMap("foo", "bar")
-        );
+            "topic", 1, (short) 1, null, Map.of());
         RequestMetadata withPrincipal = new RequestMetadata(
-            new ConfigResource(Type.BROKER, "0"),
-            Collections.singletonMap("foo", "bar"),
-            new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice")
-        );
-        // The principal is request-scoped metadata and must not affect equality of the requested change.
+            "topic", 1, (short) 1, null, Map.of(),
+            new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"));
+        // The principal is request-scoped metadata and must not affect equality of the requested topic.
         assertEquals(withoutPrincipal, withPrincipal);
         assertEquals(withoutPrincipal.hashCode(), withPrincipal.hashCode());
     }
@@ -92,10 +59,8 @@ public class AlterConfigPolicyTest {
     @Test
     public void testToStringIncludesPrincipal() {
         RequestMetadata requestMetadata = new RequestMetadata(
-            new ConfigResource(Type.BROKER, "0"),
-            Collections.singletonMap("foo", "bar"),
-            new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice")
-        );
+            "topic", 1, (short) 1, null, Map.of(),
+            new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"));
         assertTrue(requestMetadata.toString().contains("principal=User:alice"),
             "Expected toString to contain the principal, but was: " + requestMetadata);
     }
