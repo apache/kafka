@@ -38,6 +38,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
@@ -572,6 +573,41 @@ public class CastTest {
 
         // The following fields are not changed
         assertEquals(Timestamp.SCHEMA.type(), transformedSchema.field("timestamp").schema().type());
+    }
+
+    @Test
+    public void byteBufferToStringUsesRemainingBytes() {
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "bytes:string"));
+
+        ByteBuffer bytes = ByteBuffer.wrap(new byte[] {1, 2, 3, 4});
+        bytes.position(1);
+        bytes.limit(3);
+
+        Schema schema = SchemaBuilder.struct().field("bytes", Schema.BYTES_SCHEMA).build();
+        Struct recordValue = new Struct(schema).put("bytes", bytes);
+
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0, schema, recordValue));
+
+        String expected = Base64.getEncoder().encodeToString(new byte[] {2, 3});
+        assertEquals(expected, ((Struct) transformed.value()).get("bytes"));
+    }
+
+    @Test
+    public void directByteBufferToString() {
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "bytes:string"));
+
+        ByteBuffer bytes = ByteBuffer.allocateDirect(2);
+        bytes.put((byte) 1);
+        bytes.put((byte) 2);
+        bytes.flip();
+
+        Schema schema = SchemaBuilder.struct().field("bytes", Schema.BYTES_SCHEMA).build();
+        Struct recordValue = new Struct(schema).put("bytes", bytes);
+
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0, schema, recordValue));
+
+        String expected = Base64.getEncoder().encodeToString(new byte[] {1, 2});
+        assertEquals(expected, ((Struct) transformed.value()).get("bytes"));
     }
 
     @SuppressWarnings("unchecked")
