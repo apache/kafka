@@ -1204,8 +1204,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     int partitionCount = partitionsPerTopic.get(topic).size();
                     for (int i = 0; i < partitionCount; i++) {
                         TopicPartition topicPartition = new TopicPartition(topic, i);
-                        if (!currentAssignment.get(consumer).contains(topicPartition)) {
-                            String otherConsumer = allPartitions.get(topicPartition);
+                        String otherConsumer = allPartitions.get(topicPartition);
+                        if (!consumer.equals(otherConsumer)) {
                             int otherConsumerPartitionCount = currentAssignment.get(otherConsumer).size();
                             if (consumerPartitionCount + 1 < otherConsumerPartitionCount) {
                                 log.debug("{} can be moved from consumer {} to consumer {} for a more balanced assignment.",
