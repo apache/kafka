@@ -65,7 +65,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     }
 
     /**
-     * The algorithm distributes standby tasks for the {@param statefulTaskIds} over different tag dimensions.
+     * The algorithm distributes standby tasks for the {@code statefulTaskIds} over different tag dimensions.
      * For each stateful task, the number of standby tasks will be assigned based on configured {@link AssignmentConfigs#numStandbyReplicas()}.
      * Rack aware standby tasks distribution only takes into account tags specified via {@link AssignmentConfigs#rackAwareAssignmentTags()}.
      * Ideally, all standby tasks for any given stateful task will be located on different tag dimensions to have the best possible distribution.
