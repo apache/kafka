@@ -28,12 +28,21 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -41,6 +50,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.ReplicationControlManager;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.metadata.LeaderConstants;
 import org.apache.kafka.metadata.MetadataCache;
@@ -57,12 +67,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.server.TestUtils.awaitLeaderChange;
@@ -137,6 +150,126 @@ public class UncleanLeaderElectionTest {
     )
     public void testUncleanLeaderElectionEnabledConsumer() throws Exception {
         testUncleanLeaderElectionEnabled(GroupProtocol.CONSUMER);
+    }
+
+    @ClusterTest(
+        serverProperties = {
+            @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, value = "1")
+        }
+    )
+    public void testUncleanLeaderElectionCanLeaveReadCommittedConsumerAtLastStableOffset() throws Exception {
+        disableEligibleLeaderReplicas();
+
+        String transactionalId = "unclean-election-" + UUID.randomUUID();
+        Map<String, Object> producerConfig = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                ProducerConfig.ACKS_CONFIG, "all",
+                ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId
+        );
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerConfig)) {
+            producer.initTransactions();
+
+            var transactionStateTopic = admin.describeTopics(Set.of(Topic.TRANSACTION_STATE_TOPIC_NAME))
+                    .allTopicNames().get().get(Topic.TRANSACTION_STATE_TOPIC_NAME);
+            int transactionPartitionId = Utils.abs(transactionalId.hashCode()) % transactionStateTopic.partitions().size();
+            int transactionCoordinatorId = transactionStateTopic.partitions().stream()
+                    .filter(partition -> partition.partition() == transactionPartitionId)
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("Transaction state partition is missing"))
+                    .leader().id();
+            int followerId = transactionCoordinatorId == BROKER_ID_0 ? BROKER_ID_1 : BROKER_ID_0;
+
+            NewTopic newTopic = new NewTopic(TOPIC, Map.of(PARTITION_ID, List.of(transactionCoordinatorId, followerId)))
+                    .configs(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "1"));
+            admin.createTopics(List.of(newTopic)).all().get();
+            try {
+                admin.electLeaders(ElectionType.PREFERRED, Set.of(TOPIC_PARTITION)).all().get();
+            } catch (ExecutionException e) {
+                assertInstanceOf(ElectionNotNeededException.class, e.getCause());
+            }
+
+            int leaderId = awaitLeaderChange(cluster, TOPIC_PARTITION, Optional.of(transactionCoordinatorId));
+            KafkaBroker leader = cluster.brokers().get(leaderId);
+            KafkaBroker follower = cluster.brokers().get(followerId);
+
+            produceMessage(cluster, TOPIC, "before");
+            waitForCondition(
+                    () -> {
+                        var log = follower.replicaManager().localLog(TOPIC_PARTITION);
+                        return log.isDefined() && log.get().logEndOffset() >= 1;
+                    },
+                    DEFAULT_MAX_WAIT_MS,
+                    "Timed out waiting for the follower to replicate the non-transactional record"
+            );
+
+            producer.beginTransaction();
+            producer.send(new ProducerRecord<>(TOPIC, "transactional")).get();
+
+            // The follower must contain the transaction data, but must be stopped before the marker is committed.
+            waitForCondition(
+                    () -> {
+                        var log = follower.replicaManager().localLog(TOPIC_PARTITION);
+                        return log.isDefined() && log.get().logEndOffset() >= 2;
+                    },
+                    DEFAULT_MAX_WAIT_MS,
+                    "Timed out waiting for the follower to replicate the transactional record"
+            );
+            follower.shutdown();
+            follower.awaitShutdown();
+            waitForCondition(
+                    () -> {
+                        var leaderAndIsr = leader.replicaManager().metadataCache().getLeaderAndIsr(TOPIC, PARTITION_ID);
+                        return leaderAndIsr.isPresent() && leaderAndIsr.get().isr().equals(Set.of(leaderId));
+                    },
+                    DEFAULT_MAX_WAIT_MS,
+                    "Timed out waiting for the follower to leave the ISR"
+            );
+
+            // The marker is now written only to the leader. The follower will retain the open transaction after failover.
+            producer.commitTransaction();
+
+            // Close the producer while its coordinator is still available; no client cleanup should depend on the old leader.
+            producer.close();
+            leader.shutdown();
+            leader.awaitShutdown();
+            follower.startup();
+            awaitLeaderChange(cluster, TOPIC_PARTITION, Optional.of(followerId));
+
+            Map<String, Object> consumerConfig = Map.of(
+                    ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+                    ConsumerConfig.GROUP_ID_CONFIG, "unclean-election-consumer-" + UUID.randomUUID(),
+                    ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+                    ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+                    ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                    ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false,
+                    ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString()
+            );
+
+            try (Consumer<String, String> consumer = new KafkaConsumer<>(consumerConfig)) {
+                consumer.assign(List.of(TOPIC_PARTITION));
+                consumer.seekToBeginning(List.of(TOPIC_PARTITION));
+                List<String> values = new ArrayList<>();
+                waitForCondition(
+                        () -> {
+                            for (ConsumerRecord<String, String> record : consumer.poll(Duration.ofMillis(100))) {
+                                values.add(record.value());
+                            }
+                            return !values.isEmpty();
+                        },
+                        DEFAULT_MAX_WAIT_MS,
+                        "Timed out waiting for the read_committed consumer to read the non-transactional record"
+                );
+
+                assertEquals(List.of("before"), values);
+                assertEquals(1, consumer.position(TOPIC_PARTITION));
+                assertTrue(consumer.poll(Duration.ofMillis(500)).isEmpty());
+            }
+        }
     }
 
     private void testUncleanLeaderElectionEnabled(GroupProtocol groupProtocol) throws Exception {
