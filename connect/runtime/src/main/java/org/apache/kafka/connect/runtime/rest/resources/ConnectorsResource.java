@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
+import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -47,6 +48,13 @@ import java.util.Map;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.inject.Inject;
 import jakarta.servlet.ServletContext;
 import jakarta.ws.rs.BadRequestException;
@@ -98,7 +106,23 @@ public class ConnectorsResource {
     }
 
     @GET
-    @Operation(summary = "List all active connectors")
+    @Operation(
+        summary = "List all active connectors",
+        parameters = @Parameter(
+            name = "expand",
+            in = ParameterIn.QUERY,
+            description = "Optional connector details to expand. Supported values are status and info. Repeat this parameter to include both",
+            array = @ArraySchema(schema = @Schema(type = "string", allowableValues = {"status", "info"}))
+        )
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "Connector names retrieved successfully. When expand is supplied, connector details are returned keyed by connector name",
+        content = @Content(
+            mediaType = MediaType.APPLICATION_JSON,
+            schema = @Schema(oneOf = {String[].class, Object.class})
+        )
+    )
     public Response listConnectors(
         final @Context UriInfo uriInfo,
         final @Context HttpHeaders headers
@@ -135,7 +159,35 @@ public class ConnectorsResource {
     }
 
     @POST
-    @Operation(summary = "Create a new connector")
+    @Operation(
+        summary = "Create a new connector",
+        requestBody = @RequestBody(
+            required = true,
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = CreateConnectorRequest.class))
+        )
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "201",
+            description = "Connector created successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorInfo.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid connector creation request or configuration",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Connector already exists or request cannot be completed while a rebalance is in progress",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while creating the connector",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
     public Response createConnector(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                     final @Context HttpHeaders headers,
                                     final CreateConnectorRequest createRequest) throws Throwable {
@@ -159,7 +211,24 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}")
     @Operation(summary = "Get the details for the specified connector")
-    public ConnectorInfo getConnector(final @PathParam("connector") String connector) throws Throwable {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector details retrieved successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorInfo.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while retrieving connector details",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public ConnectorInfo getConnector(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) throws Throwable {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
         return requestHandler.completeRequest(cb);
@@ -168,7 +237,24 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}/config")
     @Operation(summary = "Get the configuration for the specified connector")
-    public Map<String, String> getConnectorConfig(final @PathParam("connector") String connector) throws Throwable {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector configuration retrieved successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(type = "object", additionalPropertiesSchema = String.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while retrieving the connector configuration",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public Map<String, String> getConnectorConfig(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) throws Throwable {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
         return requestHandler.completeRequest(cb);
@@ -177,14 +263,41 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}/status")
     @Operation(summary = "Get the status for the specified connector")
-    public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector status retrieved successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorStateInfo.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) {
         return herder.connectorStatus(connector);
     }
 
     @GET
     @Path("/{connector}/topics")
     @Operation(summary = "Get the list of topics actively used by the specified connector")
-    public Response getConnectorActiveTopics(final @PathParam("connector") String connector) {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector active topics retrieved successfully",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(type = "object", additionalPropertiesSchema = ActiveTopicsInfo.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Topic tracking is disabled",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public Response getConnectorActiveTopics(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) {
         if (isTopicTrackingDisabled) {
             throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
                     "Topic tracking is disabled.");
@@ -196,7 +309,19 @@ public class ConnectorsResource {
     @PUT
     @Path("/{connector}/topics/reset")
     @Operation(summary = "Reset the list of topics actively used by the specified connector")
-    public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "202",
+            description = "Connector active topics reset request accepted"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Topic tracking or topic tracking reset is disabled",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public Response resetConnectorActiveTopics(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
+                                               final @Context HttpHeaders headers) {
         if (isTopicTrackingDisabled) {
             throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
                     "Topic tracking is disabled.");
@@ -211,8 +336,42 @@ public class ConnectorsResource {
 
     @PUT
     @Path("/{connector}/config")
-    @Operation(summary = "Create or reconfigure the specified connector")
-    public Response putConnectorConfig(final @PathParam("connector") String connector,
+    @Operation(
+        summary = "Create or reconfigure the specified connector",
+        requestBody = @RequestBody(
+            description = "The full connector configuration used to create the connector or replace its existing configuration",
+            required = true,
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(type = "object", additionalPropertiesSchema = String.class))
+        )
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector reconfigured successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorInfo.class))
+        ),
+        @ApiResponse(
+            responseCode = "201",
+            description = "Connector created successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorInfo.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid connector configuration",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Request cannot be completed while a rebalance is in progress",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while creating or updating the connector configuration",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public Response putConnectorConfig(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
                                        final @Context HttpHeaders headers,
                                        final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                        final Map<String, String> connectorConfig) throws Throwable {
@@ -234,7 +393,46 @@ public class ConnectorsResource {
 
     @PATCH
     @Path("/{connector}/config")
-    public Response patchConnectorConfig(final @PathParam("connector") String connector,
+    @Operation(
+        summary = "Patch the configuration for the specified connector",
+        requestBody = @RequestBody(
+            description = "The connector configuration patch. Properties with non-null values are updated or added, and properties with null values are removed",
+            required = true,
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(type = "object"),
+                additionalPropertiesSchema = @Schema(type = "string", nullable = true)
+            )
+        )
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector configuration patched successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorInfo.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid connector configuration",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Request cannot be completed while a rebalance is in progress",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while patching the connector configuration",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public Response patchConnectorConfig(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
                                          final @Context HttpHeaders headers,
                                          final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                          final Map<String, String> connectorConfigPatch) throws Throwable {
@@ -248,7 +446,33 @@ public class ConnectorsResource {
     @POST
     @Path("/{connector}/restart")
     @Operation(summary = "Restart the specified connector")
-    public Response restartConnector(final @PathParam("connector") String connector,
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "202",
+            description = "Restart request accepted when includeTasks or onlyFailed is true",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorStateInfo.class))
+        ),
+        @ApiResponse(
+            responseCode = "204",
+            description = "Connector restarted successfully when includeTasks and onlyFailed are false"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Request cannot be completed while a rebalance is in progress",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while restarting the connector",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public Response restartConnector(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
                                  final @Context HttpHeaders headers,
                                  final @DefaultValue("false") @QueryParam("includeTasks") @Parameter(description = "Whether to also restart tasks") Boolean includeTasks,
                                  final @DefaultValue("false") @QueryParam("onlyFailed") @Parameter(description = "Whether to only restart failed tasks/connectors")Boolean onlyFailed,
@@ -278,8 +502,29 @@ public class ConnectorsResource {
     @Path("/{connector}/stop")
     @Operation(summary = "Stop the specified connector",
                description = "This operation is idempotent and has no effects if the connector is already stopped")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "Connector stopped successfully"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Request cannot be completed while a rebalance is in progress",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while stopping the connector",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
     public void stopConnector(
-            @PathParam("connector") String connector,
+            @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
             final @Context HttpHeaders headers,
             final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
@@ -291,7 +536,24 @@ public class ConnectorsResource {
     @Path("/{connector}/pause")
     @Operation(summary = "Pause the specified connector",
                description = "This operation is idempotent and has no effects if the connector is already paused")
-    public Response pauseConnector(@PathParam("connector") String connector, final @Context HttpHeaders headers) {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "202",
+            description = "Connector pause request accepted"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while pausing the connector",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public Response pauseConnector(@PathParam("connector") @Parameter(description = "The name of the connector") String connector,
+                                   final @Context HttpHeaders headers) {
         herder.pauseConnector(connector);
         return Response.accepted().build();
     }
@@ -300,7 +562,23 @@ public class ConnectorsResource {
     @Path("/{connector}/resume")
     @Operation(summary = "Resume the specified connector",
                description = "This operation is idempotent and has no effects if the connector is already running")
-    public Response resumeConnector(@PathParam("connector") String connector) {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "202",
+            description = "Connector resume request accepted"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while resuming the connector",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public Response resumeConnector(@PathParam("connector") @Parameter(description = "The name of the connector") String connector) {
         herder.resumeConnector(connector);
         return Response.accepted().build();
     }
@@ -308,7 +586,24 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}/tasks")
     @Operation(summary = "List all tasks and their configurations for the specified connector")
-    public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector) throws Throwable {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector task configurations retrieved successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, array = @ArraySchema(schema = @Schema(implementation = TaskInfo.class)))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while retrieving task configurations",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public List<TaskInfo> getTaskConfigs(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);
         return requestHandler.completeRequest(cb);
@@ -317,17 +612,50 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}/tasks/{task}/status")
     @Operation(summary = "Get the state of the specified task for the specified connector")
-    public ConnectorStateInfo.TaskState getTaskStatus(final @PathParam("connector") String connector,
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Task status retrieved successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorStateInfo.TaskState.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector or task not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public ConnectorStateInfo.TaskState getTaskStatus(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
                                                       final @Context HttpHeaders headers,
-                                                      final @PathParam("task") Integer task) {
+                                                      final @PathParam("task") @Parameter(description = "The task ID") Integer task) {
         return herder.taskStatus(new ConnectorTaskId(connector, task));
     }
 
     @POST
     @Path("/{connector}/tasks/{task}/restart")
     @Operation(summary = "Restart the specified task for the specified connector")
-    public void restartTask(final @PathParam("connector") String connector,
-                            final @PathParam("task") Integer task,
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "Task restarted successfully"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector or task not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Request cannot be completed while a rebalance is in progress",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while restarting the task",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public void restartTask(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
+                            final @PathParam("task") @Parameter(description = "The task ID") Integer task,
                             final @Context HttpHeaders headers,
                             final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
@@ -339,7 +667,28 @@ public class ConnectorsResource {
     @DELETE
     @Path("/{connector}")
     @Operation(summary = "Delete the specified connector")
-    public void destroyConnector(final @PathParam("connector") String connector,
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "Connector deleted successfully"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Request cannot be completed while a rebalance is in progress",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while deleting the connector",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public void destroyConnector(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
                                  final @Context HttpHeaders headers,
                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
@@ -350,7 +699,24 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}/offsets")
     @Operation(summary = "Get the current offsets for the specified connector")
-    public ConnectorOffsets getOffsets(final @PathParam("connector") String connector) throws Throwable {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector offsets retrieved successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorOffsets.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while retrieving connector offsets",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public ConnectorOffsets getOffsets(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) throws Throwable {
         FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
         herder.connectorOffsets(connector, cb);
         return requestHandler.completeRequest(cb);
@@ -358,9 +724,44 @@ public class ConnectorsResource {
 
     @PATCH
     @Path("/{connector}/offsets")
-    @Operation(summary = "Alter the offsets for the specified connector")
+    @Operation(
+        summary = "Alter the offsets for the specified connector",
+        requestBody = @RequestBody(
+            description = "The connector offsets to write. A null offset removes the offset for that partition",
+            required = true,
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ConnectorOffsets.class))
+        )
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector offsets altered successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = Message.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid connector offsets or the connector is not in the STOPPED state",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Request cannot be completed while a rebalance is in progress",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while altering connector offsets",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
     public Response alterConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
-                                          final @Context HttpHeaders headers, final @PathParam("connector") String connector,
+                                          final @Context HttpHeaders headers,
+                                          final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
                                           final ConnectorOffsets offsets) throws Throwable {
         if (offsets.offsets() == null || offsets.offsets().isEmpty()) {
             throw new BadRequestException("Partitions / offsets need to be provided for an alter offsets request");
@@ -376,8 +777,36 @@ public class ConnectorsResource {
     @DELETE
     @Path("/{connector}/offsets")
     @Operation(summary = "Reset the offsets for the specified connector")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector offsets reset successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = Message.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Connector is not in the STOPPED state",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Request cannot be completed while a rebalance is in progress",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while resetting connector offsets",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
     public Response resetConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
-                                          final @Context HttpHeaders headers, final @PathParam("connector") String connector) throws Throwable {
+                                          final @Context HttpHeaders headers,
+                                          final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) throws Throwable {
         FutureCallback<Message> cb = new FutureCallback<>();
         herder.resetConnectorOffsets(connector, cb);
         Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "DELETE", headers, null,
