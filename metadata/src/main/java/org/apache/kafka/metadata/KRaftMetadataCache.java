@@ -417,17 +417,18 @@ public class KRaftMetadataCache implements MetadataCache {
     }
 
     /**
-     * If the leader is not known, return None;
-     * If the leader is known and corresponding node is available, return Some(node)
-     * If the leader is known but corresponding node with the listener name is not available, return Some(NO_NODE)
+     * If the topic or partition is not known, return None.
+     * If the leader endpoint is available, return Some(node).
+     * Otherwise, return Some(NO_NODE).
      */
     @Override
     public Optional<Node> getPartitionLeaderEndpoint(String topicName, int partitionId, ListenerName listenerName) {
         MetadataImage image = currentImage;
         return Optional.ofNullable(image.topics().getTopic(topicName))
             .flatMap(topic -> Optional.ofNullable(topic.partitions().get(partitionId)))
-            .flatMap(partition -> Optional.ofNullable(image.cluster().broker(partition.leader))
-                .map(broker -> broker.node(listenerName.value()).orElse(Node.noNode())));
+            .map(partition -> Optional.ofNullable(image.cluster().broker(partition.leader))
+                .flatMap(broker -> broker.node(listenerName.value()))
+                .orElse(Node.noNode()));
     }
 
     @Override
