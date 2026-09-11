@@ -208,24 +208,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Close this record set
+     * Close this record set. Callers are responsible for flushing and trimming before closing.
      */
     public void close() throws IOException {
-        if (!channel.isOpen()) {
-            return;
-        }
-
-        trim();
-        // flush() must run after trim() so the truncated file length is included in the fsync.
-        // A flush before trim only persists message data, not the smaller size set by trim().
-        flush();
-        channel.close();
-    }
-
-    /**
-     * Close file handlers used by the FileChannel but don't write to disk. This is used when the disk may have failed
-     */
-    public void closeHandlers() throws IOException {
         channel.close();
     }
 
@@ -241,7 +226,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Trim file when close or roll to next file
+     * Trim file when rolling to the next segment or preparing for shutdown
      */
     public void trim() throws IOException {
         truncateTo(sizeInBytes());

@@ -34,7 +34,6 @@ import com.yammer.metrics.core.Timer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.event.Level;
 
 import java.io.Closeable;
 import java.io.File;
@@ -521,10 +520,10 @@ public class LogSegment implements Closeable {
             LOGGER.debug("Truncated {} invalid bytes at the end of segment {} during recovery", truncated, log.file().getAbsolutePath());
 
         log.truncateTo(validBytes);
-        offsetIndex().trimToValidSize(false);
+        offsetIndex().trimToValidSize();
         // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
         timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true);
-        timeIndex().trimToValidSize(false);
+        timeIndex().trimToValidSize();
         return truncated;
     }
 
@@ -628,16 +627,12 @@ public class LogSegment implements Closeable {
      */
     public void flush() throws IOException {
         try {
-            LOG_FLUSH_TIMER.time(new Callable<Void>() {
-                // lambdas cannot declare a more specific exception type, so we use an anonymous inner class
-                @Override
-                public Void call() throws IOException {
-                    log.flush();
-                    offsetIndex().flush();
-                    timeIndex().flush();
-                    txnIndex.flush();
-                    return null;
-                }
+            LOG_FLUSH_TIMER.time((Callable<Void>) () -> {
+                log.flush();
+                offsetIndex().flush();
+                timeIndex().flush();
+                txnIndex.flush();
+                return null;
             });
         } catch (Exception e) {
             if (e instanceof IOException)
@@ -685,8 +680,8 @@ public class LogSegment implements Closeable {
      */
     public void onBecomeInactiveSegment() throws IOException {
         timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true);
-        offsetIndex().trimToValidSize(false);
-        timeIndex().trimToValidSize(false);
+        offsetIndex().trimToValidSize();
+        timeIndex().trimToValidSize();
         log.trim();
     }
 
@@ -766,18 +761,16 @@ public class LogSegment implements Closeable {
      */
     @Override
     public void close() throws IOException {
-        if (maxTimestampAndOffsetSoFar != TimestampOffset.UNKNOWN)
-            Utils.swallow(LOGGER, Level.WARN, "maybeAppend", () -> timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true));
         Utils.closeAll(lazyOffsetIndex, lazyTimeIndex, log, txnIndex);
     }
 
     /**
-     * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
+     * Close the log segment, swallowing any exceptions. This is used when the disk may have failed.
      */
-    void closeHandlers() {
-        Utils.swallow(LOGGER, Level.WARN, "offsetIndex", lazyOffsetIndex::closeHandler);
-        Utils.swallow(LOGGER, Level.WARN, "timeIndex", lazyTimeIndex::closeHandler);
-        Utils.swallow(LOGGER, Level.WARN, "log", log::closeHandlers);
+    void closeQuietly() {
+        Utils.closeQuietly(lazyOffsetIndex, "offsetIndex", LOGGER);
+        Utils.closeQuietly(lazyTimeIndex, "timeIndex", LOGGER);
+        Utils.closeQuietly(log, "log", LOGGER);
         Utils.closeQuietly(txnIndex, "txnIndex", LOGGER);
     }
 

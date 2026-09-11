@@ -294,6 +294,8 @@ public class LogSegmentTest {
         try (LogSegment seg = createSegment(0L, time)) {
             seg.timeIndex(); // Force load indexes before closing the segment
             seg.offsetIndex();
+            // Trim indexes to simulate a segment from a previous clean shutdown
+            seg.onBecomeInactiveSegment();
             seg.close();
 
             LogSegment reopened = createSegment(0L, time);
@@ -676,8 +678,9 @@ public class LogSegmentTest {
             long oldPosition = seg.log().channel().position();
             long oldFileSize = seg.log().file().length();
             assertEquals(512 * 1024 * 1024, oldFileSize);
+            seg.onBecomeInactiveSegment();
             seg.close();
-            // After close, file should be trimmed
+            // After onBecomeInactiveSegment, file should be trimmed
             assertEquals(oldSize, seg.log().file().length());
 
             LogSegment segReopen = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM,

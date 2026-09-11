@@ -86,9 +86,9 @@ public class LocalLog {
     private final Logger logger;
 
     private volatile LogOffsetMetadata nextOffsetMetadata;
-    // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
-    // After memory mapped buffer is closed, no disk IO operation should be performed for this log.
-    private volatile boolean isMemoryMappedBufferClosed = false;
+    // Set to true when the log is closed with either delete(), close() or closeQuietly().
+    // After the log is closed, no disk IO operation should be performed for this log.
+    private volatile boolean isClosed = false;
     // Cache value of parent directory to avoid allocations in hot paths like ReplicaManager.checkpointHighWatermarks
     private volatile String parentDir;
     private volatile LogConfig config;
@@ -222,9 +222,9 @@ public class LocalLog {
         config = newConfig;
     }
 
-    public void checkIfMemoryMappedBufferClosed() {
-        if (isMemoryMappedBufferClosed) {
-            throw new KafkaStorageException("The memory mapped buffer for log of " + topicPartition + " is already closed");
+    public void checkIfClosed() {
+        if (isClosed) {
+            throw new KafkaStorageException("The log for " + topicPartition + " is already closed");
         }
     }
 
@@ -239,7 +239,7 @@ public class LocalLog {
      * @param offset the offset to be updated
      */
     public void markFlushed(long offset) {
-        checkIfMemoryMappedBufferClosed();
+        checkIfClosed();
         if (offset > recoveryPoint) {
             updateRecoveryPoint(offset);
             lastFlushedTime.set(time.milliseconds());
@@ -309,23 +309,25 @@ public class LocalLog {
     }
 
     /**
-     * Close file handlers used by log but don't write to disk.
+     * Close the segments of the log, swallowing any exceptions.
      * This is called if the log directory is offline.
      */
-    public void closeHandlers() {
-        segments.closeHandlers();
-        isMemoryMappedBufferClosed = true;
+    public void closeQuietly() {
+        if (isClosed) return;
+        segments.closeQuietly();
+        isClosed = true;
     }
 
     /**
-     * Closes the segments of the log.
+     * Close the segments of the log.
      */
     public void close() {
+        if (isClosed) return;
         maybeHandleIOException(
             () -> "Error while closing log segments for " + topicPartition + " in dir " + dir.getParent(),
             () -> {
-                checkIfMemoryMappedBufferClosed();
                 segments.close();
+                isClosed = true;
                 return null;
             }
         );
@@ -341,8 +343,8 @@ public class LocalLog {
                 if (!segments.isEmpty()) {
                     throw new IllegalStateException("Can not delete directory when " + segments.numberOfSegments() + " segments are still present");
                 }
-                if (!isMemoryMappedBufferClosed) {
-                    throw new IllegalStateException("Can not delete directory when memory mapped buffer for log of " + topicPartition + " is still open.");
+                if (!isClosed) {
+                    throw new IllegalStateException("Can not delete directory when log of " + topicPartition + " is still open.");
                 }
                 Utils.delete(dir);
                 return null;
@@ -365,7 +367,7 @@ public class LocalLog {
                         toDelete -> logger.info("Deleting segments as the log has been deleted: {}", toDelete.stream()
                             .map(LogSegment::toString)
                             .collect(Collectors.joining(", "))));
-                isMemoryMappedBufferClosed = true;
+                isClosed = true;
                 return deletableSegments;
             }
         );
@@ -586,7 +588,7 @@ public class LocalLog {
             () -> "Error while rolling log segment for " + topicPartition + " in dir " + dir.getParent(),
             () -> {
                 long start = time.hiResClockMs();
-                checkIfMemoryMappedBufferClosed();
+                checkIfClosed();
                 long newOffset = Math.max(expectedNextOffset, logEndOffset());
                 File logFile = LogFileUtils.logFile(dir, newOffset, "");
                 LogSegment activeSegment = segments.activeSegment();
@@ -659,7 +661,7 @@ public class LocalLog {
             () -> "Error while truncating the entire log for " + topicPartition + " in dir " + dir.getParent(),
             () -> {
                 logger.debug("Truncate and start at offset {}", newOffset);
-                checkIfMemoryMappedBufferClosed();
+                checkIfClosed();
                 List<LogSegment> segmentsToDelete = new ArrayList<>(segments.values());
 
                 if (!segmentsToDelete.isEmpty()) {

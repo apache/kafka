@@ -1221,7 +1221,7 @@ public class RemoteIndexCacheTest {
         return metadataList;
     }
 
-    private void maybeAppendIndexEntries(OffsetIndex offsetIndex, TimeIndex timeIndex) {
+    private void maybeAppendIndexEntries(OffsetIndex offsetIndex, TimeIndex timeIndex) throws IOException {
         if (!offsetIndex.isFull()) {
             long curTime = time.milliseconds();
             for (int i = 0; i < offsetIndex.maxEntries(); i++) {
