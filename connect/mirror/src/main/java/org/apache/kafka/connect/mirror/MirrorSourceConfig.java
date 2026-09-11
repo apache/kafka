@@ -58,6 +58,16 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     private static final String CONSUMER_POLL_TIMEOUT_MILLIS_DOC = "Timeout when polling source cluster.";
     public static final long CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT = 1000L;
 
+    public static final String DETECT_OFFSET_OUT_OF_RANGE_ENABLED = "detect.offset.out.of.range.enabled";
+    private static final String DETECT_OFFSET_OUT_OF_RANGE_ENABLED_DOC = "Whether MirrorSourceTask should fail fast when the "
+            + "requested source offset is no longer available. When enabled, the replication consumer's "
+            + "\"auto.offset.reset\" policy is forced to \"none\" so that an OffsetOutOfRangeException is surfaced instead of "
+            + "being silently masked. MirrorMaker 2 then inspects the earliest available offset of the affected partition: if it "
+            + "is greater than 0, earlier records were purged (data loss) and a DataLossException is thrown; if it is 0, the topic "
+            + "was deleted and recreated (topic reset) and a TopicResetException is thrown. When disabled, MirrorMaker 2 retains "
+            + "its default behavior of resetting to the earliest offset.";
+    public static final boolean DETECT_OFFSET_OUT_OF_RANGE_ENABLED_DEFAULT = false;
+
     public static final String REFRESH_TOPICS_ENABLED = REFRESH_TOPICS + ENABLED_SUFFIX;
     private static final String REFRESH_TOPICS_ENABLED_DOC = "Whether to periodically check for new topics and partitions.";
     public static final boolean REFRESH_TOPICS_ENABLED_DEFAULT = true;
@@ -213,6 +223,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
+    boolean detectOffsetOutOfRangeEnabled() {
+        return getBoolean(DETECT_OFFSET_OUT_OF_RANGE_ENABLED);
+    }
+
     boolean emitOffsetSyncsEnabled() {
         return getBoolean(EMIT_OFFSET_SYNCS_ENABLED);
     }
@@ -266,6 +280,12 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT,
                         ConfigDef.Importance.LOW,
                         CONSUMER_POLL_TIMEOUT_MILLIS_DOC)
+                .define(
+                        DETECT_OFFSET_OUT_OF_RANGE_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        DETECT_OFFSET_OUT_OF_RANGE_ENABLED_DEFAULT,
+                        ConfigDef.Importance.MEDIUM,
+                        DETECT_OFFSET_OUT_OF_RANGE_ENABLED_DOC)
                 .define(
                         REFRESH_TOPICS_ENABLED,
                         ConfigDef.Type.BOOLEAN,
