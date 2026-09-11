@@ -24,7 +24,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.metrics.Sensor;
@@ -49,10 +48,8 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.common.utils.internals.ThreadUtils;
 
 import org.slf4j.Logger;
 
@@ -70,11 +67,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -152,15 +144,7 @@ public class NetworkClient implements KafkaClient {
 
     private final BootstrapConfiguration bootstrapConfiguration;
 
-    private Timer bootstrapTimer;
-
-    private CompletableFuture<List<InetSocketAddress>> pendingBootstrapResolution;
-
-    private volatile long bootstrapResolutionRetryMs = -1L;
-
-    private BootstrapResolutionException bootstrapException = null;
-
-    private final ExecutorService bootstrapExecutor;
+    private final BootstrapServerResolver bootstrapServerResolver;
 
     private final TelemetrySender telemetrySender;
 
@@ -390,27 +374,7 @@ public class NetworkClient implements KafkaClient {
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
         this.metadataClusterCheckEnable = metadataClusterCheckEnable;
         this.bootstrapConfiguration = bootstrapConfiguration;
-        // Bootstrap timer is lazily initialized on the first poll so its budget represents
-        // "time we spend on bootstrap once polling begins" — an idle gap between construction
-        // and the first poll should not eat into that budget.
-        this.bootstrapTimer = null;
-        // Create executor for async DNS resolution if bootstrap is enabled
-        if (bootstrapConfiguration != BootstrapConfiguration.DISABLED) {
-            this.bootstrapExecutor = Executors.newSingleThreadExecutor(ThreadUtils.createThreadFactory("kafka-bootstrap-dns-resolver", true));
-            // Kick off the first DNS resolution eagerly so it overlaps with the caller finishing
-            // construction. We deliberately don't start the timer here (see field comment);
-            // poll() remains the driver — it starts the timer, observes the result, propagates
-            // errors, and drives retries.
-            this.pendingBootstrapResolution = CompletableFuture.supplyAsync(
-                () -> ClientUtils.parseAddresses(
-                    bootstrapConfiguration.bootstrapServers,
-                    bootstrapConfiguration.clientDnsLookup
-                ),
-                bootstrapExecutor
-            );
-        } else {
-            this.bootstrapExecutor = null;
-        }
+        this.bootstrapServerResolver = new BootstrapServerResolver(bootstrapConfiguration, time, logContext);
     }
 
     /**
@@ -802,8 +766,7 @@ public class NetworkClient implements KafkaClient {
     public void close() {
         state.compareAndSet(State.ACTIVE, State.CLOSING);
         if (state.compareAndSet(State.CLOSING, State.CLOSED)) {
-            cancelBootstrapResolution();
-            ThreadUtils.shutdownExecutorServiceQuietly(bootstrapExecutor, 1, TimeUnit.SECONDS);
+            bootstrapServerResolver.close();
             this.selector.close();
             this.metadataUpdater.close();
             if (telemetrySender != null)
@@ -811,14 +774,6 @@ public class NetworkClient implements KafkaClient {
         } else {
             log.warn("Attempting to close NetworkClient that has already been closed.");
         }
-    }
-
-    private void cancelBootstrapResolution() {
-        if (pendingBootstrapResolution != null) {
-            pendingBootstrapResolution.cancel(true);
-            pendingBootstrapResolution = null;
-        }
-        bootstrapResolutionRetryMs = -1L;
     }
 
     /**
@@ -1288,117 +1243,14 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Attempts to resolve bootstrap server addresses via DNS and create an initial bootstrap cluster.
-     * This method is called from {@link #poll(long, long)} and uses a truly asynchronous approach
-     * to avoid blocking on DNS resolution.
-     *
-     * <p>DNS resolution is performed on a separate thread via {@link CompletableFuture}. This ensures
-     * the event loop remains responsive even if DNS lookups block or take a long time. The bootstrap
-     * timeout can interrupt a pending DNS resolution, unlike synchronous approaches.
+     * This method is called from {@link #poll(long, long)}. The resolver keeps DNS work and retry state
+     * outside of the network client's event-loop logic.
      *
      * @param currentTimeMs The current time in milliseconds
      * @throws BootstrapResolutionException if the bootstrap timeout expires before DNS resolution succeeds
      */
     void ensureBootstrapped(final long currentTimeMs) {
-        if (bootstrapConfiguration == BootstrapConfiguration.DISABLED || metadataUpdater.isBootstrapped())
-            return;
-
-        if (bootstrapException != null)
-            return;
-
-        if (Thread.interrupted()) {
-            cancelBootstrapResolution();
-            throw new InterruptException(new InterruptedException());
-        }
-
-        // Start the timer on the first poll so its budget represents "time we spend on
-        // bootstrap since polling began" — the caller may have created the client well before
-        // its first API call, and we don't want that idle gap to eat into the budget.
-        if (bootstrapTimer == null)
-            bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-
-        // Check if a pending resolution completed before checking the timeout, so that a
-        // result arriving at the same time as the deadline is not incorrectly rejected.
-        if (maybeProcessBootstrapResolutionResult(currentTimeMs))
-            return;
-
-        // Record a timeout failure before possibly triggering a new resolution.
-        // maybeStartBootstrapResolution skips if bootstrapException is set, so we
-        // don't kick off a fresh resolution after the failure has been recorded.
-        bootstrapTimer.update(currentTimeMs);
-        checkBootstrapTimeout();
-        maybeStartBootstrapResolution(currentTimeMs);
-    }
-
-    /**
-     * Record a permanent bootstrap failure on the metadata if the timeout has expired.
-     * The error is not thrown here; callers observe it through their metadata layer
-     * (e.g. {@link Metadata#maybeThrowFatalException()} for Producer/Consumer, or
-     * {@code AdminMetadataManager#bootstrapFatalException()} for AdminClient).
-     */
-    private void checkBootstrapTimeout() {
-        if (bootstrapTimer.isExpired() && bootstrapException == null) {
-            cancelBootstrapResolution();
-            bootstrapException = new BootstrapResolutionException("Failed to resolve bootstrap servers after " +
-                bootstrapConfiguration.bootstrapResolveTimeoutMs + "ms. " +
-                "Please check your bootstrap.servers configuration and DNS settings.");
-            metadataUpdater.bootstrapFailed(bootstrapException);
-        }
-    }
-
-    /**
-     * Trigger a new async DNS resolution if none is in progress and the retry backoff has elapsed.
-     */
-    private void maybeStartBootstrapResolution(final long currentTimeMs) {
-        if (bootstrapException != null)
-            return;
-
-        if (pendingBootstrapResolution != null)
-            return;
-
-        if (bootstrapResolutionRetryMs >= 0 && currentTimeMs < bootstrapResolutionRetryMs)
-            return;
-
-        bootstrapResolutionRetryMs = -1L;
-        if (bootstrapTimer == null)
-            bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-
-        pendingBootstrapResolution = CompletableFuture.supplyAsync(
-            () -> ClientUtils.parseAddresses(
-                bootstrapConfiguration.bootstrapServers,
-                bootstrapConfiguration.clientDnsLookup
-            ),
-            bootstrapExecutor
-        );
-    }
-
-    /**
-     * Check if a pending bootstrap DNS resolution has completed and process its result.
-     *
-     * @return true if the client is now bootstrapped and the caller should early return.
-     */
-    private boolean maybeProcessBootstrapResolutionResult(final long currentTimeMs) {
-        if (pendingBootstrapResolution == null || !pendingBootstrapResolution.isDone())
-            return false;
-
-        List<InetSocketAddress> servers = List.of();
-        try {
-            servers = pendingBootstrapResolution.getNow(List.of());
-        } catch (CompletionException e) {
-            log.debug("DNS resolution failed", e);
-        }
-
-        pendingBootstrapResolution = null;
-
-        if (!servers.isEmpty()) {
-            log.debug("Bootstrap DNS resolution succeeded, {} servers resolved", servers.size());
-            metadataUpdater.bootstrap(servers);
-            return true;
-        }
-
-        log.debug("Failed to resolve bootstrap servers, will retry after {}ms. Remaining time: {}ms",
-            bootstrapConfiguration.retryBackoffMs, bootstrapTimer.remainingMs());
-        bootstrapResolutionRetryMs = currentTimeMs + bootstrapConfiguration.retryBackoffMs;
-        return false;
+        bootstrapServerResolver.ensureBootstrapped(currentTimeMs, metadataUpdater);
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {
