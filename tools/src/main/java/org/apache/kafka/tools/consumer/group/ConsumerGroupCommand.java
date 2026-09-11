@@ -61,6 +61,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
@@ -97,7 +98,7 @@ public class ConsumerGroupCommand {
             if (actions.stream().filter(opts.options::has).count() != 1) {
                 CommandLineUtils.printUsageAndExit(
                     opts.parser,
-                    String.format(
+                    String.format(Locale.ROOT,
                         "Command must include exactly one action: %s",
                         actions.stream().map(opt ->
                             "--" + opt.options().get(0)
@@ -991,7 +992,7 @@ public class ConsumerGroupCommand {
                 return groupOffsetsResetter.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
-            CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+            CommandLineUtils.printUsageAndExit(opts.parser, String.format(Locale.ROOT, "Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
         }
 

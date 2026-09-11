@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -130,7 +131,7 @@ public class DeleteRecordsCommand {
             StringJoiner duplicates = new StringJoiner(",");
             duplicatePartitions.forEach(tp -> duplicates.add(tp.toString()));
             throw new AdminCommandFailedException(
-                String.format("Offset json file contains duplicate topic partitions: %s", duplicates)
+                String.format(Locale.ROOT, "Offset json file contains duplicate topic partitions: %s", duplicates)
             );
         }
 

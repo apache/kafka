@@ -21,6 +21,7 @@ import org.apache.kafka.common.feature.SupportedVersionRange;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.apache.kafka.server.common.UnitTestFeatureVersion.FV0.UT_FV0_0;
@@ -265,12 +266,12 @@ public enum Feature {
         FeatureVersion latestProduction = feature.latestProduction;
 
         if (!feature.hasFeatureVersion(latestProduction)) {
-            throw new IllegalArgumentException(String.format("Feature %s has latest production version %s " +
+            throw new IllegalArgumentException(String.format(Locale.ROOT, "Feature %s has latest production version %s " +
                     "which is not one of its feature versions.", feature.name(), latestProduction));
         }
 
         if (latestProduction.featureLevel() < defaultVersion.featureLevel()) {
-            throw new IllegalArgumentException(String.format("Feature %s has latest production value %s " +
+            throw new IllegalArgumentException(String.format(Locale.ROOT, "Feature %s has latest production value %s " +
                     "smaller than its default version %s with latest production MV.",
                 feature.name(), latestProduction, defaultVersion));
         }
@@ -280,14 +281,14 @@ public enum Feature {
             if (!dependencyFeatureName.equals(MetadataVersion.FEATURE_NAME)) {
                 Feature dependencyFeature = featureFromName(dependencyFeatureName);
                 if (!dependencyFeature.isProductionReady(dependency.getValue())) {
-                    throw new IllegalArgumentException(String.format("Feature %s has latest production FeatureVersion %s " +
+                    throw new IllegalArgumentException(String.format(Locale.ROOT, "Feature %s has latest production FeatureVersion %s " +
                             "with dependency %s that is not production ready. (%s latest production: %s)",
                         feature.name(), latestProduction, dependencyFeature.fromFeatureLevel(dependency.getValue(), true),
                         dependencyFeature, dependencyFeature.latestProduction));
                 }
             } else {
                 if (dependency.getValue() > MetadataVersion.LATEST_PRODUCTION.featureLevel()) {
-                    throw new IllegalArgumentException(String.format("Feature %s has latest production FeatureVersion %s " +
+                    throw new IllegalArgumentException(String.format(Locale.ROOT, "Feature %s has latest production FeatureVersion %s " +
                             "with MV dependency %s that is not production ready. (MV latest production: %s)",
                         feature.name(), latestProduction, MetadataVersion.fromFeatureLevel(dependency.getValue()),
                         MetadataVersion.LATEST_PRODUCTION));
@@ -302,7 +303,7 @@ public enum Feature {
                 if (!dependencyFeatureName.equals(MetadataVersion.FEATURE_NAME)) {
                     Feature dependencyFeature = featureFromName(dependencyFeatureName);
                     if (dependency.getValue() > dependencyFeature.defaultLevel(metadataVersion)) {
-                        throw new IllegalArgumentException(String.format("Feature %s has default FeatureVersion %s " +
+                        throw new IllegalArgumentException(String.format(Locale.ROOT, "Feature %s has default FeatureVersion %s " +
                                 "when MV=%s with dependency %s that is behind its default version %s.",
                             feature.name(), defaultVersion, metadataVersion,
                             dependencyFeature.fromFeatureLevel(dependency.getValue(), true),
@@ -310,7 +311,7 @@ public enum Feature {
                     }
                 } else {
                     if (dependency.getValue() > defaultVersion.bootstrapMetadataVersion().featureLevel()) {
-                        throw new IllegalArgumentException(String.format("Feature %s has default FeatureVersion %s " +
+                        throw new IllegalArgumentException(String.format(Locale.ROOT, "Feature %s has default FeatureVersion %s " +
                                 "when MV=%s with MV dependency %s that is behind its bootstrap MV %s.",
                             feature.name(), defaultVersion, metadataVersion,
                             MetadataVersion.fromFeatureLevel(dependency.getValue()),

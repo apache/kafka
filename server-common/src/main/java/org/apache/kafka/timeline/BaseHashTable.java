@@ -19,6 +19,7 @@ package org.apache.kafka.timeline;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * A hash table which uses separate chaining.
@@ -238,7 +239,7 @@ class BaseHashTable<T> {
         bld.append("BaseHashTable{");
         for (int i = 0; i < elements.length; i++) {
             Object slotObject = elements[i];
-            bld.append(String.format("%n%d: ", i));
+            bld.append(String.format(Locale.ROOT, "%n%d: ", i));
             if (slotObject == null) {
                 bld.append("null");
             } else if (slotObject instanceof Object[] array) {
@@ -252,7 +253,7 @@ class BaseHashTable<T> {
                 bld.append(slotObject);
             }
         }
-        bld.append(String.format("%n}"));
+        bld.append(String.format(Locale.ROOT, "%n}"));
         return bld.toString();
     }
 }

@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -81,7 +82,7 @@ public class CommandLineUtils {
     public static void checkRequiredArgs(OptionParser parser, OptionSet options, OptionSpec<?>... requiredList) {
         for (OptionSpec<?> arg : requiredList) {
             if (!options.has(arg)) {
-                printUsageAndExit(parser, String.format("Missing required argument \"%s\"", arg));
+                printUsageAndExit(parser, String.format(Locale.ROOT, "Missing required argument \"%s\"", arg));
             }
         }
     }
@@ -96,7 +97,7 @@ public class CommandLineUtils {
         if (options.has(usedOption)) {
             for (OptionSpec<?> arg : invalidOptions) {
                 if (options.has(arg)) {
-                    printUsageAndExit(parser, String.format("Option \"%s\" can't be used with option \"%s\"", usedOption, arg));
+                    printUsageAndExit(parser, String.format(Locale.ROOT, "Option \"%s\" can't be used with option \"%s\"", usedOption, arg));
                 }
             }
         }
@@ -125,7 +126,7 @@ public class CommandLineUtils {
         if (usedOptions.stream().filter(options::has).count() == usedOptions.size()) {
             for (OptionSpec<?> arg : invalidOptions) {
                 if (options.has(arg)) {
-                    printUsageAndExit(parser, String.format("Option combination \"%s\" can't be used with option \"%s\"%s",
+                    printUsageAndExit(parser, String.format(Locale.ROOT, "Option combination \"%s\" can't be used with option \"%s\"%s",
                             usedOptions, arg, trailingAdditionalMessage.orElse("")));
                 }
             }
@@ -201,7 +202,7 @@ public class CommandLineUtils {
                 if (acceptMissingValue) {
                     props.put(split[0], "");
                 } else {
-                    throw new IllegalArgumentException(String.format("Missing value for key %s}", split[0]));
+                    throw new IllegalArgumentException(String.format(Locale.ROOT, "Missing value for key %s}", split[0]));
                 }
             } else {
                 props.put(split[0], split[1]);
