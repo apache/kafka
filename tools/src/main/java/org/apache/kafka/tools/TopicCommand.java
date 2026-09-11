@@ -312,7 +312,7 @@ public abstract class TopicCommand {
         }
 
         int minIsrCount() {
-            return Integer.parseInt(config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
+            return Integer.parseInt(config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value().trim());
         }
 
         boolean isUnderReplicated() {
