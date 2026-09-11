@@ -40,6 +40,7 @@ import org.apache.kafka.server.common.FeatureVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandlerException;
 
+import org.apache.kafka.server.util.DeferredValue;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
@@ -179,7 +180,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public String clusterId() {
-            return Stream.concat(controllers().values().stream().map(ControllerServer::clusterId),
+            return Stream.concat(controllers().values().stream().map(c -> c.clusterId().getNow()),
                 brokers().values().stream().map(KafkaBroker::clusterId)).findFirst()
                 .orElseThrow(() -> new RuntimeException("No controllers or brokers!"));
         }

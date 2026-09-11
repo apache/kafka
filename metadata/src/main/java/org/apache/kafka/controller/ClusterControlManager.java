@@ -54,6 +54,7 @@ import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.util.DeferredValue;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
@@ -72,6 +73,7 @@ import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -87,7 +89,7 @@ public class ClusterControlManager {
 
     static class Builder {
         private LogContext logContext = null;
-        private String clusterId = null;
+        private DeferredValue<String> clusterId = null;
         private Time time = Time.SYSTEM;
         private SnapshotRegistry snapshotRegistry = null;
         private long sessionTimeoutNs = DEFAULT_SESSION_TIMEOUT_NS;
@@ -101,8 +103,13 @@ public class ClusterControlManager {
             return this;
         }
 
-        Builder setClusterId(String clusterId) {
+        Builder setClusterId(DeferredValue<String> clusterId) {
             this.clusterId = clusterId;
+            return this;
+        }
+
+        Builder setClusterId(String clusterId) {
+            this.clusterId = DeferredValue.completed(clusterId);
             return this;
         }
 
@@ -147,7 +154,7 @@ public class ClusterControlManager {
                 logContext = new LogContext();
             }
             if (clusterId == null) {
-                clusterId = Uuid.randomUuid().toString();
+                clusterId = DeferredValue.completed(Uuid.randomUuid().toString());
             }
             if (snapshotRegistry == null) {
                 snapshotRegistry = new SnapshotRegistry(logContext);
@@ -208,7 +215,7 @@ public class ClusterControlManager {
     /**
      * The ID of this cluster.
      */
-    private final String clusterId;
+    private final DeferredValue<String> clusterId;
 
     /**
      * The SLF4J log object.
@@ -278,7 +285,7 @@ public class ClusterControlManager {
 
     private ClusterControlManager(
         LogContext logContext,
-        String clusterId,
+        DeferredValue<String> clusterId,
         Time time,
         SnapshotRegistry snapshotRegistry,
         long sessionTimeoutNs,
@@ -326,7 +333,7 @@ public class ClusterControlManager {
     }
 
     String clusterId() { // Visible for testing
-        return clusterId;
+        return clusterId.getNow();
     }
 
     /**
@@ -357,8 +364,8 @@ public class ClusterControlManager {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
-        if (!clusterId.equals(request.clusterId())) {
-            throw new InconsistentClusterIdException("Expected cluster ID " + clusterId +
+        if (!request.clusterId().equals(clusterId.getNow())) {
+            throw new InconsistentClusterIdException("Expected cluster ID " + clusterId.getNow() +
                 ", but got cluster ID " + request.clusterId());
         }
         int brokerId = request.brokerId();

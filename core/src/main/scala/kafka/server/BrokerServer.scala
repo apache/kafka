@@ -154,7 +154,7 @@ class BrokerServer(
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
-  val clusterId: String = sharedServer.metaPropsEnsemble.clusterId().get()
+  var clusterId: String = _
 
   var brokerMetadataPublisher: BrokerMetadataPublisher = _
 
@@ -205,6 +205,9 @@ class BrokerServer(
       sharedServer.startForBroker()
 
       info("Starting broker")
+
+      clusterId = sharedServer.clusterId.waitWithLogging(logger.underlying, logIdent,
+        "cluster ID to be available", startupDeadline, time)
 
       val clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin()
 

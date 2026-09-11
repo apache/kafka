@@ -43,6 +43,7 @@ import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+import org.apache.kafka.server.util.DeferredValue;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
 
@@ -594,7 +595,7 @@ public class RaftEventSimulationTest {
         final Random random;
         final AtomicInteger correlationIdCounter = new AtomicInteger();
         final MockTime time = new MockTime();
-        final String clusterId = Uuid.randomUuid().toString();
+        final DeferredValue<String> clusterId = DeferredValue.completed(Uuid.randomUuid().toString());
         final Map<Integer, Node> voters = new HashMap<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
