@@ -377,10 +377,10 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
         new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
-    // Guards the hand-off of leaveGroupRequested to completeShutdown: an update is applied if and
-    // only if it acquires the lock before the shutting-down thread consumes the operation.
+    // Makes the shutdown-state transition and the operation write atomic, so that the
+    // failure-path default cannot overwrite the operation of a caller that already initiated
+    // this thread's shutdown: the owner of the transition to PENDING_SHUTDOWN decides.
     private final Object leaveGroupRequestedLock = new Object();
-    private boolean leaveGroupRequestedConsumed = false;
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean processingThreadsEnabled;
@@ -1933,7 +1933,6 @@ public class StreamThread extends Thread implements ProcessingThread {
      * @return true if this call initiated the shutdown, i.e., transitioned the thread to
      *         {@code PENDING_SHUTDOWN}; false if the thread was already shutting down or dead,
      *         in which case the group membership operation of the earlier shutdown request is kept
-     *         (use {@link #updateGroupMembershipOperation} to change it)
      */
     public boolean shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         log.info("Informed to shut down");
@@ -1952,27 +1951,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             completeShutdown(true);
         }
         return true;
-    }
-
-    /**
-     * Update the group membership operation of an already-initiated shutdown, without affecting
-     * who initiated it. Synchronized against the consumption of the operation in
-     * {@code completeShutdown}: an update that runs before the shutting-down thread consumes the
-     * operation is guaranteed to be applied; afterwards the update is rejected, since the
-     * consumer is already closing with the earlier operation.
-     *
-     * @param operation the group membership operation to apply on shutdown
-     * @return true if the operation was recorded; false if the thread has already consumed the
-     *         operation for its consumer shutdown, in which case the earlier operation applies
-     */
-    public boolean updateGroupMembershipOperation(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
-        synchronized (leaveGroupRequestedLock) {
-            if (leaveGroupRequestedConsumed) {
-                return false;
-            }
-            leaveGroupRequested.set(operation);
-            return true;
-        }
     }
 
     /**
@@ -2017,13 +1995,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
-            final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation streamsOperation;
-            synchronized (leaveGroupRequestedLock) {
-                // Consume the operation: from here on, updateGroupMembershipOperation rejects
-                // changes, since they could no longer influence the consumer shutdown below.
-                leaveGroupRequestedConsumed = true;
-                streamsOperation = leaveGroupRequested.get();
-            }
+            final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation streamsOperation = leaveGroupRequested.get();
             final GroupMembershipOperation membershipOperation;
             if (streamsOperation == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP) {
                 membershipOperation = LEAVE_GROUP;

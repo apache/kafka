@@ -1900,27 +1900,19 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldApplyGroupMembershipOperationUpdatedAfterShutdownWasInitiated() throws InterruptedException {
-        // A client-level close can find the thread already shutting down because a removal or
-        // replacement initiated the shutdown first: the close's shutdown() call returns false and
-        // the close path records its operation via updateGroupMembershipOperation instead. The
-        // consumer must then be closed with that operation.
+    public void shouldKeepGroupMembershipOperationOfTheCallerThatInitiatedShutdown() throws InterruptedException {
+        // The caller that initiates the shutdown decides the group membership operation: a later
+        // shutdown request (e.g., a client close racing a removal or replacement) loses and must
+        // not change the operation the thread shuts down with.
         final CountDownLatch releasePoll = startThreadParkedInPoll(null);
 
-        // A removal or replacement wins the shutdown; the close path loses and records its
-        // operation, which must succeed while the thread has not consumed the operation yet.
-        assertTrue(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT));
+        assertTrue(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
         assertFalse(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
-        assertTrue(thread.updateGroupMembershipOperation(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
 
         releasePoll.countDown();
         awaitThreadDead();
 
-        verifyConsumerClosedWith(GroupMembershipOperation.LEAVE_GROUP);
-
-        // Once the thread has consumed the operation for its consumer shutdown, updates are
-        // rejected: they could no longer influence anything.
-        assertFalse(thread.updateGroupMembershipOperation(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+        verifyConsumerClosedWith(GroupMembershipOperation.REMAIN_IN_GROUP);
     }
 
     @ParameterizedTest

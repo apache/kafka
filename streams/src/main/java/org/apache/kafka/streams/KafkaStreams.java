@@ -1629,19 +1629,11 @@ public class KafkaStreams implements AutoCloseable {
         return new Thread(() -> {
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down.
-            // A thread may already be shutting down (initiated by a removal or a thread
-            // replacement), in which case shutdown() returns false. Closing is an explicit
-            // client-level request whose group membership operation applies to every thread,
-            // so record it on those threads too; every thread is joined below regardless of
-            // who initiated its shutdown.
+            // The return value of shutdown() is deliberately ignored: a thread already shutting
+            // down keeps the group membership operation of whoever initiated its shutdown, and
+            // every thread is joined below regardless of who initiated it.
             int numStreamThreads = processStreamThread(
-                streamThread -> {
-                    if (!streamThread.shutdown(operation)
-                        && !streamThread.updateGroupMembershipOperation(operation)) {
-                        log.info("{} already started closing its consumer, so it shuts down with the "
-                            + "group membership operation of the earlier shutdown request", streamThread.getName());
-                    }
-                }
+                streamThread -> streamThread.shutdown(operation)
             );
 
             log.info("Shutting down {} stream threads", numStreamThreads);
