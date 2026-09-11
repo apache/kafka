@@ -133,15 +133,15 @@ public class ServerConfigs {
             .define(BROKER_ID_CONFIG, INT, BROKER_ID_DEFAULT, HIGH, BROKER_ID_DOC)
             .define(MESSAGE_MAX_BYTES_CONFIG, INT, ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, atLeast(0), HIGH, MESSAGE_MAX_BYTES_DOC)
             .define(NUM_IO_THREADS_CONFIG, INT, NUM_IO_THREADS_DEFAULT, atLeast(1), HIGH, NUM_IO_THREADS_DOC)
-            .define(NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG, INT, null, HIGH, NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC)
-            .define(BACKGROUND_THREADS_CONFIG, INT, BACKGROUND_THREADS_DEFAULT, atLeast(1), HIGH, BACKGROUND_THREADS_DOC)
+            .define(NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG, INT, null, MEDIUM, NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC)
+            .define(BACKGROUND_THREADS_CONFIG, INT, BACKGROUND_THREADS_DEFAULT, atLeast(1), MEDIUM, BACKGROUND_THREADS_DOC)
             .define(REQUEST_TIMEOUT_MS_CONFIG, INT, REQUEST_TIMEOUT_MS_DEFAULT, HIGH, REQUEST_TIMEOUT_MS_DOC)
             .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, LONG, DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS, MEDIUM, SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
             .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, LONG, SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS, MEDIUM, SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
             .define(CONFIG_PROVIDERS_CONFIG, ConfigDef.Type.LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), ConfigDef.Importance.LOW, CONFIG_PROVIDERS_DOC)
             /************* Authorizer Configuration ***********/
             .define(AUTHORIZER_CLASS_NAME_CONFIG, STRING, AUTHORIZER_CLASS_NAME_DEFAULT, new ConfigDef.NonNullValidator(), LOW, AUTHORIZER_CLASS_NAME_DOC)
-            .define(EARLY_START_LISTENERS_CONFIG, LIST, null, ConfigDef.ValidList.anyNonDuplicateValues(true, true), HIGH, EARLY_START_LISTENERS_DOC)
+            .define(EARLY_START_LISTENERS_CONFIG, LIST, null, ConfigDef.ValidList.anyNonDuplicateValues(true, true), MEDIUM, EARLY_START_LISTENERS_DOC)
             /************ Rack Configuration ******************/
             .define(BROKER_RACK_CONFIG, STRING, null, MEDIUM, BROKER_RACK_DOC)
             /** ********* Controlled shutdown configuration ***********/
