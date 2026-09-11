@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.HeadersBytesStore;
+import org.apache.kafka.streams.state.internals.ChangeLoggingListValueBytesStore;
+import org.apache.kafka.streams.state.internals.ChangeLoggingListValueBytesStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionStore;
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
@@ -43,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawListValueToHeadersListValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToSessionHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
@@ -189,6 +192,34 @@ public class StateManagerUtilConverterTest {
         final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
 
         assertEquals(rawValueToTimestampedValue(), converter);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldReturnListConverterForHeadersListValueStore() {
+        // Metered -> ChangeLoggingListValueBytesStoreWithHeaders (the HeadersAwareListValueStore marker)
+        final StateStore mockInner = mock(ChangeLoggingListValueBytesStoreWithHeaders.class);
+        final WrappedStateStore<?, ?, ?> mockMetered = mock(WrappedStateStore.class);
+
+        doReturn(mockInner).when(mockMetered).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockMetered);
+
+        assertEquals(rawListValueToHeadersListValue(), converter);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldReturnIdentityConverterForPlainListValueStore() {
+        // Metered -> ChangeLoggingListValueBytesStore (no headers marker)
+        final StateStore mockInner = mock(ChangeLoggingListValueBytesStore.class);
+        final WrappedStateStore<?, ?, ?> mockMetered = mock(WrappedStateStore.class);
+
+        doReturn(mockInner).when(mockMetered).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockMetered);
+
+        assertEquals(identity(), converter);
     }
 
     @Test
