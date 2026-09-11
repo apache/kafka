@@ -31,6 +31,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.helper.HelpScreenException;
 import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
@@ -38,7 +39,6 @@ import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
-import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -74,7 +74,8 @@ public class FeatureCommand {
 
     static void execute(String... args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("kafka-features")
+                .newFor("kafka-features")
+                .build()
                 .defaultHelp(true)
                 .description("This tool manages feature flags in Kafka.");
         MutuallyExclusiveGroup bootstrapGroup = parser.addMutuallyExclusiveGroup();

@@ -24,7 +24,7 @@ import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace, Subparser, Subparsers}
-import net.sourceforge.argparse4j.internal.HelpScreenException
+import net.sourceforge.argparse4j.helper.HelpScreenException
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.Exit
@@ -291,7 +291,11 @@ object StorageTool extends Logging {
 
   def parseArguments(args: Array[String]): Namespace = {
     val parser = ArgumentParsers
-      .newArgumentParser("kafka-storage", /* defaultHelp */true, /* prefixChars */"-", /* fromFilePrefix */ "@")
+      .newFor("kafka-storage")
+      .addHelp(true)
+      .prefixChars("-")
+      .fromFilePrefix("@")
+      .build()
       .description("The Kafka storage tool.")
 
     val subparsers = parser.addSubparsers().dest("command")
