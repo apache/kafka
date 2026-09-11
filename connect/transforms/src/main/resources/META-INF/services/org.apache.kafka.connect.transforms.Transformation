@@ -38,4 +38,6 @@ org.apache.kafka.connect.transforms.SetSchemaMetadata$Value
 org.apache.kafka.connect.transforms.TimestampConverter$Key
 org.apache.kafka.connect.transforms.TimestampConverter$Value
 org.apache.kafka.connect.transforms.TimestampRouter
+org.apache.kafka.connect.transforms.TranslateSurrogates$Key
+org.apache.kafka.connect.transforms.TranslateSurrogates$Value
 org.apache.kafka.connect.transforms.ValueToKey
