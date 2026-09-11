@@ -763,10 +763,11 @@ public interface KTable<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions can be performed.
      * <p>
-     * If the downstream topology uses aggregation functions, (e.g. {@link KGroupedTable#reduce}, {@link KGroupedTable#aggregate}, etc),
-     * care must be taken when dealing with state, (either held in state-stores or transformer instances), to ensure correct aggregate results.
-     * In contrast, if the resulting KTable is materialized, (cf. {@link #transformValues(ValueTransformerWithKeySupplier, Materialized, String...)}),
-     * such concerns are handled for you.
+     * If {@code stateStoreNames} are provided, the resulting {@code KTable} is internally materialized to ensure that
+     * downstream lookups return the value computed with the state at the time the input record was processed.
+     * If state is held only in the transformer instance, callers should explicitly materialize the result (cf.
+     * {@link #transformValues(ValueTransformerWithKeySupplier, Materialized, String...)}) before using a downstream
+     * operation that performs table lookups.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -836,10 +837,11 @@ public interface KTable<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions can be performed.
      * <p>
-     * If the downstream topology uses aggregation functions, (e.g. {@link KGroupedTable#reduce}, {@link KGroupedTable#aggregate}, etc),
-     * care must be taken when dealing with state, (either held in state-stores or transformer instances), to ensure correct aggregate results.
-     * In contrast, if the resulting KTable is materialized, (cf. {@link #transformValues(ValueTransformerWithKeySupplier, Materialized, String...)}),
-     * such concerns are handled for you.
+     * If {@code stateStoreNames} are provided, the resulting {@code KTable} is internally materialized to ensure that
+     * downstream lookups return the value computed with the state at the time the input record was processed.
+     * If state is held only in the transformer instance, callers should explicitly materialize the result (cf.
+     * {@link #transformValues(ValueTransformerWithKeySupplier, Materialized, String...)}) before using a downstream
+     * operation that performs table lookups.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
