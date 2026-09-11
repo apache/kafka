@@ -53,7 +53,7 @@ import java.nio.MappedByteBuffer;
  */
 public class TimeIndex extends AbstractIndex {
     private static final Logger log = LoggerFactory.getLogger(TimeIndex.class);
-    private static final int ENTRY_SIZE = 12;
+    static final int ENTRY_SIZE = 12;
 
     private volatile TimestampOffset lastEntry;
 
@@ -88,6 +88,9 @@ public class TimeIndex extends AbstractIndex {
         if (length() % ENTRY_SIZE != 0)
             throw new CorruptIndexException("Time index file " + file().getAbsolutePath() + " is corrupt, found " + length()
                 + " bytes which is neither positive nor a multiple of " + ENTRY_SIZE);
+        if (entries() == maxEntries() && lastTimestamp == 0)
+            throw new CorruptIndexException("Time index file " + file().getAbsolutePath() + " is corrupt, found a full index "
+                + "(entries=" + entries() + " equals maxEntries) with lastTimestamp=0");
     }
 
     /**
