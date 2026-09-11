@@ -234,10 +234,17 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
     val throttledTook = System.currentTimeMillis() - start
 
-    assertTrue(throttledTook > expectedDuration * 1000 * 0.9,
-      s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms")
-    assertTrue(throttledTook < expectedDuration * 1000 * 1.5,
-      s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms")
+    // The quota is enforced by a rolling byte-rate sensor. The first fetch can exceed the
+    // configured rate before the sensor has a complete sample, so elapsed time is not a
+    // reliable lower bound for a short replication. Verify the measured rate instead.
+    assertTrue(throttledTook < expectedDuration * 1000 * 3,
+      s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 3000}ms")
+
+    val rate = measuredRate(brokerFor(100), QuotaType.LEADER_REPLICATION)
+    val rateUpperBound = throttle * 1.1
+    val rateLowerBound = throttle * 0.5
+    assertTrue(rate < rateUpperBound, s"Expected $rate < $rateUpperBound")
+    assertTrue(rate > rateLowerBound, s"Expected $rate > $rateLowerBound")
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
