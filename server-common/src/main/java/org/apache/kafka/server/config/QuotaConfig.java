@@ -74,17 +74,22 @@ public class QuotaConfig {
 
     public static final String LEADER_REPLICATION_THROTTLED_RATE_CONFIG = "leader.replication.throttled.rate";
     public static final String LEADER_REPLICATION_THROTTLED_RATE_DOC = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
-            String.format("property %s (for each topic). This property can be only set dynamically. It is suggested that the ", LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG) +
+            String.format("property %s (for each topic). This property can be only set dynamically, and defining it in the static configuration file has no effect. It is suggested that the ", LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG) +
             "limit be kept above 1MB/s for accurate behaviour.";
 
     public static final String FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG = "follower.replication.throttled.rate";
     public static final String FOLLOWER_REPLICATION_THROTTLED_RATE_DOC = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
-            String.format("property %s (for each topic). This property can be only set dynamically. It is suggested that the ", FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG) +
+            String.format("property %s (for each topic). This property can be only set dynamically, and defining it in the static configuration file has no effect. It is suggested that the ", FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG) +
             "limit be kept above 1MB/s for accurate behaviour.";
     public static final String REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG = "replica.alter.log.dirs.io.max.bytes.per.second";
     public static final String REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC = "A long representing the upper bound (bytes/sec) on disk IO used for moving replica between log directories on the same broker. " +
-            "This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour.";
+            "This property can be only set dynamically, and defining it in the static configuration file has no effect. It is suggested that the limit be kept above 1MB/s for accurate behaviour.";
     public static final long QUOTA_BYTES_PER_SECOND_DEFAULT = Long.MAX_VALUE;
+
+    public static final Set<String> DYNAMIC_ONLY_BROKER_QUOTA_CONFIGS = Set.of(
+            LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
+            FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
+            REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG);
 
     public static final String PRODUCER_BYTE_RATE_OVERRIDE_CONFIG = "producer_byte_rate";
     public static final String CONSUMER_BYTE_RATE_OVERRIDE_CONFIG = "consumer_byte_rate";
