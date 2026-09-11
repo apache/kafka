@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.io.File
 import java.util
 import java.util.{Collections, OptionalLong, Properties}
 import kafka.utils.TestUtils
@@ -301,6 +302,38 @@ class BrokerLifecycleManagerTest {
 
     nextHeartbeatRequest()
     assertEquals(1200L, manager.brokerEpoch)
+  }
+
+  @Test
+  def testRelativeCordonedLogDirsIncludedInHeartbeatAfterInitialCatchUp(): Unit = {
+    val relativeLogDir = "relative-log-dir"
+    val logDirId = Uuid.fromString("ad5FLIeCTnaQdai5vOjeng")
+    val props = configProperties
+    props.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, relativeLogDir)
+    props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, relativeLogDir)
+
+    val ctx = new RegistrationTestContext(props)
+    val logDirIdsByAbsolutePath = util.Map.of(new File(relativeLogDir).getAbsolutePath, logDirId)
+    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "relative-cordoned-dirs-sent-in-heartbeat-",
+      logDirIdsByAbsolutePath, () => {}, () => true)
+    val controllerNode = new Node(3000, "localhost", 8021)
+    ctx.controllerNodeProvider.node.set(controllerNode)
+
+    val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
+    manager.start(() => ctx.highestMetadataOffset.get(),
+      ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
+      Collections.emptyMap(), OptionalLong.empty())
+    poll(ctx, manager, registration)
+
+    // This request is created before the response indicating catch-up is processed.
+    val beforeCatchUp = poll(ctx, manager, prepareResponse[BrokerHeartbeatRequest](ctx,
+      new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().setIsCaughtUp(true))))
+    assertNull(beforeCatchUp.data().cordonedLogDirs())
+
+    // The next request reflects the broker having processed the catch-up response.
+    val afterCatchUp = poll(ctx, manager, prepareResponse[BrokerHeartbeatRequest](ctx,
+      new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData())))
+    assertEquals(Set(logDirId), afterCatchUp.data().cordonedLogDirs().asScala.toSet)
   }
 
   @Test

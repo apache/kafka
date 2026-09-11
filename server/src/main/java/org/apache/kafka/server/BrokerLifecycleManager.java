@@ -651,7 +651,7 @@ public class BrokerLifecycleManager {
                                 // Now that the broker has caught up with the latest metadata, the configuration should
                                 // be up to date, so we can retrieve the cordoned log dirs to include them in the
                                 // next heartbeat request
-                                cordonedLogDirs = config.cordonedLogDirs().stream()
+                                cordonedLogDirs = config.absoluteCordonedLogDirs().stream()
                                     .flatMap(logDir -> Optional.ofNullable(logDirs.get(logDir)).stream())
                                     .collect(Collectors.toSet());
                             } else {
