@@ -179,18 +179,15 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   /**
-   * Truncate the log for each partition based on current replica's returned epoch and offset.
+   * Truncate the future replica's log for each partition based on the diverging epoch and offset
+   * returned by the current replica in the fetch response.
    *
-   * The logic for finding the truncation offset is the same as in ReplicaFetcherThread
-   * and mainly implemented in AbstractFetcherThread.getOffsetTruncationState. One difference is
-   * that the initial fetch offset for topic partition could be set to the truncation offset of
-   * the current replica if that replica truncates. Otherwise, it is high watermark as in ReplicaFetcherThread.
-   *
-   * The reason we have to follow the leader epoch approach for truncating a future replica is to
-   * cover the case where a future replica is offline when the current replica truncates and
-   * re-replicates offsets that may have already been copied to the future replica. In that case,
-   * the future replica may miss "mark for truncation" event and must use the offset for leader epoch
-   * exchange with the current replica to truncate to the largest common log prefix for the topic partition
+   * The logic for finding the truncation offset is the same as in ReplicaFetcherThread and mainly
+   * implemented in AbstractFetcherThread.getOffsetTruncationState. The local fetch carries the
+   * future replica's latest epoch as the last fetched epoch, so if the current replica truncates
+   * (e.g. while the future replica is offline), the divergence is detected on the next fetch and
+   * the future replica truncates to the largest common log prefix for the topic partition. A future
+   * replica without any leader epoch truncates to its initial fetch offset via the high watermark path.
    */
   override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)

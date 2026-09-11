@@ -58,7 +58,6 @@ import org.apache.kafka.raft.MetadataLogConfig
 import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
-import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.server.quota.{ClientQuotaEntity, ClientQuotaManager}
@@ -879,7 +878,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size, 1)
 
     verifyProcessorMetrics()
-    verifyMarkPartitionsForTruncation()
   }
 
   private def isProcessorMetric(metricName: MetricName): Boolean = {
@@ -911,33 +909,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       .filter(isProcessorMetric)
       .groupBy(_.getName)
       .foreach { case (name, set) => assertEquals(numProcessors, set.size, s"Metrics not deleted $name") }
-  }
-
-  // Verify that replicaFetcherManager.markPartitionsForTruncation uses the current fetcher thread size
-  // to obtain partition assignment
-  private def verifyMarkPartitionsForTruncation(): Unit = {
-    val leaderId = 0
-    val topicDescription = adminClients.head.
-      describeTopics(java.util.List.of(topic)).
-      allTopicNames().
-      get(3, TimeUnit.MINUTES).get(topic)
-    val partitions = topicDescription.partitions().asScala.
-      filter(p => p.leader().id() == leaderId).
-      map(p => new TopicPartition(topic, p.partition()))
-    assertTrue(partitions.nonEmpty, s"Partitions not found with leader $leaderId")
-    partitions.foreach { tp =>
-      (1 to 2).foreach { i =>
-        val replicaFetcherManager = servers(i).replicaManager.replicaFetcherManager
-        val truncationOffset = tp.partition
-        replicaFetcherManager.markPartitionsForTruncation(leaderId, tp, truncationOffset)
-        val fetcherThreads = replicaFetcherManager.fetcherThreadMap.filter(_._2.fetchState(tp).isDefined)
-        assertEquals(1, fetcherThreads.size)
-        assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
-        val thread = fetcherThreads.head._2
-        assertEquals(Some(truncationOffset), thread.fetchState(tp).map(_.fetchOffset))
-        assertEquals(Some(ReplicaState.TRUNCATING), thread.fetchState(tp).map(_.state))
-      }
-    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)

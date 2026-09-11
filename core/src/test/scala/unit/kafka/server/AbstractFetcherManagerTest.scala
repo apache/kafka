@@ -315,8 +315,6 @@ class AbstractFetcherManagerTest {
 
     override def buildFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[java.util.Optional[ReplicaFetch]] = new ResultWithPartitions(java.util.Optional.empty[ReplicaFetch](), java.util.Set.of())
 
-    override val isTruncationOnFetchSupported: Boolean = false
-
     override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
 
     override def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(-1L, -1)

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
 import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.FetchResponse
@@ -77,7 +78,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
   ): Option[LogAppendInfo] = {
     val state = replicaPartitionState(topicPartition)
 
-    if (leader.isTruncationOnFetchSupported && FetchResponse.isDivergingEpoch(partitionData)) {
+    if (FetchResponse.isDivergingEpoch(partitionData)) {
       throw new IllegalStateException("processPartitionData should not be called for a partition with " +
         "a diverging epoch.")
     }
@@ -168,7 +169,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
   override def logEndOffset(topicPartition: TopicPartition): Long = replicaPartitionState(topicPartition).logEndOffset
 
   override def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
-    val epochData = new EpochData()
+    val epochData = new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
       .setPartition(topicPartition.partition)
       .setLeaderEpoch(epoch)
     val result = mockLeader.lookupEndOffsetForEpoch(topicPartition, epochData, replicaPartitionState(topicPartition))
@@ -179,10 +180,8 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
   }
 
   def verifyLastFetchedEpoch(partition: TopicPartition, expectedEpoch: Option[Int]): Unit = {
-    if (leader.isTruncationOnFetchSupported) {
-      assertEquals(Some(ReplicaState.FETCHING), fetchState(partition).map(_.state))
-      assertEquals(expectedEpoch, fetchState(partition).map(_.lastFetchedEpoch.get()))
-    }
+    assertEquals(Some(ReplicaState.FETCHING), fetchState(partition).map(_.state))
+    assertEquals(expectedEpoch, fetchState(partition).map(_.lastFetchedEpoch.get()))
   }
 
   override def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, leaderEndOffset: Long, replicaEndOffset: Long): Boolean = fetchFromLastTieredOffset
