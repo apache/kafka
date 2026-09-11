@@ -136,13 +136,14 @@ public class EndToEndLatency {
             }
 
             printResults(numRecords, totalTime, latencies);
+            consumer.commitSync();
         }
     }
 
     // Visible for testing
     static void validate(KafkaConsumer<byte[], byte[]> consumer, byte[] sentRecordValue, ConsumerRecords<byte[], byte[]> records, byte[] sentRecordKey, Iterable<Header> sentHeaders) {
         if (records.isEmpty()) {
-            throw new RuntimeException("poll() timed out before finding a result (timeout:[" + POLL_TIMEOUT_MS + "ms])");
+            commitAndThrow(consumer, "poll() timed out before finding a result (timeout:[" + POLL_TIMEOUT_MS + "ms])");
         }
 
         ConsumerRecord<byte[], byte[]> record = records.iterator().next();
@@ -150,34 +151,40 @@ public class EndToEndLatency {
         String read = new String(record.value(), StandardCharsets.UTF_8);
 
         if (!read.equals(sent)) {
-            throw new RuntimeException("The message value read [" + read + "] did not match the message value sent [" + sent + "]");
+            commitAndThrow(consumer, "The message value read [" + read + "] did not match the message value sent [" + sent + "]");
         }
 
         if (sentRecordKey != null) {
             if (record.key() == null) {
-                throw new RuntimeException("Expected message key but received null");
+                commitAndThrow(consumer, "Expected message key but received null");
             }
             String sentKey = new String(sentRecordKey, StandardCharsets.UTF_8);
             String readKey = new String(record.key(), StandardCharsets.UTF_8);
             if (!readKey.equals(sentKey)) {
-                throw new RuntimeException("The message key read [" + readKey + "] did not match the message key sent [" + sentKey + "]");
+                commitAndThrow(consumer, "The message key read [" + readKey + "] did not match the message key sent [" + sentKey + "]");
             }
         } else if (record.key() != null) {
-            throw new RuntimeException("Expected null message key but received [" + new String(record.key(), StandardCharsets.UTF_8) + "]");
+            commitAndThrow(consumer, "Expected null message key but received [" + new String(record.key(), StandardCharsets.UTF_8) + "]");
         }
 
         validateHeaders(consumer, sentHeaders, record);
 
         //Check we only got the one message
         if (records.count() != 1) {
-            throw new RuntimeException("Only one result was expected during this test. We found [" + records.count() + "]");
+            int count = records.count();
+            commitAndThrow(consumer, "Only one result was expected during this test. We found [" + count + "]");
         }
+    }
+
+    private static void commitAndThrow(KafkaConsumer<byte[], byte[]> consumer, String message) {
+        consumer.commitSync();
+        throw new RuntimeException(message);
     }
 
     private static void validateHeaders(KafkaConsumer<byte[], byte[]> consumer, Iterable<Header> sentHeaders, ConsumerRecord<byte[], byte[]> record) {
         if (sentHeaders != null && sentHeaders.iterator().hasNext()) {
             if (!record.headers().iterator().hasNext()) {
-                throw new RuntimeException("Expected message headers but received none");
+                commitAndThrow(consumer, "Expected message headers but received none");
             }
             
             Iterator<Header> sentIterator = sentHeaders.iterator();
@@ -189,13 +196,13 @@ public class EndToEndLatency {
                 if (!receivedHeader.key().equals(sentHeader.key()) || !Arrays.equals(receivedHeader.value(), sentHeader.value())) {
                     String receivedValueStr = receivedHeader.value() == null ? "null" : Arrays.toString(receivedHeader.value());
                     String sentValueStr = sentHeader.value() == null ? "null" : Arrays.toString(sentHeader.value());
-                    throw new RuntimeException("The message header read [" + receivedHeader.key() + ":" + receivedValueStr +
+                    commitAndThrow(consumer, "The message header read [" + receivedHeader.key() + ":" + receivedValueStr +
                             "] did not match the message header sent [" + sentHeader.key() + ":" + sentValueStr + "]");
                 }
             }
             
             if (sentIterator.hasNext() || receivedIterator.hasNext()) {
-                throw new RuntimeException("Header count mismatch between sent and received messages");
+                commitAndThrow(consumer, "Header count mismatch between sent and received messages");
             }
         }
     }
