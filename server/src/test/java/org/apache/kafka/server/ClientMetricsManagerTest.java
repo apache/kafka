@@ -1413,6 +1413,53 @@ public class ClientMetricsManagerTest {
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
     }
 
+    @Test
+    public void testPushTelemetryTerminatingFlagNotSetOnValidationFailure() throws UnknownHostException {
+        clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultTestProperties());
+
+        GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData(), true).build();
+
+        GetTelemetrySubscriptionsResponse subscriptionsResponse = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            subscriptionsRequest, ClientMetricsTestUtils.requestContext());
+
+        ClientMetricsInstance instance = clientMetricsManager.clientInstance(subscriptionsResponse.data().clientInstanceId());
+        assertNotNull(instance);
+        assertFalse(instance.terminating());
+
+        // Send a push request with terminating=true but an INVALID subscriptionId.
+        // This simulates the race where the subscription was updated between
+        // GetTelemetrySubscriptions and PushTelemetry calls.
+        PushTelemetryRequest request = new PushTelemetryRequest.Builder(
+            new PushTelemetryRequestData()
+                .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
+                .setSubscriptionId(1234) // wrong subscription id
+                .setTerminating(true), true).build();
+
+        PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
+            request, ClientMetricsTestUtils.requestContext());
+
+        // Validation should fail with UNKNOWN_SUBSCRIPTION_ID
+        assertEquals(Errors.UNKNOWN_SUBSCRIPTION_ID, response.error());
+
+        assertFalse(instance.terminating(), "terminating flag should not be set when push validation fails");
+
+        time.sleep(ClientMetricsTestUtils.INTERVAL_MS_TEST_DEFAULT);
+
+        PushTelemetryRequest validRequest = new PushTelemetryRequest.Builder(
+            new PushTelemetryRequestData()
+                .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
+                .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
+                .setCompressionType(CompressionType.NONE.id)
+                .setTerminating(true), true).build();
+
+        PushTelemetryResponse validResponse = clientMetricsManager.processPushTelemetryRequest(
+            validRequest, ClientMetricsTestUtils.requestContext());
+
+        assertEquals(Errors.NONE, validResponse.error());
+        assertTrue(instance.terminating());
+    }
+
     private KafkaMetric getMetric(String name) throws Exception {
         return getMetric(kafkaMetrics, name);
     }
