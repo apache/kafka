@@ -311,15 +311,7 @@ public class DumpLogSegments {
                 prevTimestamp = entry.timestamp();
             }
         } finally {
-            if (fileRecords != null) {
-                fileRecords.close();
-            }
-            if (index != null) {
-                index.close();
-            }
-            if (timeIndex != null) {
-                timeIndex.close();
-            }
+            Utils.closeAll(fileRecords, index, timeIndex);
         }
     }
 
@@ -376,9 +368,7 @@ public class DumpLogSegments {
             }
         }
 
-        FileRecords fileRecords = null;
-        try {
-            fileRecords = FileRecords.open(file, false).slice(0, maxBytes);
+        try (FileRecords fileRecords = FileRecords.open(file, false).slice(0, maxBytes)) {
             long validBytes = 0L;
             AtomicLong lastOffset = new AtomicLong(-1L);
 
@@ -392,10 +382,6 @@ public class DumpLogSegments {
             }
 
             printTrailingBytes(fileRecords, validBytes, maxBytes, file);
-        } finally {
-            if (fileRecords != null) {
-                fileRecords.close();
-            }
         }
     }
 
