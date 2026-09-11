@@ -53,7 +53,7 @@ public class MirrorConnectorConfigTest {
         Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig("test");
         Map<String, Object> expectedConsumerProps = new HashMap<>();
         expectedConsumerProps.put("enable.auto.commit", "false");
-        expectedConsumerProps.put("auto.offset.reset", "earliest");
+        expectedConsumerProps.put("auto.offset.reset", "none");
         expectedConsumerProps.put("max.poll.interval.ms", "120000");
         expectedConsumerProps.put("client.id", "source1->target2|ConnectorName|test");
         expectedConsumerProps.put("bootstrap.servers", "localhost:2345");
