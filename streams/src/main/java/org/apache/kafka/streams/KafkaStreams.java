@@ -1283,11 +1283,11 @@ public class KafkaStreams implements AutoCloseable {
 
         if (threadToRemove == null) {
             if (skippedThreadAlreadyShuttingDown) {
-                log.warn("There are no threads eligible for removal: every alive thread is already shutting down, "
+                log.info("There are no threads eligible for removal: every alive thread is already shutting down, "
                     + "either because it is being replaced after an uncaught exception or because the client is closing. "
                     + "Retry to remove the replacement thread once it is running.");
             } else {
-                log.warn("There are no threads eligible for removal");
+                log.info("There are no threads eligible for removal: no thread is in an alive state");
             }
             return Optional.empty();
         }
@@ -1355,8 +1355,7 @@ public class KafkaStreams implements AutoCloseable {
             resizeMaxUncommittedBytes(maxUncommittedBytesPerThread(numLiveStreamThreads()));
         }
 
-        final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
-        if (remainingTimeMs <= 0) {
+        if (callingThreadIsNotCurrentStreamThread && !reachedDead) {
             throw new TimeoutException("Thread " + threadToRemove.getName() + " did not stop in the allotted time");
         }
         return Optional.of(threadToRemove.getName());
