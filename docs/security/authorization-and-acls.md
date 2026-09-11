@@ -220,7 +220,7 @@ Configuration
 </td>  
 <td>
 
-A property file containing configs to be passed to Admin Client. This option can only be used with --bootstrap-server option.
+A property file containing configs to be passed to Admin Client. This option can be used with either --bootstrap-server or --bootstrap-controller.
 </td>  
 <td>
 
