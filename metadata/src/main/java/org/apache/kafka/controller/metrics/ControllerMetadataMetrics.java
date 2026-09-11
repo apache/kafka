@@ -236,7 +236,16 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             BrokerRegistrationState.UNREGISTERED.state()
         );
     }
-    
+
+    /**
+     * True if {@link #setBrokerRegistrationState} has tracked this broker (and a per-broker JMX
+     * gauge is typically registered). Used to avoid duplicate gauge registration when applying a
+     * metadata snapshot after brokers were installed via log deltas.
+     */
+    boolean tracksBrokerRegistrationState(int brokerId) {
+        return brokerRegistrationStates.containsKey(brokerId);
+    }
+
     public void setGlobalTopicCount(int topicCount) {
         this.globalTopicCount.set(topicCount);
     }
