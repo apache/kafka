@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -3275,7 +3275,7 @@ public class ConsumerMembershipManagerTest {
             Arguments.of(MemberState.STALE));
     }
 
-    private static class SleepyRebalanceListener implements ConsumerRebalanceListener {
+    private static class SleepyRebalanceListener implements RebalanceListener {
         private long sleepMs;
         private final long sleepDurationMs;
         private final Time time;
@@ -3285,13 +3285,13 @@ public class ConsumerMembershipManagerTest {
         }
 
         @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             sleepMs += sleepDurationMs;
             time.sleep(sleepDurationMs);
         }
 
         @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             sleepMs += sleepDurationMs;
             time.sleep(sleepDurationMs);
         }
