@@ -29,15 +29,25 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
     private final long maxBytes;
     private final BufferFullStrategy bufferFullStrategy;
     private final Map<String, String> logConfig;
+    private final Boolean headersEnabled;
 
     public StrictBufferConfigImpl(final long maxRecords,
                                   final long maxBytes,
                                   final BufferFullStrategy bufferFullStrategy,
                                   final Map<String, String> logConfig) {
+        this(maxRecords, maxBytes, bufferFullStrategy, logConfig, null);
+    }
+
+    public StrictBufferConfigImpl(final long maxRecords,
+                                  final long maxBytes,
+                                  final BufferFullStrategy bufferFullStrategy,
+                                  final Map<String, String> logConfig,
+                                  final Boolean headersEnabled) {
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.bufferFullStrategy = bufferFullStrategy;
         this.logConfig = logConfig;
+        this.headersEnabled = headersEnabled;
     }
 
 
@@ -46,16 +56,17 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
         this.maxBytes = Long.MAX_VALUE;
         this.bufferFullStrategy = SHUT_DOWN;
         this.logConfig = Map.of();
+        this.headersEnabled = null;
     }
 
     @Override
     public Suppressed.StrictBufferConfig withMaxRecords(final long recordLimit) {
-        return new StrictBufferConfigImpl(recordLimit, maxBytes, bufferFullStrategy, logConfig());
+        return new StrictBufferConfigImpl(recordLimit, maxBytes, bufferFullStrategy, logConfig(), headersEnabled);
     }
 
     @Override
     public Suppressed.StrictBufferConfig withMaxBytes(final long byteLimit) {
-        return new StrictBufferConfigImpl(maxRecords, byteLimit, bufferFullStrategy, logConfig());
+        return new StrictBufferConfigImpl(maxRecords, byteLimit, bufferFullStrategy, logConfig(), headersEnabled);
     }
 
     @Override
@@ -75,12 +86,27 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
 
     @Override
     public Suppressed.StrictBufferConfig withLoggingDisabled() {
-        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, null);
+        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, null, headersEnabled);
     }
 
     @Override
     public Suppressed.StrictBufferConfig withLoggingEnabled(final Map<String, String> config) {
-        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, config);
+        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, config, headersEnabled);
+    }
+
+    @Override
+    public Suppressed.StrictBufferConfig withHeadersEnabled() {
+        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, logConfig, true);
+    }
+
+    @Override
+    public Suppressed.StrictBufferConfig withHeadersDisabled() {
+        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, logConfig, false);
+    }
+
+    @Override
+    public Boolean headersEnabled() {
+        return headersEnabled;
     }
 
     @Override
@@ -105,12 +131,13 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
         return maxRecords == that.maxRecords &&
             maxBytes == that.maxBytes &&
             bufferFullStrategy == that.bufferFullStrategy &&
+            Objects.equals(headersEnabled, that.headersEnabled) &&
             Objects.equals(logConfig(), ((StrictBufferConfigImpl) o).logConfig());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxRecords, maxBytes, bufferFullStrategy, logConfig());
+        return Objects.hash(maxRecords, maxBytes, bufferFullStrategy, logConfig(), headersEnabled);
     }
 
     @Override
@@ -119,6 +146,7 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
             ", maxBytes=" + maxBytes +
             ", bufferFullStrategy=" + bufferFullStrategy +
             ", logConfig=" + logConfig().toString() +
+            ", headersEnabled=" + headersEnabled +
              '}';
     }
 }

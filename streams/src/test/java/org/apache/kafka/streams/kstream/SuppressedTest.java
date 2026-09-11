@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.kstream.internals.suppress.BufferConfigInternal;
 import org.apache.kafka.streams.kstream.internals.suppress.EagerBufferConfigImpl;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImpl;
@@ -34,6 +35,8 @@ import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy.SHUT_DOWN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SuppressedTest {
 
@@ -206,5 +209,21 @@ public class SuppressedTest {
             bufferConfigWithLoggingCalledAtTheEnd.shutDownWhenFull(),
             "long chain of strict buffer config sets logging even after other setters"
         );
+    }
+
+    @Test
+    public void shouldPreserveHeadersConfigurationAcrossBufferConfigurationChanges() {
+        final BufferConfigInternal<?> headersEnabled = (BufferConfigInternal<?>) unbounded()
+            .withHeadersEnabled()
+            .emitEarlyWhenFull()
+            .withMaxRecords(3L)
+            .withLoggingDisabled();
+        final BufferConfigInternal<?> headersDisabled = (BufferConfigInternal<?>) maxBytes(4L)
+            .withHeadersDisabled()
+            .shutDownWhenFull()
+            .withLoggingEnabled(Map.of());
+
+        assertTrue(headersEnabled.headersEnabled());
+        assertFalse(headersDisabled.headersEnabled());
     }
 }

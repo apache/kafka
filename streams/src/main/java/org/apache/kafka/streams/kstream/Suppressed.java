@@ -141,6 +141,22 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * @return this
          */
         BC withLoggingEnabled(final Map<String, String> config);
+
+        /**
+         * Enable headers support for this suppression's internal buffer, independently of the global
+         * {@code dsl.store.format} configuration.
+         *
+         * @return this
+         */
+        BC withHeadersEnabled();
+
+        /**
+         * Disable headers support for this suppression's internal buffer, independently of the global
+         * {@code dsl.store.format} configuration.
+         *
+         * @return this
+         */
+        BC withHeadersDisabled();
     }
 
     /**
