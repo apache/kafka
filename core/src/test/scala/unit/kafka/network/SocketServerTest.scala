@@ -1992,6 +1992,17 @@ class SocketServerTest {
     }
   }
 
+  @Test
+  def testProcessorShutdownCausesSocketChannelLeak(): Unit = {
+    withTestableServer(testWithServer = { testableServer =>
+      testableServer.closeTestableProcessor()
+      connect(testableServer)
+      testableServer.shutdown()
+      val clientChannels = testableServer.clientChannels()
+      assertFalse(clientChannels.exists(_.isOpen))
+    })
+  }
+
   class TestableAcceptor(socketServer: SocketServer,
                          endPoint: Endpoint,
                          cfg: KafkaConfig,
@@ -2026,7 +2037,15 @@ class SocketServerTest {
       new TestableProcessor(id, time, requestChannel, listenerName, securityProtocol, cfg, connectionQuotas, connectionQueueSize, isPrivilegedListener, socketServer.connectionDisconnectListeners)
     }
 
+    override protected[kafka] def assignNewConnection(socketChannel: SocketChannel, processor: Processor, mayBlock: Boolean): Boolean = {
+      if (clientChannels.isEmpty || clientChannels(clientChannels.length - 1) != socketChannel) {
+        clientChannels.append(socketChannel)
+      }
+      super.assignNewConnection(socketChannel, processor, mayBlock)
+    }
+
     def isOpen: Boolean = serverChannel.isOpen
+    val clientChannels: ArrayBuffer[SocketChannel] = ArrayBuffer.empty[SocketChannel]
   }
 
   class TestableProcessor(id: Int,
@@ -2132,6 +2151,13 @@ class SocketServerTest {
       assertNull(selector.channel(connectionId), "Channel not removed")
       assertNull(selector.closingChannel(connectionId), "Closing channel not removed")
     }
+
+    def closeTestableProcessor(): Unit = {
+      testableProcessor.beginShutdown()
+      testableProcessor.thread.join()
+    }
+
+    def clientChannels(): ArrayBuffer[SocketChannel] = testableAcceptor.clientChannels
   }
 
   // a X509TrustManager to trust self-signed certs for unit tests.
