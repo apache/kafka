@@ -89,6 +89,11 @@ Start the Kafka Server
     
     $ bin/kafka-server-start.sh config/server.properties
 
+Validate the Kafka server configurations
+
+
+    $ bin/kafka-server-start.sh config/server.properties --check-config
+
 ### Step 3: Prepare input topic and start Kafka producer
 
 Next, we create the input topic named **streams-plaintext-input** and the output topic named **streams-wordcount-output** : 
