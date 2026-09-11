@@ -37,6 +37,7 @@ import org.apache.kafka.common.errors.InvalidPidMappingException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.{DeleteRecordsResponseData, FetchResponseData, ShareFetchResponseData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.message.ProduceResponseData.PartitionProduceResponse
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.Monitorable
@@ -50,7 +51,6 @@ import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSe
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.server.share.LogReader
 import org.apache.kafka.server.share.PartitionMetadataProvider
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -267,8 +267,8 @@ class ReplicaManagerTest {
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager)
     try {
-      def callback(responseStatus: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
-        assert(responseStatus.values().iterator().next().error == Errors.INVALID_REQUIRED_ACKS)
+      def callback(responseStatus: util.Map[TopicIdPartition, PartitionProduceResponse]): Unit = {
+        assert(responseStatus.values().iterator().next().errorCode == Errors.INVALID_REQUIRED_ACKS.code)
       }
       rm.appendRecords(
         timeout = 0,
@@ -440,7 +440,7 @@ class ReplicaManagerTest {
 
       val records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("first message".getBytes()))
       val appendResult = appendRecords(rm, new TopicPartition(topic, 0), records).onFire { response =>
-        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, response.error)
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, response.errorCode)
       }
 
       // Make this replica the follower
@@ -575,7 +575,7 @@ class ReplicaManagerTest {
         val records = MemoryRecords.withIdempotentRecords(Compression.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
         appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
+          assertEquals(Errors.NONE.code, response.errorCode)
         }
       }
 
@@ -587,7 +587,7 @@ class ReplicaManagerTest {
       val record = MemoryRecords.withIdempotentRecords(Compression.NONE, producerId, epoch, outOfRangeSequence,
         new SimpleRecord(s"message: $outOfRangeSequence".getBytes))
       appendRecords(replicaManager, new TopicPartition(topic, 0), record).onFire { response =>
-        assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, response.error)
+        assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER.code, response.errorCode)
         assertEquals(0, response.logStartOffset)
       }
 
@@ -632,7 +632,7 @@ class ReplicaManagerTest {
         val records = MemoryRecords.withIdempotentRecords(Compression.NONE, pid, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
         appendRecords(replicaManager, new TopicPartition(topic, partition), records).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
+          assertEquals(Errors.NONE.code, response.errorCode)
         }
       }
 
@@ -709,7 +709,7 @@ class ReplicaManagerTest {
       val records = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, epoch, sequence,
         new SimpleRecord(time.milliseconds(), s"message $sequence".getBytes))
       handleProduceAppend(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
-        assertEquals(Errors.NONE, response.error)
+        assertEquals(Errors.NONE.code, response.errorCode)
       }
       assertLateTransactionCount(Some(0))
 
@@ -724,7 +724,7 @@ class ReplicaManagerTest {
       val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, abortTxnMarker)
       appendRecords(replicaManager, new TopicPartition(topic, 0),
         abortRecordBatch, origin = AppendOrigin.COORDINATOR, transactionVersion = TransactionVersion.TV_0.featureLevel()).onFire { response =>
-        assertEquals(Errors.NONE, response.error)
+        assertEquals(Errors.NONE.code, response.errorCode)
       }
       assertLateTransactionCount(Some(0))
     } finally {
@@ -764,7 +764,7 @@ class ReplicaManagerTest {
         val records = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
         handleProduceAppend(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
+          assertEquals(Errors.NONE.code, response.errorCode)
         }
       }
 
@@ -809,7 +809,7 @@ class ReplicaManagerTest {
       val commitRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
       appendRecords(replicaManager, new TopicPartition(topic, 0), commitRecordBatch,
         origin = AppendOrigin.COORDINATOR, transactionVersion = TransactionVersion.TV_0.featureLevel())
-        .onFire { response => assertEquals(Errors.NONE, response.error) }
+        .onFire { response => assertEquals(Errors.NONE.code, response.errorCode) }
 
       // the LSO has advanced, but the appended commit marker has not been replicated, so
       // none of the data from the transaction should be visible yet
@@ -875,7 +875,7 @@ class ReplicaManagerTest {
         val records = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
         handleProduceAppend(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
+          assertEquals(Errors.NONE.code, response.errorCode)
         }
       }
 
@@ -884,7 +884,7 @@ class ReplicaManagerTest {
       val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
       appendRecords(replicaManager, new TopicPartition(topic, 0), abortRecordBatch,
         origin = AppendOrigin.COORDINATOR, transactionVersion = TransactionVersion.TV_0.featureLevel())
-        .onFire { response => assertEquals(Errors.NONE, response.error) }
+        .onFire { response => assertEquals(Errors.NONE.code, response.errorCode) }
 
       // fetch as follower to advance the high watermark
       fetchPartitionAsFollower(
@@ -946,7 +946,7 @@ class ReplicaManagerTest {
       for (i <- 1 to 2) {
         val records = TestUtils.singletonRecords(s"message $i".getBytes)
         appendRecords(rm, new TopicPartition(topic, 0), records).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
+          assertEquals(Errors.NONE.code, response.errorCode)
         }
       }
 
@@ -1003,7 +1003,7 @@ class ReplicaManagerTest {
       // Leader appends some data
       for (i <- 1 to 5) {
         appendRecords(replicaManager, tp, TestUtils.singletonRecords(s"message $i".getBytes)).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
+          assertEquals(Errors.NONE.code, response.errorCode)
         }
       }
 
@@ -1152,10 +1152,10 @@ class ReplicaManagerTest {
       // Append a couple of messages.
       for (i <- 1 to 2) {
         appendRecords(replicaManager, tp0, TestUtils.singletonRecords(s"message $i".getBytes)).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
+          assertEquals(Errors.NONE.code, response.errorCode)
         }
         appendRecords(replicaManager, tp1, TestUtils.singletonRecords(s"message $i".getBytes)).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
+          assertEquals(Errors.NONE.code, response.errorCode)
         }
       }
 
@@ -1423,7 +1423,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
 
       appendRecords(replicaManager, tp0, TestUtils.singletonRecords(s"message".getBytes)).onFire { response =>
-        assertEquals(Errors.NONE, response.error)
+        assertEquals(Errors.NONE.code, response.errorCode)
       }
       // Fetch as follower to initialise the log end offset of the replica
       fetchPartitionAsFollower(
@@ -1901,7 +1901,7 @@ class ReplicaManagerTest {
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
       callback.complete(util.Map.of(tp0, Errors.INVALID_TXN_STATE))
-      assertEquals(Errors.INVALID_TXN_STATE, result.assertFired.error)
+      assertEquals(Errors.INVALID_TXN_STATE.code, result.assertFired.errorCode)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // This time verification is successful.
@@ -1974,7 +1974,7 @@ class ReplicaManagerTest {
 
       if (error != Errors.CONCURRENT_TRANSACTIONS) {
         // NOT_COORDINATOR is converted to NOT_ENOUGH_REPLICAS
-        assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
+        assertEquals(Errors.NOT_ENOUGH_REPLICAS.code, result.assertFired.errorCode)
       } else {
         // The append should not finish with error, it should retry later.
         assertFalse(result.hasFired)
@@ -2037,7 +2037,7 @@ class ReplicaManagerTest {
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
       callback.complete(util.Map.of(tp0, Errors.INVALID_PRODUCER_ID_MAPPING))
-      assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, result.assertFired.error)
+      assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING.code, result.assertFired.errorCode)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // Try to append a higher sequence (1) after the first one failed with a retriable error.
@@ -2060,7 +2060,7 @@ class ReplicaManagerTest {
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue
       callback2.complete(util.Map.of())
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
-      assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, result2.assertFired.error)
+      assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER.code, result2.assertFired.errorCode)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2130,7 +2130,7 @@ class ReplicaManagerTest {
       verifyNoMoreInteractions(addPartitionsToTxnManager)
 
       // broker returns the fencing error
-      assertEquals(Errors.INVALID_PRODUCER_EPOCH, result2.assertFired.error)
+      assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, result2.assertFired.errorCode)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2158,7 +2158,7 @@ class ReplicaManagerTest {
 
       handleProduceAppendToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> transactionalRecords), transactionalId).onFire { responses =>
         responses.foreach {
-          entry => assertEquals(Errors.NONE, entry._2.error)
+          entry => assertEquals(Errors.NONE.code, entry._2.errorCode)
         }
       }
     } finally {
@@ -2217,7 +2217,7 @@ class ReplicaManagerTest {
 
       // We should not add these partitions to the manager to verify, but instead throw an error.
       handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId).onFire { response =>
-        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, response.error)
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, response.errorCode)
       }
       verify(addPartitionsToTxnManager, times(0)).addOrVerifyTransaction(any(), any(), any(), any(), any(), any())
     } finally {
@@ -2249,7 +2249,7 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
       handleProduceAppend(replicaManager, tp, transactionalRecords, transactionalId = transactionalId).onFire { response =>
-        assertEquals(Errors.NONE, response.error)
+        assertEquals(Errors.NONE.code, response.errorCode)
       }
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
 
@@ -2321,7 +2321,7 @@ class ReplicaManagerTest {
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
       callback.complete(util.Map.of(tp0, Errors.INVALID_TXN_STATE))
-      assertEquals(Errors.INVALID_TXN_STATE, result.assertFired.error)
+      assertEquals(Errors.INVALID_TXN_STATE.code, result.assertFired.errorCode)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // This time we do not verify
@@ -2376,7 +2376,7 @@ class ReplicaManagerTest {
       // Confirm we did not write to the log and instead returned the converted error with the correct error message.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
       callback.complete(util.Map.of(tp0, error))
-      assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
+      assertEquals(Errors.NOT_ENOUGH_REPLICAS.code, result.assertFired.errorCode)
       assertEquals(expectedMessage, result.assertFired.errorMessage)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2426,7 +2426,7 @@ class ReplicaManagerTest {
       // Confirm we did not write to the log and instead returned the converted error with the correct error message.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
       callback.complete(util.Map.of(tp0, error))
-      assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
+      assertEquals(Errors.NOT_ENOUGH_REPLICAS.code, result.assertFired.errorCode)
       assertEquals(expectedMessage, result.assertFired.errorMessage)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2463,9 +2463,9 @@ class ReplicaManagerTest {
     replicaManager: ReplicaManager,
     topicPartition: TopicIdPartition,
     numOfRecords: Int
-  ): AtomicReference[PartitionResponse] = {
-    val produceResult = new AtomicReference[PartitionResponse]()
-    def callback(response: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+  ): AtomicReference[PartitionProduceResponse] = {
+    val produceResult = new AtomicReference[PartitionProduceResponse]()
+    def callback(response: util.Map[TopicIdPartition, PartitionProduceResponse]): Unit = {
       produceResult.set(response.get(topicPartition))
     }
 
@@ -2709,10 +2709,10 @@ class ReplicaManagerTest {
                             records: MemoryRecords,
                             origin: AppendOrigin = AppendOrigin.CLIENT,
                             requiredAcks: Short = -1,
-                            transactionVersion: Short = TransactionVersion.TV_UNKNOWN): CallbackResult[PartitionResponse] = {
-    val result = new CallbackResult[PartitionResponse]()
+                            transactionVersion: Short = TransactionVersion.TV_UNKNOWN): CallbackResult[PartitionProduceResponse] = {
+    val result = new CallbackResult[PartitionProduceResponse]()
     val topicIdPartition = new TopicIdPartition(topicId, partition)
-    def appendCallback(responses: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+    def appendCallback(responses: util.Map[TopicIdPartition, PartitionProduceResponse]): Unit = {
       val response = responses.get(topicIdPartition)
       assertNotNull(response)
       result.fire(response)
@@ -2736,9 +2736,9 @@ class ReplicaManagerTest {
                                                   transactionalId: String,
                                                   requiredAcks: Short = -1,
                                                   transactionSupportedOperation: TransactionSupportedOperation = GENERIC_ERROR_SUPPORTED
-                                                 ): CallbackResult[Map[TopicIdPartition, PartitionResponse]] = {
-    val result = new CallbackResult[Map[TopicIdPartition, PartitionResponse]]()
-    def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
+                                                 ): CallbackResult[Map[TopicIdPartition, PartitionProduceResponse]] = {
+    val result = new CallbackResult[Map[TopicIdPartition, PartitionProduceResponse]]()
+    def appendCallback(responses: Map[TopicIdPartition, PartitionProduceResponse]): Unit = {
       responses.foreach( response => assertTrue(responses.get(response._1).isDefined))
       result.fire(responses)
     }
@@ -2763,11 +2763,11 @@ class ReplicaManagerTest {
                                   requiredAcks: Short = -1,
                                   transactionalId: String,
                                   transactionSupportedOperation: TransactionSupportedOperation = GENERIC_ERROR_SUPPORTED
-                                 ): CallbackResult[PartitionResponse] = {
-    val result = new CallbackResult[PartitionResponse]()
+                                 ): CallbackResult[PartitionProduceResponse] = {
+    val result = new CallbackResult[PartitionProduceResponse]()
 
     val topicIdPartition = new TopicIdPartition(topicIds.get(partition.topic()).getOrElse(Uuid.ZERO_UUID), partition)
-    def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
+    def appendCallback(responses: Map[TopicIdPartition, PartitionProduceResponse]): Unit = {
       val response = responses.get(topicIdPartition)
       assertTrue(response.isDefined)
       result.fire(response.get)
@@ -4525,7 +4525,7 @@ class ReplicaManagerTest {
         new PartitionData(Uuid.ZERO_UUID, numOfRecords, 0, Int.MaxValue, Optional.empty()),
         replicaId = otherId
       )
-      assertEquals(Errors.NONE, leaderResponse.get.error)
+      assertEquals(Errors.NONE.code, leaderResponse.get.errorCode)
 
       // Change the local replica to follower
       val followerTopicsDelta = topicsChangeDelta(leaderMetadataImage.topics(), localId, false)
@@ -4534,7 +4534,7 @@ class ReplicaManagerTest {
 
       // Append on a follower should fail
       val followerResponse = sendProducerAppend(replicaManager, topicIdPartition, numOfRecords)
-      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, followerResponse.get.errorCode)
 
       // Check the state of that partition and fetcher
       val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
@@ -4586,7 +4586,7 @@ class ReplicaManagerTest {
       val followerResponse = sendProducerAppend(replicaManager,
         new TopicIdPartition(followerMetadataImage.topics().topicsByName().get("foo").id, topicPartition),
         numOfRecords)
-      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, followerResponse.get.errorCode)
 
       // Change the local replica to leader
       val leaderTopicsDelta = topicsChangeDelta(followerMetadataImage.topics(), localId, true)
@@ -4602,7 +4602,7 @@ class ReplicaManagerTest {
         new PartitionData(Uuid.ZERO_UUID, numOfRecords, 0, Int.MaxValue, Optional.empty()),
         replicaId = otherId
       )
-      assertEquals(Errors.NONE, leaderResponse.get.error)
+      assertEquals(Errors.NONE.code, leaderResponse.get.errorCode)
 
       val leaderPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertTrue(leaderPartition.isLeader)
@@ -4902,7 +4902,7 @@ class ReplicaManagerTest {
       }
 
       // Check that the produce failed because it changed to follower before replicating
-      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, leaderResponse.get.error)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, leaderResponse.get.errorCode)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -5401,7 +5401,7 @@ class ReplicaManagerTest {
       // Leader appends some data
       for (i <- 1 to 5) {
         appendRecords(replicaManager, tp, TestUtils.singletonRecords(s"message $i".getBytes)).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
+          assertEquals(Errors.NONE.code, response.errorCode)
         }
       }
 

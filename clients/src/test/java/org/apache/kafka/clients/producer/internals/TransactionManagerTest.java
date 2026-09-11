@@ -52,6 +52,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -4635,11 +4636,17 @@ public class TransactionManagerTest {
         return produceResponse(tp, offset, error, throttleTimeMs, 10);
     }
 
-    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, int logStartOffset) {
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
-        Map<TopicIdPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(new TopicIdPartition(TOPIC_ID, tp), resp);
-        return new ProduceResponse(partResp, throttleTimeMs);
+        return new ProduceResponse(Map.of(
+            new TopicIdPartition(TOPIC_ID, tp),
+            new ProduceResponseData.PartitionProduceResponse()
+                .setIndex(tp.partition())
+                .setBaseOffset(offset)
+                .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                .setLogStartOffset(logStartOffset)
+                .setErrorCode(error.code())),
+            List.of(),
+            throttleTimeMs);
     }
 
     private void initializeIdempotentProducerId(long producerId, short epoch) {

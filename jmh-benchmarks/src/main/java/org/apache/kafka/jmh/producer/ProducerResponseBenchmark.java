@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.producer;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ProduceResponse;
@@ -34,6 +35,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.AbstractMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -50,17 +52,18 @@ public class ProducerResponseBenchmark {
     private static final int NUMBER_OF_RECORDS = 3;
     private static final Uuid TOPIC_ID = Uuid.randomUuid();
     private static final String TOPIC_NAME = "tp";
-    private static final Map<TopicIdPartition, ProduceResponse.PartitionResponse> PARTITION_RESPONSE_MAP = IntStream.range(0, NUMBER_OF_PARTITIONS)
+    private static final Map<TopicIdPartition, ProduceResponseData.PartitionProduceResponse> PARTITION_RESPONSE_MAP = IntStream.range(0, NUMBER_OF_PARTITIONS)
         .mapToObj(partitionIndex -> new AbstractMap.SimpleEntry<>(
             new TopicIdPartition(TOPIC_ID, partitionIndex, TOPIC_NAME),
-            new ProduceResponse.PartitionResponse(
-                Errors.NONE,
-                0,
-                0,
-                0,
-                IntStream.range(0, NUMBER_OF_RECORDS)
-                    .mapToObj(ProduceResponse.RecordError::new)
-                    .toList())
+            new ProduceResponseData.PartitionProduceResponse()
+                .setIndex(partitionIndex)
+                .setBaseOffset(0)
+                .setLogAppendTimeMs(0)
+                .setLogStartOffset(0)
+                .setErrorCode(Errors.NONE.code())
+                .setRecordErrors(IntStream.range(0, NUMBER_OF_RECORDS)
+                    .mapToObj(i -> new ProduceResponseData.BatchIndexAndErrorMessage().setBatchIndex(i))
+                    .collect(Collectors.toList()))
         ))
         .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
 
@@ -70,7 +73,7 @@ public class ProducerResponseBenchmark {
      */
     @SuppressWarnings("deprecation")
     private static ProduceResponse response() {
-        return new ProduceResponse(PARTITION_RESPONSE_MAP);
+        return new ProduceResponse(PARTITION_RESPONSE_MAP, List.of(), AbstractResponse.DEFAULT_THROTTLE_TIME);
     }
 
     private static final ProduceResponse RESPONSE = response();

@@ -26,10 +26,10 @@ import kafka.cluster.Partition
 import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils._
+import org.apache.kafka.common.message.ProduceResponseData.PartitionProduceResponse
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.{MemoryRecords, RecordBatch}
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.purgatory.DelayedProduce.ProducePartitionStatus
@@ -216,7 +216,7 @@ object AbstractCoordinatorConcurrencyTest {
                                internalTopicsAllowed: Boolean,
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
-                               responseCallback: java.util.Map[TopicIdPartition, PartitionResponse] => Unit,
+                               responseCallback: java.util.Map[TopicIdPartition, PartitionProduceResponse] => Unit,
                                processingStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.noCaching,
                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
@@ -226,7 +226,12 @@ object AbstractCoordinatorConcurrencyTest {
         return
       val produceStatus = entriesPerPartition.map {
         case (tp, _) =>
-          (tp, new ProducePartitionStatus(0L, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+          (tp, new ProducePartitionStatus(0L, new PartitionProduceResponse()
+            .setIndex(tp.partition)
+            .setErrorCode(Errors.NONE.code)
+            .setBaseOffset(0)
+            .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+            .setLogStartOffset(0)))
       }.asJava
 
       // It is safe to set the third parameter to null because it is only used in tryComplete().
@@ -243,7 +248,12 @@ object AbstractCoordinatorConcurrencyTest {
         override def onComplete(): Unit = {
           responseCallback(entriesPerPartition.map {
             case (tp, _) =>
-              (tp, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L))
+              (tp, new PartitionProduceResponse()
+                .setIndex(tp.partition)
+                .setErrorCode(Errors.NONE.code)
+                .setBaseOffset(0)
+                .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                .setLogStartOffset(0))
           }.asJava)
         }
       }
