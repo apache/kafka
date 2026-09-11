@@ -24,6 +24,7 @@ import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.Timer;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +59,8 @@ public class KafkaMetricsGroup {
 
     private static MetricName explicitMetricName(String group, String typeName,
                                                 String name, Map<String, String> tags) {
+        if (tags.size() > 1 && !(tags instanceof LinkedHashMap<String, String>))
+            throw new RuntimeException("Tags must be of type LinkedHashMap. tags: " + tags + " type: " + tags.getClass().getName());
         StringBuilder nameBuilder = new StringBuilder(100);
         nameBuilder.append(group);
         nameBuilder.append(":type=");
