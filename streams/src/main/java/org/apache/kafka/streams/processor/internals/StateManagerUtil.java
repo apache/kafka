@@ -193,7 +193,15 @@ final class StateManagerUtil {
                     }
                 }
             } else {
-                log.warn("Unable to acquire lock while closing the state store for {} task {}", taskType, id);
+                final Thread lockOwner = stateDirectory.lockOwner(id);
+                if (lockOwner != null && !lockOwner.equals(Thread.currentThread())) {
+                    // In-process hand-off (state updater / other stream thread).
+                    // Nothing we can close without the lock; do not treat as unexpected.
+                    log.debug("Unable to acquire lock while closing the state store for {} task {}; held by {}",
+                        taskType, id, lockOwner.getName());
+                } else {
+                    log.warn("Unable to acquire lock while closing the state store for {} task {}", taskType, id);
+                }
             }
         } catch (final IOException e) {
             final ProcessorStateException exception = new ProcessorStateException(

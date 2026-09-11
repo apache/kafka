@@ -222,12 +222,14 @@ public class StateManagerUtilTest {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(false);
+        when(stateDirectory.lockOwner(taskId)).thenReturn(new Thread("other-stream-thread"));
 
         StateManagerUtil.closeStateManager(
                 logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).taskId();
         inOrder.verify(stateDirectory).lock(taskId);
+        inOrder.verify(stateDirectory).lockOwner(taskId);
         verify(stateManager, never()).close();
         verify(stateManager, never()).baseDir();
         verify(stateDirectory, never()).unlock(taskId);
@@ -239,12 +241,14 @@ public class StateManagerUtilTest {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(false);
+        when(stateDirectory.lockOwner(taskId)).thenReturn(new Thread("other-stream-thread"));
 
         StateManagerUtil.closeStateManager(
                 logger, "logPrefix:", false, true, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).taskId();
         inOrder.verify(stateDirectory).lock(taskId);
+        inOrder.verify(stateDirectory).lockOwner(taskId);
         verify(stateManager, never()).close();
         verify(stateManager, never()).baseDir();
         verify(stateDirectory, never()).unlock(taskId);
