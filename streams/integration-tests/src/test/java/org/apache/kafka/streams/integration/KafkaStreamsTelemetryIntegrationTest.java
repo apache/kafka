@@ -150,6 +150,20 @@ public class KafkaStreamsTelemetryIntegrationTest {
         cluster.createTopic(inputTopicOnePartition, 1, 1);
         cluster.createTopic(outputTopicOnePartition, 1, 1);
         cluster.createTopic(globalStoreTopic, 2, 1);
+
+        // createTopic only waits until the topic name appears in listTopics(), not until
+        // partition metadata has fully propagated. The GlobalStreamThread fails fast if partitionsFor()
+        // returns empty during initialization, so wait until partitions are visible before starting Streams.
+        try (final Admin admin = cluster.createAdminClient()) {
+            waitForCondition(
+                () -> admin.describeTopics(Collections.singleton(globalStoreTopic))
+                    .allTopicNames().get()
+                    .get(globalStoreTopic)
+                    .partitions().size() == 2,
+                30_000,
+                "Global store topic partitions were not available"
+            );
+        }
     }
 
     @AfterAll
