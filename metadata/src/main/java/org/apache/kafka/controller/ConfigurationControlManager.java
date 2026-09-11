@@ -294,6 +294,7 @@ public class ConfigurationControlManager {
         boolean forwarded
     ) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
+        List<String> explicitlyDeletedConfigs = new ArrayList<>();
         for (Entry<String, Entry<OpType, String>> keysToOpsEntry : keysToOps.entrySet()) {
             String key = keysToOpsEntry.getKey();
             String currentValue = null;
@@ -311,6 +312,7 @@ public class ConfigurationControlManager {
                     break;
                 case DELETE:
                     newValue = null;
+                    explicitlyDeletedConfigs.add(key);
                     break;
                 case APPEND:
                 case SUBTRACT:
@@ -343,7 +345,8 @@ public class ConfigurationControlManager {
                     setValue(newValue), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), newlyCreatedResource, forwarded);
+        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), explicitlyDeletedConfigs,
+            newlyCreatedResource, forwarded);
         if (error.isFailure()) {
             return error;
         }
@@ -355,6 +358,7 @@ public class ConfigurationControlManager {
         ConfigResource configResource,
         List<ApiMessageAndVersion> recordsExplicitlyAltered,
         List<ApiMessageAndVersion> recordsImplicitlyDeleted,
+        List<String> explicitlyDeletedConfigs,
         boolean newlyCreatedResource,
         boolean forwarded
     ) {
@@ -387,6 +391,7 @@ public class ConfigurationControlManager {
             }
             alteredConfigsForAlterConfigPolicyCheck.put(configRecord.name(), configRecord.value());
         }
+        explicitlyDeletedConfigs.forEach(config -> alteredConfigsForAlterConfigPolicyCheck.put(config, null));
         for (ApiMessageAndVersion recordImplicitlyDeleted : recordsImplicitlyDeleted) {
             ConfigRecord configRecord = (ConfigRecord) recordImplicitlyDeleted.message();
             if (isDisallowedBrokerMinIsrTransition(configRecord)) {
@@ -563,7 +568,8 @@ public class ConfigurationControlManager {
                     setValue(null), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, newlyCreatedResource, forwarded);
+        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, List.of(),
+            newlyCreatedResource, forwarded);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;
