@@ -286,10 +286,10 @@ public class StandardAuthorizerData {
         switch (rule.result()) {
             case ALLOWED:
                 // logIfAllowed is true if access is granted to the resource as a result of this authorization.
-                // In this case, log at debug level. If false, no access is actually granted, the result is used
+                // In this case, log at info level. If false, no access is actually granted, the result is used
                 // only to determine authorized operations. So log only at trace level.
-                if (action.logIfAllowed() && auditLog.isDebugEnabled()) {
-                    auditLog.debug(buildAuditMessage(principal, requestContext, action, rule));
+                if (action.logIfAllowed() && auditLog.isInfoEnabled()) {
+                    auditLog.info(buildAuditMessage(principal, requestContext, action, rule));
                 } else if (auditLog.isTraceEnabled()) {
                     auditLog.trace(buildAuditMessage(principal, requestContext, action, rule));
                 }
@@ -297,11 +297,11 @@ public class StandardAuthorizerData {
 
             case DENIED:
                 // logIfDenied is true if access to the resource was explicitly requested. Since this is an attempt
-                // to access unauthorized resources, log at info level. If false, this is either a request to determine
+                // to access unauthorized resources, log at warn level. If false, this is either a request to determine
                 // authorized operations or a filter (e.g for regex subscriptions) to filter out authorized resources.
                 // In this case, log only at trace level.
                 if (action.logIfDenied()) {
-                    auditLog.info(buildAuditMessage(principal, requestContext, action, rule));
+                    auditLog.warn(buildAuditMessage(principal, requestContext, action, rule));
                 } else if (auditLog.isTraceEnabled()) {
                     auditLog.trace(buildAuditMessage(principal, requestContext, action, rule));
                 }
