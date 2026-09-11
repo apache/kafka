@@ -84,6 +84,10 @@ class LRUCacheEntry {
         return record.recordContext();
     }
 
+    boolean hasSameRecord(final LRUCacheEntry other) {
+        return record.equals(other.record);
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
