@@ -53,7 +53,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     val describeConfigsRequest = request.body(classOf[DescribeConfigsRequest])
     val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.partition { resource =>
       ConfigResource.Type.forId(resource.resourceType) match {
-        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER | ConfigResource.Type.CLIENT_METRICS =>
+        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER | ConfigResource.Type.CLIENT_METRICS | ConfigResource.Type.CONTROLLER =>
           authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)
         case ConfigResource.Type.TOPIC =>
           authHelper.authorize(request.context, DESCRIBE_CONFIGS, TOPIC, resource.resourceName)
@@ -65,7 +65,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     val authorizedConfigs = describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
     val unauthorizedConfigs = unauthorizedResources.map { resource =>
       val error = ConfigResource.Type.forId(resource.resourceType) match {
-        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER | ConfigResource.Type.CLIENT_METRICS => Errors.CLUSTER_AUTHORIZATION_FAILED
+        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER | ConfigResource.Type.CLIENT_METRICS | ConfigResource.Type.CONTROLLER => Errors.CLUSTER_AUTHORIZATION_FAILED
         case ConfigResource.Type.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
         case ConfigResource.Type.GROUP => Errors.GROUP_AUTHORIZATION_FAILED
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
@@ -136,6 +136,29 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               val groupConfig = GroupConfig.fromProps(config.extractGroupConfigMap(config.groupCoordinatorConfig), groupProps)
               createResponseConfig(resource, groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation)(_, _))
             }
+
+          case ConfigResource.Type.CONTROLLER =>
+            val controllerProps = configRepository.config(
+              new ConfigResource(ConfigResource.Type.CONTROLLER, resource.resourceName))
+            val isDefault = resource.resourceName == null || resource.resourceName.isEmpty
+            val sourceId =
+              if (isDefault) ConfigSource.DYNAMIC_DEFAULT_CONTROLLER_CONFIG.id
+              else ConfigSource.DYNAMIC_CONTROLLER_CONFIG.id
+            val entries = controllerProps.entrySet.asScala.map { e =>
+              val name = e.getKey.toString
+              val value = e.getValue.toString
+              val isSensitive = name.toLowerCase.contains("password")
+              new DescribeConfigsResponseData.DescribeConfigsResourceResult()
+                .setName(name)
+                .setValue(if (isSensitive) null else value)
+                .setConfigSource(sourceId)
+                .setIsSensitive(isSensitive)
+                .setReadOnly(false)
+                .setSynonyms(Collections.emptyList())
+            }.toList.asJava
+            new DescribeConfigsResponseData.DescribeConfigsResult()
+              .setErrorCode(Errors.NONE.code)
+              .setConfigs(entries)
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }

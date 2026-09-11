@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, GROUP, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, CONTROLLER, GROUP, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
@@ -113,6 +113,7 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
     resource.`type`() match {
       case TOPIC => validateTopicName(resource.name())
       case BROKER => validateBrokerName(resource.name())
+      case CONTROLLER => validateBrokerName(resource.name())
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }
@@ -129,6 +130,9 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
         LogConfig.validate(oldConfigs, filteredConfigs, kafkaConfig.extractLogConfigMap,
           kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
       case BROKER => validateBrokerName(resource.name())
+      case CONTROLLER =>
+        validateBrokerName(resource.name())
+        filterAndValidateNullConfigs(newConfigs, "controller")
       case CLIENT_METRICS =>
         val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "client metrics")
         ClientMetricsConfigs.validate(resource.name(), filteredConfigs)

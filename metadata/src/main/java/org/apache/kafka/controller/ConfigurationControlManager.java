@@ -293,6 +293,13 @@ public class ConfigurationControlManager {
         List<ApiMessageAndVersion> outputRecords,
         boolean forwarded
     ) {
+        if (configResource.type() == Type.CONTROLLER) {
+            ApiError controllerValidationError = validateControllerConfigs(configResource, keysToOps);
+            if (controllerValidationError.isFailure()) {
+                return controllerValidationError;
+            }
+        }
+
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
         for (Entry<String, Entry<OpType, String>> keysToOpsEntry : keysToOps.entrySet()) {
             String key = keysToOpsEntry.getKey();
@@ -496,6 +503,55 @@ public class ConfigurationControlManager {
             }
         }
         return false;
+    }
+
+    /**
+     * Validate CONTROLLER resource configurations.
+     * Only SSL reconfigurable configs with proper listener prefix are allowed.
+     * Resource name must be either empty (cluster-default) or a stringified node ID.
+     */
+    private ApiError validateControllerConfigs(
+        ConfigResource configResource,
+        Map<String, Entry<OpType, String>> keysToOps
+    ) {
+        java.util.Set<String> sslReconfigurableConfigs = org.apache.kafka.common.config.SslConfigs.RECONFIGURABLE_CONFIGS;
+
+        String resourceName = configResource.name();
+        if (!resourceName.isEmpty()) {
+            try {
+                Integer.parseInt(resourceName);
+            } catch (NumberFormatException e) {
+                return new ApiError(INVALID_CONFIG,
+                    "CONTROLLER resource name must be either empty (cluster-default) or a valid node ID, got: " + resourceName);
+            }
+        }
+
+        // Validate config keys
+        for (String key : keysToOps.keySet()) {
+            boolean isValid = false;
+
+            if (sslReconfigurableConfigs.contains(key)) {
+                isValid = true;
+            } else {
+                if (key.startsWith("listener.name.")) {
+                    int thirdDot = key.indexOf('.', "listener.name.".length());
+                    if (thirdDot > 0 && thirdDot < key.length() - 1) {
+                        String configWithoutPrefix = key.substring(thirdDot + 1);
+                        if (sslReconfigurableConfigs.contains(configWithoutPrefix)) {
+                            isValid = true;
+                        }
+                    }
+                }
+            }
+
+            if (!isValid) {
+                return new ApiError(INVALID_CONFIG,
+                    "Invalid config key for CONTROLLER resource: " + key +
+                    ". Only SSL reconfigurable configs are allowed (with optional listener.name.<name>. prefix).");
+            }
+        }
+
+        return ApiError.NONE;
     }
 
     /**
