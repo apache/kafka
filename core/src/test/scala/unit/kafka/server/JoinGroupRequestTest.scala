@@ -294,6 +294,80 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
     }
   }
 
+  @ClusterTest
+  def testStaticMemberRejoiningWithChangedSubscriptionTriggersRebalance(): Unit = {
+    // Reproduces KAFKA-12759: a static member that rejoins with an additional subscribed topic must trigger
+    // a rebalance under the classic protocol, otherwise the newly subscribed topic is never assigned.
+    // Creates the __consumer_offsets topic because it won't be created automatically in this test
+    // because it does not use the FindCoordinator API.
+    createOffsetsTopic()
+
+    createTopic(topic = "foo", numPartitions = 3)
+    createTopic(topic = "bar", numPartitions = 3)
+
+    val version = ApiKeys.JOIN_GROUP.latestVersion(isUnstableApiEnabled)
+
+    val fooSubscription = ConsumerProtocol.serializeSubscription(
+      new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
+    ).array
+
+    val fooBarSubscription = ConsumerProtocol.serializeSubscription(
+      new ConsumerPartitionAssignor.Subscription(List("foo", "bar").asJava)
+    ).array
+
+    // A static member joins the group subscribed to foo.
+    val joinResponseData = sendJoinRequest(
+      groupId = "grp",
+      groupInstanceId = "group-instance-id",
+      metadata = fooSubscription,
+      version = version
+    )
+    val memberId = joinResponseData.memberId
+    assertEquals(Errors.NONE.code, joinResponseData.errorCode)
+    assertEquals(1, joinResponseData.generationId)
+
+    // Sync the member to move the group to Stable.
+    verifySyncGroupWithOldProtocol(
+      groupId = "grp",
+      memberId = memberId,
+      generationId = 1,
+      assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
+        .setMemberId(memberId)
+        .setAssignment(Array[Byte](1))
+      ),
+      expectedAssignment = Array[Byte](1)
+    )
+
+    TestUtils.waitUntilTrue(() => {
+      val described = describeGroups(groupIds = List("grp"))
+      ClassicGroupState.STABLE.toString == described.head.groupState
+    }, msg = "The group is not in STABLE state.")
+
+    // The static member rejoins with an additional subscribed topic. This must trigger a rebalance.
+    val rejoinResponseData = sendJoinRequest(
+      groupId = "grp",
+      groupInstanceId = "group-instance-id",
+      metadata = fooBarSubscription,
+      version = version
+    )
+
+    assertEquals(Errors.NONE.code, rejoinResponseData.errorCode)
+    assertEquals(2, rejoinResponseData.generationId)
+
+    leaveGroup(
+      groupId = "grp",
+      memberId = rejoinResponseData.memberId,
+      useNewProtocol = false,
+      version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
+    )
+
+    deleteGroups(
+      groupIds = List("grp"),
+      expectedErrors = List(Errors.NONE),
+      version = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
+    )
+  }
+
   private def testFencedStaticGroup(
     leaderMemberId: String,
     followerMemberId: String,
