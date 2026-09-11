@@ -110,9 +110,11 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -2802,6 +2804,96 @@ public class RemoteLogManagerTest {
             assertEquals(0L, currentLogStartOffset.get());
             verify(remoteStorageManager, never()).deleteLogSegmentData(any());
         }
+    }
+
+    @Test
+    public void testExpirationDoesNotAdvanceLogStartOffsetAfterCancellation()
+            throws RemoteStorageException, ExecutionException, InterruptedException {
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put("retention.bytes", 0L);
+        logProps.put("retention.ms", -1L);
+        when(mockLog.config()).thenReturn(new LogConfig(logProps));
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+        when(mockLog.logEndOffset()).thenReturn(100L);
+
+        checkpoint.write(List.of(epochEntry0));
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
+        when(mockLog.leaderEpochCache()).thenReturn(cache);
+
+        List<RemoteLogSegmentMetadata> metadata = listRemoteLogSegmentMetadata(
+                leaderTopicIdPartition, 1, 100, 1024, List.of(epochEntry0), RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
+                .thenAnswer(invocation -> metadata.iterator());
+
+        CountDownLatch scanPaused = new CountDownLatch(1);
+        CountDownLatch resumeScan = new CountDownLatch(1);
+        Iterator<RemoteLogSegmentMetadata> blockingIterator = new Iterator<>() {
+            private boolean hasReturnedMetadata = false;
+
+            @Override
+            public boolean hasNext() {
+                if (hasReturnedMetadata) {
+                    scanPaused.countDown();
+                    try {
+                        assertTrue(resumeScan.await(5, TimeUnit.SECONDS));
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                return !hasReturnedMetadata;
+            }
+
+            @Override
+            public RemoteLogSegmentMetadata next() {
+                hasReturnedMetadata = true;
+                return metadata.get(0);
+            }
+        };
+        AtomicInteger epochSegmentListCalls = new AtomicInteger();
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
+                .thenAnswer(invocation -> epochSegmentListCalls.getAndIncrement() == 0
+                        ? metadata.iterator()
+                        : blockingIterator);
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        RemoteLogManager.RLMExpirationTask expirationTask = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread cleanupThread = new Thread(() -> {
+            try {
+                expirationTask.run();
+            } catch (Throwable t) {
+                failure.set(t);
+            }
+        });
+        cleanupThread.start();
+
+        Future<?> scheduledFuture = mock(Future.class);
+        RemoteLogManager.RLMTaskWithFuture taskWithFuture =
+                new RemoteLogManager.RLMTaskWithFuture(expirationTask, scheduledFuture);
+        Thread cancellationThread = null;
+        try {
+            assertTrue(scanPaused.await(5, TimeUnit.SECONDS));
+            cancellationThread = new Thread(taskWithFuture::cancel);
+            cancellationThread.start();
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+                while (!expirationTask.isCancelled()) {
+                    Thread.yield();
+                }
+            });
+            assertTrue(cancellationThread.isAlive());
+        } finally {
+            resumeScan.countDown();
+        }
+        cancellationThread.join(5_000);
+        cleanupThread.join(5_000);
+
+        assertFalse(cancellationThread.isAlive());
+        assertFalse(cleanupThread.isAlive());
+        assertNull(failure.get());
+        verify(scheduledFuture).cancel(true);
+        assertEquals(0L, currentLogStartOffset.get());
+        verify(remoteStorageManager, never()).deleteLogSegmentData(any());
     }
 
     @Test
