@@ -66,12 +66,12 @@ jobs:
     name: Load Test Catalog
     steps:
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           persist-credentials: false
 
       - name: Checkout test-catalog
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           ref: 'test-catalog'
           persist-credentials: false
@@ -102,7 +102,7 @@ jobs:
 
       - name: Archive Combined Test Catalog
         if: steps.combine-catalog.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: combined-test-catalog
           path: combined-test-catalog.txt
@@ -118,7 +118,7 @@ jobs:
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           persist-credentials: false
           ref: ${{ github.sha }}  # this is the default, just being explicit.
@@ -146,7 +146,7 @@ jobs:
           ./gradlew --build-cache --info $SCAN_ARG check releaseTarGz -x test
       - name: Archive check reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: check-reports
           path: |
@@ -195,7 +195,7 @@ jobs:
     name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' (flaky)' || '' }}${{ matrix.run-new == true && ' (new)' || '' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           persist-credentials: false
           ref: ${{ needs.configure.outputs.sha }}
@@ -213,7 +213,7 @@ jobs:
       # the overall workflow, so we'll continue here without a test catalog.
       - name: Load Test Catalog
         id: load-test-catalog
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         continue-on-error: true
         with:
           name: combined-test-catalog
@@ -234,7 +234,7 @@ jobs:
           test-verbose: ${{ runner.debug == '1' }}
 
       - name: Archive JUnit HTML reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         id: archive-junit-html
         with:
           name: junit-reports-${{ env.job-variation }}
@@ -244,7 +244,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Archive JUnit XML
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: junit-xml-${{ env.job-variation }}
           path: |
@@ -255,7 +255,7 @@ jobs:
       - name: Archive Thread Dumps
         id: archive-thread-dump
         if: steps.junit-test.outputs.gradle-exitcode == '124'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: junit-thread-dumps-${{ env.job-variation }}
           path: |
@@ -285,11 +285,11 @@ jobs:
       uploaded-test-catalog: ${{ steps.archive-test-catalog.outcome == 'success' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           persist-credentials: false
       - name: Download Thread Dumps
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: junit-thread-dumps-25-*
           path: thread-dumps
@@ -303,7 +303,7 @@ jobs:
               exit 1;
           fi
       - name: Download JUnit XMLs
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: junit-xml-25-*  # Only look at JDK 25 tests for the test catalog
           path: junit-xml
@@ -319,7 +319,7 @@ jobs:
            --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
       - name: Archive Test Catalog
         id: archive-test-catalog
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-catalog
           path: test-catalog
@@ -337,7 +337,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout Test Catalog
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           persist-credentials: true  # Needed to commit and push later
           ref: test-catalog
@@ -345,7 +345,7 @@ jobs:
         run: |
           rm -rf test-catalog
       - name: Download Test Catalog
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: test-catalog
           path: test-catalog
