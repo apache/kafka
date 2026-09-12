@@ -17,16 +17,20 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,6 +69,27 @@ public class ScramImageTest {
     @Test
     public void testImage2RoundTrip() {
         testToImage(IMAGE2);
+    }
+
+    @Test
+    public void testMechanismsAreDeeplyImmutable() {
+        ScramCredentialData credential = new ScramCredentialData(
+            new byte[] {1}, new byte[] {2}, new byte[] {3}, 4096);
+        Map<String, ScramCredentialData> credentials = new HashMap<>();
+        credentials.put("alice", credential);
+        Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms = new HashMap<>();
+        mechanisms.put(ScramMechanism.SCRAM_SHA_256, credentials);
+
+        ScramImage image = new ScramImage(mechanisms);
+
+        mechanisms.clear();
+        credentials.clear();
+        assertEquals(
+            Map.of(ScramMechanism.SCRAM_SHA_256, Map.of("alice", credential)),
+            image.mechanisms());
+        assertThrows(UnsupportedOperationException.class, () -> image.mechanisms().clear());
+        assertThrows(UnsupportedOperationException.class,
+            () -> image.mechanisms().get(ScramMechanism.SCRAM_SHA_256).clear());
     }
 
     private static void testToImage(ScramImage image) {
