@@ -355,7 +355,7 @@ public class LogManager {
                     if (!created) {
                         throw new IOException("Failed to create data directory " + dir.getAbsolutePath());
                     }
-                    Utils.flushDir(dir.toPath().toAbsolutePath().normalize().getParent());
+                    Utils.flushPath(dir.toPath().toAbsolutePath().normalize().getParent());
                 }
                 if (!dir.isDirectory() || !dir.canRead()) {
                     throw new IOException(dir.getAbsolutePath() + " is not a readable log directory.");
