@@ -107,6 +107,7 @@ public class OffsetStorageReaderTest {
 
         // Mock hanging future
         doAnswer(invocation -> {
+            latchTask1.countDown();
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.get(9999, TimeUnit.SECONDS);
             throw new RuntimeException("Should never get here");
@@ -121,7 +122,6 @@ public class OffsetStorageReaderTest {
                     if (callCount == 0) {
                         callCount += 1;
                         // First connector task
-                        latchTask1.countDown();
                         return hangingFuture;
                     } else {
                         // Second connector task
@@ -144,7 +144,6 @@ public class OffsetStorageReaderTest {
         latchTask1.await();
 
         verify(offsetBackingStore, times(1)).get(any());
-        verify(hangingFuture, times(1)).get();
 
         // Another connector task thread calls `offsets()` --> hangs on offsetBackingStore.get()
         // --> the future is never added to `offsetStorageReaderImpl.offsetReadFutures`
