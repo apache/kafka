@@ -588,6 +588,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
     require(queuedMaxBytes <= 0 || queuedMaxBytes >= socketRequestMaxBytes,
       s"${SocketServerConfigs.QUEUED_MAX_BYTES_CONFIG} must be larger or equal to ${SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG}")
 
+   require(socketRequestMaxBytes >= messageMaxBytes, 
+      s"${SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG} must be larger or equal to ${ServerConfigs.MESSAGE_MAX_BYTES_CONFIG}")
+
     if (maxConnectionsPerIp == 0)
       require(!maxConnectionsPerIpOverrides.isEmpty, s"${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG} can be set to zero only if" +
         s" ${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG} property is set.")
