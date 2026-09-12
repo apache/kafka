@@ -45,8 +45,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import joptsimple.OptionException;
-
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -79,7 +77,7 @@ public class DeleteConsumerGroupsTest {
     @Test
     public void testDeleteWithTopicOption() {
         String[] cgcArgs = new String[]{"--bootstrap-server", "localhost:62241", "--delete", "--group", getDummyGroupId(), "--topic"};
-        assertThrows(OptionException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
     }
 
 
@@ -284,7 +282,7 @@ public class DeleteConsumerGroupsTest {
     @Test
     public void testDeleteWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", "localhost:62241", "--delete", "--group", getDummyGroupId()};
-        assertThrows(OptionException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
     }
 
     private String getDummyGroupId() {

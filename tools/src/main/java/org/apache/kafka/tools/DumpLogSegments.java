@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
@@ -47,6 +48,7 @@ import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.common.runtime.Deserializer;
@@ -64,6 +66,7 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.snapshot.SnapshotPath;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.storage.internals.log.BatchMetadata;
+import org.apache.kafka.storage.internals.log.CorruptIndexException;
 import org.apache.kafka.storage.internals.log.CorruptSnapshotException;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
@@ -97,13 +100,39 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 public class DumpLogSegments {
     // Visible for testing
     static final String RECORD_INDENT = "|";
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
+        Exit.exit(mainNoExit(args));
+    }
+
+    // Visible for testing
+    static int mainNoExit(String[] args) {
+        try {
+            execute(args);
+            return 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.out.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException | TerseException e) {
+            System.err.println(e.getMessage());
+            return 1;
+        } catch (Throwable e) {
+            System.err.println(e.getMessage());
+            System.err.println(Utils.stackTrace(e));
+            return 1;
+        }
+    }
+
+    // Visible for testing
+    static void execute(String[] args) throws Exception {
         DumpLogSegmentsOptions opts = new DumpLogSegmentsOptions(args);
         CommandLineUtils.maybePrintHelpOrVersion(
             opts,
@@ -153,9 +182,15 @@ public class DumpLogSegments {
             System.err.println("Non-consecutive offsets in " + fileName);
             listOfNonConsecutivePairs.forEach((key, value) -> System.err.println("  " + key + " is followed by " + value));
         });
+
+        if (!misMatchesForIndexFilesMap.isEmpty()
+                || timeIndexDumpErrors.hasErrors()
+                || !nonConsecutivePairsForLogFilesMap.isEmpty()) {
+            throw new TerseException("Errors found in log segments.");
+        }
     }
 
-    private static void dumpTxnIndex(File file) throws IOException {
+    private static void dumpTxnIndex(File file) throws Exception {
         try (TransactionIndex index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)) {
             for (AbortedTxn abortedTxn : index.allAbortedTxns()) {
                 System.out.println("version: " + AbortedTxn.HIGHEST_SUPPORTED_VERSION +
@@ -164,10 +199,12 @@ public class DumpLogSegments {
                     " lastOffset: " + abortedTxn.lastOffset() +
                     " lastStableOffset: " + abortedTxn.lastStableOffset());
             }
+        } catch (CorruptIndexException | KafkaException e) {
+            throw new TerseException(e.getMessage());
         }
     }
 
-    private static void dumpProducerIdSnapshot(File file) throws IOException {
+    private static void dumpProducerIdSnapshot(File file) throws Exception {
         try {
             List<ProducerStateEntry> entries = ProducerStateManager.readSnapshot(file);
             for (ProducerStateEntry entry : entries) {
@@ -188,7 +225,7 @@ public class DumpLogSegments {
                 System.out.println();
             }
         } catch (CorruptSnapshotException e) {
-            System.err.println(e.getMessage());
+            throw new TerseException(e.getMessage());
         }
     }
 
@@ -558,6 +595,12 @@ public class DumpLogSegments {
             shallowOffsetNotFoundSeq.add(Map.entry(indexOffset, logOffset));
         }
 
+        boolean hasErrors() {
+            return !misMatchesForTimeIndexFilesMap.isEmpty()
+                    || !outOfOrderTimestamp.isEmpty()
+                    || !shallowOffsetNotFound.isEmpty();
+        }
+
         void printErrors() {
             misMatchesForTimeIndexFilesMap.forEach((fileName, listOfMismatches) -> {
                 System.err.println("Found timestamp mismatch in :" + fileName);
@@ -872,7 +915,11 @@ public class DumpLogSegments {
             skipRecordMetadataOpt = parser.accepts("skip-record-metadata",
                 "Skip metadata when printing records. This flag also skips control records.");
 
-            this.options = parser.parse(args);
+            try {
+                this.options = parser.parse(args);
+            } catch (OptionException e) {
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
+            }
         }
 
         MessageParser<?, ?> messageParser() {
