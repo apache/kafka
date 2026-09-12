@@ -95,6 +95,8 @@ org.apache.kafka.clients.admin.DescribeAuthorizedOperationsTest:
 - testClusterAuthorizedOperations
 - testConsumerGroupAuthorizedOperations
 - testTopicAuthorizedOperations
+org.apache.kafka.clients.admin.DescribeConfigsTest:
+- testDescribeConfigsNonexistent
 org.apache.kafka.clients.admin.DescribeFeaturesTest:
 - testApiVersions
 - testSendRequestToWrongNodeType

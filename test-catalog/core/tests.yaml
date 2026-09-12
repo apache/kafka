@@ -328,8 +328,6 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testDescribeClassicGroups
 - testDescribeConfigWithOptionTimeoutMs
 - testDescribeConfigsForLog4jLogLevels
-- testDescribeConfigsNonexistent
-- testDescribeConfigsNonexistentForKraft
 - testDescribeGroups
 - testDescribeProducers
 - testDescribeStreamsGroups
