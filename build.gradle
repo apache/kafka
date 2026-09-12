@@ -35,7 +35,7 @@ plugins {
   id 'jacoco'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '12.2.2'
-  id 'org.nosphere.apache.rat' version "0.8.1"
+  id 'org.nosphere.apache.rat' version "0.11.0"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
   id "com.github.spotbugs" version '6.5.10' apply false
@@ -274,7 +274,6 @@ if (repo != null) {
 
     verbose.set(true)
     reportDir.set(project.file('build/rat'))
-    stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
 
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
