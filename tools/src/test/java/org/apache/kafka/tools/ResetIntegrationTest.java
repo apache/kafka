@@ -196,6 +196,7 @@ public class ResetIntegrationTest {
         final String appId = generateAppId();
         final String[] parameters = new String[] {
             "--application-id", appId,
+            "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", NON_EXISTING_TOPIC
         };
@@ -213,6 +214,7 @@ public class ResetIntegrationTest {
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
         final String[] parameters = new String[] {
             "--application-id", appId,
+            "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", INPUT_TOPIC
         };
@@ -231,6 +233,7 @@ public class ResetIntegrationTest {
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
         final String[] parameters = new String[] {
             "--application-id", appId,
+            "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", INPUT_TOPIC
         };
@@ -250,6 +253,7 @@ public class ResetIntegrationTest {
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
         final String[] parameters = new String[] {
             "--application-id", appId,
+            "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", INPUT_TOPIC
         };
@@ -268,6 +272,7 @@ public class ResetIntegrationTest {
         final String appId = generateAppId();
         final String[] parameters = new String[] {
             "--application-id", appId,
+            "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--intermediate-topics", NON_EXISTING_TOPIC
         };
@@ -284,6 +289,7 @@ public class ResetIntegrationTest {
         final String appId = generateAppId();
         final String[] parameters = new String[] {
             "--application-id", appId,
+            "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--internal-topics", NON_EXISTING_TOPIC
         };
@@ -296,14 +302,93 @@ public class ResetIntegrationTest {
     }
 
     @ClusterTest
+    public void shouldSucceedWhenApplicationIdExistsAsConsumerGroup(ClusterInstance cluster) throws Exception {
+        try (Admin adminClient = cluster.admin()) {
+            final String appID = generateAppId();
+            prepare(cluster, null, appID);
+            streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
+
+            final KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+            startApplicationAndWaitUntilRunning(streams);
+            waitUntilMinKeyValueRecordsReceived(cluster, resultConsumerConfig, OUTPUT_TOPIC, 10);
+            streams.close();
+            waitForEmptyConsumerGroup(adminClient, appID);
+
+            final KafkaStreams cleanupInstance = new KafkaStreams(
+                    setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+            cleanupInstance.cleanUp();
+            cleanupInstance.close();
+
+            final String[] parameters = new String[] {
+                "--application-id", appID,
+                "--bootstrap-server", cluster.bootstrapServers()
+            };
+            final Properties cleanUpConfig = new Properties();
+            cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+            cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+
+            final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
+            assertEquals(0, exitCode);
+        }
+    }
+
+    @ClusterTest
+    public void shouldFailWithErrorWhenApplicationIdDoesNotExist(ClusterInstance cluster) {
+        final String nonExistentAppID = generateAppId() + "-does-not-exist";
+
+        final String[] parameters = new String[] {
+            "--application-id", nonExistentAppID,
+            "--bootstrap-server", cluster.bootstrapServers()
+        };
+        final Properties cleanUpConfig = new Properties();
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+
+        final String errorOutput = ToolsTestUtils.captureStandardErr(() -> {
+            final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
+            assertEquals(1, exitCode);
+        });
+
+        assertTrue(errorOutput.contains(nonExistentAppID));
+        assertTrue(errorOutput.contains("Refusing to delete internal topics"));
+    }
+
+    @ClusterTest
+    public void shouldSucceedWhenApplicationIdDoesNotExistWithForce(ClusterInstance cluster) {
+
+        final String nonExistentAppID = generateAppId() + "-does-not-exist";
+
+        final String[] parameters = new String[] {
+            "--application-id", nonExistentAppID,
+            "--force",
+            "--bootstrap-server", cluster.bootstrapServers()
+        };
+
+        final Properties cleanUpConfig = new Properties();
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "100");
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
+                Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+
+        final String output = ToolsTestUtils.captureStandardOut(() -> {
+            final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
+            assertEquals(0, exitCode);
+        });
+
+        assertTrue(output.contains("Done."));
+    }
+
+    @ClusterTest
     public void shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal(ClusterInstance cluster) throws Exception {
         final String appId = generateAppId();
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
+
         final String[] parameters = new String[] {
             "--application-id", appId,
+            "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--internal-topics", INPUT_TOPIC
         };
+
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));

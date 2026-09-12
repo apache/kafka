@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
@@ -27,6 +28,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
@@ -56,6 +58,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import joptsimple.OptionException;
@@ -153,7 +156,13 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 
             try (Admin adminClient = Admin.create(properties)) {
-                maybeDeleteActiveConsumers(groupId, adminClient, options.hasForce());
+                final boolean force = options.hasForce();
+
+                maybeDeleteActiveConsumers(groupId, adminClient, force);
+
+                if (!force) {
+                    validateApplicationIdExists(groupId, adminClient);
+                }
 
                 allTopics.clear();
                 allTopics.addAll(adminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -178,6 +187,38 @@ public class StreamsResetter {
             System.err.println("ERROR: " + e);
             e.printStackTrace(System.err);
             return EXIT_CODE_ERROR;
+        }
+    }
+
+    // Note: this check confirms the application.id exists as a consumer group,
+    // but cannot prevent topic deletion for other applications whose IDs share
+    // this application.id as a prefix (e.g. resetting "foo" may affect "foo-v2"
+    // topics). This is a known limitation of prefix-based topic inference.
+    void validateApplicationIdExists(final String applicationId,
+                                             final Admin adminClient)
+            throws InterruptedException, TimeoutException {
+        ConsumerGroupDescription description = null;
+        try {
+            final Map<String, ConsumerGroupDescription> groups = adminClient
+                    .describeConsumerGroups(Set.of(applicationId))
+                    .all()
+                    .get(60, TimeUnit.SECONDS);
+
+            description = groups.get(applicationId);
+        } catch (final ExecutionException e) {
+            if (!(e.getCause() instanceof GroupIdNotFoundException)) {
+                throw new RuntimeException(e.getCause());
+            }
+        }
+
+        if (description == null || GroupState.DEAD.equals(description.groupState())) {
+            throw new IllegalArgumentException(
+                    "No consumer group found with application.id '" + applicationId + "'. "
+                            + "Refusing to delete internal topics to avoid accidentally removing topics "
+                            + "that belong to other applications sharing a similar name prefix. "
+                            + "Verify your --application-id value. "
+                            + "Re-run with --force to bypass this check."
+            );
         }
     }
 
