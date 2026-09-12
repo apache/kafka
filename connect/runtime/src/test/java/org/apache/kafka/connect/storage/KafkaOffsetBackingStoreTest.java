@@ -297,6 +297,30 @@ public class KafkaOffsetBackingStoreTest {
     }
 
     @Test
+    public void testSetUsesByteBufferRemainingBytes() {
+        setup(false);
+        store.configure(mockConfig(props));
+        store.start();
+
+        verify(storeLog).start();
+
+        Map<ByteBuffer, ByteBuffer> offsets = Map.of(
+                ByteBuffer.wrap("xkeyx".getBytes(), 1, 3),
+                ByteBuffer.wrap("xvaluex".getBytes(), 1, 5)
+        );
+
+        Future<Void> setFuture = store.set(offsets, (error, result) -> { });
+        assertFalse(setFuture.isDone());
+
+        ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
+        verify(storeLog).send(aryEq(buffer("key").array()), aryEq(buffer("value").array()), callback.capture());
+
+        store.stop();
+
+        verify(storeLog).stop();
+    }
+
+    @Test
     public void testGetSetNull() throws Exception {
         setup(true);
         // Second get() should get the produced data and return the new values
