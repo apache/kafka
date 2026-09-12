@@ -305,6 +305,10 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
     // is in an inconsistent state and we cannot safely use them until they have been refreshed.
     final Set<String> inconsistent = new HashSet<>();
+    // Connectors whose task commit was encountered before their connector config while replaying the config topic.
+    // This can happen after compaction has removed an older connector config and leaves it ambiguous whether the
+    // task configs belong to a deleted connector or to the connector config that appears later in the log.
+    private final Set<String> connectorsPendingTaskConfigRecovery = new HashSet<>();
     // The most recently read offset. This does not take into account deferred task updates/commits, so we may have
     // outstanding data to be applied.
     private volatile long offset;
@@ -396,7 +400,13 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
             throw new ConfigException(msg);
         }
 
-        started = true;
+        synchronized (lock) {
+            // During startup, any connector that appears later in the log has already been marked inconsistent.
+            // The remaining entries belong to deleted connectors and no longer need to be retained. Set started
+            // under the same lock so that records received after startup cannot have their marker cleared here.
+            connectorsPendingTaskConfigRecovery.clear();
+            started = true;
+        }
         log.info("Started KafkaConfigBackingStore");
     }
 
@@ -1016,6 +1026,10 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
                 Map<String, String> stringsConnectorConfig = (Map<String, String>) newConnectorConfig;
                 connectorConfigs.put(connectorName, stringsConnectorConfig);
 
+                if (connectorsPendingTaskConfigRecovery.remove(connectorName)) {
+                    inconsistent.add(connectorName);
+                }
+
                 // Set the initial state of the connector to STARTED, which ensures that any connectors
                 // which were created with 0.9 Connect will be initialized in the STARTED state.
                 if (!connectorTargetStates.containsKey(connectorName))
@@ -1066,6 +1080,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
             Map<String, String> appliedConnectorConfig = connectorConfigs.get(connectorName);
             if (appliedConnectorConfig == null) {
                 processConnectorRemoval(connectorName);
+                connectorsPendingTaskConfigRecovery.add(connectorName);
                 log.debug(
                         "Ignoring task configs for connector {}; it appears that the connector was deleted previously "
                             + "and that log compaction has since removed any trace of its previous configurations "
@@ -1266,6 +1281,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
         deferredTaskUpdates.remove(connectorName);
         appliedConnectorConfigs.remove(connectorName);
+        connectorsPendingTaskConfigRecovery.remove(connectorName);
     }
 
     private ConnectorTaskId parseTaskId(String key) {
