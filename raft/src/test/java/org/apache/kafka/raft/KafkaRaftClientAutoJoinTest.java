@@ -27,8 +27,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
-import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_595_PROTOCOL;
-import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
+import static org.apache.kafka.raft.SharedRaftClientContext.RaftProtocol.KIP_595_PROTOCOL;
+import static org.apache.kafka.raft.SharedRaftClientContext.RaftProtocol.KIP_853_PROTOCOL;
 
 public class KafkaRaftClientAutoJoinTest {
     @Test
@@ -37,10 +37,9 @@ public class KafkaRaftClientAutoJoinTest {
         final var oldFollower = replicaKey(leader.id() + 1, true);
         final var newFollowerKey = replicaKey(oldFollower.id(), true);
         final int epoch = 1;
-        final var context = new RaftClientTestContext.Builder(
+        final var context = new RaftClientContextBuilder<>(
             newFollowerKey.id(),
-            newFollowerKey.directoryId().get()
-        )
+            newFollowerKey.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, oldFollower)), KRaftVersion.KRAFT_VERSION_1
@@ -68,10 +67,9 @@ public class KafkaRaftClientAutoJoinTest {
         final var follower = replicaKey(leader.id() + 1, true);
         final var newVoter = replicaKey(follower.id() + 1, true);
         final int epoch = 1;
-        final var context = new RaftClientTestContext.Builder(
+        final var context = new RaftClientContextBuilder<>(
             newVoter.id(),
-            newVoter.directoryId().get()
-        )
+            newVoter.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, follower)), KRaftVersion.KRAFT_VERSION_1
@@ -114,10 +112,9 @@ public class KafkaRaftClientAutoJoinTest {
         final var oldFollower = replicaKey(leader.id() + 1, true);
         final var newFollowerKey = replicaKey(oldFollower.id(), true);
         final int epoch = 1;
-        final var context = new RaftClientTestContext.Builder(
+        final var context = new RaftClientContextBuilder<>(
             newFollowerKey.id(),
-            newFollowerKey.directoryId().get()
-        )
+            newFollowerKey.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, oldFollower)), KRaftVersion.KRAFT_VERSION_1
@@ -175,10 +172,9 @@ public class KafkaRaftClientAutoJoinTest {
         final var follower = replicaKey(leader.id() + 1, true);
         final var newObserver = replicaKey(follower.id() + 1, true);
         final int epoch = 1;
-        final var context = new RaftClientTestContext.Builder(
+        final var context = new RaftClientContextBuilder<>(
             newObserver.id(),
-            newObserver.directoryId().get()
-        )
+            newObserver.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, follower)), KRaftVersion.KRAFT_VERSION_1
@@ -204,10 +200,9 @@ public class KafkaRaftClientAutoJoinTest {
         final var follower = replicaKey(leader.id() + 1, true);
         final var observer = replicaKey(follower.id() + 1, true);
         final int epoch = 1;
-        final var context = new RaftClientTestContext.Builder(
+        final var context = new RaftClientContextBuilder<>(
             observer.id(),
-            observer.directoryId().get()
-        )
+            observer.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, follower)), KRaftVersion.KRAFT_VERSION_1
@@ -233,10 +228,9 @@ public class KafkaRaftClientAutoJoinTest {
         final var follower = replicaKey(leader.id() + 1, true);
         final var observer = replicaKey(follower.id() + 1, true);
         final int epoch = 1;
-        final var context = new RaftClientTestContext.Builder(
+        final var context = new RaftClientContextBuilder<>(
             observer.id(),
-            observer.directoryId().get()
-        )
+            observer.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(KIP_595_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, follower)), KRaftVersion.KRAFT_VERSION_0

@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.randomReplicaId;
-import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
+import static org.apache.kafka.raft.RaftClientContextBuilder.DEFAULT_ELECTION_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -44,7 +44,7 @@ public class KafkaRaftClientClusterAuthTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
                 .withKip853Rpc(withKip853Rpc)
                 .withElectedLeader(epoch, otherNodeId)
                 .build();
@@ -72,7 +72,7 @@ public class KafkaRaftClientClusterAuthTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
                 .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
                 .withUnknownLeader(epoch - 1)
                 .withKip853Rpc(withKip853Rpc)
@@ -102,7 +102,7 @@ public class KafkaRaftClientClusterAuthTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
                 .withUnknownLeader(epoch - 1)
                 .withKip853Rpc(withKip853Rpc)
                 .build();
@@ -127,7 +127,7 @@ public class KafkaRaftClientClusterAuthTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
                 .withUnknownLeader(1)
                 .withKip853Rpc(withKip853Rpc)
                 .build();
