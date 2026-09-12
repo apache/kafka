@@ -960,7 +960,7 @@ public final class Utils {
     /**
      * Flushes dirty directories to guarantee crash consistency.
      * <p>
-     * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
+     * Note: We don't fsync directories on Windows OS and z/OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
      *
      * @throws IOException if flushing the directory fails.
      */
@@ -987,12 +987,16 @@ public final class Utils {
 
     /**
      * Flushes dirty file with swallowing {@link NoSuchFileException}
+     * <p>
+     * Note: We don't fsync files on Windows OS and z/OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
      */
     public static void flushFileIfExists(Path path) throws IOException {
-        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
-            fileChannel.force(true);
-        } catch (NoSuchFileException e) {
-            log.warn("Failed to flush file {}", path, e);
+        if (!OperatingSystem.IS_WINDOWS && !OperatingSystem.IS_ZOS) {
+            try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
+                fileChannel.force(true);
+            } catch (NoSuchFileException e) {
+                log.warn("Failed to flush file {}", path, e);
+            }
         }
     }
 
