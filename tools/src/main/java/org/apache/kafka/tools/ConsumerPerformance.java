@@ -67,22 +67,13 @@ public class ConsumerPerformance {
             AtomicLong totalRecordsRead = new AtomicLong(0);
             AtomicLong totalBytesRead = new AtomicLong(0);
             AtomicLong joinTimeMs = new AtomicLong(0);
-            AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
 
             if (!options.hideHeader())
                 printHeader(options.showDetailedStats());
 
             try (Consumer<byte[], byte[]> consumer = consumerCreator.apply(options.props())) {
-                long bytesRead = 0L;
-                long recordsRead = 0L;
-                long lastBytesRead = 0L;
-                long lastRecordsRead = 0L;
-                long currentTimeMs = System.currentTimeMillis();
-                long joinStartMs = currentTimeMs;
-                long startMs = currentTimeMs;
-                consume(consumer, options, totalRecordsRead, totalBytesRead, joinTimeMs,
-                    bytesRead, recordsRead, lastBytesRead, lastRecordsRead,
-                    joinStartMs, joinTimeMsInSingleRound);
+                long startMs = System.currentTimeMillis();
+                consume(consumer, options, totalRecordsRead, totalBytesRead, joinTimeMs, startMs);
                 long endMs = System.currentTimeMillis();
 
                 // print final stats
@@ -128,19 +119,19 @@ public class ConsumerPerformance {
                                 AtomicLong totalRecordsRead,
                                 AtomicLong totalBytesRead,
                                 AtomicLong joinTimeMs,
-                                long bytesRead,
-                                long recordsRead,
-                                long lastBytesRead,
-                                long lastRecordsRead,
-                                long joinStartMs,
-                                AtomicLong joinTimeMsInSingleRound) {
+                                long startMs) {
+        long bytesRead = 0L;
+        long recordsRead = 0L;
+        long lastBytesRead = 0L;
+        long lastRecordsRead = 0L;
+        AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
         long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         long reportingIntervalMs = options.reportingIntervalMs();
         boolean showDetailedStats = options.showDetailedStats();
         SimpleDateFormat dateFormat = options.dateFormat();
 
-        ConsumerPerfRebListener listener = new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound);
+        ConsumerPerfRebListener listener = new ConsumerPerfRebListener(joinTimeMs, startMs, joinTimeMsInSingleRound);
         consumer.setRebalanceListener(listener);
         if (options.topic().isPresent()) {
             consumer.subscribe(options.topic().get());
