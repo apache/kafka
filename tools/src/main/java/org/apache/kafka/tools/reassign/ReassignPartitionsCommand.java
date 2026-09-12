@@ -129,11 +129,16 @@ public class ReassignPartitionsCommand {
         "is removed.";
 
     public static void main(String[] args) {
-        ReassignPartitionsCommandOptions opts = validateAndParseArgs(args);
-        boolean failed = true;
+        Exit.exit(mainNoExit(args));
+    }
+
+    // Visible for testing
+    static int mainNoExit(String[] args) {
+        int exitCode = 1;
         Admin adminClient = null;
 
         try {
+            ReassignPartitionsCommandOptions opts = validateAndParseArgs(args);
             Properties props = opts.options.has(opts.commandConfigOpt)
                 ? Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
                 : new Properties();
@@ -145,8 +150,13 @@ public class ReassignPartitionsCommand {
             props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool");
             adminClient = Admin.create(props);
             handleAction(adminClient, opts);
-            failed = false;
-        } catch (TerseException e) {
+            exitCode = 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.out.println(e.getMessage());
+            }
+            exitCode = 0;
+        } catch (IllegalArgumentException | TerseException e) {
             System.out.println(e.getMessage());
         } catch (Throwable e) {
             System.out.println("Error: " + e.getMessage());
@@ -157,10 +167,7 @@ public class ReassignPartitionsCommand {
                 adminClient.close();
             }
         }
-        // If the command failed, exit with a non-zero exit code.
-        if (failed) {
-            Exit.exit(1);
-        }
+        return exitCode;
     }
 
     private static void handleAction(Admin adminClient, ReassignPartitionsCommandOptions opts) throws IOException, ExecutionException, InterruptedException, TerseException {
@@ -1453,16 +1460,16 @@ public class ReassignPartitionsCommand {
             .filter(a -> opts.options.has(a)).toList();
 
         if (allActions.size() != 1) {
-            CommandLineUtils.printUsageAndExit(opts.parser, String.format("Command must include exactly one action: %s",
+            CommandLineUtils.printUsageAndThrow(opts.parser, String.format("Command must include exactly one action: %s",
                 validActions.stream().map(a -> "--" + a.options().get(0)).collect(Collectors.joining(", "))));
         }
 
         OptionSpec<?> action = allActions.get(0);
 
         if (opts.options.has(opts.bootstrapServerOpt) && opts.options.has(opts.bootstrapControllerOpt))
-            CommandLineUtils.printUsageAndExit(opts.parser, "Please don't specify both --bootstrap-server and --bootstrap-controller");
+            CommandLineUtils.printUsageAndThrow(opts.parser, "Please don't specify both --bootstrap-server and --bootstrap-controller");
         else if (!opts.options.has(opts.bootstrapServerOpt) && !opts.options.has(opts.bootstrapControllerOpt))
-            CommandLineUtils.printUsageAndExit(opts.parser, "Please specify either --bootstrap-server or --bootstrap-controller");
+            CommandLineUtils.printUsageAndThrow(opts.parser, "Please specify either --bootstrap-server or --bootstrap-controller");
 
         boolean isBootstrapServer = opts.options.has(opts.bootstrapServerOpt);
 
@@ -1514,7 +1521,7 @@ public class ReassignPartitionsCommand {
             if (!opt.equals(action) &&
                 !requiredArgs.getOrDefault(action, List.of()).contains(opt) &&
                 !permittedArgs.getOrDefault(action, List.of()).contains(opt)) {
-                CommandLineUtils.printUsageAndExit(opts.parser,
+                CommandLineUtils.printUsageAndThrow(opts.parser,
                     String.format("Option \"%s\" can't be used with action \"%s\"", opt, action));
             }
         });

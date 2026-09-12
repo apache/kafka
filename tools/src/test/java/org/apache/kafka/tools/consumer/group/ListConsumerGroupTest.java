@@ -558,7 +558,7 @@ public class ListConsumerGroupTest {
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
         TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(args.toArray(new String[0])));
+            String output = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.mainNoExit(args.toArray(new String[0])));
             out.set(output);
 
             int index = 0;
