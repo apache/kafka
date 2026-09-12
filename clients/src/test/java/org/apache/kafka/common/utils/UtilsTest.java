@@ -608,6 +608,20 @@ public class UtilsTest {
         }
     }
 
+    @Test
+    public void testFlushFileIfExistsWithExistingFile() throws IOException {
+        Path file = TestUtils.tempFile().toPath();
+        // On non-Windows/z/OS platforms this fsyncs the file; on Windows/z/OS it is skipped. Either way it must not throw.
+        assertDoesNotThrow(() -> Utils.flushFileIfExists(file));
+    }
+
+    @Test
+    public void testFlushFileIfExistsSwallowsNoSuchFileException() {
+        Path missing = TestUtils.tempDirectory().toPath().resolve("does-not-exist");
+        // A missing file must be swallowed (NoSuchFileException), not propagated.
+        assertDoesNotThrow(() -> Utils.flushFileIfExists(missing));
+    }
+
     /**
      * Tests that `readFullyOrFail` behaves correctly if multiple `FileChannel.read` operations are required to fill
      * the destination buffer.
