@@ -30,7 +30,7 @@ import java.util.SortedSet;
 
 /**
  * This class encapsulates the invocation of the callback methods defined in the
- * {@link org.apache.kafka.clients.consumer.ConsumerRebalanceListener} interface. When consumer
+ * {@link org.apache.kafka.clients.consumer.RebalanceListener} interface. When consumer
  * group partition assignment changes, these methods are invoked. This class wraps those callback
  * calls with logging, metrics recording, and exception handling.
  */

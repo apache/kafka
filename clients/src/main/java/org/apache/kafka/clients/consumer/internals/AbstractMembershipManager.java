@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -108,7 +108,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     protected final SubscriptionState subscriptions;
 
     /**
-     * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
+     * Metadata that allows us to create the partitions needed for {@link RebalanceListener}.
      */
     private final Metadata metadata;
 
@@ -618,7 +618,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * transition to {@link MemberState#LEAVING} to send the heartbeat request and leave the group.
      * This is expected to be invoked when the user calls the unsubscribe API or is closing the consumer.
      *
-     * @param runCallbacks {@code true} to insert the step to execute the {@link ConsumerRebalanceListener} callback,
+     * @param runCallbacks {@code true} to insert the step to execute the {@link RebalanceListener} callback,
      *                     {@code false} to skip
      *
      * @return Future that will complete when the callback execution completes and the heartbeat

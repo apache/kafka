@@ -154,7 +154,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private final RebalanceProtocol protocol;
-    // Wraps the logic for invoking the ConsumerRebalanceListener methods
+    // Wraps the logic for invoking the RebalanceListener methods
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     // pending commit offset request in onJoinPrepare
     private RequestFuture<Void> autoCommitOffsetRequestFuture = null;
