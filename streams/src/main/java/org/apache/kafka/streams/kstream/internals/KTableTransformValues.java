@@ -40,14 +40,23 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
     private final KTableImpl<K, ?, V> parent;
     private final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier;
     private final String queryableName;
+    private final String[] stateStoreNames;
     private boolean sendOldValues = false;
 
     KTableTransformValues(final KTableImpl<K, ?, V> parent,
                           final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier,
                           final String queryableName) {
+        this(parent, transformerSupplier, queryableName, new String[0]);
+    }
+
+    KTableTransformValues(final KTableImpl<K, ?, V> parent,
+                          final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier,
+                          final String queryableName,
+                          final String[] stateStoreNames) {
         this.parent = Objects.requireNonNull(parent, "parent");
         this.transformerSupplier = Objects.requireNonNull(transformerSupplier, "transformerSupplier");
         this.queryableName = queryableName;
+        this.stateStoreNames = Objects.requireNonNull(stateStoreNames, "stateStoreNames");
     }
 
     @Override
@@ -72,7 +81,11 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
 
             @Override
             public String[] storeNames() {
-                return parentValueGetterSupplier.storeNames();
+                final String[] parentStoreNames = parentValueGetterSupplier.storeNames();
+                final String[] storeNames = new String[parentStoreNames.length + stateStoreNames.length];
+                System.arraycopy(parentStoreNames, 0, storeNames, 0, parentStoreNames.length);
+                System.arraycopy(stateStoreNames, 0, storeNames, parentStoreNames.length, stateStoreNames.length);
+                return storeNames;
             }
         };
     }
