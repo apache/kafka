@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
@@ -391,19 +389,13 @@ public class IQv2VersionedStoreIntegrationTest {
         }
 
         inputPosition = inputPosition.withComponent(INPUT_TOPIC_NAME, 0, 4);
-        assertEquals(Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, 4), inputPosition);
 
         // make sure that the new value is picked up by the store
-        final Properties consumerProps = new Properties();
-        consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProps.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
-        consumerProps.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
-        consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "foo");
-        consumerProps.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        try {
-            IntegrationTestUtils.waitUntilMinRecordsReceived(consumerProps, INPUT_TOPIC_NAME, RECORD_NUMBER + 1);
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
-        }
+        shouldHandleVersionedKeyQuery(
+            Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0])),
+            999999,
+            RECORD_TIMESTAMPS[0],
+            Optional.of(RECORD_TIMESTAMPS[1])
+        );
     }
 }
