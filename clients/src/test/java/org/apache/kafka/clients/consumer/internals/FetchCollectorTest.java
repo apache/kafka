@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.IsolationLevel;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
@@ -190,6 +192,29 @@ public class FetchCollectorTest {
 
         // Verify that when drain() was invoked, the position had already been advanced.
         assertEquals(DEFAULT_RECORD_COUNT, positionAtDrainTime.get());
+    }
+
+    @Test
+    public void testPositionUpdateUsesCurrentLeaderEpoch() {
+        buildDependencies();
+        assignAndSeek(topicAPartition0);
+
+        int leaderEpoch = 15;
+        metadata.requestUpdate(true);
+        Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion(time.milliseconds());
+        metadata.update(requestAndVersion.requestVersion,
+                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(topicAPartition0.topic(), 1), tp -> leaderEpoch),
+                false,
+                time.milliseconds());
+
+        CompletedFetch completedFetch = completedFetchBuilder
+                .recordCount(DEFAULT_RECORD_COUNT)
+                .build();
+        fetchBuffer.add(completedFetch);
+
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertFalse(fetch.isEmpty());
+        assertEquals(Optional.of(leaderEpoch), subscriptions.position(topicAPartition0).currentLeader.epoch);
     }
 
     @Test
