@@ -38,6 +38,8 @@ import java.util.Set;
 import static org.apache.kafka.clients.consumer.internals.FetchMetricsManager.topicPartitionTags;
 import static org.apache.kafka.clients.consumer.internals.FetchMetricsManager.topicTags;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FetchMetricsManagerTest {
@@ -203,6 +205,63 @@ public class FetchMetricsManagerTest {
     }
 
     @Test
+    public void testRecordsFetchedTopicWithPeriodBeforeUnderscoreTopic() {
+        String dottedTopic = "my.topic";
+        String underscoreTopic = "my_topic";
+        Map<String, String> dottedTags = Map.of("topic", dottedTopic);
+        Map<String, String> underscoreTags = Map.of("topic", underscoreTopic);
+        int initialMetricsSize = metrics.metrics().size();
+
+        metricsManager.recordRecordsFetched(dottedTopic, 1);
+        assertEquals(6, metrics.metrics().size() - initialMetricsSize);
+        assertNotNull(metrics.getSensor("topic.my.topic.records-fetched"));
+        assertNotNull(metrics.getSensor("topic.my_topic.records-fetched.deprecated"));
+        assertNull(metrics.getSensor("topic.my_topic.records-fetched"));
+
+        metricsManager.recordRecordsFetched(underscoreTopic, 2);
+        assertEquals(6, metrics.metrics().size() - initialMetricsSize);
+        assertNotNull(metrics.getSensor("topic.my_topic.records-fetched"));
+        assertNull(metrics.getSensor("topic.my_topic.records-fetched.deprecated"));
+        assertEquals(1, metricValue(metricsRegistry.topicRecordsConsumedTotal, dottedTags), EPSILON);
+        assertEquals(2, metricValue(metricsRegistry.topicRecordsConsumedTotal, underscoreTags), EPSILON);
+    }
+
+    @Test
+    public void testRecordsFetchedTopicWithUnderscoreBeforePeriodTopic() {
+        String dottedTopic = "my.topic";
+        String underscoreTopic = "my_topic";
+        Map<String, String> dottedTags = Map.of("topic", dottedTopic);
+        Map<String, String> underscoreTags = Map.of("topic", underscoreTopic);
+        int initialMetricsSize = metrics.metrics().size();
+
+        metricsManager.recordRecordsFetched(underscoreTopic, 2);
+        assertEquals(3, metrics.metrics().size() - initialMetricsSize);
+        assertNotNull(metrics.getSensor("topic.my_topic.records-fetched"));
+        assertNull(metrics.getSensor("topic.my_topic.records-fetched.deprecated"));
+
+        metricsManager.recordRecordsFetched(dottedTopic, 1);
+        assertEquals(6, metrics.metrics().size() - initialMetricsSize);
+        assertNotNull(metrics.getSensor("topic.my.topic.records-fetched"));
+        assertNull(metrics.getSensor("topic.my_topic.records-fetched.deprecated"));
+        assertEquals(1, metricValue(metricsRegistry.topicRecordsConsumedTotal, dottedTags), EPSILON);
+        assertEquals(2, metricValue(metricsRegistry.topicRecordsConsumedTotal, underscoreTags), EPSILON);
+    }
+
+    @Test
+    public void testRecordsFetchedTopicWithoutPeriodDoesNotRegisterDeprecatedSensor() {
+        String topicName = "my_topic";
+        Map<String, String> tags = Map.of("topic", topicName);
+        int initialMetricsSize = metrics.metrics().size();
+
+        metricsManager.recordRecordsFetched(topicName, 2);
+
+        assertEquals(3, metrics.metrics().size() - initialMetricsSize);
+        assertNotNull(metrics.getSensor("topic.my_topic.records-fetched"));
+        assertNull(metrics.getSensor("topic.my_topic.records-fetched.deprecated"));
+        assertEquals(2, metricValue(metricsRegistry.topicRecordsConsumedTotal, tags), EPSILON);
+    }
+
+    @Test
     @SuppressWarnings("deprecation")
     public void testPartitionLag() {
         TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 0);
@@ -295,6 +354,68 @@ public class FetchMetricsManagerTest {
         assertEquals(15, metricValue(metricsRegistry.partitionRecordsLead, deprecatedTags), EPSILON);
         assertEquals(12, metricValue(metricsRegistry.partitionRecordsLeadMin, deprecatedTags), EPSILON);
         assertEquals(15, metricValue(metricsRegistry.partitionRecordsLeadAvg, deprecatedTags), EPSILON);
+    }
+
+    @Test
+    public void testPartitionMetricsWithPeriodBeforeUnderscoreTopic() {
+        TopicPartition dottedTp = new TopicPartition("my.topic", 0);
+        TopicPartition underscoreTp = new TopicPartition("my_topic", 0);
+        Map<String, String> dottedTags = Map.of(
+            "topic", dottedTp.topic(),
+            "partition", String.valueOf(dottedTp.partition()));
+        Map<String, String> underscoreTags = Map.of(
+            "topic", underscoreTp.topic(),
+            "partition", String.valueOf(underscoreTp.partition()));
+        int initialMetricsSize = metrics.metrics().size();
+
+        metricsManager.recordPartitionLag(dottedTp, 4);
+        metricsManager.recordPartitionLead(dottedTp, 8);
+        assertEquals(12, metrics.metrics().size() - initialMetricsSize);
+        assertNotNull(metrics.getSensor("my.topic-0.records-lag"));
+        assertNotNull(metrics.getSensor("my_topic-0.records-lag.deprecated"));
+        assertNotNull(metrics.getSensor("my.topic-0.records-lead"));
+        assertNotNull(metrics.getSensor("my_topic-0.records-lead.deprecated"));
+
+        metricsManager.recordPartitionLag(underscoreTp, 2);
+        metricsManager.recordPartitionLead(underscoreTp, 6);
+        assertEquals(12, metrics.metrics().size() - initialMetricsSize);
+        assertNotNull(metrics.getSensor("my_topic-0.records-lag"));
+        assertNull(metrics.getSensor("my_topic-0.records-lag.deprecated"));
+        assertNotNull(metrics.getSensor("my_topic-0.records-lead"));
+        assertNull(metrics.getSensor("my_topic-0.records-lead.deprecated"));
+        assertEquals(4, metricValue(metricsRegistry.partitionRecordsLag, dottedTags), EPSILON);
+        assertEquals(2, metricValue(metricsRegistry.partitionRecordsLag, underscoreTags), EPSILON);
+        assertEquals(8, metricValue(metricsRegistry.partitionRecordsLead, dottedTags), EPSILON);
+        assertEquals(6, metricValue(metricsRegistry.partitionRecordsLead, underscoreTags), EPSILON);
+    }
+
+    @Test
+    public void testMaybeUpdateAssignmentWithPeriodBeforeUnderscoreTopic() {
+        TopicPartition dottedTp = new TopicPartition("my.topic", 0);
+        TopicPartition underscoreTp = new TopicPartition("my_topic", 0);
+        Map<String, String> dottedTags = Map.of(
+            "topic", dottedTp.topic(),
+            "partition", String.valueOf(dottedTp.partition()));
+        Map<String, String> underscoreTags = Map.of(
+            "topic", underscoreTp.topic(),
+            "partition", String.valueOf(underscoreTp.partition()));
+
+        SubscriptionState subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        subscriptionState.assignFromUser(Set.of(dottedTp));
+        subscriptionState.updatePreferredReadReplica(dottedTp, 1, () -> 0L);
+        metricsManager.maybeUpdateAssignment(subscriptionState);
+        assertEquals(1, readReplicaMetricValue(metricsRegistry.partitionPreferredReadReplica, dottedTags), EPSILON);
+        assertEquals(1, readReplicaMetricValue(metricsRegistry.partitionPreferredReadReplica, underscoreTags), EPSILON);
+
+        subscriptionState.assignFromUser(Set.of(dottedTp, underscoreTp));
+        subscriptionState.updatePreferredReadReplica(underscoreTp, 2, () -> 0L);
+        metricsManager.maybeUpdateAssignment(subscriptionState);
+        assertEquals(2, readReplicaMetricValue(metricsRegistry.partitionPreferredReadReplica, underscoreTags), EPSILON);
+
+        subscriptionState.assignFromUser(Set.of(underscoreTp));
+        subscriptionState.updatePreferredReadReplica(underscoreTp, 2, () -> 0L);
+        metricsManager.maybeUpdateAssignment(subscriptionState);
+        assertEquals(2, readReplicaMetricValue(metricsRegistry.partitionPreferredReadReplica, underscoreTags), EPSILON);
     }
 
     @Test
