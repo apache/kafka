@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -45,6 +46,7 @@ import java.util.Set;
 public final class ResignedState implements EpochState {
     private final int localId;
     private final int epoch;
+    private final Optional<ReplicaKey> votedKey;
     private final Endpoints endpoints;
     private final Set<Integer> voters;
     private final long electionTimeoutMs;
@@ -57,6 +59,7 @@ public final class ResignedState implements EpochState {
         Time time,
         int localId,
         int epoch,
+        Optional<ReplicaKey> votedKey,
         Set<Integer> voters,
         long electionTimeoutMs,
         List<ReplicaKey> preferredSuccessors,
@@ -65,6 +68,7 @@ public final class ResignedState implements EpochState {
     ) {
         this.localId = localId;
         this.epoch = epoch;
+        this.votedKey = Objects.requireNonNull(votedKey, "votedKey must be non-null");
         this.voters = voters;
         this.unackedVoters = new HashSet<>(voters);
         this.unackedVoters.remove(localId);
@@ -77,7 +81,7 @@ public final class ResignedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, localId, Optional.empty(), voters);
+        return ElectionState.withElectedLeader(epoch, localId, votedKey, voters);
     }
 
     @Override
@@ -173,6 +177,7 @@ public final class ResignedState implements EpochState {
         return "ResignedState(" +
             "localId=" + localId +
             ", epoch=" + epoch +
+            ", votedKey=" + votedKey +
             ", voters=" + voters +
             ", electionTimeoutMs=" + electionTimeoutMs +
             ", unackedVoters=" + unackedVoters +
