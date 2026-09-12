@@ -209,7 +209,7 @@ class BrokerServer(
       val clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin()
 
       config.dynamicConfig.initialize(Some(clientTelemetryExporterPlugin))
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", sharedServer.clientQuotaCallbackPlugin)
       DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
       /* start scheduler */
