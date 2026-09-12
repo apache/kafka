@@ -242,7 +242,7 @@ public class LogCompactionTester {
 
         OptionSet optionSet = parser.parse(args);
         if (args.length == 0) {
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                     "A tool to test log compaction. Valid options are: ");
         }
 

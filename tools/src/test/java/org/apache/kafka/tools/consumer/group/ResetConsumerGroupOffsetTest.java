@@ -58,8 +58,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
-import joptsimple.OptionException;
-
 import static java.time.LocalDateTime.now;
 import static java.util.stream.Collectors.toMap;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -677,7 +675,7 @@ public class ResetConsumerGroupOffsetTest {
             "--bootstrap-server", cluster.bootstrapServers(),
             "--reset-offsets", "--group", group, "--all-topics",
             "--to-offset", "2", "--export"};
-        assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
+        assertThrows(IllegalArgumentException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
     @ClusterTest(brokers = 3, serverProperties = {@ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")})

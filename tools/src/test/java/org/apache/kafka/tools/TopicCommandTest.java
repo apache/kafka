@@ -55,7 +55,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.test.TestUtils;
@@ -319,15 +318,7 @@ public class TopicCommandTest {
     }
 
     public void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {
-        Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(expected, exitCode);
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> new TopicCommand.TopicCommandOptions(options));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> new TopicCommand.TopicCommandOptions(options));
     }
 
     private TopicCommand.TopicCommandOptions buildTopicCommandOptionsWithBootstrap(ClusterInstance clusterInstance, String... opts) {

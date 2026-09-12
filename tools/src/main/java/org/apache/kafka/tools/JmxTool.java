@@ -54,6 +54,7 @@ import javax.management.remote.JMXConnectorFactory;
 import javax.management.remote.JMXServiceURL;
 import javax.rmi.ssl.SslRMIClientSocketFactory;
 
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 /**
@@ -64,47 +65,62 @@ import joptsimple.OptionSpec;
  */
 public class JmxTool {
     public static void main(String[] args) {
+        Exit.exit(mainNoExit(args));
+    }
+
+    // Visible for testing
+    static int mainNoExit(String[] args) {
         try {
-            JmxToolOptions options = new JmxToolOptions(args);
-            CommandLineUtils.maybePrintHelpOrVersion(options, "Dump JMX values to standard output.");
-
-            Optional<String[]> attributesInclude = options.attributesInclude();
-            Optional<DateFormat> dateFormat = options.dateFormat();
-            String reportFormat = options.parseFormat();
-            boolean keepGoing = true;
-
-            MBeanServerConnection conn = connectToBeanServer(options);
-            List<ObjectName> queries = options.queries();
-            boolean hasPatternQueries = queries.stream().filter(Objects::nonNull).anyMatch(ObjectName::isPattern);
-
-            Set<ObjectName> found = findObjects(options, conn, queries, hasPatternQueries);
-            Map<ObjectName, Integer> numExpectedAttributes =
-                    findNumExpectedAttributes(conn, attributesInclude, hasPatternQueries, queries, found);
-
-            List<String> keys = new ArrayList<>();
-            keys.add("time");
-            keys.addAll(new TreeSet<>(queryAttributes(conn, found, attributesInclude).keySet()));
-            maybePrintCsvHeader(reportFormat, keys, numExpectedAttributes);
-
-            while (keepGoing) {
-                long start = System.currentTimeMillis();
-                Map<String, Object> attributes = queryAttributes(conn, found, attributesInclude);
-                attributes.put("time", dateFormat.map(format -> format.format(new Date())).orElseGet(() -> String.valueOf(System.currentTimeMillis())));
-                maybePrintDataRows(reportFormat, numExpectedAttributes, keys, attributes);
-                if (options.isOneTime()) {
-                    keepGoing = false;
-                } else {
-                    TimeUnit.MILLISECONDS.sleep(Math.max(0, options.interval() - (System.currentTimeMillis() - start)));
-                }
+            execute(args);
+            return 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.out.println(e.getMessage());
             }
-            Exit.exit(0);
-        } catch (TerseException e) {
+            return 0;
+        } catch (IllegalArgumentException | TerseException e) {
             System.err.println(e.getMessage());
-            Exit.exit(1);
+            return 1;
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
-            Exit.exit(1);
+            return 1;
+        }
+    }
+
+    // Visible for testing
+    static void execute(String[] args) throws Exception {
+        JmxToolOptions options = new JmxToolOptions(args);
+        CommandLineUtils.maybePrintHelpOrVersion(options, "Dump JMX values to standard output.");
+
+        Optional<String[]> attributesInclude = options.attributesInclude();
+        Optional<DateFormat> dateFormat = options.dateFormat();
+        String reportFormat = options.parseFormat();
+        boolean keepGoing = true;
+
+        MBeanServerConnection conn = connectToBeanServer(options);
+        List<ObjectName> queries = options.queries();
+        boolean hasPatternQueries = queries.stream().filter(Objects::nonNull).anyMatch(ObjectName::isPattern);
+
+        Set<ObjectName> found = findObjects(options, conn, queries, hasPatternQueries);
+        Map<ObjectName, Integer> numExpectedAttributes =
+                findNumExpectedAttributes(conn, attributesInclude, hasPatternQueries, queries, found);
+
+        List<String> keys = new ArrayList<>();
+        keys.add("time");
+        keys.addAll(new TreeSet<>(queryAttributes(conn, found, attributesInclude).keySet()));
+        maybePrintCsvHeader(reportFormat, keys, numExpectedAttributes);
+
+        while (keepGoing) {
+            long start = System.currentTimeMillis();
+            Map<String, Object> attributes = queryAttributes(conn, found, attributesInclude);
+            attributes.put("time", dateFormat.map(format -> format.format(new Date())).orElseGet(() -> String.valueOf(System.currentTimeMillis())));
+            maybePrintDataRows(reportFormat, numExpectedAttributes, keys, attributes);
+            if (options.isOneTime()) {
+                keepGoing = false;
+            } else {
+                TimeUnit.MILLISECONDS.sleep(Math.max(0, options.interval() - (System.currentTimeMillis() - start)));
+            }
         }
     }
 
@@ -351,7 +367,11 @@ public class JmxTool {
                 .defaultsTo(false);
             waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
                 "Only supported when the list of objects is non-empty and contains no object name patterns.");
-            options = parser.parse(args);
+            try {
+                options = parser.parse(args);
+            } catch (OptionException e) {
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
+            }
         }
 
         public JMXServiceURL jmxServiceURL() throws MalformedURLException {

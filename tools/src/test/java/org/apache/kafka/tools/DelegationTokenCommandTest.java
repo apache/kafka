@@ -19,7 +19,6 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
-import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.Test;
 
@@ -112,134 +111,120 @@ public class DelegationTokenCommandTest {
 
     @Test
     public void testCheckArgsMissingRequiredArgs() {
-        Exit.setExitProcedure((exitCode, message) -> {
-            throw new RuntimeException("Exit with code " + exitCode + ": " + message);
-        });
-        try {
-            String[] argsCreateMissingBootstrap = {"--command-config", "testfile", "--create", "--max-life-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsCreateMissingBootstrap = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateMissingBootstrap);
-            assertThrows(RuntimeException.class, optsCreateMissingBootstrap::checkArgs);
+        String[] argsCreateMissingBootstrap = {"--command-config", "testfile", "--create", "--max-life-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsCreateMissingBootstrap = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateMissingBootstrap);
+        assertThrows(RuntimeException.class, optsCreateMissingBootstrap::checkArgs);
 
-            String[] argsCreateMissingConfig = {"--bootstrap-server", "localhost:9092", "--create", "--max-life-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsCreateMissingConfig = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateMissingConfig);
-            assertThrows(RuntimeException.class, optsCreateMissingConfig::checkArgs);
+        String[] argsCreateMissingConfig = {"--bootstrap-server", "localhost:9092", "--create", "--max-life-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsCreateMissingConfig = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateMissingConfig);
+        assertThrows(RuntimeException.class, optsCreateMissingConfig::checkArgs);
 
-            String[] argsCreateMissingMaxLife = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsCreateMissingMaxLife = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateMissingMaxLife);
-            assertThrows(RuntimeException.class, optsCreateMissingMaxLife::checkArgs);
+        String[] argsCreateMissingMaxLife = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsCreateMissingMaxLife = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateMissingMaxLife);
+        assertThrows(RuntimeException.class, optsCreateMissingMaxLife::checkArgs);
 
-            String[] argsRenewMissingBootstrap = {"--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsRenewMissingBootstrap = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewMissingBootstrap);
-            assertThrows(RuntimeException.class, optsRenewMissingBootstrap::checkArgs);
+        String[] argsRenewMissingBootstrap = {"--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsRenewMissingBootstrap = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewMissingBootstrap);
+        assertThrows(RuntimeException.class, optsRenewMissingBootstrap::checkArgs);
 
-            String[] argsRenewMissingConfig = {"--bootstrap-server", "localhost:9092", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsRenewMissingConfig = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewMissingConfig);
-            assertThrows(RuntimeException.class, optsRenewMissingConfig::checkArgs);
+        String[] argsRenewMissingConfig = {"--bootstrap-server", "localhost:9092", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsRenewMissingConfig = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewMissingConfig);
+        assertThrows(RuntimeException.class, optsRenewMissingConfig::checkArgs);
 
-            String[] argsRenewMissingHmac = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--renew-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsRenewMissingHmac = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewMissingHmac);
-            assertThrows(RuntimeException.class, optsRenewMissingHmac::checkArgs);
+        String[] argsRenewMissingHmac = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--renew-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsRenewMissingHmac = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewMissingHmac);
+        assertThrows(RuntimeException.class, optsRenewMissingHmac::checkArgs);
 
-            String[] argsRenewMissingRenewTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsRenewMissingRenewTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewMissingRenewTime);
-            assertThrows(RuntimeException.class, optsRenewMissingRenewTime::checkArgs);
+        String[] argsRenewMissingRenewTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsRenewMissingRenewTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewMissingRenewTime);
+        assertThrows(RuntimeException.class, optsRenewMissingRenewTime::checkArgs);
 
-            String[] argsExpireMissingBootstrap = {"--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsExpireMissingBootstrap = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireMissingBootstrap);
-            assertThrows(RuntimeException.class, optsExpireMissingBootstrap::checkArgs);
+        String[] argsExpireMissingBootstrap = {"--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsExpireMissingBootstrap = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireMissingBootstrap);
+        assertThrows(RuntimeException.class, optsExpireMissingBootstrap::checkArgs);
 
-            String[] argsExpireMissingConfig = {"--bootstrap-server", "localhost:9092", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsExpireMissingConfig = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireMissingConfig);
-            assertThrows(RuntimeException.class, optsExpireMissingConfig::checkArgs);
+        String[] argsExpireMissingConfig = {"--bootstrap-server", "localhost:9092", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsExpireMissingConfig = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireMissingConfig);
+        assertThrows(RuntimeException.class, optsExpireMissingConfig::checkArgs);
 
-            String[] argsExpireMissingHmac = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--expiry-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsExpireMissingHmac = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireMissingHmac);
-            assertThrows(RuntimeException.class, optsExpireMissingHmac::checkArgs);
+        String[] argsExpireMissingHmac = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--expiry-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsExpireMissingHmac = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireMissingHmac);
+        assertThrows(RuntimeException.class, optsExpireMissingHmac::checkArgs);
 
-            String[] argsExpireMissingExpiryTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsExpireMissingExpiryTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireMissingExpiryTime);
-            assertThrows(RuntimeException.class, optsExpireMissingExpiryTime::checkArgs);
+        String[] argsExpireMissingExpiryTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsExpireMissingExpiryTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireMissingExpiryTime);
+        assertThrows(RuntimeException.class, optsExpireMissingExpiryTime::checkArgs);
 
-            String[] argsDescribeMissingBootstrap = {"--command-config", "testfile", "--describe"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeMissingBootstrap = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeMissingBootstrap);
-            assertThrows(RuntimeException.class, optsDescribeMissingBootstrap::checkArgs);
+        String[] argsDescribeMissingBootstrap = {"--command-config", "testfile", "--describe"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeMissingBootstrap = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeMissingBootstrap);
+        assertThrows(RuntimeException.class, optsDescribeMissingBootstrap::checkArgs);
 
-            String[] argsDescribeMissingConfig = {"--bootstrap-server", "localhost:9092", "--describe"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeMissingConfig = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeMissingConfig);
-            assertThrows(RuntimeException.class, optsDescribeMissingConfig::checkArgs);
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        String[] argsDescribeMissingConfig = {"--bootstrap-server", "localhost:9092", "--describe"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeMissingConfig = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeMissingConfig);
+        assertThrows(RuntimeException.class, optsDescribeMissingConfig::checkArgs);
     }
 
     @Test
     public void testCheckArgsInvalidArgs() {
-        Exit.setExitProcedure((exitCode, message) -> {
-            throw new RuntimeException("Exit with code " + exitCode + ": " + message);
-        });
-        try {
-            String[] argsCreateWithHmac = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create", "--max-life-time-period", "604800000", "--hmac", "test-hmac"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsCreateWithHmac = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateWithHmac);
-            assertThrows(RuntimeException.class, optsCreateWithHmac::checkArgs);
+        String[] argsCreateWithHmac = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create", "--max-life-time-period", "604800000", "--hmac", "test-hmac"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsCreateWithHmac = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateWithHmac);
+        assertThrows(RuntimeException.class, optsCreateWithHmac::checkArgs);
 
-            String[] argsCreateWithRenewTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create", "--max-life-time-period", "604800000", "--renew-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsCreateWithRenewTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateWithRenewTime);
-            assertThrows(RuntimeException.class, optsCreateWithRenewTime::checkArgs);
+        String[] argsCreateWithRenewTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create", "--max-life-time-period", "604800000", "--renew-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsCreateWithRenewTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateWithRenewTime);
+        assertThrows(RuntimeException.class, optsCreateWithRenewTime::checkArgs);
 
-            String[] argsCreateWithExpiryTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create", "--max-life-time-period", "604800000", "--expiry-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsCreateWithExpiryTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateWithExpiryTime);
-            assertThrows(RuntimeException.class, optsCreateWithExpiryTime::checkArgs);
+        String[] argsCreateWithExpiryTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create", "--max-life-time-period", "604800000", "--expiry-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsCreateWithExpiryTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsCreateWithExpiryTime);
+        assertThrows(RuntimeException.class, optsCreateWithExpiryTime::checkArgs);
 
-            String[] argsRenewWithRenewPrincipals = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000", "--renewer-principal", "User:renewer"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsRenewWithRenewPrincipals = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewWithRenewPrincipals);
-            assertThrows(RuntimeException.class, optsRenewWithRenewPrincipals::checkArgs);
+        String[] argsRenewWithRenewPrincipals = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000", "--renewer-principal", "User:renewer"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsRenewWithRenewPrincipals = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewWithRenewPrincipals);
+        assertThrows(RuntimeException.class, optsRenewWithRenewPrincipals::checkArgs);
 
-            String[] argsRenewWithMaxLife = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000", "--max-life-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsRenewWithMaxLife = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewWithMaxLife);
-            assertThrows(RuntimeException.class, optsRenewWithMaxLife::checkArgs);
+        String[] argsRenewWithMaxLife = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000", "--max-life-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsRenewWithMaxLife = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewWithMaxLife);
+        assertThrows(RuntimeException.class, optsRenewWithMaxLife::checkArgs);
 
-            String[] argsRenewWithExpiryTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000", "--expiry-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsRenewWithExpiryTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewWithExpiryTime);
-            assertThrows(RuntimeException.class, optsRenewWithExpiryTime::checkArgs);
+        String[] argsRenewWithExpiryTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000", "--expiry-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsRenewWithExpiryTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewWithExpiryTime);
+        assertThrows(RuntimeException.class, optsRenewWithExpiryTime::checkArgs);
 
-            String[] argsRenewWithOwner = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000", "--owner-principal", "User:owner"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsRenewWithOwner = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewWithOwner);
-            assertThrows(RuntimeException.class, optsRenewWithOwner::checkArgs);
+        String[] argsRenewWithOwner = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000", "--owner-principal", "User:owner"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsRenewWithOwner = new DelegationTokenCommand.DelegationTokenCommandOptions(argsRenewWithOwner);
+        assertThrows(RuntimeException.class, optsRenewWithOwner::checkArgs);
 
-            String[] argsExpireWithRenew = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--renew", "--hmac", "test-hmac", "--expiry-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsExpireWithRenew = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireWithRenew);
-            assertThrows(RuntimeException.class, optsExpireWithRenew::checkArgs);
+        String[] argsExpireWithRenew = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--renew", "--hmac", "test-hmac", "--expiry-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsExpireWithRenew = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireWithRenew);
+        assertThrows(RuntimeException.class, optsExpireWithRenew::checkArgs);
 
-            String[] argsExpireWithMaxLife = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000", "--max-life-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsExpireWithMaxLife = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireWithMaxLife);
-            assertThrows(RuntimeException.class, optsExpireWithMaxLife::checkArgs);
+        String[] argsExpireWithMaxLife = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000", "--max-life-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsExpireWithMaxLife = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireWithMaxLife);
+        assertThrows(RuntimeException.class, optsExpireWithMaxLife::checkArgs);
 
-            String[] argsExpireWithRenewTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000", "--renew-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsExpireWithRenewTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireWithRenewTime);
-            assertThrows(RuntimeException.class, optsExpireWithRenewTime::checkArgs);
+        String[] argsExpireWithRenewTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000", "--renew-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsExpireWithRenewTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireWithRenewTime);
+        assertThrows(RuntimeException.class, optsExpireWithRenewTime::checkArgs);
 
-            String[] argsExpireWithOwner = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000", "--owner-principal", "User:owner"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsExpireWithOwner = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireWithOwner);
-            assertThrows(RuntimeException.class, optsExpireWithOwner::checkArgs);
+        String[] argsExpireWithOwner = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000", "--owner-principal", "User:owner"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsExpireWithOwner = new DelegationTokenCommand.DelegationTokenCommandOptions(argsExpireWithOwner);
+        assertThrows(RuntimeException.class, optsExpireWithOwner::checkArgs);
 
-            String[] argsDescribeWithRenewTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe", "--renew-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeWithRenewTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeWithRenewTime);
-            assertThrows(RuntimeException.class, optsDescribeWithRenewTime::checkArgs);
+        String[] argsDescribeWithRenewTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe", "--renew-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeWithRenewTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeWithRenewTime);
+        assertThrows(RuntimeException.class, optsDescribeWithRenewTime::checkArgs);
 
-            String[] argsDescribeWithExpiryTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe", "--expiry-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeWithExpiryTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeWithExpiryTime);
-            assertThrows(RuntimeException.class, optsDescribeWithExpiryTime::checkArgs);
+        String[] argsDescribeWithExpiryTime = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe", "--expiry-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeWithExpiryTime = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeWithExpiryTime);
+        assertThrows(RuntimeException.class, optsDescribeWithExpiryTime::checkArgs);
 
-            String[] argsDescribeWithMaxLife = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe", "--max-life-time-period", "604800000"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeWithMaxLife = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeWithMaxLife);
-            assertThrows(RuntimeException.class, optsDescribeWithMaxLife::checkArgs);
+        String[] argsDescribeWithMaxLife = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe", "--max-life-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeWithMaxLife = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeWithMaxLife);
+        assertThrows(RuntimeException.class, optsDescribeWithMaxLife::checkArgs);
 
-            String[] argsDescribeWithHmac = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe", "--hmac", "test-hmac"};
-            DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeWithHmac = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeWithHmac);
-            assertThrows(RuntimeException.class, optsDescribeWithHmac::checkArgs);
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        String[] argsDescribeWithHmac = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe", "--hmac", "test-hmac"};
+        DelegationTokenCommand.DelegationTokenCommandOptions optsDescribeWithHmac = new DelegationTokenCommand.DelegationTokenCommandOptions(argsDescribeWithHmac);
+        assertThrows(RuntimeException.class, optsDescribeWithHmac::checkArgs);
     }
 
     @Test
