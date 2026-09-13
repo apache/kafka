@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.types.RawTaggedField;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.BigIntegerNode;
 import com.fasterxml.jackson.databind.node.BinaryNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.DoubleNode;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.Timeout;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
@@ -105,10 +107,13 @@ public final class MessageUtilTest {
         assertEquals(42, MessageUtil.jsonNodeToInt(new IntNode(42), "Test int"));
         assertEquals(42, MessageUtil.jsonNodeToInt(new LongNode(42), "Test long"));
 
-        assertThrows(NumberFormatException.class,
+        NumberFormatException exception = assertThrows(NumberFormatException.class,
             () -> MessageUtil.jsonNodeToInt(new LongNode((long) Integer.MAX_VALUE + 1), "Test large long"));
-        assertThrows(NumberFormatException.class,
+        assertEquals("Test large long: value 2147483648 does not fit in a 32-bit signed integer.",
+            exception.getMessage());
+        exception = assertThrows(NumberFormatException.class,
             () -> MessageUtil.jsonNodeToInt(new DoubleNode(42.0), "Test double"));
+        assertEquals("Test double: expected an integer type, but got NUMBER", exception.getMessage());
         assertThrows(NumberFormatException.class,
             () -> MessageUtil.jsonNodeToInt(BooleanNode.TRUE, "Test boolean"));
         assertThrows(NumberFormatException.class,
@@ -120,9 +125,18 @@ public final class MessageUtilTest {
         assertEquals(42, MessageUtil.jsonNodeToLong(new ShortNode((short) 42), "Test short"));
         assertEquals(42, MessageUtil.jsonNodeToLong(new IntNode(42), "Test int"));
         assertEquals(42, MessageUtil.jsonNodeToLong(new LongNode(42), "Test long"));
+        assertEquals(42, MessageUtil.jsonNodeToLong(
+            new BigIntegerNode(BigInteger.valueOf(42)), "Test big integer"));
 
-        assertThrows(NumberFormatException.class,
+        NumberFormatException exception = assertThrows(NumberFormatException.class,
+            () -> MessageUtil.jsonNodeToLong(
+                new BigIntegerNode(BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE)),
+                "Test large integer"));
+        assertEquals("Test large integer: value 9223372036854775808 does not fit in a 64-bit signed integer.",
+            exception.getMessage());
+        exception = assertThrows(NumberFormatException.class,
             () -> MessageUtil.jsonNodeToLong(new DoubleNode(42.0), "Test double"));
+        assertEquals("Test double: expected an integer type, but got NUMBER", exception.getMessage());
         assertThrows(NumberFormatException.class,
             () -> MessageUtil.jsonNodeToLong(BooleanNode.TRUE, "Test boolean"));
         assertThrows(NumberFormatException.class,

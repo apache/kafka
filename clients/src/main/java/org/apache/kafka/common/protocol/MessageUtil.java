@@ -111,17 +111,25 @@ public final class MessageUtil {
     }
 
     public static int jsonNodeToInt(JsonNode node, String about) {
-        if (!node.isIntegralNumber() || !node.canConvertToInt()) {
+        if (!node.isIntegralNumber()) {
             throw new NumberFormatException(about + ": expected an integer type, but got " +
                 node.getNodeType());
+        }
+        if (!node.canConvertToInt()) {
+            throw new NumberFormatException(about + ": value " + node.bigIntegerValue() +
+                " does not fit in a 32-bit signed integer.");
         }
         return node.intValue();
     }
 
     public static long jsonNodeToLong(JsonNode node, String about) {
-        if (!node.isIntegralNumber() || !node.canConvertToLong()) {
+        if (!node.isIntegralNumber()) {
             throw new NumberFormatException(about + ": expected an integer type, but got " +
                 node.getNodeType());
+        }
+        if (!node.canConvertToLong()) {
+            throw new NumberFormatException(about + ": value " + node.bigIntegerValue() +
+                " does not fit in a 64-bit signed integer.");
         }
         return node.longValue();
     }
