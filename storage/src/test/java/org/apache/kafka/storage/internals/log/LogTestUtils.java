@@ -625,6 +625,11 @@ public class LogTestUtils {
             return this;
         }
 
+        public LogConfigBuilder maxDecompressedMessageBytes(int maxDecompressedMessageBytes) {
+            configs.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, maxDecompressedMessageBytes);
+            return this;
+        }
+
         public LogConfigBuilder indexIntervalBytes(int indexIntervalBytes) {
             configs.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, indexIntervalBytes);
             return this;

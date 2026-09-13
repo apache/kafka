@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.record.internal.Records
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -80,6 +81,26 @@ class LogConfigTest {
 
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
+  }
+
+  @Test
+  def testMaxDecompressedMessageBytesProps(): Unit = {
+    // Default is the unlimited sentinel, so the limit is a no-op until an operator opts in.
+    assertEquals(Records.SOFT_MAX_ARRAY_LENGTH, LogConfig.DEFAULT_MAX_DECOMPRESSED_MESSAGE_BYTES)
+    assertEquals(Records.SOFT_MAX_ARRAY_LENGTH,
+      new LogConfig(new Properties()).maxDecompressedMessageBytes())
+
+    val props = new Properties()
+    props.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, "1000")
+    assertEquals(1000, new LogConfig(props).maxDecompressedMessageBytes())
+
+    // Values outside [1, SOFT_MAX_ARRAY_LENGTH] are rejected; the upper bound guarantees a validated
+    // config can never weaken the pre-allocation array-length guard in the record decoders.
+    for (invalid <- Seq("0", Int.MaxValue.toString)) {
+      val invalidProps = new Properties()
+      invalidProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, invalid)
+      assertThrows(classOf[ConfigException], () => new LogConfig(invalidProps))
+    }
   }
 
   @Test
