@@ -387,17 +387,17 @@ public class LogSegmentTest {
 
             assertEquals(490, seg.largestTimestamp());
             // Search for an indexed timestamp
-            assertEquals(42, seg.findOffsetByTimestamp(420, 0L).get().offset);
-            assertEquals(43, seg.findOffsetByTimestamp(421, 0L).get().offset);
+            assertEquals(42, seg.findOffsetByTimestamp(420, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
+            assertEquals(43, seg.findOffsetByTimestamp(421, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
             // Search for an un-indexed timestamp
-            assertEquals(43, seg.findOffsetByTimestamp(430, 0L).get().offset);
-            assertEquals(44, seg.findOffsetByTimestamp(431, 0L).get().offset);
+            assertEquals(43, seg.findOffsetByTimestamp(430, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
+            assertEquals(44, seg.findOffsetByTimestamp(431, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
             // Search beyond the last timestamp
-            assertEquals(Optional.empty(), seg.findOffsetByTimestamp(491, 0L));
+            assertEquals(Optional.empty(), seg.findOffsetByTimestamp(491, 0L, Records.SOFT_MAX_ARRAY_LENGTH));
             // Search before the first indexed timestamp
-            assertEquals(41, seg.findOffsetByTimestamp(401, 0L).get().offset);
+            assertEquals(41, seg.findOffsetByTimestamp(401, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
             // Search before the first timestamp
-            assertEquals(40, seg.findOffsetByTimestamp(399, 0L).get().offset);
+            assertEquals(40, seg.findOffsetByTimestamp(399, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
         }
     }
 
@@ -590,9 +590,9 @@ public class LogSegmentTest {
             writeNonsenseToFile(timeIndexFile, 5, (int) timeIndexFile.length());
             seg.recover(newProducerStateManager(), mock(LeaderEpochFileCache.class));
             for (int i = 0; i < 100; i++) {
-                assertEquals(i, seg.findOffsetByTimestamp(i * 10, 0L).get().offset);
+                assertEquals(i, seg.findOffsetByTimestamp(i * 10, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
                 if (i < 99) {
-                    assertEquals(i + 1, seg.findOffsetByTimestamp(i * 10 + 1, 0L).get().offset);
+                    assertEquals(i + 1, seg.findOffsetByTimestamp(i * 10 + 1, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
                 }
             }
         }
