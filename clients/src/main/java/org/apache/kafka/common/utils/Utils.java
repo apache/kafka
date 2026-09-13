@@ -936,9 +936,12 @@ public final class Utils {
      * to repeatedly flush the same parent directory.
      *
      * @throws IOException if both atomic and non-atomic moves fail,
-     * or parent dir flush fails if needFlushParentDir is true.
+     * or parent dir flush fails if needFlushParentDir is true. If both the move and the parent
+     * dir flush fail, the move failure is thrown with the flush failure added as a suppressed
+     * exception, so callers always see why the move failed.
      */
     public static void atomicMoveWithFallback(Path source, Path target, boolean needFlushParentDir) throws IOException {
+        IOException moveException = null;
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException outer) {
@@ -948,11 +951,20 @@ public final class Utils {
                 log.debug("Non-atomic move of {} to {} succeeded after atomic move failed", source, target);
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
+                moveException = inner;
                 throw inner;
             }
         } finally {
             if (needFlushParentDir) {
-                flushDir(target.toAbsolutePath().normalize().getParent());
+                try {
+                    flushDir(target.toAbsolutePath().normalize().getParent());
+                } catch (Throwable flushException) {
+                    if (moveException == null)
+                        throw flushException;
+                    // Throwing from a finally block would discard the in-flight move failure, so attach
+                    // the flush failure to it instead and let the move failure reach the caller.
+                    moveException.addSuppressed(flushException);
+                }
             }
         }
     }
