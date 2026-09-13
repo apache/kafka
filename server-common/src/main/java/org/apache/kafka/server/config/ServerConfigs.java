@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
 
@@ -31,6 +32,7 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
@@ -46,6 +48,9 @@ public class ServerConfigs {
     public static final String MESSAGE_MAX_BYTES_CONFIG = "message.max.bytes";
     public static final String MESSAGE_MAX_BYTES_DOC = TopicConfig.MAX_MESSAGE_BYTES_DOC +
             "This can be set per topic with the topic level <code>" + TopicConfig.MAX_MESSAGE_BYTES_CONFIG + "</code> config.";
+    public static final String MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG);
+    public static final String MAX_DECOMPRESSED_MESSAGE_BYTES_DOC = TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_DOC +
+            " This can be set per topic with the topic level <code>" + TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG + "</code> config.";
 
     public static final String NUM_IO_THREADS_CONFIG = "num.io.threads";
     public static final int NUM_IO_THREADS_DEFAULT = 8;
@@ -128,6 +133,7 @@ public class ServerConfigs {
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(BROKER_ID_CONFIG, INT, BROKER_ID_DEFAULT, HIGH, BROKER_ID_DOC)
             .define(MESSAGE_MAX_BYTES_CONFIG, INT, ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, atLeast(0), HIGH, MESSAGE_MAX_BYTES_DOC)
+            .define(MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, INT, ServerLogConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_DEFAULT, between(1, Records.SOFT_MAX_ARRAY_LENGTH), MEDIUM, MAX_DECOMPRESSED_MESSAGE_BYTES_DOC)
             .define(NUM_IO_THREADS_CONFIG, INT, NUM_IO_THREADS_DEFAULT, atLeast(1), HIGH, NUM_IO_THREADS_DOC)
             .define(NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG, INT, null, HIGH, NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC)
             .define(BACKGROUND_THREADS_CONFIG, INT, BACKGROUND_THREADS_DEFAULT, atLeast(1), HIGH, BACKGROUND_THREADS_DOC)
