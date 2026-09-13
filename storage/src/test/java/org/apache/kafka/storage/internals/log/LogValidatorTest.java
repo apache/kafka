@@ -188,6 +188,51 @@ public class LogValidatorTest {
         ));
     }
 
+    /**
+     * The compressed validation path enforces the per-record decompressed-body-size limit
+     * (max.decompressed.message.bytes): a record whose decompressed body exceeds the configured
+     * limit is rejected with InvalidRecordException before the body is allocated, while the
+     * limit-less constructor applies no effective limit.
+     */
+    @Test
+    public void testCompressedRecordExceedingMaxRecordBodySizeIsRejected() {
+        MemoryRecords records = MemoryRecords.withRecords(Compression.gzip().build(),
+                new SimpleRecord(System.currentTimeMillis(), "key".getBytes(), new byte[1000]));
+
+        new LogValidator(records,
+                topicPartition,
+                time,
+                CompressionType.GZIP,
+                Compression.gzip().build(),
+                false,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                TimestampType.CREATE_TIME,
+                5000L,
+                5000L,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                AppendOrigin.CLIENT
+        ).validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier());
+
+        InvalidRecordException e = assertThrows(InvalidRecordException.class, () -> new LogValidator(records,
+                topicPartition,
+                time,
+                CompressionType.GZIP,
+                Compression.gzip().build(),
+                false,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                TimestampType.CREATE_TIME,
+                5000L,
+                5000L,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                AppendOrigin.CLIENT,
+                100
+        ).validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size"),
+                "expected the configured-maximum guard, got: " + e.getMessage());
+    }
+
     @ParameterizedTest
     @CsvSource({"0,1,gzip", "1,0,gzip"})
     public void checkMismatchMagic(byte batchMagic, byte recordMagic, String compressionName) {

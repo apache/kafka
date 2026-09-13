@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record.internal;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
@@ -458,12 +459,12 @@ public class FileRecordsTest {
         appendWithOffsetAndTimestamp(fileRecords, version, 11L, 6, 1);
 
         assertFoundTimestamp(new FileRecords.TimestampAndOffset(10L, 5, Optional.of(0)),
-                fileRecords.searchForTimestamp(9L, 0, 0L), version);
+                fileRecords.searchForTimestamp(9L, 0, 0L, Records.SOFT_MAX_ARRAY_LENGTH), version);
         assertFoundTimestamp(new FileRecords.TimestampAndOffset(10L, 5, Optional.of(0)),
-                fileRecords.searchForTimestamp(10L, 0, 0L), version);
+                fileRecords.searchForTimestamp(10L, 0, 0L, Records.SOFT_MAX_ARRAY_LENGTH), version);
         assertFoundTimestamp(new FileRecords.TimestampAndOffset(11L, 6, Optional.of(1)),
-                fileRecords.searchForTimestamp(11L, 0, 0L), version);
-        assertNull(fileRecords.searchForTimestamp(12L, 0, 0L));
+                fileRecords.searchForTimestamp(11L, 0, 0L, Records.SOFT_MAX_ARRAY_LENGTH), version);
+        assertNull(fileRecords.searchForTimestamp(12L, 0, 0L, Records.SOFT_MAX_ARRAY_LENGTH));
     }
 
     private void assertFoundTimestamp(FileRecords.TimestampAndOffset expected,
@@ -789,5 +790,24 @@ public class FileRecordsTest {
             fileRecords.append(builder.build());
         }
         fileRecords.flush();
+    }
+
+
+    @Test
+    public void testSearchForTimestampRejectsCompressedRecordExceedingMaxRecordBodySize() throws IOException {
+        FileRecords fileRecords = FileRecords.open(tempFile(), false, 1024 * 1024, true);
+        long timestamp = 10L;
+        fileRecords.append(MemoryRecords.withRecords(5L, Compression.gzip().build(), 0,
+                new SimpleRecord(timestamp, "key".getBytes(), new byte[1000])));
+        fileRecords.flush();
+
+        // With no configured limit the record is found
+        assertEquals(new FileRecords.TimestampAndOffset(timestamp, 5L, Optional.of(0)),
+                fileRecords.searchForTimestamp(timestamp, 0, 0L, Records.SOFT_MAX_ARRAY_LENGTH));
+
+        // With a limit below the record's decompressed body the lookup is rejected before the body is allocated
+        InvalidRecordException e = assertThrows(InvalidRecordException.class,
+                () -> fileRecords.searchForTimestamp(timestamp, 0, 0L, 100));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
     }
 }
