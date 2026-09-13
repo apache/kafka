@@ -36,8 +36,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -74,7 +73,7 @@ public class StreamsRebalanceListenerTest {
             MissingSourceTopicException.class,
             () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
         );
-        assertThat(exception.getMessage(), is("One or more source topics were missing during rebalance"));
+        assertEquals("One or more source topics were missing during rebalance", exception.getMessage());
         verify(taskManager).handleRebalanceComplete();
     }
 
@@ -103,7 +102,7 @@ public class StreamsRebalanceListenerTest {
             TaskAssignmentException.class,
             () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
         );
-        assertThat(exception.getMessage(), is("Hit an unexpected exception during task assignment phase of rebalance"));
+        assertEquals("Hit an unexpected exception during task assignment phase of rebalance", exception.getMessage());
 
         verify(taskManager).handleRebalanceComplete();
     }
@@ -116,7 +115,7 @@ public class StreamsRebalanceListenerTest {
             TaskAssignmentException.class,
             () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
         );
-        assertThat(exception.getMessage(), is("Hit an unrecognized exception during rebalance"));
+        assertEquals("Hit an unrecognized exception during rebalance", exception.getMessage());
     }
 
     @Test

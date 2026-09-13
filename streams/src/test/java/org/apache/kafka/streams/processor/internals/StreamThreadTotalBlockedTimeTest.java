@@ -34,8 +34,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -78,11 +77,11 @@ public class StreamThreadTotalBlockedTimeTest {
 
     @Test
     public void shouldComputeTotalBlockedTime() {
-        assertThat(
-            blockedTime.compute(),
-            equalTo(IO_TIME_TOTAL + IO_WAIT_TIME_TOTAL + COMMITTED_TIME_TOTAL
+        assertEquals(
+            IO_TIME_TOTAL + IO_WAIT_TIME_TOTAL + COMMITTED_TIME_TOTAL
                 + COMMIT_SYNC_TIME_TOTAL + RESTORE_IOTIME_TOTAL + RESTORE_IO_WAITTIME_TOTAL
-                + PRODUCER_BLOCKED_TIME)
+                + PRODUCER_BLOCKED_TIME,
+            blockedTime.compute()
         );
     }
 

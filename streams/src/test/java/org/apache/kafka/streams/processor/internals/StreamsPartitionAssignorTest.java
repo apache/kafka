@@ -151,17 +151,10 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.anEmptyMap;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
@@ -486,8 +479,8 @@ public class StreamsPartitionAssignorTest {
         assertTrue(assignment.get(CONSUMER_1).containsAll(previousAssignment.get(CONSUMER_1)));
         assertTrue(assignment.get(CONSUMER_2).containsAll(previousAssignment.get(CONSUMER_2)));
 
-        assertThat(assignment.get(CONSUMER_1).size(), equalTo(4));
-        assertThat(assignment.get(CONSUMER_2).size(), equalTo(4));
+        assertEquals(4, assignment.get(CONSUMER_1).size());
+        assertEquals(4, assignment.get(CONSUMER_2).size());
     }
 
     @ParameterizedTest
@@ -531,10 +524,10 @@ public class StreamsPartitionAssignorTest {
         assertTrue(assignment.get(CONSUMER_2).containsAll(previousAssignment.get(CONSUMER_2)));
 
 
-        assertThat(assignment.get(CONSUMER_1).size(), equalTo(2));
-        assertThat(assignment.get(CONSUMER_2).size(), equalTo(2));
-        assertThat(assignment.get(CONSUMER_3).size(), equalTo(2));
-        assertThat(assignment.get(CONSUMER_4).size(), equalTo(2));
+        assertEquals(2, assignment.get(CONSUMER_1).size());
+        assertEquals(2, assignment.get(CONSUMER_2).size());
+        assertEquals(2, assignment.get(CONSUMER_3).size());
+        assertEquals(2, assignment.get(CONSUMER_4).size());
     }
 
     @ParameterizedTest
@@ -567,7 +560,7 @@ public class StreamsPartitionAssignorTest {
                 new HashMap<>()
             );
 
-        assertThat(interleavedTaskIds, equalTo(assignment));
+        assertEquals(assignment, interleavedTaskIds);
     }
 
     @ParameterizedTest
@@ -1615,9 +1608,9 @@ public class StreamsPartitionAssignorTest {
         expectedCreatedInternalTopics.put(APPLICATION_ID + "-KSTREAM-MAP-0000000001-repartition", 4);
 
         // check if all internal topics were created as expected
-        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
+        assertEquals(expectedCreatedInternalTopics, mockInternalTopicManager.readyTopics);
 
-        final List<TopicPartition> expectedAssignment = asList(
+        final Set<TopicPartition> expectedAssignment = Set.of(
             new TopicPartition("topic1", 0),
             new TopicPartition("topic1", 1),
             new TopicPartition("topic1", 2),
@@ -1636,7 +1629,7 @@ public class StreamsPartitionAssignorTest {
         );
 
         // check if we created a task for all expected topicPartitions.
-        assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
+        assertEquals(expectedAssignment, new HashSet<>(assignment.get(client).partitions()));
     }
 
     @ParameterizedTest
@@ -1777,12 +1770,10 @@ public class StreamsPartitionAssignorTest {
     public void shouldThrowExceptionIfApplicationServerConfigIsNotHostPortPair(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         createDefaultMockTaskManager();
-        try {
-            configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost"), parameterizedConfig);
-            fail("expected to an exception due to invalid config");
-        } catch (final ConfigException e) {
-            // pass
-        }
+        assertThrows(
+            ConfigException.class,
+            () -> configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost"), parameterizedConfig),
+            "expected to an exception due to invalid config");
     }
 
     @ParameterizedTest
@@ -1850,9 +1841,9 @@ public class StreamsPartitionAssignorTest {
         );
         final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
-        assertThat(mockInternalTopicManager.readyTopics.isEmpty(), equalTo(true));
+        assertTrue(mockInternalTopicManager.readyTopics.isEmpty());
 
-        assertThat(assignment.get(client).partitions().isEmpty(), equalTo(true));
+        assertTrue(assignment.get(client).partitions().isEmpty());
     }
 
     @ParameterizedTest
@@ -1900,11 +1891,11 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.onAssignment(createAssignment(oldHostState), null);
 
-        assertThat(referenceContainer.nextScheduledRebalanceMs.get(), is(0L));
+        assertEquals(0L, referenceContainer.nextScheduledRebalanceMs.get());
 
         partitionAssignor.onAssignment(createAssignment(newHostState), null);
 
-        assertThat(referenceContainer.nextScheduledRebalanceMs.get(), is(Long.MAX_VALUE));
+        assertEquals(Long.MAX_VALUE, referenceContainer.nextScheduledRebalanceMs.get());
     }
 
     @ParameterizedTest
@@ -1939,16 +1930,16 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
         // Verify at least one partition was revoked
-        assertThat(assignment.get(CONSUMER_1).partitions(), not(allPartitions));
-        assertThat(assignment.get(CONSUMER_2).partitions(), equalTo(emptyList()));
+        assertNotEquals(allPartitions, assignment.get(CONSUMER_1).partitions());
+        assertTrue(assignment.get(CONSUMER_2).partitions().isEmpty());
 
         // Verify that stateless revoked tasks would not be assigned as standbys
-        assertThat(AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()).activeTasks(), equalTo(emptyList()));
-        assertThat(AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()).standbyTasks(), equalTo(emptyMap()));
+        assertTrue(AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()).activeTasks().isEmpty());
+        assertTrue(AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()).standbyTasks().isEmpty());
 
         partitionAssignor.onAssignment(assignment.get(CONSUMER_2), null);
 
-        assertThat(referenceContainer.nextScheduledRebalanceMs.get(), is(0L));
+        assertEquals(0L, referenceContainer.nextScheduledRebalanceMs.get());
     }
 
     @ParameterizedTest
@@ -2002,11 +1993,11 @@ public class StreamsPartitionAssignorTest {
         final Set<TopicPartition> consumer2StandbyPartitions = assignmentInfo.standbyPartitionByHost().get(new HostInfo("other", 9090));
         final HashSet<TopicPartition> allAssignedPartitions = new HashSet<>(consumer1ActivePartitions);
         allAssignedPartitions.addAll(consumer2ActivePartitions);
-        assertThat(consumer1ActivePartitions, not(allPartitions));
-        assertThat(consumer2ActivePartitions, not(allPartitions));
-        assertThat(consumer1ActivePartitions, equalTo(consumer2StandbyPartitions));
-        assertThat(consumer2ActivePartitions, equalTo(consumer1StandbyPartitions));
-        assertThat(allAssignedPartitions, equalTo(allPartitions));
+        assertNotEquals(allPartitions, consumer1ActivePartitions);
+        assertNotEquals(allPartitions, consumer2ActivePartitions);
+        assertEquals(consumer2StandbyPartitions, consumer1ActivePartitions);
+        assertEquals(consumer1StandbyPartitions, consumer2ActivePartitions);
+        assertEquals(allPartitions, allAssignedPartitions);
     }
 
     @ParameterizedTest
@@ -2020,7 +2011,7 @@ public class StreamsPartitionAssignorTest {
             KafkaException.class,
             () -> partitionAssignor.configure(config)
         );
-        assertThat(expected.getMessage(), equalTo("ReferenceContainer is not specified"));
+        assertEquals("ReferenceContainer is not specified", expected.getMessage());
     }
 
     @ParameterizedTest
@@ -2034,10 +2025,9 @@ public class StreamsPartitionAssignorTest {
             KafkaException.class,
             () -> partitionAssignor.configure(config)
         );
-        assertThat(
-            expected.getMessage(),
-            equalTo("java.lang.String is not an instance of org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer")
-        );
+        assertEquals(
+            "java.lang.String is not an instance of org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer",
+            expected.getMessage());
     }
 
     @ParameterizedTest
@@ -2087,9 +2077,9 @@ public class StreamsPartitionAssignorTest {
 
         final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
-        assertThat(assignment.size(), equalTo(2));
-        assertThat(AssignmentInfo.decode(assignment.get("consumer1").userData()).version(), equalTo(smallestVersion));
-        assertThat(AssignmentInfo.decode(assignment.get("consumer2").userData()).version(), equalTo(smallestVersion));
+        assertEquals(2, assignment.size());
+        assertEquals(smallestVersion, AssignmentInfo.decode(assignment.get("consumer1").userData()).version());
+        assertEquals(smallestVersion, AssignmentInfo.decode(assignment.get("consumer2").userData()).version());
     }
 
     @ParameterizedTest
@@ -2126,19 +2116,19 @@ public class StreamsPartitionAssignorTest {
 
         final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
-        assertThat(assignment.size(), equalTo(2));
+        assertEquals(2, assignment.size());
 
         // The new consumer's assignment should be empty until c1 has the chance to revoke its partitions/tasks
-        assertThat(assignment.get(CONSUMER_2).partitions(), equalTo(emptyList()));
+        assertTrue(assignment.get(CONSUMER_2).partitions().isEmpty());
 
         final AssignmentInfo actualAssignment = AssignmentInfo.decode(assignment.get(CONSUMER_2).userData());
-        assertThat(actualAssignment.version(), is(LATEST_SUPPORTED_VERSION));
-        assertThat(actualAssignment.activeTasks(), empty());
+        assertEquals(LATEST_SUPPORTED_VERSION, actualAssignment.version());
+        assertTrue(actualAssignment.activeTasks().isEmpty());
         // Note we're not asserting anything about standbys. If the assignor gave an active task to CONSUMER_2, it would
         // be converted to a standby, but we don't know whether the assignor will do that.
-        assertThat(actualAssignment.partitionsByHost(), anEmptyMap());
-        assertThat(actualAssignment.standbyPartitionByHost(), anEmptyMap());
-        assertThat(actualAssignment.errCode(), is(0));
+        assertTrue(actualAssignment.partitionsByHost().isEmpty());
+        assertTrue(actualAssignment.standbyPartitionByHost().isEmpty());
+        assertEquals(0, actualAssignment.errCode());
     }
 
     @ParameterizedTest
@@ -2174,18 +2164,18 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Assignment> assignment =
             partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
-        assertThat(assignment.size(), equalTo(2));
+        assertEquals(2, assignment.size());
 
-        assertThat(assignment.get(CONSUMER_1).partitions(), equalTo(asList(t1p0, t1p2)));
-        assertThat(
-            AssignmentInfo.decode(assignment.get(CONSUMER_1).userData()),
-            equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, asList(TASK_0_0, TASK_0_2), emptyMap(), emptyMap(), emptyMap(), 0)));
+        assertEquals(List.of(t1p0, t1p2), assignment.get(CONSUMER_1).partitions());
+        assertEquals(
+            new AssignmentInfo(LATEST_SUPPORTED_VERSION, List.of(TASK_0_0, TASK_0_2), Map.of(), Map.of(), Map.of(), 0),
+            AssignmentInfo.decode(assignment.get(CONSUMER_1).userData()));
 
 
-        assertThat(assignment.get(CONSUMER_2).partitions(), equalTo(Collections.singletonList(t1p1)));
-        assertThat(
-            AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()),
-            equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, Collections.singletonList(TASK_0_1), emptyMap(), emptyMap(), emptyMap(), 0)));
+        assertEquals(List.of(t1p1), assignment.get(CONSUMER_2).partitions());
+        assertEquals(
+            new AssignmentInfo(LATEST_SUPPORTED_VERSION, List.of(TASK_0_1), Map.of(), Map.of(), Map.of(), 0),
+            AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()));
     }
 
     @ParameterizedTest
@@ -2310,10 +2300,10 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.configure(props);
 
-        assertThat(partitionAssignor.acceptableRecoveryLag(), equalTo(11L));
-        assertThat(partitionAssignor.maxWarmupReplicas(), equalTo(33));
-        assertThat(partitionAssignor.numStandbyReplicas(), equalTo(44));
-        assertThat(partitionAssignor.probingRebalanceIntervalMs(), equalTo(55 * 60 * 1000L));
+        assertEquals(11L, partitionAssignor.acceptableRecoveryLag());
+        assertEquals(33, partitionAssignor.maxWarmupReplicas());
+        assertEquals(44, partitionAssignor.numStandbyReplicas());
+        assertEquals(55 * 60 * 1000L, partitionAssignor.probingRebalanceIntervalMs());
     }
 
     @ParameterizedTest
@@ -2326,7 +2316,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Object> props = configProps(parameterizedConfig);
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
-        assertThat(assignorConfiguration.referenceContainer().time.milliseconds(), equalTo(Long.MAX_VALUE));
+        assertEquals(Long.MAX_VALUE, assignorConfiguration.referenceContainer().time.milliseconds());
     }
 
     @ParameterizedTest
@@ -2489,10 +2479,7 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
 
-        assertThat(
-            capturedChangelogs.getValue().keySet(),
-            equalTo(changelogs)
-        );
+        assertEquals(changelogs, capturedChangelogs.getValue().keySet());
     }
 
     @ParameterizedTest
@@ -2558,8 +2545,7 @@ public class StreamsPartitionAssignorTest {
                               Optional.of(RACK_0)
                           ));
         final Map<String, Assignment> assignments = partitionAssignor.assign(emptyClusterMetadata, new GroupSubscription(subscriptions)).groupAssignment();
-        assertThat(AssignmentInfo.decode(assignments.get("consumer").userData()).errCode(),
-                   equalTo(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()));
+        assertEquals(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code(), AssignmentInfo.decode(assignments.get("consumer").userData()).errCode());
     }
 
     @ParameterizedTest
@@ -2631,8 +2617,7 @@ public class StreamsPartitionAssignorTest {
                               Optional.of(RACK_1)
                           ));
         final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
-        assertThat(AssignmentInfo.decode(assignments.get("consumer").userData()).errCode(),
-                   equalTo(AssignorError.ASSIGNMENT_ERROR.code()));
+        assertEquals(AssignorError.ASSIGNMENT_ERROR.code(), AssignmentInfo.decode(assignments.get("consumer").userData()).errCode());
     }
 
     @ParameterizedTest
@@ -2704,8 +2689,8 @@ public class StreamsPartitionAssignorTest {
 
         final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
-        assertThat(AssignmentInfo.decode(assignment.get("consumer1").userData()).errCode(), equalTo(AssignorError.ASSIGNMENT_ERROR.code()));
-        assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()).errCode(), equalTo(AssignorError.ASSIGNMENT_ERROR.code()));
+        assertEquals(AssignorError.ASSIGNMENT_ERROR.code(), AssignmentInfo.decode(assignment.get("consumer1").userData()).errCode());
+        assertEquals(AssignorError.ASSIGNMENT_ERROR.code(), AssignmentInfo.decode(assignment.get("future-consumer").userData()).errCode());
     }
 
     private static Assignment createAssignment(final Map<HostInfo, Set<TopicPartition>> firstHostState) {
@@ -2769,7 +2754,7 @@ public class StreamsPartitionAssignorTest {
             final List<TaskId> otherTaskList = otherAssignment.get(consumer);
             Collections.sort(otherTaskList);
 
-            assertThat(thisTaskList, equalTo(otherTaskList));
+            assertEquals(thisTaskList, otherTaskList);
         }
     }
 
