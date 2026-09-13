@@ -46,12 +46,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.errors.DeserializationExceptionHandler.Response;
 import static org.apache.kafka.streams.errors.DeserializationExceptionHandler.Result;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -89,7 +91,7 @@ public class RecordDeserializerTest {
                     new LogContext(),
                     metrics.sensor("dropped-records")
             );
-            final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(null, rawRecord);
+            final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(null, rawRecord, new RecordHeaders(rawRecord.headers()));
             assertEquals(rawRecord.topic(), record.topic());
             assertEquals(rawRecord.partition(), record.partition());
             assertEquals(rawRecord.offset(), record.offset());
@@ -129,7 +131,7 @@ public class RecordDeserializerTest {
                     metrics.sensor("dropped-records")
             );
 
-            final StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
+            final StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord, new RecordHeaders(rawRecord.headers())));
             assertEquals("Deserialization exception handler is set "
                             + "to fail upon a deserialization error. "
                             + "If you would rather have the streaming pipeline "
@@ -167,7 +169,7 @@ public class RecordDeserializerTest {
                     metrics.sensor("dropped-records")
             );
 
-            final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(context, rawRecord);
+            final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(context, rawRecord, new RecordHeaders(rawRecord.headers()));
             assertNull(record);
         }
     }
@@ -195,7 +197,7 @@ public class RecordDeserializerTest {
 
             final StreamsException exception = assertThrows(
                     StreamsException.class,
-                    () -> recordDeserializer.deserialize(context, rawRecord)
+                    () -> recordDeserializer.deserialize(context, rawRecord, new RecordHeaders(rawRecord.headers()))
             );
             assertEquals("Fatal user code error in deserialization error callback", exception.getMessage());
             assertInstanceOf(NullPointerException.class, exception.getCause());
@@ -226,7 +228,7 @@ public class RecordDeserializerTest {
 
             final StreamsException exception = assertThrows(
                     StreamsException.class,
-                    () -> recordDeserializer.deserialize(context, rawRecord)
+                    () -> recordDeserializer.deserialize(context, rawRecord, new RecordHeaders(rawRecord.headers()))
             );
             assertEquals("Fatal user code error in deserialization error callback", exception.getMessage());
             assertEquals("CRASH", exception.getCause().getMessage());
@@ -261,6 +263,7 @@ public class RecordDeserializerTest {
                             "world".getBytes(StandardCharsets.UTF_8),
                             new RecordHeaders(),
                             Optional.empty()),
+                    new RecordHeaders(),
                     new LogContext().logger(this.getClass()),
                     metrics.sensor("dropped-records"),
                     "sourceNode"
@@ -301,6 +304,7 @@ public class RecordDeserializerTest {
                             "world".getBytes(StandardCharsets.UTF_8),
                             new RecordHeaders(),
                             Optional.empty()),
+                    new RecordHeaders(),
                     new LogContext().logger(this.getClass()),
                     metrics.sensor("dropped-records"),
                     "sourceNode"
@@ -369,6 +373,88 @@ public class RecordDeserializerTest {
         final Response response = Response.fail();
 
         assertTrue(response.deadLetterQueueRecords().isEmpty());
+    }
+
+    @Test
+    public void shouldExposeOriginalSourceRecordHeadersToErrorHandlerWhenDeserializerMutatesHeaders() {
+        final RecordHeaders mutableHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("source-only", "kept".getBytes(StandardCharsets.UTF_8))
+        });
+        final ConsumerRecord<byte[], byte[]> mutatingRawRecord = new ConsumerRecord<>(
+            "topic",
+            1,
+            1,
+            10,
+            TimestampType.LOG_APPEND_TIME,
+            3,
+            5,
+            new byte[0],
+            new byte[0],
+            mutableHeaders,
+            Optional.of(5)
+        );
+
+        final AtomicReference<Headers> capturedHeaders = new AtomicReference<>();
+
+        try (final Metrics metrics = new Metrics()) {
+            final RecordDeserializer recordDeserializer = new RecordDeserializer(
+                new HeaderMutatingSourceNode(sourceNodeName),
+                new HeaderCapturingExceptionHandler(capturedHeaders),
+                new LogContext(),
+                metrics.sensor("dropped-records")
+            );
+
+            assertNull(recordDeserializer.deserialize(context, mutatingRawRecord, new RecordHeaders(mutatingRawRecord.headers())));
+        }
+
+        assertNull(mutableHeaders.lastHeader("source-only"));
+        final Headers seenByHandler = capturedHeaders.get();
+        assertNotNull(seenByHandler);
+        assertNotNull(
+            seenByHandler.lastHeader("source-only"),
+            "ErrorHandlerContext.headers() should expose the original source-record headers, " +
+                "not the post-deserialization (mutated) headers"
+        );
+        assertEquals(
+            "kept",
+            new String(seenByHandler.lastHeader("source-only").value(), StandardCharsets.UTF_8)
+        );
+    }
+
+    static class HeaderMutatingSourceNode extends SourceNode<Object, Object> {
+        HeaderMutatingSourceNode(final String name) {
+            super(name, null, null);
+        }
+
+        @Override
+        public Object deserializeKey(final String topic, final Headers headers, final byte[] data) {
+            headers.remove("source-only");
+            throw new RuntimeException("KABOOM!");
+        }
+
+        @Override
+        public Object deserializeValue(final String topic, final Headers headers, final byte[] data) {
+            return null;
+        }
+    }
+
+    static class HeaderCapturingExceptionHandler implements DeserializationExceptionHandler {
+        private final AtomicReference<Headers> captured;
+
+        HeaderCapturingExceptionHandler(final AtomicReference<Headers> captured) {
+            this.captured = captured;
+        }
+
+        @Override
+        public Response handleError(final ErrorHandlerContext context,
+                                    final ConsumerRecord<byte[], byte[]> record,
+                                    final Exception exception) {
+            captured.set(context.headers());
+            return Response.resume();
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) { }
     }
 
     static class TheSourceNode extends SourceNode<Object, Object> {

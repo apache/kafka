@@ -282,7 +282,8 @@ public class CachingKeyValueStore
                     internalContext.recordContext().partition(),
                     internalContext.recordContext().topic(),
                     internalContext.recordContext().sourceRawKey(),
-                    internalContext.recordContext().sourceRawValue()
+                    internalContext.recordContext().sourceRawValue(),
+                    internalContext.recordContext().sourceRawHeaders()
                 )
             );
 
