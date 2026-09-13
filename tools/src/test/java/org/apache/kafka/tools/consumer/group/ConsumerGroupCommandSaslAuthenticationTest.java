@@ -113,15 +113,6 @@ public class ConsumerGroupCommandSaslAuthenticationTest {
     private void testConsumerGroupServiceWithAuthenticationSuccess(GroupProtocol groupProtocol) throws Exception {
         cluster.createTopic(TOPIC, 1, (short) 1);
         createScramCredential(SCRAM_USER, SCRAM_PASSWORD);
-        for (KafkaBroker broker : cluster.brokers().values()) {
-            CredentialCache.Cache<ScramCredential> cache =
-                    broker.credentialProvider().credentialCache
-                            .cache(KAFKA_CLIENT_SASL_MECHANISM, ScramCredential.class);
-            TestUtils.waitForCondition(
-                    () -> cache.get(SCRAM_USER) != null,
-                    "SCRAM credentials not available on broker " + broker.config().nodeId()
-            );
-        }
         try (
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
             AutoCloseable consumerExecutor = ConsumerGroupCommandTestUtils.buildConsumers(
@@ -145,6 +136,14 @@ public class ConsumerGroupCommandSaslAuthenticationTest {
                     new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), password)
             ));
             result.all().get();
+        }
+        for (KafkaBroker broker : cluster.brokers().values()) {
+            CredentialCache.Cache<ScramCredential> cache = broker.credentialProvider().credentialCache
+                .cache(KAFKA_CLIENT_SASL_MECHANISM, ScramCredential.class);
+            TestUtils.waitForCondition(
+                () -> cache.get(user) != null,
+                "SCRAM credentials not available on broker " + broker.config().nodeId()
+            );
         }
     }
 
