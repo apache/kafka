@@ -27,6 +27,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
@@ -48,6 +49,7 @@ import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.tempFile;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -783,6 +785,203 @@ public class FileRecordsTest {
                 filteredOffsets.remove(index);
             }
         }
+    }
+
+    /**
+     * A slice must not hand out bytes that lie past its end: the underlying file may hold later
+     * batches, which would then be read and replayed by callers that asked for a bounded read.
+     */
+    @Test
+    public void testReadIntoStopsAtSliceEnd() throws IOException {
+        int firstBatchSize = batches(fileRecords).get(0).sizeInBytes();
+        FileRecords slice = fileRecords.slice(0, firstBatchSize);
+
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes() * 2);
+        slice.readInto(buffer, 0);
+
+        assertEquals(firstBatchSize, buffer.limit());
+        assertEquals(1, batches(MemoryRecords.readableRecords(buffer)).size());
+    }
+
+    /**
+     * With log.preallocate=true the file is longer than the data written to it. Reading up to the
+     * end of the file would return the zero-filled tail, which does not parse as a batch.
+     */
+    @Test
+    public void testReadIntoStopsAtLogicalEndOfPreallocatedFile() throws IOException {
+        File file = tempFile();
+        try (FileRecords preallocated = FileRecords.open(file, true, false, 512 * 1024, true)) {
+            append(preallocated, values);
+            int logicalSize = preallocated.sizeInBytes();
+            assertTrue(file.length() > logicalSize, "the file is expected to be preallocated");
+
+            ByteBuffer buffer = ByteBuffer.allocate(512 * 1024);
+            preallocated.readInto(buffer, 0);
+
+            assertEquals(logicalSize, buffer.limit());
+            assertEquals(values.length, batches(MemoryRecords.readableRecords(buffer)).size());
+        }
+    }
+
+    /**
+     * An empty preallocated log is the degenerate case of the same problem: there is nothing to
+     * read, but the file is megabytes long.
+     */
+    @Test
+    public void testReadIntoEmptyPreallocatedFile() throws IOException {
+        File file = tempFile();
+        try (FileRecords preallocated = FileRecords.open(file, true, false, 512 * 1024, true)) {
+            assertEquals(0, preallocated.sizeInBytes());
+            assertTrue(file.length() > 0, "the file is expected to be preallocated");
+
+            ByteBuffer buffer = ByteBuffer.allocate(512 * 1024);
+            preallocated.readInto(buffer, 0);
+
+            assertEquals(0, buffer.limit());
+        }
+    }
+
+    /**
+     * The bound must never make the read return less than the caller asked for, otherwise callers
+     * that size their buffer to a chunk would silently make less progress per call.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {1, 7, 37, 71, 72, 73})
+    public void testReadIntoFillsBufferSmallerThanTheRecords(int capacity) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(capacity);
+        fileRecords.readInto(buffer, 0);
+        assertEquals(capacity, buffer.limit());
+    }
+
+    /**
+     * LogSegment narrows the buffer to the batches it intends to copy before calling readInto, so
+     * the bound must only ever narrow the read further, never widen it.
+     */
+    @Test
+    public void testReadIntoHonoursTighterBufferLimit() throws IOException {
+        int firstBatchSize = batches(fileRecords).get(0).sizeInBytes();
+
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes() * 2);
+        buffer.limit(firstBatchSize);
+        fileRecords.readInto(buffer, 0);
+
+        assertEquals(firstBatchSize, buffer.limit());
+        assertEquals(1, batches(MemoryRecords.readableRecords(buffer)).size());
+    }
+
+    /**
+     * RecordsIterator reads into the middle of a buffer it is filling up, so the bound has to be
+     * applied relative to the buffer position rather than to its capacity.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 16})
+    public void testReadIntoRespectsBufferPosition(int bufferOffset) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes() * 2);
+        buffer.position(bufferOffset);
+        fileRecords.readInto(buffer, 0);
+
+        assertEquals(bufferOffset + fileRecords.sizeInBytes(), buffer.limit());
+    }
+
+    /**
+     * Cleaner walks a segment chunk by chunk and stops on the logical size, so a read starting at
+     * or past that size must come back empty instead of returning the tail of the file.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 4096})
+    public void testReadIntoFromPositionAtOrPastTheEnd(int bytesPastTheEnd) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes() * 2);
+        fileRecords.readInto(buffer, fileRecords.sizeInBytes() + bytesPastTheEnd);
+        assertEquals(0, buffer.limit());
+    }
+
+    /**
+     * The bound is on the bytes left from the read position, not on the total size. The file has
+     * to be longer than the records for this to be observable, otherwise the read stops on the end
+     * of the file and hides the difference.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3})
+    public void testReadIntoFromTheMiddleStopsAtTheEnd(int batchesToSkip) throws IOException {
+        File file = tempFile();
+        try (FileRecords preallocated = FileRecords.open(file, true, false, 512 * 1024, true)) {
+            append(preallocated, values);
+            List<RecordBatch> allBatches = batches(preallocated);
+            int readPosition = 0;
+            for (int i = 0; i < batchesToSkip; i++) {
+                readPosition += allBatches.get(i).sizeInBytes();
+            }
+            int logicalSize = preallocated.sizeInBytes();
+
+            // Room for all the records, so only the bound can stop the read short.
+            ByteBuffer buffer = ByteBuffer.allocate(logicalSize);
+            preallocated.readInto(buffer, readPosition);
+
+            assertEquals(logicalSize - readPosition, buffer.limit());
+            assertEquals(allBatches.size() - batchesToSkip,
+                batches(MemoryRecords.readableRecords(buffer)).size());
+        }
+    }
+
+    /**
+     * A slice keeps the size it was created with, so the file underneath it can end up shorter.
+     * The read then has to stop at the end of the file instead of spinning on it.
+     */
+    @Test
+    @Timeout(30)
+    public void testReadIntoWhenTheFileIsShorterThanTheRecords() throws IOException {
+        int firstBatchSize = batches(fileRecords).get(0).sizeInBytes();
+        FileRecords staleSlice = fileRecords.slice(0, fileRecords.sizeInBytes());
+        fileRecords.truncateTo(firstBatchSize);
+
+        ByteBuffer buffer = ByteBuffer.allocate(staleSlice.sizeInBytes() * 2);
+        staleSlice.readInto(buffer, 0);
+
+        assertEquals(firstBatchSize, buffer.limit());
+    }
+
+    /**
+     * Records appended after a slice was taken are outside the bound the caller was given, while
+     * an instance covering the whole file must keep seeing data as it is appended.
+     */
+    @Test
+    public void testReadIntoIgnoresRecordsAppendedAfterTheSliceWasTaken() throws IOException {
+        int sizeBeforeAppend = fileRecords.sizeInBytes();
+        FileRecords slice = fileRecords.slice(0, sizeBeforeAppend);
+        append(fileRecords, values);
+        assertTrue(fileRecords.sizeInBytes() > sizeBeforeAppend);
+
+        ByteBuffer sliceBuffer = ByteBuffer.allocate(fileRecords.sizeInBytes() * 2);
+        slice.readInto(sliceBuffer, 0);
+        assertEquals(sizeBeforeAppend, sliceBuffer.limit());
+
+        ByteBuffer wholeBuffer = ByteBuffer.allocate(fileRecords.sizeInBytes() * 2);
+        fileRecords.readInto(wholeBuffer, 0);
+        assertEquals(fileRecords.sizeInBytes(), wholeBuffer.limit());
+    }
+
+    /**
+     * Reading a segment in chunks that do not align with batch boundaries, as Cleaner does, must
+     * still reassemble the records byte for byte.
+     */
+    @Test
+    public void testReadIntoInChunksReassemblesTheRecords() throws IOException {
+        ByteBuffer whole = ByteBuffer.allocate(fileRecords.sizeInBytes());
+        fileRecords.readInto(whole, 0);
+        byte[] expected = new byte[whole.remaining()];
+        whole.get(expected);
+
+        ByteBuffer reassembled = ByteBuffer.allocate(expected.length);
+        int position = 0;
+        while (position < fileRecords.sizeInBytes()) {
+            ByteBuffer chunk = ByteBuffer.allocate(37);
+            fileRecords.readInto(chunk, position);
+            assertTrue(chunk.hasRemaining(), "a read below the logical size must return bytes");
+            position += chunk.remaining();
+            reassembled.put(chunk);
+        }
+
+        assertArrayEquals(expected, reassembled.array());
     }
 
     private static List<RecordBatch> batches(Records buffer) {

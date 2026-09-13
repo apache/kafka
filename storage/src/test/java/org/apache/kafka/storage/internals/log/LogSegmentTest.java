@@ -652,6 +652,47 @@ public class LogSegmentTest {
         }
     }
 
+    /**
+     * A preallocated segment is longer than the data written to it. Callers that copy a read into
+     * a buffer of their own, as the coordinator loaders do, must be given the records only and not
+     * the zero-filled tail of the file.
+     */
+    @Test
+    public void testReadIntoBufferFromPreallocatedSegment() throws IOException {
+        File tempDir = TestUtils.tempDirectory();
+        Map<String, Object> configMap = new HashMap<>();
+        configMap.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 10);
+        configMap.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000);
+        configMap.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, 0);
+        LogConfig logConfig = new LogConfig(configMap);
+        int loadBufferSize = 1024 * 1024;
+
+        try (LogSegment seg = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM, loadBufferSize, true)) {
+            MemoryRecords appended = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 50,
+                Compression.NONE, TimestampType.CREATE_TIME,
+                new SimpleRecord(50_000L, "hello".getBytes()),
+                new SimpleRecord(51_000L, "there".getBytes()));
+            seg.append(51, appended);
+            assertTrue(seg.log().file().length() > seg.log().sizeInBytes(),
+                "the segment is expected to be preallocated beyond the records written to it");
+
+            FetchDataInfo read = seg.read(50, loadBufferSize);
+            FileRecords records = (FileRecords) read.records;
+            ByteBuffer buffer = ByteBuffer.allocate(loadBufferSize);
+            records.readInto(buffer, 0);
+
+            assertEquals(records.sizeInBytes(), buffer.limit());
+
+            List<Record> expected = TestUtils.toList(appended.records());
+            List<Record> actual = TestUtils.toList(MemoryRecords.readableRecords(buffer).records());
+            assertEquals(expected.size(), actual.size());
+            for (int i = 0; i < expected.size(); i++) {
+                assertEquals(expected.get(i).offset(), actual.get(i).offset());
+                assertEquals(Utils.utf8(expected.get(i).value()), Utils.utf8(actual.get(i).value()));
+            }
+        }
+    }
+
     /* create a segment with   pre allocate and clearly shut down*/
     @Test
     public void testCreateWithInitFileSizeClearShutdown() throws IOException {

@@ -126,8 +126,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Read log batches into the given buffer until there are no bytes remaining in the buffer or the end of the file
-     * is reached.
+     * Read log batches into the given buffer until there are no bytes remaining in the buffer or the end of these
+     * records is reached. Only the bytes belonging to these records are read: for a slice the read stops at the end
+     * of the slice rather than at the end of the underlying file, which may hold preallocated space or bytes appended
+     * after this instance was created.
      *
      * @param buffer The buffer to write the batches to
      * @param position Position in the buffer to read from
@@ -135,6 +137,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * possible exceptions
      */
     public void readInto(ByteBuffer buffer, int position) throws IOException {
+        int available = Math.max(0, sizeInBytes() - position);
+        if (buffer.remaining() > available) {
+            buffer.limit(buffer.position() + available);
+        }
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
     }
