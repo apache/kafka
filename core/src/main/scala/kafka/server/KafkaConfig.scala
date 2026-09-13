@@ -204,6 +204,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
 
   def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
 
+  def maxDecompressedMessageBytes = getInt(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG)
+
   def getNumReplicaAlterLogDirsThreads: Int = {
     val numThreads: Integer = Option(getInt(ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG)).getOrElse(logDirs.size)
     numThreads
@@ -622,6 +624,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
     logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, logRetentionBytes)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, logRetentionTimeMillis: java.lang.Long)
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, messageMaxBytes)
+    logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, maxDecompressedMessageBytes)
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, logIndexIntervalBytes)
     logProps.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, logCleanerDeleteRetentionMs)
     logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, logCleanerMinCompactionLagMs)

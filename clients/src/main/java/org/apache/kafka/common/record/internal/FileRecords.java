@@ -21,6 +21,8 @@ import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AbstractIterator;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.io.Closeable;
 import java.io.File;
@@ -351,17 +353,25 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param targetTimestamp The timestamp to search for.
      * @param startingPosition The starting position to search.
      * @param startingOffset The starting offset to search.
+     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed
+     *                          record exceeding it is rejected with an InvalidRecordException before its body is
+     *                          allocated. Pass {@link Records#SOFT_MAX_ARRAY_LENGTH} for no limit beyond the
+     *                          array-length ceiling.
      * @return The timestamp and offset of the message found. Null if no message is found.
      */
-    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset) {
+    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset,
+                                                 int maxRecordBodySize) {
         for (RecordBatch batch : batchesFrom(startingPosition)) {
             if (batch.maxTimestamp() >= targetTimestamp) {
                 // We found a message
-                for (Record record : batch) {
-                    long timestamp = record.timestamp();
-                    if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
-                        return new TimestampAndOffset(timestamp, record.offset(),
-                                maybeLeaderEpoch(batch.partitionLeaderEpoch()));
+                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
+                    while (iterator.hasNext()) {
+                        Record record = iterator.next();
+                        long timestamp = record.timestamp();
+                        if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
+                            return new TimestampAndOffset(timestamp, record.offset(),
+                                    maybeLeaderEpoch(batch.partitionLeaderEpoch()));
+                    }
                 }
             }
         }
