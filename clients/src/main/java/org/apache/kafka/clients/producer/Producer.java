@@ -18,6 +18,8 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
+import org.apache.kafka.clients.consumer.ShareGroupMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
@@ -63,6 +65,12 @@ public interface Producer<K, V> extends Closeable {
      */
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                   ConsumerGroupMetadata groupMetadata) throws ProducerFencedException;
+
+    /**
+     * See {@link KafkaProducer#sendShareAcknowledgementsToTransaction(ShareAcknowledgements, ShareGroupMetadata)}
+     */
+    void sendShareAcknowledgementsToTransaction(ShareAcknowledgements acknowledgements,
+                                               ShareGroupMetadata groupMetadata) throws ProducerFencedException;
 
     /**
      * See {@link KafkaProducer#prepareTransaction()}

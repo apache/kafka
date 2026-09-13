@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
+import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -1044,17 +1045,22 @@ class PersisterStateManagerTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
         List<PersisterStateBatch> stateBatches = List.of(
-            new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
+            new PersisterStateBatch(0, 9, (byte) 5, (short) 1, 123L, (short) 7, (byte) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
 
         Node coordinatorNode = new Node(1, HOST, PORT);
+        AtomicBoolean sawStagedAckMetadata = new AtomicBoolean(false);
 
         client.prepareResponseFrom(body -> {
             WriteShareGroupStateRequest request = (WriteShareGroupStateRequest) body;
             String requestGroupId = request.data().groupId();
             Uuid requestTopicId = request.data().topics().get(0).topicId();
             int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+            WriteShareGroupStateRequestData.StateBatch firstBatch = request.data().topics().get(0).partitions().get(0).stateBatches().get(0);
+            sawStagedAckMetadata.set(firstBatch.stagedProducerId() == 123L &&
+                firstBatch.stagedProducerEpoch() == 7 &&
+                firstBatch.stagedAckType() == 1);
 
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
@@ -1121,6 +1127,7 @@ class PersisterStateManagerTest {
         // Verifying the result returned in correct
         assertEquals(partition, partitionResult.partition());
         assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+        assertEquals(true, sawStagedAckMetadata.get());
 
         try {
             // Stopping the state manager

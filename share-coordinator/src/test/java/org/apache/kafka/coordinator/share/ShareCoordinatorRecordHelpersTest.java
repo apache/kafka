@@ -123,6 +123,45 @@ public class ShareCoordinatorRecordHelpersTest {
     }
 
     @Test
+    public void testNewShareStateRecordsPreserveStagedAckMetadata() {
+        String groupId = "test-group";
+        Uuid topicId = Uuid.randomUuid();
+        long timestamp = System.currentTimeMillis();
+        int partitionId = 1;
+        PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 5, (short) 1, 123L, (short) 7, (byte) 1);
+        ShareGroupOffset offset = new ShareGroupOffset.Builder()
+            .setSnapshotEpoch(0)
+            .setStateEpoch(1)
+            .setLeaderEpoch(5)
+            .setStartOffset(0)
+            .setDeliveryCompleteCount(10)
+            .setCreateTimestamp(timestamp)
+            .setWriteTimestamp(timestamp)
+            .setStateBatches(List.of(batch))
+            .build();
+
+        ShareSnapshotValue snapshotValue = (ShareSnapshotValue) ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            groupId,
+            topicId,
+            partitionId,
+            offset
+        ).value().message();
+        ShareUpdateValue updateValue = (ShareUpdateValue) ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            groupId,
+            topicId,
+            partitionId,
+            offset
+        ).value().message();
+
+        assertEquals(123L, snapshotValue.stateBatches().get(0).stagedProducerId());
+        assertEquals((short) 7, snapshotValue.stateBatches().get(0).stagedProducerEpoch());
+        assertEquals((byte) 1, snapshotValue.stateBatches().get(0).stagedAckType());
+        assertEquals(123L, updateValue.stateBatches().get(0).stagedProducerId());
+        assertEquals((short) 7, updateValue.stateBatches().get(0).stagedProducerEpoch());
+        assertEquals((byte) 1, updateValue.stateBatches().get(0).stagedAckType());
+    }
+
+    @Test
     public void testNewShareStateTombstoneRecord() {
         String groupId = "test-group";
         Uuid topicId = Uuid.randomUuid();

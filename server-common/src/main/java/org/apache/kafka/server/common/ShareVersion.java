@@ -28,7 +28,10 @@ public enum ShareVersion implements FeatureVersion {
     SV_1(1, MetadataVersion.IBP_4_2_IV0, Map.of()),
 
     // Version 2 adds supports for DLQ (KIP-1191)
-    SV_2(2, MetadataVersion.IBP_4_4_IV0, Map.of());
+    SV_2(2, MetadataVersion.IBP_4_4_IV0, Map.of()),
+
+    // Version 3 adds transactional acknowledgments for share groups (KIP-1289)
+    SV_3(3, MetadataVersion.IBP_4_4_IV0, Map.of());
 
     public static final String FEATURE_NAME = "share.version";
 
@@ -76,6 +79,10 @@ public enum ShareVersion implements FeatureVersion {
         return featureLevel >= SV_2.featureLevel;
     }
 
+    public boolean supportsTransactionalShareAcknowledge() {
+        return featureLevel >= SV_3.featureLevel;
+    }
+
     public static ShareVersion fromFeatureLevel(short version) {
         switch (version) {
             case 0:
@@ -84,6 +91,8 @@ public enum ShareVersion implements FeatureVersion {
                 return SV_1;
             case 2:
                 return SV_2;
+            case 3:
+                return SV_3;
             default:
                 throw new RuntimeException("Unknown share feature level: " + (int) version);
         }

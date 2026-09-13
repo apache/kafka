@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -468,6 +469,21 @@ public class PersisterStateBatchCombinerTest {
                 test.startOffset)
                 .combineStateBatches(),
             test.testName
+        );
+    }
+
+    @Test
+    public void testDoesNotMergePendingBatchesFromDifferentTransactions() {
+        PersisterStateBatch firstTransaction = new PersisterStateBatch(100, 110, (byte) 5, (short) 1, 1L, (short) 0, (byte) 1);
+        PersisterStateBatch secondTransaction = new PersisterStateBatch(111, 120, (byte) 5, (short) 1, 2L, (short) 0, (byte) 1);
+
+        assertEquals(
+            List.of(firstTransaction, secondTransaction),
+            new PersisterStateBatchCombiner(
+                List.of(firstTransaction),
+                List.of(secondTransaction),
+                -1
+            ).combineStateBatches()
         );
     }
 }

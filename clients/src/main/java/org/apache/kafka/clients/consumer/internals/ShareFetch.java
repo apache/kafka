@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
+import org.apache.kafka.clients.consumer.ShareAcknowledgementBatch;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * {@link ShareFetch} represents the records fetched from the broker to be returned to the consumer
@@ -234,6 +237,47 @@ public class ShareFetch<K, V> {
                 acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
         });
         return acknowledgementMap;
+    }
+
+    /**
+     * Rejects acknowledgement types that have no meaning inside a transaction, before anything is
+     * drained. RELEASE and RENEW both concern the acquisition lock, which the transaction timeout
+     * takes over once a record is staged, so the broker refuses them; shipping them anyway turns a
+     * caller mistake into a rejected transaction. The gap marker (0) is not checked because it is
+     * emitted by the consumer itself for acquired offsets that hold no non-control record, and is
+     * staged and archived normally.
+     * <p>
+     * This must run before {@link #takeAcknowledgedRecords()}, which is destructive: validating
+     * after the drain would leave the rejected records with no way back into the in-flight set.
+     *
+     * @throws IllegalStateException if any pending acknowledgement cannot be sent to a transaction
+     */
+    private void ensureAcknowledgementsAreTransactional() {
+        batches.forEach((tip, batch) -> batch.pendingAcknowledgementTypes().forEach((offset, type) -> {
+            if (type == AcknowledgeType.RELEASE || type == AcknowledgeType.RENEW) {
+                throw new IllegalStateException("Acknowledgement type " + type + " for offset " + offset
+                    + " of " + tip + " cannot be sent to a transaction; only ACCEPT and REJECT are valid.");
+            }
+        }));
+    }
+
+    public ShareAcknowledgements takeAcknowledgementsForTransaction() {
+        ensureAcknowledgementsAreTransactional();
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgementMap = new LinkedHashMap<>();
+        takeAcknowledgedRecords().forEach((tip, nodeAcknowledgements) -> {
+            List<ShareAcknowledgementBatch> acknowledgementBatches = nodeAcknowledgements.acknowledgements()
+                .getAcknowledgementBatches()
+                .stream()
+                .map(batch -> new ShareAcknowledgementBatch(
+                    batch.firstOffset(),
+                    batch.lastOffset(),
+                    batch.acknowledgeTypes()))
+                .collect(Collectors.toList());
+            if (!acknowledgementBatches.isEmpty()) {
+                acknowledgementMap.put(tip, acknowledgementBatches);
+            }
+        });
+        return new ShareAcknowledgements(acknowledgementMap);
     }
 
     /**

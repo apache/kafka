@@ -24,9 +24,12 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ShareAcknowledgementBatch;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
@@ -1458,8 +1461,8 @@ public class KafkaProducerTest {
 
         try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
             PreparedTxnState returned = producer.prepareTransaction();
-            assertEquals(expectedProducerId, returned.producerId());
-            assertEquals(expectedEpoch, returned.epoch());
+            assertEquals(expectedProducerId, returned.txnOwnerId());
+            assertEquals(expectedEpoch, returned.txnOwnerEpoch());
 
             verify(ctx.transactionManager).prepareTransaction();
             verify(ctx.accumulator).beginFlush();
@@ -1559,6 +1562,26 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testSendShareAcknowledgementsRejectsNullGroupMetadata() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+        TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(topic, 0));
+        ShareAcknowledgements acknowledgements = new ShareAcknowledgements(Map.of(
+            tip,
+            List.of(new ShareAcknowledgementBatch(5L, 5L, List.of(AcknowledgeType.ACCEPT.id)))));
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            NullPointerException exception = assertThrows(
+                NullPointerException.class,
+                () -> producer.sendShareAcknowledgementsToTransaction(acknowledgements, null)
+            );
+
+            assertEquals("groupMetadata cannot be null", exception.getMessage());
+            verify(ctx.transactionManager, never()).sendShareAcknowledgementsToTransaction(any(), any());
+        }
+    }
+
+    @Test
     public void testBeginTransactionNotAllowedInPreparedTransactionState() throws Exception {
         StringSerializer serializer = new StringSerializer();
         KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
@@ -1604,6 +1627,22 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testCompleteTransactionRejectsNullPreparedState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            NullPointerException exception = assertThrows(
+                NullPointerException.class,
+                () -> producer.completeTransaction(null)
+            );
+
+            assertEquals("preparedTxnState cannot be null", exception.getMessage());
+            verify(ctx.transactionManager, never()).isPrepared();
+        }
+    }
+
+    @Test
     public void testCompleteTransactionWithMatchingState() throws Exception {
         StringSerializer serializer = new StringSerializer();
         KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
@@ -1612,10 +1651,10 @@ public class KafkaProducerTest {
         when(ctx.sender.isRunning()).thenReturn(true);
 
         // Create prepared states with matching values
-        long producerId = 12345L;
-        short epoch = 5;
-        PreparedTxnState inputState = new PreparedTxnState(producerId, epoch);
-        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        long txnOwnerId = 12345L;
+        short txnOwnerEpoch = 5;
+        PreparedTxnState inputState = new PreparedTxnState(txnOwnerId, txnOwnerEpoch);
+        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(txnOwnerId, txnOwnerEpoch);
 
         // Set up the transaction manager to return the prepared state
         when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);
@@ -1642,7 +1681,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCompleteTransactionWithNonMatchingState() throws Exception {
+    public void testCompleteTransactionFailsWithNonMatchingState() throws Exception {
         StringSerializer serializer = new StringSerializer();
         KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
 
@@ -1650,32 +1689,26 @@ public class KafkaProducerTest {
         when(ctx.sender.isRunning()).thenReturn(true);
 
         // Create txn prepared states with different values
-        long producerId = 12345L;
-        short epoch = 5;
-        PreparedTxnState inputState = new PreparedTxnState(producerId + 1, epoch);
-        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        long txnOwnerId = 12345L;
+        short txnOwnerEpoch = 5;
+        PreparedTxnState inputState = new PreparedTxnState(txnOwnerId + 1, txnOwnerEpoch);
+        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(txnOwnerId, txnOwnerEpoch);
 
         // Set up the transaction manager to return the prepared state
         when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);
 
-        // Should trigger abort when states don't match
-        TransactionalRequestResult abortResult = mock(TransactionalRequestResult.class);
-        when(ctx.transactionManager.beginAbort()).thenReturn(abortResult);
-
         try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
-            // Call completeTransaction with the non-matching state
-            producer.completeTransaction(inputState);
+            InvalidTxnStateException exception = assertThrows(
+                InvalidTxnStateException.class,
+                () -> producer.completeTransaction(inputState)
+            );
 
-            // Verify methods called in order
+            assertTrue(exception.getMessage().contains("does not match the current prepared transaction state"));
             verify(ctx.transactionManager).isPrepared();
             verify(ctx.transactionManager).preparedTransactionState();
-            verify(ctx.transactionManager).beginAbort();
-
-            // Verify commit was never called
             verify(ctx.transactionManager, never()).beginCommit();
-
-            // Verify sender was woken up
-            verify(ctx.sender).wakeup();
+            verify(ctx.transactionManager, never()).beginAbort();
+            verify(ctx.sender, never()).wakeup();
         }
     }
 
