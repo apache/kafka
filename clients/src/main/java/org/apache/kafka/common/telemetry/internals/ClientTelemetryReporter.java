@@ -428,6 +428,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
             Uuid clientInstanceId = ClientTelemetryUtils.validateClientInstanceId(data.clientInstanceId());
             int intervalMs = ClientTelemetryUtils.validateIntervalMs(data.pushIntervalMs());
+            int telemetryMaxBytes = ClientTelemetryUtils.validateTelemetryMaxBytes(data.telemetryMaxBytes());
             Predicate<? super MetricKeyable> selector = ClientTelemetryUtils.getSelectorFromRequestedMetrics(
                 data.requestedMetrics());
             List<CompressionType> acceptedCompressionTypes = ClientTelemetryUtils.getCompressionTypesFromAcceptedList(
@@ -449,6 +450,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 clientInstanceId,
                 data.subscriptionId(),
                 intervalMs,
+                telemetryMaxBytes,
                 acceptedCompressionTypes,
                 data.deltaTemporality(),
                 selector);
@@ -711,9 +713,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         private Optional<Builder<?>> createPushRequest(ClientTelemetrySubscription localSubscription, boolean terminating) {
             MetricsData payload;
+            int metricsCount;
             try (MetricsEmitter emitter = new ClientTelemetryEmitter(localSubscription.selector(), localSubscription.deltaTemporality())) {
                 emitter.init();
                 kafkaMetricsCollector.collect(emitter);
+                metricsCount = emitter.emittedMetrics().size();
                 payload = createPayload(emitter.emittedMetrics());
             } catch (Exception e) {
                 log.warn("Error constructing client telemetry payload: ", e);
@@ -744,6 +748,26 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 unsupportedCompressionTypes.add(compressionType);
                 compressedPayload = ByteBuffer.wrap(payload.toByteArray());
                 compressionType = CompressionType.NONE;
+            }
+
+            /*
+             Per KIP-714, the payload must not exceed the maximum size the broker advertised in the
+             subscription. Sending it anyway would only be rejected with TELEMETRY_TOO_LARGE, hence
+             skip the push and re-fetch the subscription, which may narrow the requested metrics or
+             raise the limit, before attempting the next push.
+            */
+            if (compressedPayload.remaining() > localSubscription.telemetryMaxBytes()) {
+                log.warn("Skipping telemetry push as the {} compressed payload for {} metrics is {} bytes,"
+                        + " which exceeds the maximum of {} bytes accepted by the broker", compressionType,
+                    metricsCount, compressedPayload.remaining(), localSubscription.telemetryMaxBytes());
+
+                if (!terminating) {
+                    if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
+                        log.warn("Unable to transition state after skipping oversized telemetry push from state {}", state);
+                    }
+                    updateErrorResult(localSubscription.pushIntervalMs(), time.milliseconds());
+                }
+                return Optional.empty();
             }
 
             AbstractRequest.Builder<?> requestBuilder = new PushTelemetryRequest.Builder(
@@ -965,16 +989,18 @@ public class ClientTelemetryReporter implements MetricsReporter {
         private final Uuid clientInstanceId;
         private final int subscriptionId;
         private final int pushIntervalMs;
+        private final int telemetryMaxBytes;
         private final List<CompressionType> acceptedCompressionTypes;
         private final boolean deltaTemporality;
         private final Predicate<? super MetricKeyable> selector;
 
         ClientTelemetrySubscription(Uuid clientInstanceId, int subscriptionId, int pushIntervalMs,
-                List<CompressionType> acceptedCompressionTypes, boolean deltaTemporality,
-                Predicate<? super MetricKeyable> selector) {
+                int telemetryMaxBytes, List<CompressionType> acceptedCompressionTypes,
+                boolean deltaTemporality, Predicate<? super MetricKeyable> selector) {
             this.clientInstanceId = clientInstanceId;
             this.subscriptionId = subscriptionId;
             this.pushIntervalMs = pushIntervalMs;
+            this.telemetryMaxBytes = telemetryMaxBytes;
             this.acceptedCompressionTypes = List.copyOf(acceptedCompressionTypes);
             this.deltaTemporality = deltaTemporality;
             this.selector = selector;
@@ -990,6 +1016,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         public int pushIntervalMs() {
             return pushIntervalMs;
+        }
+
+        public int telemetryMaxBytes() {
+            return telemetryMaxBytes;
         }
 
         public List<CompressionType> acceptedCompressionTypes() {
@@ -1010,6 +1040,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 .add("clientInstanceId=" + clientInstanceId)
                 .add("subscriptionId=" + subscriptionId)
                 .add("pushIntervalMs=" + pushIntervalMs)
+                .add("telemetryMaxBytes=" + telemetryMaxBytes)
                 .add("acceptedCompressionTypes=" + acceptedCompressionTypes)
                 .add("deltaTemporality=" + deltaTemporality)
                 .add("selector=" + selector)
