@@ -186,9 +186,9 @@ public class ActivationRecordsGenerator {
                         // of the controller quorum during which the migration config is being set to false.
                         if (!stillZkRegisteredBrokerIds.isEmpty()) {
                             logMessageBuilder
-                                .append("Cannot complete ZK migration because the following broker(s) are still registered as ZK brokers: ")
+                                .append("Staying in ZK migration mode even though 'zookeeper.metadata.migration.enable' set to 'false' because the following broker(s) are still registered as ZK brokers: ")
                                 .append(stillZkRegisteredBrokerIds)
-                                .append(". Restart these brokers in KRaft mode before restarting the controllers to finalize the migration. ");
+                                .append(". These brokers must be migrated to KRaft before the controller can finalize the migration.");
                         } else {
                             logMessageBuilder
                                 .append("Completing the ZK migration since this controller was configured with ")

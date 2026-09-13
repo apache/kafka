@@ -1243,7 +1243,7 @@ public final class QuorumController implements Controller {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
             try {
-                Set<Integer> stillZkRegisteredBrokerIds = clusterControl.brokerRegistrations().values().stream()
+                Set<Integer> sortedStillZkRegisteredBrokerIds = clusterControl.brokerRegistrations().values().stream()
                     .filter(BrokerRegistration::isMigratingZkBroker)
                     .map(BrokerRegistration::id)
                     .collect(Collectors.toCollection(TreeSet::new));
@@ -1252,7 +1252,7 @@ public final class QuorumController implements Controller {
                     logReplayTracker.empty(),
                     offsetControl.transactionStartOffset(),
                     zkMigrationEnabled,
-                    stillZkRegisteredBrokerIds,
+                    sortedStillZkRegisteredBrokerIds,
                     bootstrapMetadata,
                     featureControl);
             } catch (Throwable t) {
