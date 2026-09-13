@@ -48,6 +48,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -409,6 +410,152 @@ public class ConsumerIntegrationTest {
                     1L == (Long) broker1Metrics.metric(activeNumPartitions).metricValue(),
                 "Incorrect num-partitions metric after partition reassignment to the new coordinator"
             );
+        }
+    }
+
+    /**
+     * Verifies that rapidly switching partitions via assign() correctly commits offsets
+     * for all previously-assigned partitions (classic consumer).
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    })
+    public void testRapidAssignAutoCommitCorrectnessClassic(ClusterInstance clusterInstance) throws Exception {
+        runRapidAssignAutoCommitCorrectness(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    /**
+     * Verifies that rapidly switching partitions via assign() correctly commits offsets
+     * for all previously-assigned partitions (async consumer).
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    })
+    public void testRapidAssignAutoCommitCorrectnessConsumer(ClusterInstance clusterInstance) throws Exception {
+        runRapidAssignAutoCommitCorrectness(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private void runRapidAssignAutoCommitCorrectness(ClusterInstance clusterInstance, GroupProtocol protocol) throws Exception {
+        String topic = "test-rapid-assign-autocommit";
+        String groupId = "test-rapid-assign-autocommit-group-" + protocol.name().toLowerCase(Locale.ROOT);
+        clusterInstance.createTopic(topic, 2, (short) 1);
+
+        TopicPartition tp0 = new TopicPartition(topic, 0);
+        TopicPartition tp1 = new TopicPartition(topic, 1);
+
+        int msgCount = 10;
+        try (var producer = clusterInstance.producer()) {
+            for (int i = 0; i < msgCount; i++) {
+                producer.send(new ProducerRecord<>(topic, 0, ("key" + i).getBytes(), ("val" + i).getBytes()));
+                producer.send(new ProducerRecord<>(topic, 1, ("key" + i).getBytes(), ("val" + i).getBytes()));
+            }
+            producer.flush();
+        }
+
+        try (var consumer = clusterInstance.consumer(Map.of(
+                ConsumerConfig.GROUP_ID_CONFIG, groupId,
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true",
+                ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "300000",
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1",
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT)
+            ));
+             var admin = clusterInstance.admin()) {
+
+            // Each iteration: assign tp0 → consume 1 msg → assign tp1 → consume 1 msg
+            // assign() at the start of each round triggers a best-effort commit for the previous partition
+            for (int i = 0; i < msgCount; i++) {
+                consumer.assign(List.of(tp0));
+                TestUtils.waitForCondition(
+                    () -> !consumer.poll(Duration.ofMillis(500)).isEmpty(),
+                    10000, "Should receive record from tp0 at iteration " + i);
+
+                consumer.assign(List.of(tp1));
+                TestUtils.waitForCondition(
+                    () -> !consumer.poll(Duration.ofMillis(500)).isEmpty(),
+                    10000, "Should receive record from tp1 at iteration " + i);
+            }
+
+            // Final: assign both to trigger commit for the last assigned partition (tp1)
+            consumer.assign(List.of(tp0, tp1));
+
+            // Verify both partitions committed all consumed offsets
+            TestUtils.waitForCondition(() -> {
+                var offsets = admin.listConsumerGroupOffsets(groupId)
+                    .partitionsToOffsetAndMetadata().get();
+                return offsets.containsKey(tp0) && offsets.get(tp0) != null && offsets.get(tp0).offset() == msgCount &&
+                       offsets.containsKey(tp1) && offsets.get(tp1) != null && offsets.get(tp1).offset() == msgCount;
+            }, 10000, "Both tp0 and tp1 should have committed offset " + msgCount);
+        }
+    }
+
+    /**
+     * Verifies that calling assign() triggers a best-effort auto-commit for the
+     * previously-assigned partition (classic consumer).
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    })
+    public void testAssignTriggersAutoCommitClassic(ClusterInstance clusterInstance) throws Exception {
+        runAssignTriggersAutoCommit(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    /**
+     * Verifies that calling assign() triggers a best-effort auto-commit for the
+     * previously-assigned partition (async consumer).
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    })
+    public void testAssignTriggersAutoCommitConsumer(ClusterInstance clusterInstance) throws Exception {
+        runAssignTriggersAutoCommit(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private void runAssignTriggersAutoCommit(ClusterInstance clusterInstance, GroupProtocol protocol) throws Exception {
+        String topic = "test-assign-autocommit-" + protocol.name().toLowerCase(Locale.ROOT);
+        String groupId = "test-assign-autocommit-group-" + protocol.name().toLowerCase(Locale.ROOT);
+        clusterInstance.createTopic(topic, 1, (short) 1);
+
+        TopicPartition tp = new TopicPartition(topic, 0);
+        int msgCount = 5;
+
+        try (var producer = clusterInstance.producer()) {
+            for (int i = 0; i < msgCount; i++) {
+                producer.send(new ProducerRecord<>(topic, 0, ("key" + i).getBytes(), ("val" + i).getBytes()));
+            }
+            producer.flush();
+        }
+
+        try (var consumer = clusterInstance.consumer(Map.of(
+                ConsumerConfig.GROUP_ID_CONFIG, groupId,
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true",
+                ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "300000",
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT)
+            ));
+             var admin = clusterInstance.admin()) {
+
+            // Assign and consume all messages
+            consumer.assign(List.of(tp));
+            int consumed = 0;
+            while (consumed < msgCount) {
+                consumed += consumer.poll(Duration.ofMillis(500)).count();
+            }
+
+            // Re-assign the same partition — triggers best-effort async commit for the previously-consumed offsets.
+            // Poll once to drive the network layer so the queued commit is transmitted.
+            consumer.assign(List.of(tp));
+            consumer.poll(Duration.ofMillis(500));
+
+            TestUtils.waitForCondition(() -> {
+                var offsets = admin.listConsumerGroupOffsets(groupId)
+                    .partitionsToOffsetAndMetadata().get();
+                return offsets.containsKey(tp) && offsets.get(tp) != null && offsets.get(tp).offset() == msgCount;
+            }, 10000, "tp should have committed offset " + msgCount);
         }
     }
 
