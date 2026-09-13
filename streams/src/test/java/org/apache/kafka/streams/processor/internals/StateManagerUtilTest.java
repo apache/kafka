@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.LockException;
@@ -26,6 +27,7 @@ import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
@@ -44,7 +46,9 @@ import java.util.List;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mockStatic;
@@ -220,12 +224,17 @@ public class StateManagerUtilTest {
     @Test
     public void shouldNotCloseStateManagerIfUnableToLockTaskDirectory() {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
+        final Thread lockOwner = liveThread("other-stream-thread");
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(false);
-        when(stateDirectory.lockOwner(taskId)).thenReturn(new Thread("other-stream-thread"));
+        when(stateDirectory.lockOwner(taskId)).thenReturn(lockOwner);
 
-        StateManagerUtil.closeStateManager(
-                logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
+        try {
+            StateManagerUtil.closeStateManager(
+                    logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
+        } finally {
+            lockOwner.interrupt();
+        }
 
         inOrder.verify(stateManager).taskId();
         inOrder.verify(stateDirectory).lock(taskId);
@@ -239,12 +248,17 @@ public class StateManagerUtilTest {
     @Test
     public void shouldNotWipeStateStoresIfUnableToLockTaskDirectory() {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
+        final Thread lockOwner = liveThread("other-stream-thread");
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(false);
-        when(stateDirectory.lockOwner(taskId)).thenReturn(new Thread("other-stream-thread"));
+        when(stateDirectory.lockOwner(taskId)).thenReturn(lockOwner);
 
-        StateManagerUtil.closeStateManager(
-                logger, "logPrefix:", false, true, false, stateManager, stateDirectory, TaskType.ACTIVE);
+        try {
+            StateManagerUtil.closeStateManager(
+                    logger, "logPrefix:", false, true, false, stateManager, stateDirectory, TaskType.ACTIVE);
+        } finally {
+            lockOwner.interrupt();
+        }
 
         inOrder.verify(stateManager).taskId();
         inOrder.verify(stateDirectory).lock(taskId);
@@ -253,6 +267,68 @@ public class StateManagerUtilTest {
         verify(stateManager, never()).baseDir();
         verify(stateDirectory, never()).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
+    }
+
+    @Test
+    public void shouldLogDebugWhenUnableToLockBecauseAnotherLiveThreadHoldsIt() {
+        final Thread lockOwner = liveThread("other-stream-thread");
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.lock(taskId)).thenReturn(false);
+        when(stateDirectory.lockOwner(taskId)).thenReturn(lockOwner);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(AbstractTask.class)) {
+            appender.setClassLogger(AbstractTask.class, Level.DEBUG);
+
+            StateManagerUtil.closeStateManager(
+                logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
+
+            assertTrue(appender.getMessages("DEBUG").stream().anyMatch(
+                m -> m.contains("Unable to acquire lock while closing the state store for ACTIVE task 0_0; held by other-stream-thread")));
+            assertFalse(appender.getMessages("WARN").stream().anyMatch(
+                m -> m.contains("Unable to acquire lock")));
+        } finally {
+            lockOwner.interrupt();
+        }
+    }
+
+    @Test
+    public void shouldLogDebugWhenUnableToLockAndOwnerAlreadyReleased() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.lock(taskId)).thenReturn(false);
+        when(stateDirectory.lockOwner(taskId)).thenReturn(null);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(AbstractTask.class)) {
+            appender.setClassLogger(AbstractTask.class, Level.DEBUG);
+
+            StateManagerUtil.closeStateManager(
+                logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
+
+            assertTrue(appender.getMessages("DEBUG").stream().anyMatch(
+                m -> m.contains("Unable to acquire lock while closing the state store for ACTIVE task 0_0")));
+            assertFalse(appender.getMessages("WARN").stream().anyMatch(
+                m -> m.contains("Unable to acquire lock")));
+        }
+        verify(stateManager, never()).close();
+    }
+
+    @Test
+    public void shouldLogWarnWhenUnableToLockBecauseOwnerThreadTerminated() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.lock(taskId)).thenReturn(false);
+        when(stateDirectory.lockOwner(taskId)).thenReturn(new Thread("dead-stream-thread"));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(AbstractTask.class)) {
+            appender.setClassLogger(AbstractTask.class, Level.DEBUG);
+
+            StateManagerUtil.closeStateManager(
+                logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
+
+            assertTrue(appender.getMessages("WARN").stream().anyMatch(
+                m -> m.contains("Unable to acquire lock while closing the state store for ACTIVE task 0_0; held by terminated thread dead-stream-thread")));
+            assertFalse(appender.getMessages("DEBUG").stream().anyMatch(
+                m -> m.contains("Unable to acquire lock")));
+        }
+        verify(stateManager, never()).close();
     }
 
     @Test
@@ -284,5 +360,18 @@ public class StateManagerUtilTest {
         inOrder.verify(stateManager).close();
         inOrder.verify(stateDirectory).removeTaskOffsets(taskId);
         inOrder.verify(stateDirectory).unlock(taskId);
+    }
+
+    private static Thread liveThread(final String name) {
+        final Thread thread = new Thread(() -> {
+            try {
+                Thread.sleep(Long.MAX_VALUE);
+            } catch (final InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }, name);
+        thread.setDaemon(true);
+        thread.start();
+        return thread;
     }
 }
