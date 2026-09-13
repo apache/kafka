@@ -20,11 +20,11 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, TopicDescription}
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, TopicDescription}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.message.ProduceRequestData
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.message.{ProduceRequestData, ProduceResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
@@ -280,6 +280,161 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse1.errorCode))
     assertEquals(0, partitionProduceResponse1.baseOffset)
     assertEquals(-1, partitionProduceResponse1.logAppendTimeMs)
+  }
+
+  private val SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES = "512"
+  // Above the limit but tiny gzip-compressed and below max.message.bytes, so the decompressed
+  // per-record limit -- not the wire bound -- is what rejects it.
+  private val OVERSIZED_VALUE_BYTES = 4096
+  private val UNDERSIZED_VALUE_BYTES = 64
+
+  /**
+   * A topic-level limit rejects a compressed record whose declared decompressed body exceeds it
+   * (INVALID_RECORD, before allocating the body). A small compressed record and an equally-large
+   * uncompressed record (bounded instead by max.message.bytes) are accepted.
+   */
+  @Test
+  def testProduceRejectsCompressedRecordExceedingMaxDecompressedMessageBytes(): Unit = {
+    val topic = "topic"
+    val topicConfig = new Properties
+    topicConfig.setProperty(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES)
+    val partitionToLeader = createTopic(topic, topicConfig = topicConfig)
+    val leader = partitionToLeader(0)
+    val topicId = getTopicIds().get(topic).get
+
+    val rejected = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))))
+    assertEquals(Errors.INVALID_RECORD.code, rejected.errorCode,
+      "a compressed record exceeding the configured per-record limit must be rejected as invalid")
+    assertEquals(-1, rejected.baseOffset, "a rejected record must not be appended")
+
+    val acceptedSmall = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest(topicId, singleRecord(Compression.gzip().build(), UNDERSIZED_VALUE_BYTES))))
+    assertEquals(Errors.NONE.code, acceptedSmall.errorCode,
+      "a compressed record under the configured per-record limit must be accepted")
+
+    val acceptedUncompressed = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest(topicId, singleRecord(Compression.NONE, OVERSIZED_VALUE_BYTES))))
+    assertEquals(Errors.NONE.code, acceptedUncompressed.errorCode,
+      "an uncompressed record must not be subject to the decompressed per-record limit")
+  }
+
+  /**
+   * The topic-level limit is dynamically reconfigurable: a large compressed record is accepted at
+   * the default, then rejected after lowering it via incrementalAlterConfigs -- no restart.
+   */
+  @Test
+  def testMaxDecompressedMessageBytesIsDynamicallyReconfigurable(): Unit = {
+    val topic = "topic"
+    val partitionToLeader = createTopic(topic)
+    val leader = partitionToLeader(0)
+    val topicId = getTopicIds().get(topic).get
+
+    val before = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))))
+    assertEquals(Errors.NONE.code, before.errorCode,
+      "with the default per-record limit the record must be accepted")
+
+    val admin = createAdminClient()
+    val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    admin.incrementalAlterConfigs(Map(resource -> List(new AlterConfigOp(
+      new ConfigEntry(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES),
+      AlterConfigOp.OpType.SET)).asJavaCollection).asJava).all.get
+
+    // The topic-config change reaches the produce path asynchronously; poll until it takes effect.
+    TestUtils.waitUntilTrue(
+      () => onlyPartitionResponse(sendProduceRequest(leader,
+        produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))))
+        .errorCode == Errors.INVALID_RECORD.code,
+      s"the lowered topic-level ${TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG} was not applied to the produce path",
+      15000L)
+  }
+
+  /**
+   * A broker-level default is inherited by a topic without an override: an oversized compressed
+   * record is rejected. The default is lowered dynamically (via a BROKER-resource alter) rather
+   * than at cluster startup, since this test suite shares one cluster per test method with no
+   * per-test static broker-config override.
+   */
+  @Test
+  def testBrokerDefaultMaxDecompressedMessageBytesAppliesToTopicWithoutOverride(): Unit = {
+    val topic = "topic"
+    val admin = createAdminClient()
+    // Empty resource name = cluster-wide broker default.
+    val resource = new ConfigResource(ConfigResource.Type.BROKER, "")
+    admin.incrementalAlterConfigs(Map(resource -> List(new AlterConfigOp(
+      new ConfigEntry(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES),
+      AlterConfigOp.OpType.SET)).asJavaCollection).asJava).all.get
+
+    val partitionToLeader = createTopic(topic)
+    val leader = partitionToLeader(0)
+    val topicId = getTopicIds().get(topic).get
+
+    // The broker-default change reaches the produce path asynchronously; poll until it takes effect.
+    TestUtils.waitUntilTrue(
+      () => onlyPartitionResponse(sendProduceRequest(leader,
+        produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))))
+        .errorCode == Errors.INVALID_RECORD.code,
+      "the broker-level default per-record limit was not applied to a topic without an override",
+      15000L)
+  }
+
+  /**
+   * The broker-level default is dynamically reconfigurable and flows to a topic without an
+   * override: accepted at the default, rejected after lowering the cluster-wide default via a
+   * BROKER-resource alter -- no restart.
+   */
+  @Test
+  def testBrokerDefaultMaxDecompressedMessageBytesIsDynamicallyReconfigurable(): Unit = {
+    val topic = "topic"
+    val partitionToLeader = createTopic(topic)
+    val leader = partitionToLeader(0)
+    val topicId = getTopicIds().get(topic).get
+
+    val before = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))))
+    assertEquals(Errors.NONE.code, before.errorCode,
+      "with the default broker per-record limit and no topic override the record must be accepted")
+
+    val admin = createAdminClient()
+    // Empty resource name = cluster-wide broker default.
+    val resource = new ConfigResource(ConfigResource.Type.BROKER, "")
+    admin.incrementalAlterConfigs(Map(resource -> List(new AlterConfigOp(
+      new ConfigEntry(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES),
+      AlterConfigOp.OpType.SET)).asJavaCollection).asJava).all.get
+
+    // The broker-default change reaches the produce path asynchronously; poll until it takes effect.
+    TestUtils.waitUntilTrue(
+      () => onlyPartitionResponse(sendProduceRequest(leader,
+        produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))))
+        .errorCode == Errors.INVALID_RECORD.code,
+      s"the lowered cluster-wide broker-default ${TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG} was not applied to the produce path",
+      15000L)
+  }
+
+  private def produceRequest(topicId: Uuid, records: MemoryRecords): ProduceRequest = {
+    ProduceRequest.builder(new ProduceRequestData()
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+        new ProduceRequestData.TopicProduceData()
+          .setTopicId(topicId)
+          .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+            .setIndex(0)
+            .setRecords(records)))).iterator))
+      .setAcks((-1).toShort)
+      .setTimeoutMs(3000)
+      .setTransactionalId(null)).build()
+  }
+
+  private def singleRecord(compression: Compression, valueSize: Int): MemoryRecords = {
+    MemoryRecords.withRecords(compression,
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, new Array[Byte](valueSize)))
+  }
+
+  private def onlyPartitionResponse(response: ProduceResponse): ProduceResponseData.PartitionProduceResponse = {
+    assertEquals(1, response.data.responses.size)
+    val topicProduceResponse = response.data.responses.asScala.head
+    assertEquals(1, topicProduceResponse.partitionResponses.size)
+    topicProduceResponse.partitionResponses.asScala.head
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {

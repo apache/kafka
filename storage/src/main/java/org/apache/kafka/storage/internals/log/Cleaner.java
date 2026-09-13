@@ -252,7 +252,8 @@ public class Cleaner {
                             lastOffsetOfActiveProducers,
                             upperBoundOffsetOfCleaningRound,
                             stats,
-                            currentTime
+                            currentTime,
+                            log.config().maxDecompressedMessageBytes()
                     );
                 } catch (LogSegmentOffsetOverflowException e) {
                     // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -302,6 +303,8 @@ public class Cleaner {
      * @param upperBoundOffsetOfCleaningRound Next offset of the last batch in the source segment
      * @param stats Collector for cleaning statistics
      * @param currentTime The time at which the clean was initiated
+     * @param maxRecordBodySize The maximum decompressed per-record body size of the corresponding topic; records
+     *                          exceeding it are rejected with an InvalidRecordException before allocation
      */
     private void cleanInto(TopicPartition topicPartition,
                            FileRecords sourceRecords,
@@ -314,7 +317,8 @@ public class Cleaner {
                            Map<Long, LastRecord> lastRecordsOfActiveProducers,
                            long upperBoundOffsetOfCleaningRound,
                            CleanerStats stats,
-                           long currentTime) throws IOException {
+                           long currentTime,
+                           int maxRecordBodySize) throws IOException {
         MemoryRecords.RecordFilter logCleanerFilter = new MemoryRecords.RecordFilter(currentTime, deleteRetentionMs) {
             private boolean discardBatchRecords;
 
@@ -388,7 +392,7 @@ public class Cleaner {
             sourceRecords.readInto(readBuffer, position);
             MemoryRecords records = MemoryRecords.readableRecords(readBuffer);
             throttler.maybeThrottle(records.sizeInBytes());
-            MemoryRecords.FilterResult result = records.filterTo(logCleanerFilter, writeBuffer, decompressionBufferSupplier);
+            MemoryRecords.FilterResult result = records.filterTo(logCleanerFilter, writeBuffer, decompressionBufferSupplier, maxRecordBodySize);
 
             stats.readMessages(result.messagesRead(), result.bytesRead());
             stats.recopyMessages(result.messagesRetained(), result.bytesRetained());
@@ -669,7 +673,8 @@ public class Cleaner {
                     nextSegmentStartOffset,
                     log.config().maxMessageSize(),
                     transactionMetadata,
-                    stats
+                    stats,
+                    log.config().maxDecompressedMessageBytes()
             );
             if (full) {
                 logger.debug("Offset map is full, {} segments fully mapped, segment with base offset {} is partially mapped",
@@ -691,6 +696,8 @@ public class Cleaner {
      * @param maxLogMessageSize The maximum size in bytes for record allowed
      * @param transactionMetadata The state of ongoing transactions for the log between offset range to build
      * @param stats Collector for cleaning statistics
+     * @param maxRecordBodySize The maximum decompressed per-record body size of the corresponding topic; records
+     *                          exceeding it are rejected with an InvalidRecordException before allocation
      *
      * @return If the map was filled whilst loading from this segment
      */
@@ -701,7 +708,8 @@ public class Cleaner {
                                              long nextSegmentStartOffset,
                                              int maxLogMessageSize,
                                              CleanedTransactionMetadata transactionMetadata,
-                                             CleanerStats stats) throws IOException, DigestException {
+                                             CleanerStats stats,
+                                             int maxRecordBodySize) throws IOException, DigestException {
         int position = segment.offsetIndex().lookup(startOffset).position();
         int maxDesiredMapSize = (int) (map.slots() * dupBufferLoadFactor);
 
@@ -729,7 +737,7 @@ public class Cleaner {
                         // Note that abort markers are supported in v2 and above, which means count is defined.
                         stats.indexMessagesRead(batch.countOrNull());
                     } else {
-                        try (CloseableIterator<Record> recordsIterator = batch.streamingIterator(decompressionBufferSupplier)) {
+                        try (CloseableIterator<Record> recordsIterator = batch.streamingIterator(decompressionBufferSupplier, maxRecordBodySize)) {
                             for (Record record : (Iterable<Record>) () -> recordsIterator) {
                                 if (record.hasKey() && record.offset() >= startOffset) {
                                     if (map.size() < maxDesiredMapSize) {

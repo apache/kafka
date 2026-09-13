@@ -232,8 +232,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
+        return iterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH);
+    }
+
+    CloseableIterator<Record> iterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
         if (isCompressed())
-            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
+            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier, maxRecordBodySize);
 
         return new CloseableIterator<>() {
             private boolean hasNext = true;
@@ -267,6 +271,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         return iterator(bufferSupplier);
     }
 
+    @Override
+    public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
+        // the older message format versions do not support streaming, so we return the normal iterator
+        return iterator(bufferSupplier, maxRecordBodySize);
+    }
+
     static void writeHeader(ByteBuffer buffer, long offset, int size) {
         buffer.putLong(offset);
         buffer.putInt(size);
@@ -280,11 +290,13 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     private static final class DataLogInputStream implements LogInputStream<AbstractLegacyRecordBatch> {
         private final InputStream stream;
         private final int maxMessageSize;
+        private final int maxRecordBodySize;
         private final ByteBuffer offsetAndSizeBuffer;
 
-        DataLogInputStream(InputStream stream, int maxMessageSize) {
+        DataLogInputStream(InputStream stream, int maxMessageSize, int maxRecordBodySize) {
             this.stream = stream;
             this.maxMessageSize = maxMessageSize;
+            this.maxRecordBodySize = maxRecordBodySize;
             this.offsetAndSizeBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
         }
 
@@ -300,6 +312,15 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                 throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", LegacyRecord.RECORD_OVERHEAD_V0));
             if (size > maxMessageSize)
                 throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
+            // The maxMessageSize check above does not bound the allocation on the compressed deep-decode
+            // path, where maxMessageSize can be up to Integer.MAX_VALUE. Reject, before allocating, any
+            // inner record whose declared size exceeds the configured per-record maximum. maxRecordBodySize
+            // never exceeds SOFT_MAX_ARRAY_LENGTH (the default here, and the config's upper bound), so this
+            // also stops an adversarial inner size from triggering an OutOfMemoryError (see the equivalent
+            // guard in DefaultRecord for the V2 format).
+            if (size > maxRecordBodySize)
+                throw new InvalidRecordException("Invalid record size: " + size +
+                    " exceeds the configured maximum record size of " + maxRecordBodySize + ".");
 
             ByteBuffer batchBuffer = ByteBuffer.allocate(size);
             Utils.readFully(stream, batchBuffer);
@@ -319,7 +340,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry,
                                     boolean ensureMatchingMagic,
                                     int maxMessageSize,
-                                    BufferSupplier bufferSupplier) {
+                                    BufferSupplier bufferSupplier,
+                                    int maxRecordBodySize) {
             LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
             this.wrapperMagic = wrapperRecord.magic();
             if (wrapperMagic != RecordBatch.MAGIC_VALUE_V0 && wrapperMagic != RecordBatch.MAGIC_VALUE_V1)
@@ -334,7 +356,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                         wrapperMagic + ")");
 
             InputStream stream = Compression.of(compressionType).build().wrapForInput(wrapperValue, wrapperRecord.magic(), bufferSupplier);
-            LogInputStream<AbstractLegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize);
+            LogInputStream<AbstractLegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize, maxRecordBodySize);
 
             long lastOffsetFromWrapper = wrapperEntry.lastOffset();
             long timestampFromWrapper = wrapperRecord.timestamp();
@@ -515,6 +537,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         @Override
         public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
             return CloseableIterator.wrap(iterator(bufferSupplier));
+        }
+
+        @Override
+        public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
+            // legacy batches cannot cheaply skip the record body, so this is a full decode
+            return CloseableIterator.wrap(iterator(bufferSupplier, maxRecordBodySize));
         }
 
         @Override

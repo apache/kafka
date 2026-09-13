@@ -1136,7 +1136,8 @@ public class UnifiedLog implements AutoCloseable {
                                         config().messageTimestampBeforeMaxMs,
                                         config().messageTimestampAfterMaxMs,
                                         leaderEpoch,
-                                        origin
+                                        origin,
+                                        config().maxDecompressedMessageBytes()
                                 );
                                 LogValidator.ValidationResult validateAndOffsetAssignResult = validator.validateMessagesAndAssignOffsets(offset,
                                         validatorMetricsRecorder,
@@ -1721,7 +1722,7 @@ public class UnifiedLog implements AutoCloseable {
                         Optional<FileRecords.TimestampAndOffset> timestampAndOffsetOpt = findFirst(
                                 latestTimestampSegment.log().batchesFrom(position.position()),
                                 item -> item.maxTimestamp() == maxTimestampSoFar.timestamp())
-                                    .flatMap(batch -> batch.offsetOfMaxTimestamp()
+                                    .flatMap(batch -> batch.offsetOfMaxTimestamp(config().maxDecompressedMessageBytes())
                                         .map(offset -> new FileRecords.TimestampAndOffset(
                                             batch.maxTimestamp(),
                                             offset,
@@ -1783,7 +1784,7 @@ public class UnifiedLog implements AutoCloseable {
         List<LogSegment> segments = logSegments();
         for (LogSegment segment : segments) {
             if (segment.largestTimestamp() >= targetTimestamp) {
-                return segment.findOffsetByTimestamp(targetTimestamp, startOffset);
+                return segment.findOffsetByTimestamp(targetTimestamp, startOffset, config().maxDecompressedMessageBytes());
             }
         }
         return Optional.empty();
