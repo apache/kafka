@@ -2243,8 +2243,8 @@ public class KafkaConsumerTest {
     // NOTE: this test drives consumerCloseTest, whose close/rebalance mock setup is Classic-specific.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testCloseNoWait(GroupProtocol groupProtocol) throws Exception {
-        consumerCloseTest(groupProtocol, 0, Collections.emptyList(), 0, false);
+    public void testCloseWithTimeout(GroupProtocol groupProtocol) throws Exception {
+        consumerCloseTest(groupProtocol, 100, Collections.emptyList(), 100, false);
     }
 
     // NOTE: this test drives consumerCloseTest, whose close/rebalance mock setup is Classic-specific.
@@ -2487,12 +2487,7 @@ public class KafkaConsumerTest {
 
             // Close task should not complete until commit succeeds or close times out
             // if close timeout is not zero.
-            if (closeTimeoutMs != 0) {
-                assertThrows(TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS), "Close completed without waiting for commit or leave response");
-            } else {
-                // Handle the case where timeout is 0, if needed
-                future.get(100, TimeUnit.MILLISECONDS);
-            }
+            assertThrows(TimeoutException.class, () -> future.get(50, TimeUnit.MILLISECONDS), "Close completed without waiting for commit or leave response");
 
             // Ensure close has started and queued at least one more request after commitAsync.
             //

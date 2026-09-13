@@ -186,12 +186,18 @@ public class BufferPoolTest {
      * Test if the  waiter that is waiting on availability of more memory is cleaned up when an interruption occurs
      */
     @Test
-    public void testCleanupMemoryAvailabilityWaiterOnInterruption() throws Exception {
+    public void testCleanupMemoryAvailabilityWaiterOnInterruption() throws Throwable {
         BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
         long blockTime = 5000;
         pool.allocate(1, maxBlockTimeMs);
-        Thread t1 = new Thread(new BufferPoolAllocator(pool, blockTime));
-        Thread t2 = new Thread(new BufferPoolAllocator(pool, blockTime));
+
+        // Create distinct allocator instances to track failures
+        BufferPoolAllocator allocator1 = new BufferPoolAllocator(pool, blockTime);
+        BufferPoolAllocator allocator2 = new BufferPoolAllocator(pool, blockTime);
+
+        Thread t1 = new Thread(allocator1);
+        Thread t2 = new Thread(allocator2);
+
         // start thread t1 which will try to allocate more memory on to the Buffer pool
         t1.start();
         // sleep for 500ms. Condition variable c1 associated with pool.allocate() by thread t1 will be inserted in the waiters queue.
@@ -212,6 +218,11 @@ public class BufferPoolTest {
         assertNotEquals(c1, c2);
         t1.join();
         t2.join();
+
+        // Propagate any background thread assertion failures to the main JUnit thread
+        allocator1.assertSuccess();
+        allocator2.assertSuccess();
+
         // both the allocate() called by threads t1 and t2 should have been interrupted and the waiters queue should be empty
         assertEquals(0, pool.queued());
     }
@@ -233,8 +244,9 @@ public class BufferPoolTest {
     }
 
     private static class BufferPoolAllocator implements Runnable {
-        BufferPool pool;
-        long maxBlockTimeMs;
+        private final BufferPool pool;
+        private final long maxBlockTimeMs;
+        private volatile Throwable failure = null;
 
         BufferPoolAllocator(BufferPool pool, long maxBlockTimeMs) {
             this.pool = pool;
@@ -243,11 +255,22 @@ public class BufferPoolTest {
 
         @Override
         public void run() {
-            Exception e = assertThrows(Exception.class, () -> pool.allocate(2, maxBlockTimeMs));
-            assertTrue(
-                    e instanceof BufferExhaustedException || e instanceof InterruptedException,
-                    "The buffer allocated more memory than its maximum value 2, exception type: " + e.getClass()
-            );
+            try {
+                Exception e = assertThrows(Exception.class, () -> pool.allocate(2, maxBlockTimeMs));
+                assertTrue(
+                        e instanceof BufferExhaustedException || e instanceof InterruptedException,
+                        "The buffer allocated more memory than its maximum value 2, exception type: " + e.getClass()
+                );
+            } catch (Throwable t) {
+                // Capture JUnit assertion errors or unexpected exceptions
+                this.failure = t;
+            }
+        }
+
+        public void assertSuccess() throws Throwable {
+            if (failure != null) {
+                throw failure;
+            }
         }
     }
 
