@@ -54,7 +54,7 @@ public class DescribeFeaturesTest {
         }
     }
 
-    @ClusterTest(types = {Type.KRAFT}, brokers = 1, controllers = 1, standalone = true)
+    @ClusterTest(types = {Type.KRAFT}, standalone = true)
     public void testDescribeKRaftVersion(ClusterInstance clusterInstance) throws Exception {
         try (Admin admin = clusterInstance.admin()) {
             assertKRaftVersion(admin);

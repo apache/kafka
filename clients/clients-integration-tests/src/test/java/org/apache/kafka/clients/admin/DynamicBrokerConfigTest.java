@@ -28,11 +28,7 @@ import java.util.Map;
 
 public class DynamicBrokerConfigTest {
 
-    @ClusterTest(
-        types = {Type.KRAFT},
-        brokers = 1,
-        controllers = 1
-    )
+    @ClusterTest(types = {Type.KRAFT})
     public void testIncreaseNumIoThreads(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
             admin.incrementalAlterConfigs(Map.of(

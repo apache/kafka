@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CreateTopicsTest {
 
-    @ClusterTest(types = {Type.KRAFT}, brokers = 1, controllers = 1)
+    @ClusterTest(types = {Type.KRAFT})
     public void testOverlyLargeCreateTopics(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             var newTopics = new ArrayList<NewTopic>();

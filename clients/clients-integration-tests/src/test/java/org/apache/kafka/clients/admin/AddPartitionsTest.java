@@ -126,8 +126,8 @@ public class AddPartitionsTest {
     }
 
     @ClusterTests(value = {
-        @ClusterTest(types = {Type.KRAFT}, brokers = 3, controllers = 3, metadataVersion = MetadataVersion.IBP_3_7_IV0),
-        @ClusterTest(types = {Type.KRAFT}, brokers = 3, controllers = 3, metadataVersion = MetadataVersion.IBP_3_7_IV2)
+        @ClusterTest(brokers = 3, controllers = 3, metadataVersion = MetadataVersion.IBP_3_7_IV0),
+        @ClusterTest(brokers = 3, controllers = 3, metadataVersion = MetadataVersion.IBP_3_7_IV2)
     })
     public void testCreatePartitionsWithPartialFailure(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
