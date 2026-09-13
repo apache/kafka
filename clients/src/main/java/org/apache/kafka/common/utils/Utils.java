@@ -109,8 +109,8 @@ public final class Utils {
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
     // Prints up to 2 decimal digits. Used for human-readable printing
-    private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##",
-        DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+    private static final ThreadLocal<DecimalFormat> TWO_DIGIT_FORMAT = ThreadLocal.withInitial(
+        () -> new DecimalFormat("0.##", DecimalFormatSymbols.getInstance(Locale.ENGLISH)));
 
     private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
@@ -602,7 +602,7 @@ public final class Utils {
         int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
         double scale = Math.pow(1024.0, ordinal);
         double scaled = asDouble / scale;
-        String formatted = TWO_DIGIT_FORMAT.format(scaled);
+        String formatted = TWO_DIGIT_FORMAT.get().format(scaled);
         try {
             return formatted + " " + BYTE_SCALE_SUFFIXES[ordinal];
         } catch (IndexOutOfBoundsException e) {
