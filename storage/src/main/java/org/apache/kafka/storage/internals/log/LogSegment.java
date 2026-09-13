@@ -750,15 +750,17 @@ public class LogSegment implements Closeable {
      *
      * @param timestampMs The timestamp to search for.
      * @param startingOffset The starting offset to search.
+     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed record
+     *                          exceeding it is rejected with an InvalidRecordException before its body is allocated.
      * @return the timestamp and offset of the first message that meets the requirements. Empty will be returned if there is no such message.
      */
-    public Optional<FileRecords.TimestampAndOffset> findOffsetByTimestamp(long timestampMs, long startingOffset) throws IOException {
+    public Optional<FileRecords.TimestampAndOffset> findOffsetByTimestamp(long timestampMs, long startingOffset, int maxRecordBodySize) throws IOException {
         // Get the index entry with a timestamp less than or equal to the target timestamp
         TimestampOffset timestampOffset = timeIndex().lookup(timestampMs);
         int position = offsetIndex().lookup(Math.max(timestampOffset.offset(), startingOffset)).position();
 
         // Search the timestamp
-        return Optional.ofNullable(log.searchForTimestamp(timestampMs, position, startingOffset));
+        return Optional.ofNullable(log.searchForTimestamp(timestampMs, position, startingOffset, maxRecordBodySize));
     }
 
     /**

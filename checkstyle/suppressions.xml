@@ -308,9 +308,11 @@
               files="(LocalLog|LogLoader|LogManager|LogValidator|RemoteLogManager|RemoteIndexCache|UnifiedLog).java"/>
     <suppress checks="ParameterNumber"
               files="(LogLoader|LogManager|UnifiedLog).java"/>
+    <suppress checks="ParameterNumber"
+              files="[/\\]Cleaner\.java"/>
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
               files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest|UnifiedLogTest).java"/>
-    <suppress checks="MethodLength" files="RemoteLogManagerConfig.java"/>
+    <suppress checks="MethodLength" files="(RemoteLogManagerConfig|UnifiedLog).java"/>
     <suppress checks="JavaNCSS" files="(RemoteLogManagerTest|UnifiedLogTest).java"/>
     
     <!-- storage test -->
