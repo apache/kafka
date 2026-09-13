@@ -1610,7 +1610,7 @@ public class StreamsPartitionAssignorTest {
         // check if all internal topics were created as expected
         assertEquals(expectedCreatedInternalTopics, mockInternalTopicManager.readyTopics);
 
-        final Set<TopicPartition> expectedAssignment = Set.of(
+        final List<TopicPartition> expectedAssignment = new ArrayList<>(List.of(
             new TopicPartition("topic1", 0),
             new TopicPartition("topic1", 1),
             new TopicPartition("topic1", 2),
@@ -1626,10 +1626,12 @@ public class StreamsPartitionAssignorTest {
             new TopicPartition(APPLICATION_ID + "-KSTREAM-MAP-0000000001-repartition", 1),
             new TopicPartition(APPLICATION_ID + "-KSTREAM-MAP-0000000001-repartition", 2),
             new TopicPartition(APPLICATION_ID + "-KSTREAM-MAP-0000000001-repartition", 3)
-        );
+        ));
+        // match the topic and partition ordering used by the assignor.
+        expectedAssignment.sort(StreamsPartitionAssignor.PARTITION_COMPARATOR);
 
         // check if we created a task for all expected topicPartitions.
-        assertEquals(expectedAssignment, new HashSet<>(assignment.get(client).partitions()));
+        assertEquals(expectedAssignment, assignment.get(client).partitions());
     }
 
     @ParameterizedTest

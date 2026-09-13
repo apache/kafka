@@ -66,8 +66,7 @@ public class SinkNodeTest {
         // When/Then
         context.setTime(-1); // ensures a negative timestamp is set for the record we send next
         assertThrows(StreamsException.class,
-            () -> illTypedSink.process(new Record<>("any key".getBytes(), "any value".getBytes(), -1)),
-            "Should have thrown StreamsException");
+            () -> illTypedSink.process(new Record<>("any key".getBytes(), "any value".getBytes(), -1)));
     }
 
     @Test

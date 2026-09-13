@@ -57,7 +57,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -98,8 +97,7 @@ public class RepartitionOptimizingTest {
     private final Map<String, Long> expectedCountKeyValues = Map.of("A", 3L, "B", 3L, "C", 3L);
     private final Map<String, Integer> expectedAggKeyValues = Map.of("A", 9, "B", 9, "C", 9);
     private final Map<String, String> expectedReduceKeyValues = Map.of("A", "foo:bar:baz", "B", "foo:bar:baz", "C", "foo:bar:baz");
-    private final List<KeyValue<String, String>> expectedJoinKeyValues =
-        Arrays.asList(KeyValue.pair("A", "foo:3"), KeyValue.pair("A", "bar:3"), KeyValue.pair("A", "baz:3"));
+    private final Map<String, String> expectedJoinKeyValues = Map.of("A", "baz:3");
     private final List<String> expectedCollectedProcessorValues =
         Arrays.asList("FOO", "BAR", "BAZ");
 
@@ -216,7 +214,7 @@ public class RepartitionOptimizingTest {
         assertEquals(expectedCountKeyValues, countOutputTopic.readKeyValuesToMap());
         assertEquals(expectedAggKeyValues, aggregationOutputTopic.readKeyValuesToMap());
         assertEquals(expectedReduceKeyValues, reduceOutputTopic.readKeyValuesToMap());
-        assertEquals(keyValueListToMap(expectedJoinKeyValues), joinedOutputTopic.readKeyValuesToMap());
+        assertEquals(expectedJoinKeyValues, joinedOutputTopic.readKeyValuesToMap());
     }
 
     @Test
@@ -249,14 +247,6 @@ public class RepartitionOptimizingTest {
         inputTopic.pipeKeyValueList(getKeyValues());
 
         assertEquals(expectedAggKeyValues, outputTopic.readKeyValuesToMap());
-    }
-
-    private <K, V> Map<K, V> keyValueListToMap(final List<KeyValue<K, V>> keyValuePairs) {
-        final Map<K, V> map = new HashMap<>();
-        for (final KeyValue<K, V> pair : keyValuePairs) {
-            map.put(pair.key, pair.value);
-        }
-        return map;
     }
 
     private int getCountOfRepartitionTopicsFound(final String topologyString) {
