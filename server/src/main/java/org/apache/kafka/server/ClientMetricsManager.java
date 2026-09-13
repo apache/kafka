@@ -216,6 +216,14 @@ public class ClientMetricsManager implements AutoCloseable {
                 long exportTimeStartMs = time.hiResClockMs();
                 clientTelemetryExporterPlugin.exportMetrics(requestContext, request, clientInstance.pushIntervalMs(), clientTelemetryMaxBytes);
                 clientMetricsStats.recordPluginExport(clientInstanceId, time.hiResClockMs() - exportTimeStartMs);
+            } catch (TelemetryTooLargeException exception) {
+                // The decompressed payload exceeded the configured size limit. This is retryable (the client may
+                // shrink its metric set or the broker may be reconfigured), unlike a malformed payload, so it must
+                // not be reported as INVALID_RECORD: that error tells the client to stop pushing telemetry entirely.
+                clientMetricsStats.recordPluginErrorCount(clientInstanceId);
+                clientInstance.lastKnownError(Errors.TELEMETRY_TOO_LARGE);
+                log.error("Error exporting client metrics to the plugin for client instance id: {}", clientInstanceId, exception);
+                return request.errorResponse(0, Errors.TELEMETRY_TOO_LARGE);
             } catch (Throwable exception) {
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);
                 clientInstance.lastKnownError(Errors.INVALID_RECORD);
