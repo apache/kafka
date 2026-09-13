@@ -896,6 +896,7 @@ kafka.log.LogConfigTest:
 - testLocalLogRetentionDerivedDefaultProps
 - testLocalLogRetentionDerivedProps
 - testLocalLogRetentionProps
+- testMaxDecompressedMessageBytesProps
 - testOverriddenConfigsAsLoggableString
 - testToEnrichedRst
 - testToHtml
@@ -1537,6 +1538,7 @@ kafka.server.KafkaApisTest:
 - testDescribeClusterRequest
 - testDescribeConfigsClientMetrics
 - testDescribeConfigsConsumerGroup
+- testDescribeConfigsTopicIncludesInternalConfigSetOnTopic
 - testDescribeConfigsWithAuthorizer
 - testDescribeProducers
 - testDescribeQuorumForwardedForKRaftClusters

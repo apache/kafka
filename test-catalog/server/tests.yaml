@@ -570,8 +570,12 @@ org.apache.kafka.server.replica.ReplicaTest:
 - testResetReplicaStateWhenNewLeaderIsElectedAndReplicaIsNotInSync
 - testUpdateFetchState
 org.apache.kafka.server.requests.ProduceRequestTest:
+- testBrokerDefaultMaxDecompressedMessageBytesAppliesToTopicWithoutOverride
+- testBrokerDefaultMaxDecompressedMessageBytesIsDynamicallyReconfigurable
 - testCorruptLz4ProduceRequest
 - testIdempotentProduceWithNonZeroFirstSequenceOnNewPartition
+- testMaxDecompressedMessageBytesIsDynamicallyReconfigurable
+- testProduceRejectsCompressedRecordExceedingMaxDecompressedMessageBytes
 - testProduceToNonReplica
 - testProduceWithTimestampTooNew
 - testProduceWithTimestampTooOld

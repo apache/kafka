@@ -4446,6 +4446,8 @@ org.apache.kafka.common.protocol.types.TypeTest:
 - testNullRecordsSerde
 - testRecordsSerde
 org.apache.kafka.common.record.internal.AbstractLegacyRecordBatchTest:
+- testCompressedDeepDecodeEnforcesConfiguredMaxRecordBodySize
+- testCompressedDeepDecodeRejectsForgedInnerSizeExceedingArrayLengthLimit
 - testInvalidWrapperOffsetV1
 - testIterateCompressedRecordWithWrapperOffsetZero
 - testSetCreateTimeNotAllowedV0
@@ -4482,6 +4484,7 @@ org.apache.kafka.common.record.internal.DefaultRecordBatchTest:
 - buildDefaultRecordBatchWithProducerId
 - buildDefaultRecordBatchWithSequenceWrapAround
 - testBufferReuseInSkipKeyValueIterator
+- testCompressedIteratorsEnforceConfiguredMaxRecordBodySize
 - testDecrementSequence
 - testIncrementSequence
 - testInvalidCrc
@@ -4490,6 +4493,7 @@ org.apache.kafka.common.record.internal.DefaultRecordBatchTest:
 - testInvalidRecordCountTooManyCompressedV2
 - testInvalidRecordCountTooManyNonCompressedV2
 - testInvalidRecordSize
+- testOffsetOfMaxTimestampEnforcesConfiguredMaxRecordBodySize
 - testReadAndWriteControlBatch
 - testSetLastOffset
 - testSetLogAppendTime
@@ -4498,6 +4502,7 @@ org.apache.kafka.common.record.internal.DefaultRecordBatchTest:
 - testSizeInBytes
 - testSkipKeyValueIteratorCorrectness
 - testStreamingIteratorConsistency
+- testStreamingIteratorRejectsForgedBodySizeExceedingArrayLengthLimit
 - testWriteEmptyHeader
 - testZstdJniForSkipKeyValueIterator
 org.apache.kafka.common.record.internal.DefaultRecordTest:
@@ -4518,6 +4523,11 @@ org.apache.kafka.common.record.internal.DefaultRecordTest:
 - testInvalidVarlong
 - testNullHeaderKey
 - testNullHeaderKeyPartial
+- testReadFromStreamRejectsBodySizeExceedingConfiguredMax
+- testReadFromStreamRejectsInvalidBodySize
+- testReadFromStreamWithConfiguredMaxAcceptsValidRecordAndRejectsWhenTooSmall
+- testReadPartiallyFromStreamRejectsBodySizeExceedingConfiguredMax
+- testReadPartiallyFromStreamRejectsInvalidBodySize
 - testSerdeNoSequence
 - testUnderflowReadingTimestamp
 - testUnderflowReadingVarlong
@@ -4563,6 +4573,7 @@ org.apache.kafka.common.record.internal.FileRecordsTest:
 - testSearchForOffsetFromPosition6
 - testSearchForOffsetFromPosition7
 - testSearchForTimestamp
+- testSearchForTimestampRejectsCompressedRecordExceedingMaxRecordBodySize
 - testSliceForAlreadySlicedFileRecords
 - testSliceSizeLimitWithConcurrentWrite
 - testTruncate

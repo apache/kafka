@@ -198,6 +198,7 @@ org.apache.kafka.server.log.remote.storage.RemoteLogManagerTest:
 - testFindNextSegmentWithTxnIndex
 - testFindNextSegmentWithTxnIndexTraversesNextEpoch
 - testFindOffsetByTimestamp
+- testFindOffsetByTimestampRejectsRemoteRecordExceedingMaxDecompressedMessageBytes
 - testFindOffsetByTimestampWithInvalidEpochSegments
 - testFindOffsetByTimestampWithSegmentNotReady
 - testGetClassLoaderAwareRemoteStorageManager
@@ -428,6 +429,7 @@ org.apache.kafka.storage.internals.log.LogCleanerTest:
 - testBuildPartialOffsetMap
 - testCleanCorruptMessageSet
 - testCleanEmptyControlBatch
+- testCleanRejectsRecordExceedingConfiguredMaxDecompressedMessageBytes
 - testCleanSegments
 - testCleanSegmentsNotRetainingLastEmptyBatch
 - testCleanSegmentsRetainingLastEmptyBatch
@@ -618,6 +620,7 @@ org.apache.kafka.storage.internals.log.LogValidatorTest:
 - testAbsoluteOffsetAssignmentNonCompressed
 - testBatchWithInvalidRecordsAndInvalidTimestamp
 - testBatchWithoutRecordsNotAllowed
+- testCompressedRecordExceedingMaxRecordBodySizeIsRejected
 - testControlRecordsNotAllowedFromClients
 - testControlRecordsNotCompressed
 - testCreateTimeUpConversionV1ToV2
@@ -823,6 +826,7 @@ org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - testAppendAndReadWithNonSequentialOffsets
 - testAppendAndReadWithSequentialOffsets
 - testAppendAsLeaderWithRaftLeader
+- testAppendCompressedRecordExceedingMaxDecompressedMessageBytesIsRejected
 - testAppendInfoFirstOffset
 - testAppendMessageWithNullPayload
 - testAppendToOrReadFromLogInFailedLogDir
@@ -858,8 +862,10 @@ org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - testFetchEarliestPendingUploadTimestampWithRemoteStorageNoLocalDeletion
 - testFetchLatestTieredTimestampNoRemoteStorage
 - testFetchLatestTieredTimestampWithRemoteStorage
+- testFetchOffsetByMaxTimestampRejectsCompressedRecordExceedingMaxDecompressedMessageBytes
 - testFetchOffsetByTimestampFromRemoteStorage
 - testFetchOffsetByTimestampIncludesLeaderEpoch
+- testFetchOffsetByTimestampRejectsCompressedRecordExceedingMaxDecompressedMessageBytes
 - testFetchOffsetByTimestampShouldReadOnlyLocalLogWhenLogIsEmpty
 - testFetchOffsetByTimestampWithMaxTimestampIncludesTimestamp
 - testFetchUpToHighWatermark
