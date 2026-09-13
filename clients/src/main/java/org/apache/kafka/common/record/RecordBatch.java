@@ -240,6 +240,15 @@ public interface RecordBatch extends Iterable<Record> {
     CloseableIterator<Record> streamingIterator(BufferSupplier decompressionBufferSupplier);
 
     /**
+     * Variant of {@link #streamingIterator(BufferSupplier)} that rejects any record whose declared
+     * (decompressed) body size exceeds {@code maxRecordBodySize} before allocating the body buffer.
+     * The single-argument overload passes {@link Records#SOFT_MAX_ARRAY_LENGTH} (no effective limit).
+     *
+     * @return The closeable iterator
+     */
+    CloseableIterator<Record> streamingIterator(BufferSupplier decompressionBufferSupplier, int maxRecordBodySize);
+
+    /**
      * Check whether this is a control batch (i.e. whether the control bit is set in the batch attributes).
      * For magic versions prior to 2, this is always false.
      *
@@ -252,12 +261,15 @@ public interface RecordBatch extends Iterable<Record> {
      * noted:
      * 1) that the earliest offset will return if there are multi records having same (max) timestamp
      * 2) it always returns None if the {@link RecordBatch#magic()} is equal to {@link RecordBatch#MAGIC_VALUE_V0}
+     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed record
+     *                          exceeding it is rejected with an InvalidRecordException before its body is allocated.
+     *                          Pass {@link Records#SOFT_MAX_ARRAY_LENGTH} for no limit beyond the array-length ceiling.
      * @return offset of max timestamp
      */
-    default Optional<Long> offsetOfMaxTimestamp() {
+    default Optional<Long> offsetOfMaxTimestamp(int maxRecordBodySize) {
         if (magic() == RecordBatch.MAGIC_VALUE_V0) return Optional.empty();
         long maxTimestamp = maxTimestamp();
-        try (CloseableIterator<Record> iter = streamingIterator(BufferSupplier.create())) {
+        try (CloseableIterator<Record> iter = streamingIterator(BufferSupplier.create(), maxRecordBodySize)) {
             while (iter.hasNext()) {
                 Record record = iter.next();
                 if (maxTimestamp == record.timestamp()) return Optional.of(record.offset());

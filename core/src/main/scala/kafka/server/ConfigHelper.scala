@@ -34,6 +34,7 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
+import org.apache.kafka.server.ConfigHelperUtils.createResponseConfig
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
@@ -87,7 +88,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                       includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
     resourceToConfigNames.map { resource =>
 
-      def createResponseConfig(configs: Map[String, Any],
+      def createResponseConfigInside(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
         val filteredConfigPairs = if (resource.configurationKeys == null || resource.configurationKeys.isEmpty)
           configs.toBuffer
@@ -109,7 +110,8 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             if (metadataCache.contains(topic)) {
               val topicProps = configRepository.topicConfig(topic)
               val logConfig = LogConfig.fromProps(config.extractLogConfigMap, topicProps)
-              createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
+              // Internal configs are reported only when set on the topic itself, consistent with the CreateTopics response.
+              createResponseConfig(resource, logConfig, logConfig.overriddenConfigs, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation)(_, _))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
                 .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
@@ -117,10 +119,10 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
           case ConfigResource.Type.BROKER =>
             if (resource.resourceName == null || resource.resourceName.isEmpty)
-              createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs,
+              createResponseConfigInside(config.dynamicConfig.currentDynamicDefaultConfigs,
                 createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation))
             else if (resourceNameToBrokerId(resource.resourceName) == config.brokerId)
-              createResponseConfig(allConfigs(config),
+              createResponseConfigInside(allConfigs(config),
                 createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation))
             else
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received ${resource.resourceName}")
@@ -131,7 +133,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             else if (resourceNameToBrokerId(resource.resourceName) != config.brokerId)
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.resourceName}")
             else
-              createResponseConfig(LoggingController.loggers.asScala,
+              createResponseConfigInside(LoggingController.loggers.asScala,
                 (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
@@ -142,7 +144,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             } else {
               val clientMetricsProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resource.resourceName))
               val clientMetricsConfig = ClientMetricsConfigs.fromProps(ClientMetricsConfigs.defaultConfigsMap(), clientMetricsProps)
-              createResponseConfig(allConfigs(clientMetricsConfig), createClientMetricsConfigEntry(clientMetricsConfig, clientMetricsProps, includeSynonyms, includeDocumentation))
+              createResponseConfigInside(allConfigs(clientMetricsConfig), createClientMetricsConfigEntry(clientMetricsConfig, clientMetricsProps, includeSynonyms, includeDocumentation))
             }
 
           case ConfigResource.Type.GROUP =>
@@ -152,7 +154,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             } else {
               val groupProps = configRepository.groupConfig(group)
               val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
-              createResponseConfig(allConfigs(groupConfig), createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
+              createResponseConfigInside(allConfigs(groupConfig), createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
             }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
