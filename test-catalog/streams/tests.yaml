@@ -3488,7 +3488,6 @@ org.apache.kafka.streams.processor.internals.assignment.AssignorConfigurationTes
 - configsShouldRejectZeroWarmups
 - shouldSupportAllUpgradeFromVersionsFromCooperativeRebalancingOn
 org.apache.kafka.streams.processor.internals.assignment.ClientStateTest:
-- previousStateConstructorShouldCreateAValidObject
 - shouldAddActiveTasksToBothAssignedAndActive
 - shouldAddPreviousActiveTasksToPreviousAssignedAndPreviousActive
 - shouldAddPreviousStandbyTasksToPreviousAssignedAndPreviousStandby
@@ -3496,7 +3495,6 @@ org.apache.kafka.streams.processor.internals.assignment.ClientStateTest:
 - shouldAddTasksInOffsetSumsMapToPrevStandbyTasks
 - shouldAddTasksWithLatestOffsetToPrevActiveTasks
 - shouldComputeTaskLags
-- shouldCopyState
 - shouldFilterOutUnrecognizedPartitionsAndInitializePrevTasksWhenUsingNamedTopologies
 - shouldHaveAssignedTaskIfActiveTaskAssigned
 - shouldHaveAssignedTaskIfStandbyTaskAssigned
