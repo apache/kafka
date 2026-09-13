@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.Utils;
@@ -300,8 +301,35 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         long position = start + offset;
         int count = Math.min(length, oldSize - offset);
-        // safe to cast to int since `count` is an int
-        return (int) destChannel.transferFrom(channel, position, count);
+        try {
+            // safe to cast to int since `count` is an int
+            return (int) destChannel.transferFrom(channel, position, count);
+        } catch (IOException e) {
+            // Sent zero copy, so the disk read happens here and a broken medium looks exactly
+            // like a broken socket: both arrive as a bare IOException. Re-read the region to
+            // tell them apart; costs one read, on the error path only. The message text is not
+            // inspected: it is the platform's strerror output and differs between platforms.
+            if (regionIsReadable(position))
+                throw e;
+            throw new KafkaStorageException("Failed to read " + count + " bytes at position "
+                    + position + " of " + file.getAbsolutePath() + " while writing a response", e);
+        }
+    }
+
+    /**
+     * Whether the given position of the backing file can still be read, used by {@link #writeTo}
+     * to tell a storage failure from a socket failure. Anything but a successful read means
+     * unreadable; a position at or past the end of the file means readable, since nothing can be
+     * concluded about the medium from it.
+     */
+    private boolean regionIsReadable(long position) {
+        try {
+            if (position >= channel.size())
+                return true;
+            return channel.read(ByteBuffer.allocate(1), position) >= 0;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /**

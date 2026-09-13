@@ -18,6 +18,7 @@ package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
@@ -51,6 +52,7 @@ import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -536,6 +538,67 @@ public class FileRecordsTest {
         fileRecords.writeTo(channel, firstWritten, secondWrittenLength);
         // But we still only write (size - firstWritten), which is not fulfilled in the old version
         verify(channel).transferFrom(any(), anyLong(), eq((long) size - firstWritten));
+    }
+
+    /**
+     * A failed send whose file is still readable must be reported exactly as it arrived: the
+     * socket was at fault, and turning that into a storage failure would take a log directory
+     * offline because a client went away.
+     */
+    @Test
+    public void testWriteToPreservesExceptionWhenFileIsStillReadable() throws IOException {
+        TransferableChannel channel = Mockito.mock(TransferableChannel.class);
+        IOException socketFailure = new IOException("Broken pipe");
+        when(channel.transferFrom(any(), anyLong(), anyLong())).thenThrow(socketFailure);
+
+        IOException thrown = assertThrows(IOException.class,
+            () -> fileRecords.writeTo(channel, 0, fileRecords.sizeInBytes()));
+        assertSame(socketFailure, thrown);
+    }
+
+    /**
+     * A failed send whose file cannot be read is a storage failure, and must say so, naming the
+     * file: the response is sent zero copy, so this call is where a read error from the log
+     * surfaces.
+     */
+    @Test
+    public void testWriteToReportsStorageFailureWhenRegionIsUnreadable() throws IOException {
+        File fileMock = mock(File.class);
+        when(fileMock.getAbsolutePath()).thenReturn("/logs/topic-0/00000000000000000000.log");
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        when(fileChannelMock.size()).thenReturn(1024L);
+        when(fileChannelMock.read(any(ByteBuffer.class), anyLong()))
+            .thenThrow(new IOException("Input/output error"));
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, 1024);
+
+        TransferableChannel channel = Mockito.mock(TransferableChannel.class);
+        IOException transferFailure = new IOException("Input/output error");
+        when(channel.transferFrom(any(), anyLong(), anyLong())).thenThrow(transferFailure);
+
+        KafkaStorageException thrown = assertThrows(KafkaStorageException.class,
+            () -> records.writeTo(channel, 0, 1024));
+        assertSame(transferFailure, thrown.getCause());
+        assertTrue(thrown.getMessage().contains("/logs/topic-0/00000000000000000000.log"));
+    }
+
+    /**
+     * Nothing can be concluded about the medium from a position at the end of the file, so the
+     * original exception must survive rather than be reclassified.
+     */
+    @Test
+    public void testWriteToPreservesExceptionAtEndOfFile() throws IOException {
+        File fileMock = mock(File.class);
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        when(fileChannelMock.size()).thenReturn(0L);
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, 0);
+
+        TransferableChannel channel = Mockito.mock(TransferableChannel.class);
+        IOException transferFailure = new IOException("Broken pipe");
+        when(channel.transferFrom(any(), anyLong(), anyLong())).thenThrow(transferFailure);
+
+        IOException thrown = assertThrows(IOException.class, () -> records.writeTo(channel, 0, 0));
+        assertSame(transferFailure, thrown);
+        verify(fileChannelMock, never()).read(any(ByteBuffer.class), anyLong());
     }
 
     /**
