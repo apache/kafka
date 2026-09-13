@@ -1520,15 +1520,23 @@ public class LogManager {
         }
     }
 
-    private void replaceCurrentWithFutureLog(Optional<UnifiedLog> sourceLog, UnifiedLog destLog, boolean updateHighWatermark) throws IOException {
+    private void replaceCurrentWithFutureLog(Optional<UnifiedLog> sourceLog, UnifiedLog destLog, boolean futureLogCaughtUp) throws IOException {
         TopicPartition topicPartition = destLog.topicPartition();
 
         destLog.renameDir(UnifiedLog.logDirName(topicPartition), true);
         // the metrics tags still contain "future", so we have to remove it.
         // we will add metrics back after sourceLog remove the metrics
         destLog.removeLogMetrics();
-        if (updateHighWatermark && sourceLog.isPresent()) {
+        if (futureLogCaughtUp && sourceLog.isPresent()) {
             destLog.updateHighWatermark(sourceLog.get().highWatermark());
+            // The future log only learns about leader epochs from the record batches copied into it, so
+            // epochs which have no records behind them are missing from its cache. One is assigned on
+            // every leader election, which means a partition that is moved between log directories while
+            // it has no incoming traffic ends up with a leader that cannot answer the end offset of the
+            // epoch a follower last fetched, and answers OffsetOutOfRangeException instead. Carry the
+            // history over. This is sound only because the future log has caught up with the current one,
+            // so both hold the same offsets.
+            destLog.leaderEpochCache().assign(sourceLog.get().leaderEpochCache().epochEntries());
         }
 
         // Now that future replica has been successfully renamed to be the current replica
