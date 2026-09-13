@@ -19,10 +19,13 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.raft.KRaftConfigs;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,6 +41,23 @@ public class CreateTopicsTest {
             for (int i = 0; i <= 10000; i++) {
                 newTopics.add(new NewTopic("foo" + i, 100000, (short) 1));
             }
+            var executionException = assertThrows(ExecutionException.class,
+                () -> admin.createTopics(newTopics).all().get());
+            assertNotNull(executionException.getCause());
+            assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
+            assertEquals("Too many partitions in request.", executionException.getCause().getMessage());
+        }
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT},
+        serverProperties = @ClusterConfigProperty(key = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG, value = "10")
+    )
+    public void testCreateTopicsRespectsConfiguredMaxRecordsPerBatch(ClusterInstance cluster) {
+        try (Admin admin = cluster.admin()) {
+            var newTopics = List.of(
+                new NewTopic("foo1", 5, (short) 1),
+                new NewTopic("foo2", 6, (short) 1));
             var executionException = assertThrows(ExecutionException.class,
                 () -> admin.createTopics(newTopics).all().get());
             assertNotNull(executionException.getCause());

@@ -44,7 +44,6 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.metadata.ConfigRecord;
@@ -1335,31 +1334,6 @@ public class KRaftClusterTest {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
-        }
-    }
-
-    @Test
-    public void testCreateTopicsRespectsConfiguredMaxRecordsPerBatch() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .setConfigProp(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG, "10")
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            try (Admin admin = cluster.admin()) {
-                var newTopics = List.of(
-                    new NewTopic("foo1", 5, (short) 1),
-                    new NewTopic("foo2", 6, (short) 1));
-                var executionException = assertThrows(ExecutionException.class,
-                    () -> admin.createTopics(newTopics).all().get());
-                assertNotNull(executionException.getCause());
-                assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
-                assertEquals("Too many partitions in request.",
-                    executionException.getCause().getMessage());
-            }
         }
     }
 
