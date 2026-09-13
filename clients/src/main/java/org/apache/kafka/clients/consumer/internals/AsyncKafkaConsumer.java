@@ -1987,27 +1987,29 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         long pollTimeout = Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs());
 
-        // Bound the wait when background progress may make fetching possible soon.
+        // Bound the wait when background progress may make fetching possible soon. retry.backoff.ms may be 0,
+        // but the application thread still needs a positive wait to avoid polling continuously.
+        long pollBackoffMs = Math.max(1L, retryBackoffMs);
         // Use the current application-thread state to avoid relying on stale state from the network thread.
-        if (pollTimeout > retryBackoffMs) {
+        if (pollTimeout > pollBackoffMs) {
             if (subscriptions.numAssignedPartitions() == 0) {
                 // If there are no assigned partitions, reduce the fetch buffer wait time. This may happen when
                 // group membership has not been established yet, assignments have been revoked but not reassigned,
                 // bootstrap DNS resolution is still in progress, or manual assignment has not happened yet.
-                pollTimeout = retryBackoffMs;
+                pollTimeout = pollBackoffMs;
             } else if (!subscriptions.hasAllFetchPositions()) {
                 // If some partitions do not have valid positions, the background thread may still be resolving them,
                 // for example by fetching committed offsets, looking up offsets by timestamp, or backing off after a
                 // failure. Reduce the wait time so the application thread can consume data promptly once positions are
                 // resolved.
-                pollTimeout = retryBackoffMs;
+                pollTimeout = pollBackoffMs;
             } else {
                 Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
                 if (subscriptions.hasFetchablePartitions(tp -> !buffered.contains(tp))) {
                     // If any fetchable partition has no buffered data, it may have been skipped due to reconnect
                     // backoff, an in-flight request, or a missing leader. Bound the wait so the application thread
                     // can retry once the condition clears.
-                    pollTimeout = retryBackoffMs;
+                    pollTimeout = pollBackoffMs;
                 }
             }
         }
