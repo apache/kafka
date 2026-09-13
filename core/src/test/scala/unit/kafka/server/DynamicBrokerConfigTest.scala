@@ -339,8 +339,17 @@ class DynamicBrokerConfigTest {
     }
     config.dynamicConfig.addReconfigurable(reconfigurable)
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, invalidProps)
+    assertTrue(config.dynamicConfig.currentDynamicBrokerConfigs.isEmpty)
     config.dynamicConfig.removeReconfigurable(reconfigurable)
 
+    var reconfigured = false
+    config.dynamicConfig.addReconfigurable(new Reconfigurable {
+      override def configure(configs: util.Map[String, _]): Unit = {}
+      override def reconfigurableConfigs(): util.Set[String] =
+        Set(CleanerConfig.LOG_CLEANER_THREADS_PROP).asJava
+      override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
+      override def reconfigure(configs: util.Map[String, _]): Unit = reconfigured = true
+    })
     val brokerReconfigurable = new BrokerReconfigurable {
       override def reconfigurableConfigs: util.Set[String] = util.Set.of(CleanerConfig.LOG_CLEANER_THREADS_PROP)
       override def validateReconfiguration(newConfig: KafkaConfig): Unit = validateLogCleanerConfig(newConfig.originals)
@@ -348,6 +357,67 @@ class DynamicBrokerConfigTest {
     }
     config.dynamicConfig.addBrokerReconfigurable(brokerReconfigurable)
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, invalidProps)
+    assertTrue(config.dynamicConfig.currentDynamicBrokerConfigs.isEmpty)
+    assertFalse(reconfigured)
+
+    val invalidDefaultProps = new Properties
+    invalidProps.foreach { case (name, value) => invalidDefaultProps.put(name, value) }
+    config.dynamicConfig.updateDefaultConfig(invalidDefaultProps)
+    assertTrue(config.dynamicConfig.currentDynamicDefaultConfigs.isEmpty)
+  }
+
+  @Test
+  def testConfigUpdateWithReconfigurableFailureDoesNotUpdateCache(): Unit = {
+    val config = KafkaConfig(TestUtils.createBrokerConfig(0, port = 8181))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addReconfigurable(new Reconfigurable {
+      override def configure(configs: util.Map[String, _]): Unit = {}
+      override def reconfigurableConfigs(): util.Set[String] =
+        Set(CleanerConfig.LOG_CLEANER_THREADS_PROP).asJava
+      override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
+      override def reconfigure(configs: util.Map[String, _]): Unit =
+        throw new ConfigException("reconfiguration failed")
+    })
+
+    val props = new Properties
+    props.put(CleanerConfig.LOG_CLEANER_THREADS_PROP, "2")
+    config.dynamicConfig.updateDefaultConfig(props)
+
+    assertEquals(CleanerConfig.LOG_CLEANER_THREADS, config.getInt(CleanerConfig.LOG_CLEANER_THREADS_PROP))
+    assertTrue(config.dynamicConfig.currentDynamicDefaultConfigs.isEmpty)
+  }
+
+  @Test
+  def testInitializeFromPersistentPropsAppliesBrokerOverride(): Unit = {
+    val config = KafkaConfig(TestUtils.createBrokerConfig(0, port = 8181))
+    config.dynamicConfig.initialize(None)
+    val defaultProps = new Properties
+    defaultProps.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "100")
+    val brokerProps = new Properties
+    brokerProps.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "200")
+
+    config.dynamicConfig.initializeFromPersistentProps(defaultProps, brokerProps)
+
+    assertEquals("100", config.dynamicConfig.currentDynamicDefaultConfigs(SocketServerConfigs.MAX_CONNECTIONS_CONFIG))
+    assertEquals("200", config.dynamicConfig.currentDynamicBrokerConfigs(SocketServerConfigs.MAX_CONNECTIONS_CONFIG))
+    assertEquals(200, config.maxConnections)
+  }
+
+  @Test
+  def testInitializeFromPersistentPropsRemovesOfflineConfig(): Unit = {
+    val config = KafkaConfig(TestUtils.createBrokerConfig(0, port = 8181))
+    config.dynamicConfig.initialize(None)
+    val props = new Properties
+    props.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "100")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(100, config.maxConnections)
+
+    config.dynamicConfig.clear()
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.initializeFromPersistentProps(new Properties, new Properties)
+
+    assertEquals(SocketServerConfigs.MAX_CONNECTIONS_DEFAULT, config.maxConnections)
+    assertTrue(config.dynamicConfig.currentDynamicDefaultConfigs.isEmpty)
   }
 
   @Test
