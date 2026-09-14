@@ -448,6 +448,67 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
+     * Streams -> classic offline downgrade. Related bugs: KAFKA-19862, KAFKA-20254
+     *
+     * Scenario:
+     *  Streams group created and rebalanced
+     *  Streams offset commit
+     *  Group is shut down (all members leave), leaving an empty streams group
+     *  Group restarts with the classic protocol, tombstoning the streams group
+     */
+    @Test
+    public void testStreamsGroupOfflineDowngradeToClassicGroup() throws Exception {
+        CompactionReplayTestContext context = newContext();
+        String groupId = "streams-downgrade-group";
+
+        // A streams group is created and members join and rebalance.
+        String streamsMemberA = Uuid.randomUuid().toString();
+        context.prepareStreamsAssignment(Map.of(streamsMemberA, context.tasks(0, 1, 2, 3, 4, 5)));
+        Map<String, StreamsMemberState> members = new LinkedHashMap<>();
+        context.joinStreamsMember(groupId, streamsMemberA, "process-a", members);
+        context.completeStreamsGroupRebalance(groupId, members);
+        assertEquals(Group.GroupType.STREAMS, context.groupType(groupId));
+
+        // Offset commit
+        context.commitOffset(groupId, FOO_TOPIC_NAME, 0, 10L);
+
+        // Member B joins and the group rebalances.
+        String streamsMemberB = Uuid.randomUuid().toString();
+        context.prepareStreamsAssignment(Map.of(
+            streamsMemberA, context.tasks(0, 1, 2),
+            streamsMemberB, context.tasks(3, 4, 5)));
+        context.waitForAssignmentInterval();
+        context.joinStreamsMember(groupId, streamsMemberB, "process-b", members);
+        context.completeStreamsGroupRebalance(groupId, members);
+
+        // The group is shut down for offline downgrade to classic. Both members leave, one at a time,
+        // leaving an empty streams group.
+        context.prepareStreamsAssignment(Map.of(streamsMemberB, context.tasks(0, 1, 2, 3, 4, 5)));
+        context.waitForAssignmentInterval();
+        context.leaveStreamsMember(groupId, streamsMemberA, members);
+        context.completeStreamsGroupRebalance(groupId, members);
+        context.leaveStreamsMember(groupId, streamsMemberB, members);
+
+        // Group restarts with the classic protocol. The leftover streams group is tombstoned.
+        JoinGroupResponseData joinResponseA = context.joinFirstClassicMember(groupId);
+        assertEquals(Group.GroupType.CLASSIC, context.groupType(groupId));
+        String classicMemberA = joinResponseA.memberId();
+        context.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
+            classicMemberA, List.of(
+                new TopicPartition(FOO_TOPIC_NAME, 0),
+                new TopicPartition(FOO_TOPIC_NAME, 1),
+                new TopicPartition(FOO_TOPIC_NAME, 2),
+                new TopicPartition(FOO_TOPIC_NAME, 3),
+                new TopicPartition(FOO_TOPIC_NAME, 4),
+                new TopicPartition(FOO_TOPIC_NAME, 5))
+        ));
+        context.commitOffset(groupId, FOO_TOPIC_NAME, 1, 20L);
+
+        // Verify partitions can be reloaded cleanly from log.
+        assertCompactedVariantsLoadCleanly(context);
+    }
+
+    /**
      * Replays every compacted variant of the captured log through a fresh group coordinator
      * and asserts that each one loads without throwing. Each variant cleans a single contiguous
      * window of record batches, modelling the three ways a load can observe compaction:
@@ -589,9 +650,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * The positions removed by cleaning the compactable records. A tombstone is
-     * retained if an earlier surviving record shares its key, since the tombstone is still needed to
-     * delete that record on load.
+     * The positions removed by cleaning the compactable records in {@code [from, to)}.
      */
     private static Set<Integer> compactedPositions(
         List<CoordinatorRecord> log,
