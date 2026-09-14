@@ -225,7 +225,7 @@ public class HeaderVersionsTest {
 
     @Test
     public void testDecreasingHeaderVersionRejected() {
-        // Header version must not go down as the body version goes up.
+        // Header version must not go down as the message version goes up.
         assertMessageContains("must not decrease",
             () -> parse(requestSpec("0-5", "none", "{'0': '2', '1+': '1'}")));
     }
@@ -316,6 +316,14 @@ public class HeaderVersionsTest {
     }
 
     @Test
+    public void testRequestHeaderVersionBelowLowestRejected() {
+        // The request header schema starts at v1, so a request version may not map to the
+        // non-existent request header v0.
+        assertMessageContains("the lowest request header version is 1",
+            () -> checkHeaderVersions(parse(requestSpec("0-5", "none", "{'0': '0', '1+': '1'}"))));
+    }
+
+    @Test
     public void testHighestExistingHeaderVersionsAccepted() throws Exception {
         MessageSpec spec = parse(requestSpec("0-5", "0+", "{'0+': '2'}"));
         checkHeaderVersions(spec);
@@ -358,7 +366,7 @@ public class HeaderVersionsTest {
 
     @Test
     public void testFirstFlexibleHeaderFollowsHeaderSchema() {
-        // A header schema that only becomes flexible at v3 makes a flexible body mapped to header v2 fail.
+        // A header schema that only becomes flexible at v3 makes a flexible message version mapped to header v2 fail.
         assertMessageContains("which is flexible", () -> parse(requestSpec("0-5", "2+", "{'0-1': '1', '2+': '2'}"))
             .checkHeaderVersions(headerSpec("RequestHeader", "1-3", "3+"), responseHeader()));
     }
@@ -377,8 +385,8 @@ public class HeaderVersionsTest {
     }
 
     @Test
-    public void testNonFlexibleHeaderSchemaWithFlexibleBodyRejected() {
-        // A header schema with no flexible version cannot serve a flexible body version.
+    public void testNonFlexibleHeaderSchemaWithFlexibleVersionRejected() {
+        // A header schema with no flexible version cannot serve a flexible message version.
         assertMessageContains("no flexible version",
             () -> parse(requestSpec("0-5", "2+", "{'0+': '2'}"))
                 .checkHeaderVersions(headerSpec("RequestHeader", "1-2", "none"), responseHeader()));
