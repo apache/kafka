@@ -67,6 +67,8 @@ Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires Ma
 
 ## Streams API changes in 4.4.0
 
+Processors returning the same `StoreBuilder` instance from `ConnectedStoreProvider#stores()` are now grouped into one subtopology ([KAFKA-20464](https://issues.apache.org/jira/browse/KAFKA-20464)). For affected applications, task IDs change and state is restored from the changelog on first startup after upgrading. Linking processors to a store by name is unaffected.
+
 Kafka Streams does not support the asynchronous bootstrap DNS resolution mode introduced by [KIP-909](https://cwiki.apache.org/confluence/x/MJtbDg) yet. For every client it creates internally, `bootstrap.resolve.timeout.ms` is forced to `0`, and a user-supplied positive value, through any prefix form, is ignored with a warning.
 
 Kafka Streams no longer emits a WARN from `KafkaStreams#cleanUp()` when the application state directory cannot be deleted only because expected metadata files remain, such as `kafka-streams-process-metadata` and/or `.lock`. In this case, the local state cleanup is considered successful and the application state directory may be retained. Users who require a full local reset including persisted process metadata should manually delete the application state directory after the Kafka Streams instance has been closed. More details can be found in [KIP-1283](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1283:+Clarify+KafkaStreams+cleanUp+semantics+to+preserve+process+metadata+and+state+directory+lock+file)
