@@ -33,7 +33,6 @@ import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -108,7 +107,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * Classic -> consumer group upgrade with offset commits. Related bugs: KAFKA-19862
+     * Classic -> consumer group upgrade with offset commits.
      *
      * Scenario:
      *  Classic group created
@@ -218,7 +217,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * Classic -> streams upgrade with offset commits. Related bugs: KAFKA-19862, KAFKA-20254
+     * Classic -> streams upgrade with offset commits. Related bugs: KAFKA-20254
      *
      * Scenario:
      *  Classic group created
@@ -316,7 +315,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * Consumer -> classic downgrade by leave. Related bugs: KAFKA-19862
+     * Consumer -> classic downgrade by leave.
      *
      * Scenario:
      *  Classic group created and rebalanced
@@ -387,7 +386,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * Consumer -> classic downgrade by static member replacement. Related bugs: KAFKA-19862
+     * Consumer -> classic downgrade by static member replacement.
      *
      * Scenario:
      *  Classic group created
@@ -439,48 +438,63 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * Replays every compacted variant of the captured log through a fresh coordinator and asserts that
-     * each one loads without throwing. Each variant cleans a single contiguous window of record batches,
-     * modelling the three ways a load can observe compaction:
+     * Replays every compacted variant of the captured log through a fresh group coordinator
+     * and asserts that each one loads without throwing. Each variant cleans a single contiguous
+     * window of record batches, modelling the three ways a load can observe compaction:
      * <ul>
      *   <li>uncompacted: the load reads the log exactly as written;</li>
      *   <li>compacted prefix: a prefix of the log is compacted, so the load reads a compacted section
-     *       followed by the uncompacted tail. This is the standard case;</li>
-     *   <li>concurrent compaction: a section in the middle of the log is compacted, so the load reads an
-     *       uncompacted section, then a compacted section, then the uncompacted tail (KAFKA-19862).</li>
+     *       followed by the uncompacted tail. In this case, tombstones can be deleted to model
+     *       {@code delete.retention.ms} elapsing (related to KAFKA-20254);</li>
+     *   <li>concurrent compaction: a section in the middle of the log is compacted, so the coordinator
+     *       reads an uncompacted section, then a compacted section, then the uncompacted tail (KAFKA-19862).
+     *       Tombstones are retained as concurrent compaction is necessarily recent, so 
+     *       {@code delete.retention.ms} is assumed to not have elapsed.</li>
      * </ul>
      */
     private void assertCompactedVariantsLoadCleanly() {
         List<CoordinatorRecord> log = replay.records();
 
-        Set<ApiMessage> laterKeys = new HashSet<>();
-        Set<Integer> compactable = new HashSet<>();
-        for (int position = log.size() - 1; position >= 0; position--) {
-            CoordinatorRecord record = log.get(position);
-            if (record.value() == null || laterKeys.contains(record.key())) {
-                compactable.add(position);
-            }
-            laterKeys.add(record.key());
-        }
+        Set<Integer> compactableWithTombstoneDeletion = compactablePositions(log, true);
+        Set<Integer> compactableWithoutTombstoneDeletion = compactablePositions(log, false);
 
         List<Integer> boundaries = replay.batchBoundaries();
 
         // Uncompacted log
-        assertLoadsCleanly(log, compactedPositions(log, compactable, 0, 0));
+        assertLoadsCleanly(log, compactedPositions(log, compactableWithTombstoneDeletion, 0, 0));
 
         // Compacted prefix
         for (int lastBatch = 1; lastBatch < boundaries.size(); lastBatch++) {
-            assertLoadsCleanly(log, compactedPositions(log, compactable, 0, boundaries.get(lastBatch)));
+            assertLoadsCleanly(log,
+                compactedPositions(log, compactableWithTombstoneDeletion, 0, boundaries.get(lastBatch)));
         }
 
         // Concurrent compaction: the window starts partway through the log, leaving an uncompacted
         // section before it.
         for (int firstBatch = 1; firstBatch < boundaries.size() - 1; firstBatch++) {
             for (int lastBatch = firstBatch + 1; lastBatch < boundaries.size(); lastBatch++) {
-                assertLoadsCleanly(log,
-                    compactedPositions(log, compactable, boundaries.get(firstBatch), boundaries.get(lastBatch)));
+                assertLoadsCleanly(log, compactedPositions(
+                    log, compactableWithoutTombstoneDeletion, boundaries.get(firstBatch), boundaries.get(lastBatch)));
             }
         }
+    }
+
+    /**
+     * The positions in {@code log} eligible for compaction: a record superseded by a later record
+     * with the same key is always compactable. When {@code deleteTombstones} is set, a tombstone with
+     * no later record for its key is also compactable, modelling {@code delete.retention.ms} elapsing.
+     */
+    private static Set<Integer> compactablePositions(List<CoordinatorRecord> log, boolean deleteTombstones) {
+        Set<ApiMessage> laterKeys = new HashSet<>();
+        Set<Integer> compactable = new HashSet<>();
+        for (int position = log.size() - 1; position >= 0; position--) {
+            CoordinatorRecord record = log.get(position);
+            if (laterKeys.contains(record.key()) || (deleteTombstones && record.value() == null)) {
+                compactable.add(position);
+            }
+            laterKeys.add(record.key());
+        }
+        return compactable;
     }
 
     /**
@@ -489,15 +503,6 @@ public class GroupCoordinatorShardCompactionReplayTest {
      * throwing.
      */
     private void assertLoadsCleanly(List<CoordinatorRecord> log, Set<Integer> compactedPositions) {
-        List<CoordinatorRecord> survivingRecords = new ArrayList<>();
-        List<Integer> survivingPositions = new ArrayList<>();
-        for (int position = 0; position < log.size(); position++) {
-            if (!compactedPositions.contains(position)) {
-                survivingRecords.add(log.get(position));
-                survivingPositions.add(position);
-            }
-        }
-
         GroupMetadataManagerTestContext replayContext =
             new GroupMetadataManagerTestContext.Builder()
                 .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.BIDIRECTIONAL.toString())
@@ -525,12 +530,17 @@ public class GroupCoordinatorShardCompactionReplayTest {
         );
 
         int index = 0;
+        int position = 0;
         try {
-            for (; index < survivingRecords.size(); index++) {
-                shard.replay(index, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, survivingRecords.get(index));
+            for (; position < log.size(); position++) {
+                if (compactedPositions.contains(position)) {
+                    continue;
+                }
+                shard.replay(index, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, log.get(position));
+                index++;
             }
         } catch (Throwable t) {
-            throw new AssertionError(describeReplayFailure(log, compactedPositions, survivingPositions.get(index)), t);
+            throw new AssertionError(formatReplayFailure(log, compactedPositions, position), t);
         }
     }
 
@@ -545,7 +555,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
      *  23 | ConsumerGroupMemberMetadataKey(groupId=..., memberId=...) = tombstone &lt;-- replay failed
      * </pre>
      */
-    private static String describeReplayFailure(
+    private static String formatReplayFailure(
         List<CoordinatorRecord> log,
         Set<Integer> compactedPositions,
         int failedPosition

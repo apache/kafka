@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
@@ -59,9 +60,11 @@ import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoin
 
 /**
  * Drives group coordinator scenarios and records the resulting log for {@link
- * GroupCoordinatorShardCompactionReplayTest}. Each request helper runs an operation against a live
- * {@link GroupMetadataManagerTestContext} and appends whatever records it produced, so scenarios
- * read as a sequence of coordinator operations rather than of log bookkeeping.
+ * GroupCoordinatorShardCompactionReplayTest}. In practice the loading would 
+ * be done by a group coordinator shard, here it uses a live {@link
+ * GroupMetadataManagerTestContext} instead for convenience. Each helper appends
+ * the records produced by the operation, so scenarios consist of a sequence of
+ * realistic coordinator requests (joins, heartbeats, leaves, etc.).
  *
  * Records are grouped into batches. The records from an atomic write are grouped into a single
  * batch, and a non-atomic write gets one batch per record.
@@ -125,8 +128,8 @@ final class CompactionReplayTestContext {
     }
 
     /**
-     * The positions in {@link #records()} at which a batch starts, plus the length of the log:
-     * the boundaries a cleaning window may fall on.
+     * The boundaries a cleaning window may fall on: the positions in {@link #records()} at which a
+     * batch starts, plus the length of the log.
      */
     List<Integer> batchBoundaries() {
         List<Integer> boundaries = new ArrayList<>();
@@ -140,10 +143,9 @@ final class CompactionReplayTestContext {
     }
 
     /**
-     * The current type of {@code groupId}, used to assert that a scenario upgraded or downgraded the
-     * group as intended.
+     * The current type of {@code groupId}.
      */
-    Group.GroupType groupType(String groupId) {
+    GroupType groupType(String groupId) {
         return context.groupMetadataManager.group(groupId).type();
     }
 
@@ -186,7 +188,7 @@ final class CompactionReplayTestContext {
         append(secondJoin.records);
         secondJoin.appendFuture.complete(null);
         // The first generation only forms once the initial rebalance delay has elapsed.
-        sleepCapturing(context.classicGroupInitialRebalanceDelayMs);
+        sleep(context.classicGroupInitialRebalanceDelayMs);
         return secondJoin.joinFuture.get();
     }
 
@@ -228,7 +230,7 @@ final class CompactionReplayTestContext {
     /**
      * Advances the clock, capturing whatever the timeouts that fired wrote.
      */
-    private void sleepCapturing(long durationMs) {
+    private void sleep(long durationMs) {
         context.sleep(durationMs).forEach(timeout -> append(timeout.result()));
     }
 
@@ -241,7 +243,7 @@ final class CompactionReplayTestContext {
             max(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT,
                 GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT
             ) + 1;
-        sleepCapturing(assignmentIntervalAdvanceMs);
+        sleep(assignmentIntervalAdvanceMs);
     }
 
     /**
