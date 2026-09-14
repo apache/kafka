@@ -391,6 +391,10 @@ public class StateDirectory implements AutoCloseable {
         }
     }
 
+    Thread lockOwner(final TaskId taskId) {
+        return lockedTasksToOwner.get(taskId);
+    }
+
     @Override
     public void close() {
         if (hasPersistentStores) {
