@@ -231,6 +231,14 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC = "The maximum amount of time the server will wait for the remote list offsets request to complete.";
     public static final long DEFAULT_REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS = 30000L;
 
+    public static final String REMOTE_LOG_CLIENT_METRICS_ENABLED_PROP = "remote.log.metrics.client.id.enabled";
+    public static final String REMOTE_LOG_CLIENT_METRICS_ENABLED_DOC = "Whether to record per-client-id remote (tiered) storage fetch metrics. " +
+        "When enabled, the broker exposes RemoteFetchBytesPerSec and RemoteFetchRequestsPerSec under the RemoteFetchMetrics group, tagged with client-id, " +
+        "giving a per-consumer view of remote fetch volume and request rate. In practice remote fetches are rare, since most consumers read recent data " +
+        "served from local storage and only fall back to remote storage occasionally, so the set of client-ids that trigger a remote fetch is small and the " +
+        "added metric cardinality is low. Sensors for idle clients also expire automatically. Disabled by default so the extra metrics are only present when needed.";
+    public static final boolean DEFAULT_REMOTE_LOG_CLIENT_METRICS_ENABLED = false;
+
     private final AbstractConfig config;
 
     public static ConfigDef configDef() {
@@ -428,7 +436,12 @@ public final class RemoteLogManagerConfig {
                         DEFAULT_REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS,
                         atLeast(1),
                         MEDIUM,
-                        REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC);
+                        REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC)
+                .define(REMOTE_LOG_CLIENT_METRICS_ENABLED_PROP,
+                        BOOLEAN,
+                        DEFAULT_REMOTE_LOG_CLIENT_METRICS_ENABLED,
+                        LOW,
+                        REMOTE_LOG_CLIENT_METRICS_ENABLED_DOC);
     }
     
     public RemoteLogManagerConfig(AbstractConfig config) {
@@ -608,6 +621,10 @@ public final class RemoteLogManagerConfig {
 
     public long remoteListOffsetsRequestTimeoutMs() {
         return config.getLong(REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP);
+    }
+
+    public boolean remoteLogClientMetricsEnabled() {
+        return config.getBoolean(REMOTE_LOG_CLIENT_METRICS_ENABLED_PROP);
     }
 
     public static void main(String[] args) {
