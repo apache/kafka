@@ -176,6 +176,7 @@ org.apache.kafka.server.ClientMetricsManagerTest:
 - testPushTelemetryNullMetricsData
 - testPushTelemetryOnNewServer
 - testPushTelemetryPluginException
+- testPushTelemetryPluginTooLargeException
 - testPushTelemetrySubscriptionIdInvalid
 - testPushTelemetryTerminatingFlag
 - testPushTelemetryThrottleError
