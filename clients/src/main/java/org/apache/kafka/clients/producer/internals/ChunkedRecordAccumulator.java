@@ -47,7 +47,6 @@ import java.util.List;
  * <p>
  * See {@link #append} and {@link #tryAppend} for how batches are created and grown.
  * <p>
- * TODO: support compressed data (with mid-record growth); the constructor rejects compression for now.
  */
 public class ChunkedRecordAccumulator extends RecordAccumulator {
 
@@ -79,11 +78,6 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
             throw new IllegalArgumentException("bufferPool must serve "
                     + BufferPool.AllocationMode.INCREMENTAL + " allocation, but serves "
                     + bufferPool.allocationMode());
-        // TODO: drop this once the incremental strategy supports compressed data (with the
-        //   mid-record growth fallback for compressor overshoot).
-        if (compression.type() != CompressionType.NONE)
-            throw new UnsupportedOperationException(
-                    "Compression is not yet supported with the incremental buffer.memory allocation strategy");
         this.chunkedFree = bufferPool;
     }
 
