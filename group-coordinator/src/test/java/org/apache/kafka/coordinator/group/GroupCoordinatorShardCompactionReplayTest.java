@@ -84,7 +84,6 @@ public class GroupCoordinatorShardCompactionReplayTest {
     private Uuid fooTopicId;
     private Uuid barTopicId;
     private CoordinatorMetadataImage metadataImage;
-    private CompactionReplayTestContext replay;
 
     @BeforeEach
     public void setUp() {
@@ -95,6 +94,13 @@ public class GroupCoordinatorShardCompactionReplayTest {
             .addTopic(barTopicId, BAR_TOPIC_NAME, 3)
             .addRacks()
             .buildCoordinatorMetadataImage();
+    }
+
+    /**
+     * A fresh {@link CompactionReplayTestContext} for a single scenario, so no state is shared
+     * between test methods.
+     */
+    private CompactionReplayTestContext newContext() {
         MockPartitionAssignor consumerAssignor = new MockPartitionAssignor("range");
         MockTaskAssignor streamsAssignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -103,7 +109,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
             .withStreamsGroupTaskAssignors(List.of(streamsAssignor))
             .withMetadataImage(metadataImage)
             .build();
-        replay = new CompactionReplayTestContext(context, consumerAssignor, streamsAssignor, metadataImage);
+        return new CompactionReplayTestContext(context, consumerAssignor, streamsAssignor, metadataImage);
     }
 
     /**
@@ -119,12 +125,13 @@ public class GroupCoordinatorShardCompactionReplayTest {
      */
     @Test
     public void testClassicGroupUpgradeToConsumerGroup() throws Exception {
+        CompactionReplayTestContext context = newContext();
         String groupId = "consumer-lifecycle-group";
 
         // A classic group is created when its first member joins and syncs
-        JoinGroupResponseData joinResponseA = replay.joinFirstClassicMember(groupId);
+        JoinGroupResponseData joinResponseA = context.joinFirstClassicMember(groupId);
         String classicMemberA = joinResponseA.memberId();
-        replay.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
+        context.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
                 new TopicPartition(FOO_TOPIC_NAME, 0),
                 new TopicPartition(FOO_TOPIC_NAME, 1),
@@ -138,15 +145,15 @@ public class GroupCoordinatorShardCompactionReplayTest {
         ));
 
         // Offset commit
-        replay.commitOffset(groupId, FOO_TOPIC_NAME, 0, 10L);
-        replay.commitOffset(groupId, BAR_TOPIC_NAME, 0, 20L);
+        context.commitOffset(groupId, FOO_TOPIC_NAME, 0, 10L);
+        context.commitOffset(groupId, BAR_TOPIC_NAME, 0, 20L);
 
         // Member B joins with classic protocol, triggering rebalance
-        String classicMemberB = replay.joinClassicMember(groupId);
+        String classicMemberB = context.joinClassicMember(groupId);
 
         // Member A rejoins
-        JoinGroupResponseData rejoinResponseA = replay.rejoinClassicMember(groupId, classicMemberA);
-        replay.syncClassicMember(groupId, classicMemberA, rejoinResponseA.generationId(), Map.of(
+        JoinGroupResponseData rejoinResponseA = context.rejoinClassicMember(groupId, classicMemberA);
+        context.syncClassicMember(groupId, classicMemberA, rejoinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
                 new TopicPartition(FOO_TOPIC_NAME, 0),
                 new TopicPartition(FOO_TOPIC_NAME, 1),
@@ -159,61 +166,61 @@ public class GroupCoordinatorShardCompactionReplayTest {
                 new TopicPartition(BAR_TOPIC_NAME, 1),
                 new TopicPartition(BAR_TOPIC_NAME, 2))
         ));
-        replay.syncClassicMember(groupId, classicMemberB, rejoinResponseA.generationId(), Map.of());
+        context.syncClassicMember(groupId, classicMemberB, rejoinResponseA.generationId(), Map.of());
 
         // Member C joins with consumer protocol, triggering an online classic -> consumer group upgrade.
         String memberC = Uuid.randomUuid().toString();
-        replay.prepareConsumerAssignment(Map.of(
+        context.prepareConsumerAssignment(Map.of(
             classicMemberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1), mkTopicAssignment(barTopicId, 0)),
             classicMemberB, mkAssignment(mkTopicAssignment(fooTopicId, 2, 3), mkTopicAssignment(barTopicId, 1)),
             memberC, mkAssignment(mkTopicAssignment(fooTopicId, 4, 5), mkTopicAssignment(barTopicId, 2))));
         Map<String, ConsumerMemberState> members = new LinkedHashMap<>();
-        replay.joinConsumerMember(groupId, memberC, members);
+        context.joinConsumerMember(groupId, memberC, members);
 
         // Members A and B move onto the consumer protocol one at a time.
         String memberA = Uuid.randomUuid().toString();
-        replay.prepareConsumerAssignment(Map.of(
+        context.prepareConsumerAssignment(Map.of(
             classicMemberB, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3), mkTopicAssignment(barTopicId, 0, 1)),
             memberC, mkAssignment(mkTopicAssignment(fooTopicId, 4, 5), mkTopicAssignment(barTopicId, 2))));
-        replay.leaveClassicMember(groupId, classicMemberA);
-        replay.prepareConsumerAssignment(Map.of(
+        context.leaveClassicMember(groupId, classicMemberA);
+        context.prepareConsumerAssignment(Map.of(
             classicMemberB, mkAssignment(mkTopicAssignment(fooTopicId, 2, 3), mkTopicAssignment(barTopicId, 1)),
             memberC, mkAssignment(mkTopicAssignment(fooTopicId, 4, 5), mkTopicAssignment(barTopicId, 2)),
             memberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1), mkTopicAssignment(barTopicId, 0))));
-        replay.waitForAssignmentInterval();
-        replay.joinConsumerMember(groupId, memberA, members);
-        replay.completeConsumerGroupRebalance(groupId, members);
+        context.waitForAssignmentInterval();
+        context.joinConsumerMember(groupId, memberA, members);
+        context.completeConsumerGroupRebalance(groupId, members);
 
         String memberB = Uuid.randomUuid().toString();
-        replay.prepareConsumerAssignment(Map.of(
+        context.prepareConsumerAssignment(Map.of(
             memberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3), mkTopicAssignment(barTopicId, 0, 1)),
             memberC, mkAssignment(mkTopicAssignment(fooTopicId, 4, 5), mkTopicAssignment(barTopicId, 2))));
-        replay.leaveClassicMember(groupId, classicMemberB);
-        replay.completeConsumerGroupRebalance(groupId, members);
-        replay.prepareConsumerAssignment(Map.of(
+        context.leaveClassicMember(groupId, classicMemberB);
+        context.completeConsumerGroupRebalance(groupId, members);
+        context.prepareConsumerAssignment(Map.of(
             memberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1), mkTopicAssignment(barTopicId, 0)),
             memberB, mkAssignment(mkTopicAssignment(fooTopicId, 2, 3), mkTopicAssignment(barTopicId, 1)),
             memberC, mkAssignment(mkTopicAssignment(fooTopicId, 4, 5), mkTopicAssignment(barTopicId, 2))));
-        replay.waitForAssignmentInterval();
-        replay.joinConsumerMember(groupId, memberB, members);
-        replay.completeConsumerGroupRebalance(groupId, members);
+        context.waitForAssignmentInterval();
+        context.joinConsumerMember(groupId, memberB, members);
+        context.completeConsumerGroupRebalance(groupId, members);
 
         // Member D joins with consumer protocol, triggering a consumer group rebalance.
         String memberD = Uuid.randomUuid().toString();
-        replay.prepareConsumerAssignment(Map.of(
+        context.prepareConsumerAssignment(Map.of(
             memberA, mkAssignment(mkTopicAssignment(fooTopicId, 4, 5)),
             memberB, mkAssignment(mkTopicAssignment(fooTopicId, 0), mkTopicAssignment(barTopicId, 0)),
             memberC, mkAssignment(mkTopicAssignment(fooTopicId, 1), mkTopicAssignment(barTopicId, 1)),
             memberD, mkAssignment(mkTopicAssignment(fooTopicId, 2, 3), mkTopicAssignment(barTopicId, 2))));
-        replay.waitForAssignmentInterval();
-        replay.joinConsumerMember(groupId, memberD, members);
-        replay.completeConsumerGroupRebalance(groupId, members);
+        context.waitForAssignmentInterval();
+        context.joinConsumerMember(groupId, memberD, members);
+        context.completeConsumerGroupRebalance(groupId, members);
 
         // Group commits one more offset
-        replay.commitOffset(groupId, FOO_TOPIC_NAME, 1, 30L);
+        context.commitOffset(groupId, FOO_TOPIC_NAME, 1, 30L);
 
         // Verify the partitions can be reloaded cleanly from log.
-        assertCompactedVariantsLoadCleanly();
+        assertCompactedVariantsLoadCleanly(context);
     }
 
     /**
@@ -228,12 +235,13 @@ public class GroupCoordinatorShardCompactionReplayTest {
      */
     @Test
     public void testClassicGroupMigratedToStreamsGroup() throws Exception {
+        CompactionReplayTestContext context = newContext();
         String groupId = "streams-lifecycle-group";
 
         // A classic group is created when its first member joins and syncs
-        JoinGroupResponseData joinResponseA = replay.joinFirstClassicMember(groupId);
+        JoinGroupResponseData joinResponseA = context.joinFirstClassicMember(groupId);
         String classicMemberA = joinResponseA.memberId();
-        replay.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
+        context.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
                 new TopicPartition(FOO_TOPIC_NAME, 0),
                 new TopicPartition(FOO_TOPIC_NAME, 1),
@@ -244,15 +252,15 @@ public class GroupCoordinatorShardCompactionReplayTest {
         ));
 
         // Offset commit
-        replay.commitOffset(groupId, FOO_TOPIC_NAME, 0, 10L);
-        replay.commitOffset(groupId, FOO_TOPIC_NAME, 1, 20L);
+        context.commitOffset(groupId, FOO_TOPIC_NAME, 0, 10L);
+        context.commitOffset(groupId, FOO_TOPIC_NAME, 1, 20L);
 
         // Member B joins with classic protocol, triggering rebalance
-        String classicMemberB = replay.joinClassicMember(groupId);
+        String classicMemberB = context.joinClassicMember(groupId);
 
         // Member A rejoins
-        JoinGroupResponseData rejoinResponseA = replay.rejoinClassicMember(groupId, classicMemberA);
-        replay.syncClassicMember(groupId, classicMemberA, rejoinResponseA.generationId(), Map.of(
+        JoinGroupResponseData rejoinResponseA = context.rejoinClassicMember(groupId, classicMemberA);
+        context.syncClassicMember(groupId, classicMemberA, rejoinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
                 new TopicPartition(FOO_TOPIC_NAME, 0),
                 new TopicPartition(FOO_TOPIC_NAME, 1),
@@ -262,56 +270,56 @@ public class GroupCoordinatorShardCompactionReplayTest {
                 new TopicPartition(FOO_TOPIC_NAME, 4),
                 new TopicPartition(FOO_TOPIC_NAME, 5))
         ));
-        replay.syncClassicMember(groupId, classicMemberB, rejoinResponseA.generationId(), Map.of());
+        context.syncClassicMember(groupId, classicMemberB, rejoinResponseA.generationId(), Map.of());
 
         // Group is shut down for offline upgrade to streams
-        replay.leaveClassicMember(groupId, classicMemberA);
-        replay.leaveClassicMember(groupId, classicMemberB);
+        context.leaveClassicMember(groupId, classicMemberA);
+        context.leaveClassicMember(groupId, classicMemberB);
 
         // Group restarts with streams protocol. The leftover classic group is tombstoned.
         String streamsMemberA = Uuid.randomUuid().toString();
-        replay.prepareStreamsAssignment(Map.of(streamsMemberA, replay.tasks(0, 1, 2, 3, 4, 5)));
+        context.prepareStreamsAssignment(Map.of(streamsMemberA, context.tasks(0, 1, 2, 3, 4, 5)));
         Map<String, StreamsMemberState> members = new LinkedHashMap<>();
-        replay.joinStreamsMember(groupId, streamsMemberA, "process-a", members);
-        replay.completeStreamsGroupRebalance(groupId, members);
+        context.joinStreamsMember(groupId, streamsMemberA, "process-a", members);
+        context.completeStreamsGroupRebalance(groupId, members);
 
         // Member B joins and group rebalances.
         String streamsMemberB = Uuid.randomUuid().toString();
-        replay.prepareStreamsAssignment(Map.of(
-            streamsMemberA, replay.tasks(0, 1, 2),
-            streamsMemberB, replay.tasks(3, 4, 5)));
-        replay.waitForAssignmentInterval();
-        replay.joinStreamsMember(groupId, streamsMemberB, "process-b", members);
-        replay.completeStreamsGroupRebalance(groupId, members);
+        context.prepareStreamsAssignment(Map.of(
+            streamsMemberA, context.tasks(0, 1, 2),
+            streamsMemberB, context.tasks(3, 4, 5)));
+        context.waitForAssignmentInterval();
+        context.joinStreamsMember(groupId, streamsMemberB, "process-b", members);
+        context.completeStreamsGroupRebalance(groupId, members);
 
         // Member C joins and the group rebalances.
         String streamsMemberC = Uuid.randomUuid().toString();
-        replay.prepareStreamsAssignment(Map.of(
-            streamsMemberA, replay.tasks(0, 1),
-            streamsMemberB, replay.tasks(2, 3),
-            streamsMemberC, replay.tasks(4, 5)));
-        replay.waitForAssignmentInterval();
-        replay.joinStreamsMember(groupId, streamsMemberC, "process-c", members);
-        replay.completeStreamsGroupRebalance(groupId, members);
+        context.prepareStreamsAssignment(Map.of(
+            streamsMemberA, context.tasks(0, 1),
+            streamsMemberB, context.tasks(2, 3),
+            streamsMemberC, context.tasks(4, 5)));
+        context.waitForAssignmentInterval();
+        context.joinStreamsMember(groupId, streamsMemberC, "process-c", members);
+        context.completeStreamsGroupRebalance(groupId, members);
 
         // Member A leaves and the group rebalances.
-        replay.prepareStreamsAssignment(Map.of(
-            streamsMemberB, replay.tasks(0, 1, 2),
-            streamsMemberC, replay.tasks(3, 4, 5)));
-        replay.waitForAssignmentInterval();
-        replay.leaveStreamsMember(groupId, streamsMemberA, members);
-        replay.completeStreamsGroupRebalance(groupId, members);
+        context.prepareStreamsAssignment(Map.of(
+            streamsMemberB, context.tasks(0, 1, 2),
+            streamsMemberC, context.tasks(3, 4, 5)));
+        context.waitForAssignmentInterval();
+        context.leaveStreamsMember(groupId, streamsMemberA, members);
+        context.completeStreamsGroupRebalance(groupId, members);
 
         // Member B leaves and group rebalances (all tasks now owned by member C).
-        replay.prepareStreamsAssignment(Map.of(streamsMemberC, replay.tasks(0, 1, 2, 3, 4, 5)));
-        replay.waitForAssignmentInterval();
-        replay.leaveStreamsMember(groupId, streamsMemberB, members);
-        replay.completeStreamsGroupRebalance(groupId, members);
+        context.prepareStreamsAssignment(Map.of(streamsMemberC, context.tasks(0, 1, 2, 3, 4, 5)));
+        context.waitForAssignmentInterval();
+        context.leaveStreamsMember(groupId, streamsMemberB, members);
+        context.completeStreamsGroupRebalance(groupId, members);
 
-        replay.commitOffset(groupId, FOO_TOPIC_NAME, 2, 30L);
+        context.commitOffset(groupId, FOO_TOPIC_NAME, 2, 30L);
 
         // Verify partitions can be reloaded cleanly from log.
-        assertCompactedVariantsLoadCleanly();
+        assertCompactedVariantsLoadCleanly(context);
     }
 
     /**
@@ -325,12 +333,13 @@ public class GroupCoordinatorShardCompactionReplayTest {
      */
     @Test
     public void testConsumerGroupDowngradeByLeave() throws Exception {
+        CompactionReplayTestContext context = newContext();
         String groupId = "consumer-downgrade-by-leave-group";
 
         // A classic group is created when its first member joins and syncs
-        JoinGroupResponseData joinResponseA = replay.joinFirstClassicMember(groupId);
+        JoinGroupResponseData joinResponseA = context.joinFirstClassicMember(groupId);
         String classicMemberA = joinResponseA.memberId();
-        replay.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
+        context.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
                 new TopicPartition(FOO_TOPIC_NAME, 0),
                 new TopicPartition(FOO_TOPIC_NAME, 1),
@@ -344,11 +353,11 @@ public class GroupCoordinatorShardCompactionReplayTest {
         ));
 
         // Member B joins with classic protocol, triggering rebalance
-        String classicMemberB = replay.joinClassicMember(groupId);
+        String classicMemberB = context.joinClassicMember(groupId);
 
         // Member A rejoins
-        JoinGroupResponseData rejoinResponseA = replay.rejoinClassicMember(groupId, classicMemberA);
-        replay.syncClassicMember(groupId, classicMemberA, rejoinResponseA.generationId(), Map.of(
+        JoinGroupResponseData rejoinResponseA = context.rejoinClassicMember(groupId, classicMemberA);
+        context.syncClassicMember(groupId, classicMemberA, rejoinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
                 new TopicPartition(FOO_TOPIC_NAME, 0),
                 new TopicPartition(FOO_TOPIC_NAME, 1),
@@ -361,28 +370,28 @@ public class GroupCoordinatorShardCompactionReplayTest {
                 new TopicPartition(BAR_TOPIC_NAME, 1),
                 new TopicPartition(BAR_TOPIC_NAME, 2))
         ));
-        replay.syncClassicMember(groupId, classicMemberB, rejoinResponseA.generationId(), Map.of());
+        context.syncClassicMember(groupId, classicMemberB, rejoinResponseA.generationId(), Map.of());
 
         // Member C joins with the consumer protocol, upgrading the group online to a consumer group.
         // Members A and B stay on the classic protocol.
         String memberC = Uuid.randomUuid().toString();
-        replay.prepareConsumerAssignment(Map.of(
+        context.prepareConsumerAssignment(Map.of(
             classicMemberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2), mkTopicAssignment(barTopicId, 0)),
             classicMemberB, mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5), mkTopicAssignment(barTopicId, 1, 2))));
         Map<String, ConsumerMemberState> members = new LinkedHashMap<>();
-        replay.joinConsumerMember(groupId, memberC, members);
-        assertEquals(Group.GroupType.CONSUMER, replay.groupType(groupId));
+        context.joinConsumerMember(groupId, memberC, members);
+        assertEquals(Group.GroupType.CONSUMER, context.groupType(groupId));
 
         // Member C, the last consumer-protocol member, leaves; the group downgrades back to classic
         // with members A and B.
-        replay.leaveConsumerMember(groupId, memberC, members);
-        assertEquals(Group.GroupType.CLASSIC, replay.groupType(groupId));
+        context.leaveConsumerMember(groupId, memberC, members);
+        assertEquals(Group.GroupType.CLASSIC, context.groupType(groupId));
 
         // The classic group keeps working and commits an offset.
-        replay.commitOffset(groupId, FOO_TOPIC_NAME, 0, 40L);
+        context.commitOffset(groupId, FOO_TOPIC_NAME, 0, 40L);
 
         // Verify partitions can be reloaded cleanly from log.
-        assertCompactedVariantsLoadCleanly();
+        assertCompactedVariantsLoadCleanly(context);
     }
 
     /**
@@ -396,12 +405,13 @@ public class GroupCoordinatorShardCompactionReplayTest {
      */
     @Test
     public void testConsumerGroupDowngradeByStaticMemberReplacement() throws Exception {
+        CompactionReplayTestContext context = newContext();
         String groupId = "consumer-downgrade-by-replacement-group";
 
         // A classic group is created when its first member joins and syncs
-        JoinGroupResponseData joinResponseA = replay.joinFirstClassicMember(groupId);
+        JoinGroupResponseData joinResponseA = context.joinFirstClassicMember(groupId);
         String classicMemberA = joinResponseA.memberId();
-        replay.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
+        context.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
                 new TopicPartition(FOO_TOPIC_NAME, 0),
                 new TopicPartition(FOO_TOPIC_NAME, 1),
@@ -418,23 +428,23 @@ public class GroupCoordinatorShardCompactionReplayTest {
         // group. Member A stays on the classic protocol.
         String instanceId = "static-instance";
         String staticMemberId = Uuid.randomUuid().toString();
-        replay.prepareConsumerAssignment(Map.of(
+        context.prepareConsumerAssignment(Map.of(
             classicMemberA, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2), mkTopicAssignment(barTopicId, 0)),
             staticMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5), mkTopicAssignment(barTopicId, 1, 2))));
         Map<String, ConsumerMemberState> members = new LinkedHashMap<>();
-        replay.joinStaticConsumerMember(groupId, staticMemberId, instanceId, members);
-        assertEquals(Group.GroupType.CONSUMER, replay.groupType(groupId));
+        context.joinStaticConsumerMember(groupId, staticMemberId, instanceId, members);
+        assertEquals(Group.GroupType.CONSUMER, context.groupType(groupId));
 
         // A classic member with the same instance id replaces the static consumer member. As it is the
         // last consumer-protocol member, the group downgrades back to classic.
-        replay.replaceStaticMemberWithClassicProtocol(groupId, instanceId);
-        assertEquals(Group.GroupType.CLASSIC, replay.groupType(groupId));
+        context.replaceStaticMemberWithClassicProtocol(groupId, instanceId);
+        assertEquals(Group.GroupType.CLASSIC, context.groupType(groupId));
 
         // The classic group keeps working and commits an offset.
-        replay.commitOffset(groupId, FOO_TOPIC_NAME, 0, 50L);
+        context.commitOffset(groupId, FOO_TOPIC_NAME, 0, 50L);
 
         // Verify partitions can be reloaded cleanly from log.
-        assertCompactedVariantsLoadCleanly();
+        assertCompactedVariantsLoadCleanly(context);
     }
 
     /**
@@ -452,13 +462,13 @@ public class GroupCoordinatorShardCompactionReplayTest {
      *       {@code delete.retention.ms} is assumed to not have elapsed.</li>
      * </ul>
      */
-    private void assertCompactedVariantsLoadCleanly() {
-        List<CoordinatorRecord> log = replay.records();
+    private void assertCompactedVariantsLoadCleanly(CompactionReplayTestContext context) {
+        List<CoordinatorRecord> log = context.records();
 
         Set<Integer> compactableWithTombstoneDeletion = compactablePositions(log, true);
         Set<Integer> compactableWithoutTombstoneDeletion = compactablePositions(log, false);
 
-        List<Integer> boundaries = replay.batchBoundaries();
+        List<Integer> boundaries = context.batchBoundaries();
 
         // Uncompacted log
         assertLoadsCleanly(log, compactedPositions(log, compactableWithTombstoneDeletion, 0, 0));
