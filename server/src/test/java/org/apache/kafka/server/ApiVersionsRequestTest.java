@@ -68,7 +68,7 @@ public class ApiVersionsRequestTest {
     public void testApiVersionsRequest() throws IOException {
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         ApiVersionsResponse apiVersionsResponse = IntegrationTestUtils.connectAndReceive(request, cluster.brokerBoundPorts().get(0));
-        validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener(), false, false, ApiKeys.API_VERSIONS.latestVersion());
+        validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener(), false, ApiKeys.API_VERSIONS.latestVersion());
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
@@ -78,14 +78,14 @@ public class ApiVersionsRequestTest {
     public void testApiVersionsRequestIncludesUnreleasedApis() throws IOException {
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         ApiVersionsResponse apiVersionsResponse = IntegrationTestUtils.connectAndReceive(request, cluster.brokerBoundPorts().get(0));
-        validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener(), true, false, ApiKeys.API_VERSIONS.latestVersion());
+        validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener(), true, ApiKeys.API_VERSIONS.latestVersion());
     }
 
     @ClusterTest(types = {Type.KRAFT})
     public void testApiVersionsRequestThroughControllerListener() throws IOException {
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         ApiVersionsResponse apiVersionsResponse = IntegrationTestUtils.connectAndReceive(request, cluster.controllerBoundPorts().get(0));
-        validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName(), true, false, ApiKeys.API_VERSIONS.latestVersion());
+        validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName(), true, ApiKeys.API_VERSIONS.latestVersion());
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
@@ -111,7 +111,6 @@ public class ApiVersionsRequestTest {
         validateApiVersionsResponse(
             apiVersionsResponse,
             cluster.clientListener(),
-            !"false".equals(cluster.config().serverProperties().get("unstable.api.versions.enable")),
             false,
             (short) 0
         );
@@ -121,7 +120,7 @@ public class ApiVersionsRequestTest {
     public void testApiVersionsRequestValidationV0ThroughControllerListener() throws IOException {
         ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest.Builder().build((short) 0);
         ApiVersionsResponse apiVersionsResponse = IntegrationTestUtils.connectAndReceive(apiVersionsRequest, cluster.controllerBoundPorts().get(0));
-        validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName(), true, false, (short) 0);
+        validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName(), true, (short) 0);
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
@@ -141,7 +140,7 @@ public class ApiVersionsRequestTest {
         requestData.setNodeId(0);
         ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(requestData, ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION);
         ApiVersionsResponse apiVersionsResponse = IntegrationTestUtils.connectAndReceive(apiVersionsRequest, cluster.brokerBoundPorts().get(0));
-        validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener(), true, false, ApiKeys.API_VERSIONS.latestVersion());
+        validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener(), true, ApiKeys.API_VERSIONS.latestVersion());
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
@@ -167,9 +166,7 @@ public class ApiVersionsRequestTest {
             validateApiVersionsResponse(
                 apiVersionsResponse,
                 cluster.clientListener(),
-                !"false".equals(
-                    cluster.config().serverProperties().get("unstable.api.versions.enable")),
-                false,
+                true,
                 (short) 0
             );
             sendSaslHandshakeRequestValidateResponse(socket);
@@ -203,9 +200,7 @@ public class ApiVersionsRequestTest {
             validateApiVersionsResponse(
                 apiVersionsResponse2,
                 cluster.clientListener(),
-                !"false".equals(
-                    cluster.config().serverProperties().get("unstable.api.versions.enable")),
-                false,
+                true,
                 (short) 0
             );
             sendSaslHandshakeRequestValidateResponse(socket);
@@ -233,7 +228,6 @@ public class ApiVersionsRequestTest {
     private void validateApiVersionsResponse(ApiVersionsResponse apiVersionsResponse,
                                      ListenerName listenerName,
                                      boolean enableUnstableLastVersion,
-                                     boolean clientTelemetryEnabled,
                                      short apiVersion) {
         if (apiVersion >= 3) {
             assertEquals(6, apiVersionsResponse.data().finalizedFeatures().size());
@@ -278,7 +272,7 @@ public class ApiVersionsRequestTest {
                             .map(ApiVersionsResponse::toApiVersion)
                             .collect(Collectors.toList())).allSupportedApiVersions(),
                     enableUnstableLastVersion,
-                    clientTelemetryEnabled
+                    false
             );
         }
 
