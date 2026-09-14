@@ -222,7 +222,7 @@ public class ClientMetricsManager implements AutoCloseable {
                 // not be reported as INVALID_RECORD: that error tells the client to stop pushing telemetry entirely.
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);
                 clientInstance.lastKnownError(Errors.TELEMETRY_TOO_LARGE);
-                log.error("Error exporting client metrics to the plugin for client instance id: {}", clientInstanceId, exception);
+                log.warn("Error exporting client metrics to the plugin for client instance id: {}: {}", clientInstanceId, exception.toString());
                 return request.errorResponse(0, Errors.TELEMETRY_TOO_LARGE);
             } catch (Throwable exception) {
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);
