@@ -26,6 +26,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Monitorable;
@@ -112,6 +113,8 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -225,10 +228,13 @@ public class RemoteLogManagerTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        setUp(new Properties());
+    }
+
+    private void setUp(Properties props) throws Exception {
         checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
         topicIds.put(leaderTopicIdPartition.topicPartition().topic(), leaderTopicIdPartition.topicId());
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
-        Properties props = new Properties();
         appendRLMConfig(props);
         config = configs(props);
         brokerTopicStats = new BrokerTopicStats(config.isRemoteStorageSystemEnabled());
@@ -264,6 +270,231 @@ public class RemoteLogManagerTest {
 
     private RemoteLogManagerConfig configs(Properties props) {
         return new RemoteLogManagerConfig(new AbstractConfig(RemoteLogManagerConfig.configDef(), props));
+    }
+
+    @Test
+    void testRetryableFailureUsesConfiguredBackoff() throws Exception {
+        remoteLogManager.close();
+        List<List<ScheduledInvocation>> schedules = new ArrayList<>();
+        try (MockedConstruction<ScheduledThreadPoolExecutor> ignored = controlledExecutors(schedules)) {
+            setUp(retryProperties(0.0));
+            checkpoint.write(totalEpochEntries);
+            when(mockLog.parentDir()).thenReturn(logDir);
+            when(mockLog.leaderEpochCache()).thenReturn(new LeaderEpochFileCache(tp, checkpoint, scheduler));
+            when(remoteLogMetadataManager.highestOffsetForEpoch(any(), anyInt()))
+                    .thenThrow(new RetriableRemoteStorageException("Retry this lookup"));
+
+            remoteLogManager.onLeadershipChange(Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
+            List<ScheduledInvocation> copySchedule = schedules.stream().filter(schedule -> !schedule.isEmpty()).findFirst().orElseThrow();
+            assertEquals(0, copySchedule.get(0).delayMs());
+            copySchedule.get(0).runnable().run();
+            verify(remoteLogMetadataManager).highestOffsetForEpoch(eq(leaderTopicIdPartition), anyInt());
+            assertEquals(500, copySchedule.get(1).delayMs());
+
+            remoteLogManager.onLeadershipChange(Set.of(), Set.of(mockPartition(leaderTopicIdPartition)), topicIds);
+            verify(copySchedule.get(1).future()).cancel(true);
+            copySchedule.get(1).runnable().run();
+            assertEquals(2, copySchedule.size(), "The old leader must not schedule another copy");
+            remoteLogManager.close();
+            for (List<ScheduledInvocation> schedule : schedules) {
+                if (!schedule.isEmpty()) {
+                    verify(schedule.get(schedule.size() - 1).future(), atLeastOnce()).cancel(true);
+                }
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testRetryBackoffProgressionAndReset(boolean storageException) throws Exception {
+        remoteLogManager.close();
+        setUp(retryProperties(0.0));
+        RemoteLogManager.RLMTask task = retryTask();
+        Exception failure = storageException ? new RetriableRemoteStorageException("retry") : new TimeoutException("retry");
+        doThrow(failure).when(task).execute(mockLog);
+        List<ScheduledInvocation> schedule = new ArrayList<>();
+        RemoteLogManager.RLMTaskWithFuture handle = scheduleTask(task, schedule);
+
+        for (long expectedDelay : new long[] {500, 1_000, 2_000, 2_000}) {
+            schedule.get(schedule.size() - 1).runnable().run();
+            assertEquals(expectedDelay, schedule.get(schedule.size() - 1).delayMs());
+        }
+        doNothing().when(task).execute(mockLog);
+        schedule.get(schedule.size() - 1).runnable().run();
+        assertEquals(30_000, schedule.get(schedule.size() - 1).delayMs());
+        doThrow(failure).when(task).execute(mockLog);
+        schedule.get(schedule.size() - 1).runnable().run();
+        assertEquals(500, schedule.get(schedule.size() - 1).delayMs());
+        handle.cancel();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testRetryBackoffResetsAfterSkippedOrNonRetryableRun(boolean skipped) throws Exception {
+        remoteLogManager.close();
+        setUp(retryProperties(0.0));
+        RemoteLogManager.RLMTask task = retryTask();
+        doThrow(new RetriableRemoteStorageException("retry")).when(task).execute(mockLog);
+        List<ScheduledInvocation> schedule = new ArrayList<>();
+        RemoteLogManager.RLMTaskWithFuture handle = scheduleTask(task, schedule);
+        schedule.get(0).runnable().run();
+        assertEquals(500, schedule.get(1).delayMs());
+
+        when(remoteLogMetadataManager.isReady(tpId)).thenReturn(!skipped);
+        doThrow(new RemoteStorageException("not retryable")).when(task).execute(mockLog);
+        schedule.get(1).runnable().run();
+        assertEquals(30_000, schedule.get(2).delayMs());
+        when(remoteLogMetadataManager.isReady(tpId)).thenReturn(true);
+        doThrow(new RetriableRemoteStorageException("retry")).when(task).execute(mockLog);
+        schedule.get(2).runnable().run();
+        assertEquals(500, schedule.get(3).delayMs());
+        handle.cancel();
+    }
+
+    @Test
+    void testRetryBackoffJitterAndIndependentTasks() throws Exception {
+        remoteLogManager.close();
+        setUp(retryProperties(0.2));
+        RemoteLogManager.RLMTask task = retryTask();
+        doThrow(new RetriableRemoteStorageException("retry")).when(task).execute(mockLog);
+        List<ScheduledInvocation> schedule = new ArrayList<>();
+        RemoteLogManager.RLMTaskWithFuture handle = scheduleTask(task, schedule);
+        for (long baseDelay : new long[] {500, 1_000, 2_000, 2_000}) {
+            schedule.get(schedule.size() - 1).runnable().run();
+            long delay = schedule.get(schedule.size() - 1).delayMs();
+            assertTrue(delay >= baseDelay * 0.8 && delay <= Math.min(2_000, baseDelay * 1.2));
+        }
+        RemoteLogManager.RLMTask otherTask = retryTask();
+        doThrow(new RetriableRemoteStorageException("retry")).when(otherTask).execute(mockLog);
+        List<ScheduledInvocation> otherSchedule = new ArrayList<>();
+        RemoteLogManager.RLMTaskWithFuture otherHandle = scheduleTask(otherTask, otherSchedule);
+        otherSchedule.get(0).runnable().run();
+        assertTrue(otherSchedule.get(1).delayMs() >= 400 && otherSchedule.get(1).delayMs() <= 600);
+        handle.cancel();
+        otherHandle.cancel();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testCancelledTaskDoesNotReschedule(boolean duringExecution) throws Exception {
+        RemoteLogManager.RLMTask task = retryTask();
+        List<ScheduledInvocation> schedule = new ArrayList<>();
+        RemoteLogManager.RLMTaskWithFuture handle = scheduleTask(task, schedule);
+        if (duringExecution) {
+            doAnswer(invocation -> {
+                assertEquals(1, schedule.size(), "Do not schedule the next run before execution completes");
+                handle.cancel();
+                return null;
+            }).when(task).execute(mockLog);
+        } else {
+            handle.cancel();
+        }
+        schedule.get(0).runnable().run();
+        assertEquals(1, schedule.size());
+        verify(schedule.get(0).future()).cancel(true);
+        verify(task, times(duringExecution ? 1 : 0)).execute(mockLog);
+    }
+
+    @Test
+    void testSelfCancelledTaskDoesNotReschedule() throws Exception {
+        RemoteLogManager.RLMTask task = retryTask();
+        doAnswer(invocation -> {
+            task.cancel();
+            return null;
+        }).when(task).execute(mockLog);
+        List<ScheduledInvocation> schedule = new ArrayList<>();
+        scheduleTask(task, schedule);
+        schedule.get(0).runnable().run();
+        assertEquals(1, schedule.size());
+    }
+
+    @Test
+    void testCancellationDuringReschedulingCancelsNewFuture() throws Exception {
+        RemoteLogManager.RLMTask task = retryTask();
+        RemoteLogManager.RLMScheduledThreadPool pool = mock(RemoteLogManager.RLMScheduledThreadPool.class);
+        ScheduledFuture<?> initialFuture = mock(ScheduledFuture.class);
+        ScheduledFuture<?> nextFuture = mock(ScheduledFuture.class);
+        CountDownLatch scheduling = new CountDownLatch(1);
+        CountDownLatch finishScheduling = new CountDownLatch(1);
+        when(pool.schedule(any(), anyLong(), any())).thenAnswer(invocation -> initialFuture).thenAnswer(invocation -> {
+            scheduling.countDown();
+            assertTrue(finishScheduling.await(10, TimeUnit.SECONDS));
+            return nextFuture;
+        });
+        RemoteLogManager.RLMTaskWithFuture handle = new RemoteLogManager.RLMTaskWithFuture(task, pool);
+        CompletableFuture<Void> execution = CompletableFuture.runAsync(handle);
+        Thread cancellation = new Thread(handle::cancel);
+        try {
+            assertTrue(scheduling.await(10, TimeUnit.SECONDS));
+            cancellation.start();
+            TestUtils.waitForCondition(() -> cancellation.getState() == Thread.State.BLOCKED,
+                    "Cancellation must wait for the replacement future to be stored");
+        } finally {
+            finishScheduling.countDown();
+            execution.get(10, TimeUnit.SECONDS);
+            cancellation.join(10_000);
+        }
+        assertFalse(cancellation.isAlive());
+        verify(nextFuture).cancel(true);
+        verify(initialFuture, never()).cancel(true);
+        handle.run();
+        verify(pool, times(2)).schedule(any(), anyLong(), any());
+    }
+
+    private Properties retryProperties(double jitter) {
+        Properties props = new Properties();
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, 30_000L);
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP, 500L);
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP, 2_000L);
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP, jitter);
+        return props;
+    }
+
+    private RemoteLogManager.RLMTask retryTask() {
+        return spy(remoteLogManager.new RLMTask(tpId) {
+            @Override
+            protected void execute(UnifiedLog log) throws RemoteStorageException { }
+        });
+    }
+
+    private RemoteLogManager.RLMTaskWithFuture scheduleTask(RemoteLogManager.RLMTask task, List<ScheduledInvocation> schedule) {
+        RemoteLogManager.RLMScheduledThreadPool pool = mock(RemoteLogManager.RLMScheduledThreadPool.class);
+        when(pool.schedule(any(), anyLong(), any())).thenAnswer(invocation -> {
+            ScheduledFuture<?> future = mock(ScheduledFuture.class);
+            schedule.add(new ScheduledInvocation(invocation.getArgument(0), invocation.getArgument(1), future));
+            return future;
+        });
+        return new RemoteLogManager.RLMTaskWithFuture(task, pool);
+    }
+
+    private record ScheduledInvocation(Runnable runnable, long delayMs, ScheduledFuture<?> future) { }
+
+    private MockedConstruction<ScheduledThreadPoolExecutor> controlledExecutors(List<List<ScheduledInvocation>> schedules) {
+        return mockConstruction(ScheduledThreadPoolExecutor.class, (executor, context) -> {
+            List<ScheduledInvocation> invocations = new ArrayList<>();
+            schedules.add(invocations);
+            when(executor.awaitTermination(anyLong(), any())).thenReturn(true);
+            when(executor.schedule(any(Runnable.class), anyLong(), any())).thenAnswer(invocation -> {
+                ScheduledFuture<?> future = mock(ScheduledFuture.class);
+                invocations.add(new ScheduledInvocation(invocation.getArgument(0),
+                        invocation.<TimeUnit>getArgument(2).toMillis(invocation.getArgument(1)), future));
+                return future;
+            });
+            // Model the old periodic scheduler as well, so the regression runs before the fix.
+            when(executor.scheduleWithFixedDelay(any(), anyLong(), anyLong(), any())).thenAnswer(invocation -> {
+                Runnable task = invocation.getArgument(0);
+                long delay = invocation.getArgument(2);
+                TimeUnit unit = invocation.getArgument(3);
+                Runnable periodicTask = new Runnable() {
+                    @Override
+                    public void run() {
+                        task.run();
+                        executor.schedule(this, delay, unit);
+                    }
+                };
+                return executor.schedule(periodicTask, invocation.getArgument(1), unit);
+            });
+        });
     }
 
     @AfterEach
