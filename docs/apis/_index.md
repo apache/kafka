@@ -48,7 +48,7 @@ To use the producer, add the following Maven dependency to your project:
 <dependency>
 	<groupId>org.apache.kafka</groupId>
 	<artifactId>kafka-clients</artifactId>
-	<version>4.3.0</version>
+	<version>4.3.1</version>
 </dependency>
 ```
 
@@ -64,7 +64,7 @@ To use the consumer, add the following Maven dependency to your project:
 <dependency>
 	<groupId>org.apache.kafka</groupId>
 	<artifactId>kafka-clients</artifactId>
-	<version>4.3.0</version>
+	<version>4.3.1</version>
 </dependency>
 ```
 
@@ -80,7 +80,7 @@ To use the share consumer, add the following Maven dependency to your project:
 <dependency>
 	<groupId>org.apache.kafka</groupId>
 	<artifactId>kafka-clients</artifactId>
-	<version>4.3.0</version>
+	<version>4.3.1</version>
 </dependency>
 ```
 
@@ -98,7 +98,7 @@ To use Kafka Streams, add the following Maven dependency to your project:
 <dependency>
 	<groupId>org.apache.kafka</groupId>
 	<artifactId>kafka-streams</artifactId>
-	<version>4.3.0</version>
+	<version>4.3.1</version>
 </dependency>
 ```
 
@@ -114,7 +114,7 @@ To use Kafka Streams DSL for Scala 2.13, add the following Maven dependency to y
 <dependency>
 	<groupId>org.apache.kafka</groupId>
 	<artifactId>kafka-streams-scala_2.13</artifactId>
-	<version>4.3.0</version>
+	<version>4.3.1</version>
 </dependency>
 ```
 
@@ -136,7 +136,7 @@ To use the Admin API, add the following Maven dependency to your project:
 <dependency>
 	<groupId>org.apache.kafka</groupId>
 	<artifactId>kafka-clients</artifactId>
-	<version>4.3.0</version>
+	<version>4.3.1</version>
 </dependency>
 ```
 
