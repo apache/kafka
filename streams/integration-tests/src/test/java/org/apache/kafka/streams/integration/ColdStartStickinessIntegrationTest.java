@@ -70,8 +70,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyStreamGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -169,10 +168,8 @@ public class ColdStartStickinessIntegrationTest {
             startApplicationAndWaitUntilRunning(asList(restarted1, restarted2), Duration.ofSeconds(60));
 
             final long totalRestored = restore1.totalNumRestored() + restore2.totalNumRestored();
-            assertThat(
-                "Tasks should be assigned to the instance that already holds their state, so nothing is restored",
-                totalRestored,
-                equalTo(0L));
+            assertEquals(0L, totalRestored,
+                "Tasks should be assigned to the instance that already holds their state, so nothing is restored");
         } finally {
             restarted1.close(Duration.ofSeconds(60));
             restarted2.close(Duration.ofSeconds(60));
@@ -246,7 +243,7 @@ public class ColdStartStickinessIntegrationTest {
         final List<File> taskDirs = new ArrayList<>();
         taskDirs.addAll(listTaskDirectories(appDir1));
         taskDirs.addAll(listTaskDirectories(appDir2));
-        assertThat("expected one state directory per task", taskDirs.size(), equalTo(NUM_PARTITIONS));
+        assertEquals(NUM_PARTITIONS, taskDirs.size(), "expected one state directory per task");
 
         for (final File taskDir : taskDirs) {
             final int partition = Integer.parseInt(taskDir.getName().substring(taskDir.getName().indexOf('_') + 1));

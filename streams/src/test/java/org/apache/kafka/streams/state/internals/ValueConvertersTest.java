@@ -24,8 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.function.Function;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ValueConvertersTest {
@@ -35,7 +34,7 @@ public class ValueConvertersTest {
         final Function<ValueAndTimestamp<String>, String> converter = ValueConverters.extractValue();
 
         final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make("value", 42L);
-        assertThat(converter.apply(valueAndTimestamp), is("value"));
+        assertEquals("value", converter.apply(valueAndTimestamp));
     }
 
     @Test
@@ -50,7 +49,7 @@ public class ValueConvertersTest {
         final Function<ValueTimestampHeaders<String>, String> converter = ValueConverters.extractValueFromHeaders();
 
         final ValueTimestampHeaders<String> vth = ValueTimestampHeaders.make("value", 42L, new RecordHeaders());
-        assertThat(converter.apply(vth), is("value"));
+        assertEquals("value", converter.apply(vth));
     }
 
     @Test
@@ -68,8 +67,8 @@ public class ValueConvertersTest {
         final ValueTimestampHeaders<String> vth = ValueTimestampHeaders.make("value", 42L, new RecordHeaders());
         final ValueAndTimestamp<String> result = converter.apply(vth);
 
-        assertThat(result.value(), is("value"));
-        assertThat(result.timestamp(), is(42L));
+        assertEquals("value", result.value());
+        assertEquals(42L, result.timestamp());
     }
 
     @Test
@@ -92,7 +91,7 @@ public class ValueConvertersTest {
         final ValueAndTimestamp<String> result = converter.apply(vth);
 
         // Should only have value and timestamp, headers are discarded
-        assertThat(result.value(), is("value"));
-        assertThat(result.timestamp(), is(42L));
+        assertEquals("value", result.value());
+        assertEquals(42L, result.timestamp());
     }
 }

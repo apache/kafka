@@ -71,6 +71,8 @@ Upgraded RocksDB dependency to version 10.10.1(from 10.1.3). RocksDB deleted `ma
 
 ## Streams API changes in 4.4.0
 
+Kafka Streams does not support the asynchronous bootstrap DNS resolution mode introduced by [KIP-909](https://cwiki.apache.org/confluence/x/MJtbDg) yet. For every client it creates internally, `bootstrap.resolve.timeout.ms` is forced to `0`, and a user-supplied positive value, through any prefix form, is ignored with a warning.
+
 Kafka Streams no longer emits a WARN from `KafkaStreams#cleanUp()` when the application state directory cannot be deleted only because expected metadata files remain, such as `kafka-streams-process-metadata` and/or `.lock`. In this case, the local state cleanup is considered successful and the application state directory may be retained. Users who require a full local reset including persisted process metadata should manually delete the application state directory after the Kafka Streams instance has been closed. More details can be found in [KIP-1283](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1283:+Clarify+KafkaStreams+cleanUp+semantics+to+preserve+process+metadata+and+state+directory+lock+file)
 
 Kafka Streams now validates the `application.server` configuration when `StreamsConfig` is created. The value must be empty or a valid endpoint from which Kafka Streams can parse both host and port, such as `host:port` or `protocol://host:port`. Invalid values that may previously have failed later during startup or assignment now fail earlier with a `ConfigException`. More details can be found in [KIP-1245](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1245%3A+Enforce+%27application.server%27+%3Cserver%3E%3A%3Cport%3E+format+at+config+level).

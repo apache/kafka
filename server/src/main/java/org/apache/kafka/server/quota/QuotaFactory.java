@@ -84,15 +84,16 @@ public class QuotaFactory {
         String role
     ) {
         Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin = createClientQuotaCallback(cfg, metrics, role);
+        var quotaConfig = new QuotaConfig(cfg);
 
         return new QuotaManagers(
-            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.FETCH, time, threadNamePrefix, clientQuotaCallbackPlugin),
-            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.PRODUCE, time, threadNamePrefix, clientQuotaCallbackPlugin),
-            new ClientRequestQuotaManager(clientConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
-            new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
-            new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.LEADER_REPLICATION, time),
-            new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.FOLLOWER_REPLICATION, time),
-            new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, QuotaType.ALTER_LOG_DIRS_REPLICATION, time),
+            new ClientQuotaManager(clientConfig(quotaConfig), metrics, QuotaType.FETCH, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ClientQuotaManager(clientConfig(quotaConfig), metrics, QuotaType.PRODUCE, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ClientRequestQuotaManager(clientConfig(quotaConfig), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ControllerMutationQuotaManager(clientControllerMutationConfig(quotaConfig), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ReplicationQuotaManager(replicationConfig(quotaConfig), metrics, QuotaType.LEADER_REPLICATION, time),
+            new ReplicationQuotaManager(replicationConfig(quotaConfig), metrics, QuotaType.FOLLOWER_REPLICATION, time),
+            new ReplicationQuotaManager(alterLogDirsReplicationConfig(quotaConfig), metrics, QuotaType.ALTER_LOG_DIRS_REPLICATION, time),
             clientQuotaCallbackPlugin
         );
     }
@@ -112,31 +113,31 @@ public class QuotaFactory {
         ));
     }
 
-    private static ClientQuotaManagerConfig clientConfig(AbstractKafkaConfig cfg) {
+    private static ClientQuotaManagerConfig clientConfig(QuotaConfig quotaConfig) {
         return new ClientQuotaManagerConfig(
-            cfg.quotaConfig().numQuotaSamples(),
-            cfg.quotaConfig().quotaWindowSizeSeconds()
+            quotaConfig.numQuotaSamples(),
+            quotaConfig.quotaWindowSizeSeconds()
         );
     }
 
-    private static ClientQuotaManagerConfig clientControllerMutationConfig(AbstractKafkaConfig cfg) {
+    private static ClientQuotaManagerConfig clientControllerMutationConfig(QuotaConfig quotaConfig) {
         return new ClientQuotaManagerConfig(
-            cfg.quotaConfig().numControllerQuotaSamples(),
-            cfg.quotaConfig().controllerQuotaWindowSizeSeconds()
+            quotaConfig.numControllerQuotaSamples(),
+            quotaConfig.controllerQuotaWindowSizeSeconds()
         );
     }
 
-    private static ReplicationQuotaManagerConfig replicationConfig(AbstractKafkaConfig cfg) {
+    private static ReplicationQuotaManagerConfig replicationConfig(QuotaConfig quotaConfig) {
         return new ReplicationQuotaManagerConfig(
-            cfg.quotaConfig().numReplicationQuotaSamples(),
-            cfg.quotaConfig().replicationQuotaWindowSizeSeconds()
+            quotaConfig.numReplicationQuotaSamples(),
+            quotaConfig.replicationQuotaWindowSizeSeconds()
         );
     }
 
-    private static ReplicationQuotaManagerConfig alterLogDirsReplicationConfig(AbstractKafkaConfig cfg) {
+    private static ReplicationQuotaManagerConfig alterLogDirsReplicationConfig(QuotaConfig quotaConfig) {
         return new ReplicationQuotaManagerConfig(
-            cfg.quotaConfig().numAlterLogDirsReplicationQuotaSamples(),
-            cfg.quotaConfig().alterLogDirsReplicationQuotaWindowSizeSeconds()
+            quotaConfig.numAlterLogDirsReplicationQuotaSamples(),
+            quotaConfig.alterLogDirsReplicationQuotaWindowSizeSeconds()
         );
     }
 }
