@@ -338,6 +338,47 @@ class ControllerServer(
         ),
         "controller"))
 
+      // Set up the controller dynamic config manager for SSL reconfiguration.
+      val dynamicControllerConfig = new kafka.server.controller.DynamicControllerConfig(config)
+
+      import scala.jdk.CollectionConverters._
+      config.controllerListenerNames.asScala.foreach { listenerName =>
+        socketServer.dataPlaneAcceptor(listenerName).foreach { acceptor =>
+          acceptor.getProcessors.foreach { processor =>
+            processor.channelBuilder match {
+              case sslBuilder: org.apache.kafka.common.network.SslChannelBuilder =>
+                val wrapper = new kafka.server.controller.DynamicControllerSslListener(
+                  sslBuilder,
+                  processor.listenerName
+                )
+                dynamicControllerConfig.addReconfigurable(wrapper)
+                info(s"Registered SSL reconfigurable for controller inbound listener ${processor.listenerName}")
+              case _ =>
+            }
+          }
+        }
+      }
+
+      // Register the outbound raft client's SSL channel builder for SSL hot-reload.
+      Option(sharedServer.raftManager).foreach { raftManager =>
+        raftManager.clientChannelBuilder match {
+          case sslBuilder: org.apache.kafka.common.network.SslChannelBuilder =>
+            val controllerListenerName = new ListenerName(config.controllerListenerNames.get(0))
+            val wrapper = new kafka.server.controller.DynamicControllerSslListener(
+              sslBuilder,
+              controllerListenerName
+            )
+            dynamicControllerConfig.addReconfigurable(wrapper)
+            info(s"Registered SSL reconfigurable for raft outbound client (listener $controllerListenerName)")
+          case _ =>
+        }
+      }
+
+      metadataPublishers.add(new org.apache.kafka.image.publisher.ControllerDynamicConfigPublisher(
+        config.nodeId,
+        (configs: java.util.Map[String, String]) => dynamicControllerConfig.apply(configs)
+      ))
+
       // Register this instance for dynamic config changes to the KafkaConfig. This must be called
       // after the authorizer and quotaManagers are initialized, since it references those objects.
       // It must be called before DynamicClientQuotaPublisher is installed, since otherwise we may
