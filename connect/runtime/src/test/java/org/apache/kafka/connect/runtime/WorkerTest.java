@@ -93,6 +93,7 @@ import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
@@ -709,6 +710,80 @@ public class WorkerTest {
         verifyVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG);
         verifyVersionedTaskHeaderConverterFromConnector();
         verifyExecutorSubmit();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "true, consumer, true",
+        "false, consumer, true",
+        "true, classic, false",
+        "false, classic, false"
+    })
+    public void testWarnWhenStartingSinkTaskWithConsumerGroupProtocol(
+            boolean enableTopicCreation,
+            String groupProtocol,
+            boolean expectWarning) {
+        setup(enableTopicCreation);
+        workerProps.put("consumer." + ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+        config = new StandaloneConfig(workerProps);
+        // Most of the other cases use source tasks; we make sure to get code coverage for sink tasks here as well
+        SinkTask task = mock(TestSinkTask.class);
+        mockKafkaClusterId();
+        mockVersionedTaskIsolation(SampleSinkConnector.class, TestSinkTask.class, null, sinkConnector, task);
+        mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
+        mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
+        mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
+        mockExecutorFakeSubmit(WorkerTask.class);
+
+        Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                noneConnectorClientConfigOverridePolicy, null);
+        worker.herder = herder;
+        worker.start();
+
+        assertStatistics(worker, 0, 0);
+        assertEquals(Set.of(), worker.taskIds());
+        Map<String, String> connectorConfigs = anyConnectorConfigMap();
+        connectorConfigs.put(TOPICS_CONFIG, "t1");
+        connectorConfigs.put(CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+
+        ClusterConfigState configState = new ClusterConfigState(
+                0,
+                null,
+                Map.of(CONNECTOR_ID, 1),
+                Map.of(CONNECTOR_ID, connectorConfigs),
+                Map.of(CONNECTOR_ID, TargetState.STARTED),
+                Map.of(TASK_ID, origProps),
+                Map.of(),
+                Map.of(),
+                Map.of(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
+                Set.of(),
+                Set.of()
+        );
+        boolean warningLogged;
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(Worker.class)) {
+            assertTrue(worker.startSinkTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
+            warningLogged = appender.getMessages("WARN").stream().anyMatch(message -> message.contains("group.protocol=CONSUMER")
+                    && message.contains("not been fully tested for production")
+                    && message.contains(TASK_ID.toString()));
+        }
+        assertStatistics(worker, 0, 1);
+        assertEquals(Set.of(TASK_ID), worker.taskIds());
+        worker.stopAndAwaitTask(TASK_ID);
+        assertStatistics(worker, 0, 0);
+        assertEquals(Set.of(), worker.taskIds());
+        // Nothing should be left, so this should effectively be a nop
+        worker.stop();
+        assertStatistics(worker, 0, 0);
+
+        verifyKafkaClusterId();
+        verifyVersionedTaskIsolation(SampleSinkConnector.class, TestSinkTask.class, null, task);
+        verifyVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG);
+        verifyVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG);
+        verifyVersionedTaskHeaderConverterFromConnector();
+        verifyExecutorSubmit();
+        assertEquals(expectWarning, warningLogged, "Production-readiness warning should only be logged for group.protocol=CONSUMER");
     }
 
     @ParameterizedTest
