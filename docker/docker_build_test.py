@@ -38,17 +38,17 @@ from datetime import date
 import argparse
 import shutil
 from test.docker_sanity_test import run_tests
-from common import execute, build_docker_image_runner, detect_container_runtime
+from common import (
+    execute,
+    build_docker_image_runner,
+    detect_compose_command,
+    detect_container_runtime,
+)
 import tempfile
 import os
 
 def run_docker_tests(image, tag, kafka_url, kafka_archive, image_type, container_runtime="docker"):
-    compose_command = f"{container_runtime}-compose"
-    if shutil.which(compose_command) is None:
-        raise RuntimeError(
-            f"Required Compose command '{compose_command}' was not found. "
-            "Please install it and ensure it is available on PATH."
-        )
+    compose_command = detect_compose_command(container_runtime)
     temp_dir_path = tempfile.mkdtemp()
     try:
         current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -61,7 +61,7 @@ def run_docker_tests(image, tag, kafka_url, kafka_archive, image_type, container
             raise ValueError("Either --kafka-url or --kafka-archive must be passed")
         execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
         execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C", f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
-        test_exit_code = run_tests(f"{image}:{tag}", image_type, temp_dir_path, container_runtime)
+        test_exit_code = run_tests(f"{image}:{tag}", image_type, temp_dir_path, container_runtime, compose_command)
     except:
         raise SystemError("Failed to run the tests")
     finally:
