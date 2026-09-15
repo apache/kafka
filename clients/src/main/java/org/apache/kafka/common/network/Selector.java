@@ -42,6 +42,7 @@ import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
+import java.security.cert.CertPathValidatorException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -619,6 +620,10 @@ public class Selector implements Selectable, AutoCloseable {
                     String exceptionMessage = e.getMessage();
                     if (e instanceof DelayedResponseAuthenticationException)
                         exceptionMessage = e.getCause().getMessage();
+                    CertPathValidatorException certPathValidatorException = maybeGetCertPathValidatorException(e);
+                    if (certPathValidatorException != null) {
+                        exceptionMessage += "; certificate validation failed with reason " + certPathValidatorException.getReason();
+                    }
                     log.info("Failed {}authentication with {} ({})", isReauthentication ? "re-" : "",
                         desc, exceptionMessage);
                 } else {
@@ -633,6 +638,14 @@ public class Selector implements Selectable, AutoCloseable {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
         }
+    }
+
+    private CertPathValidatorException maybeGetCertPathValidatorException(Throwable throwable)  {
+        Throwable current = throwable;
+        while (current != null && !(current instanceof CertPathValidatorException)) {
+            current = current.getCause();
+        }
+        return (CertPathValidatorException) current;
     }
 
     private void attemptWrite(SelectionKey key, KafkaChannel channel, long nowNanos) throws IOException {
