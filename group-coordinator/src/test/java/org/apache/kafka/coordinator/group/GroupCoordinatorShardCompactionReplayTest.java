@@ -27,6 +27,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.CompactionReplayTestContext.ConsumerMemberState;
 import org.apache.kafka.coordinator.group.CompactionReplayTestContext.StreamsMemberState;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
 
@@ -38,8 +39,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import javax.swing.GroupLayout.Group;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -378,12 +377,12 @@ public class GroupCoordinatorShardCompactionReplayTest {
             classicMemberB, mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5), mkTopicAssignment(barTopicId, 1, 2))));
         Map<String, ConsumerMemberState> members = new LinkedHashMap<>();
         context.joinConsumerMember(groupId, memberC, members);
-        assertEquals(Group.GroupType.CONSUMER, context.groupType(groupId));
+        assertEquals(GroupType.CONSUMER, context.groupType(groupId));
 
         // Member C, the last consumer-protocol member, leaves; the group downgrades back to classic
         // with members A and B.
         context.leaveConsumerMember(groupId, memberC, members);
-        assertEquals(Group.GroupType.CLASSIC, context.groupType(groupId));
+        assertEquals(GroupType.CLASSIC, context.groupType(groupId));
 
         // The classic group keeps working and commits an offset.
         context.commitOffset(groupId, FOO_TOPIC_NAME, 0, 40L);
@@ -431,12 +430,12 @@ public class GroupCoordinatorShardCompactionReplayTest {
             staticMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5), mkTopicAssignment(barTopicId, 1, 2))));
         Map<String, ConsumerMemberState> members = new LinkedHashMap<>();
         context.joinStaticConsumerMember(groupId, staticMemberId, instanceId, members);
-        assertEquals(Group.GroupType.CONSUMER, context.groupType(groupId));
+        assertEquals(GroupType.CONSUMER, context.groupType(groupId));
 
         // A classic member with the same instance id replaces the static consumer member. As it is the
         // last consumer-protocol member, the group downgrades back to classic.
         context.replaceStaticMemberWithClassicProtocol(groupId, instanceId);
-        assertEquals(Group.GroupType.CLASSIC, context.groupType(groupId));
+        assertEquals(GroupType.CLASSIC, context.groupType(groupId));
 
         // The classic group keeps working and commits an offset.
         context.commitOffset(groupId, FOO_TOPIC_NAME, 0, 50L);
@@ -465,7 +464,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
         Map<String, StreamsMemberState> members = new LinkedHashMap<>();
         context.joinStreamsMember(groupId, streamsMemberA, "process-a", members);
         context.completeStreamsGroupRebalance(groupId, members);
-        assertEquals(Group.GroupType.STREAMS, context.groupType(groupId));
+        assertEquals(GroupType.STREAMS, context.groupType(groupId));
 
         // Offset commit
         context.commitOffset(groupId, FOO_TOPIC_NAME, 0, 10L);
@@ -489,7 +488,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
 
         // Group restarts with the classic protocol. The leftover streams group is tombstoned.
         JoinGroupResponseData joinResponseA = context.joinFirstClassicMember(groupId);
-        assertEquals(Group.GroupType.CLASSIC, context.groupType(groupId));
+        assertEquals(GroupType.CLASSIC, context.groupType(groupId));
         String classicMemberA = joinResponseA.memberId();
         context.syncClassicMember(groupId, classicMemberA, joinResponseA.generationId(), Map.of(
             classicMemberA, List.of(
