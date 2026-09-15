@@ -2598,6 +2598,8 @@ kafka.server.share.SharePartitionTest:
 - testCanAcquireRecordsWithCachedDataAndLimitNotReached
 - testCanAcquireRecordsWithCachedDataAndLimitReached
 - testCanAcquireRecordsWithEmptyCache
+- testCloseDeregistersMetrics
+- testCloseWhileActiveStillDeregistersMetrics
 - testComputeStartOffsetAdvanceResultWhenGapAtBeginning
 - testContainsAbortMarker
 - testDeliveryCompleteCountOnLockExpiryAndWriteFailureOnBatchLastDelivery
