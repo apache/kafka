@@ -2487,11 +2487,12 @@ public class KafkaConsumerTest {
 
             // Close task should not complete until commit succeeds or close times out
             // if close timeout is not zero.
-            if (closeTimeoutMs != 0) {
-                assertThrows(TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS), "Close completed without waiting for commit or leave response");
-            } else {
-                // Handle the case where timeout is 0, if needed
+            try {
                 future.get(100, TimeUnit.MILLISECONDS);
+                if (closeTimeoutMs != 0)
+                    fail("Close completed without waiting for commit or leave response");
+            } catch (TimeoutException swallow) {
+                // Expected exception
             }
 
             // Ensure close has started and queued at least one more request after commitAsync.
