@@ -34,11 +34,6 @@ import java.util.Optional;
 public interface LeaderEndPoint {
 
     /**
-     * A boolean specifying if truncation when fetching from the leader is supported
-     */
-    boolean isTruncationOnFetchSupported();
-
-    /**
      * Initiate closing access to fetches from leader.
      */
     void initiateClose();
@@ -85,7 +80,10 @@ public interface LeaderEndPoint {
     OffsetAndEpoch fetchLatestOffset(TopicPartition topicPartition, int currentLeaderEpoch);
 
     /**
-     * Fetches offset for leader epoch from the leader for each given topic partition
+     * Fetches offset for leader epoch from the leader for each given topic partition.
+     * This is only used by {@code TierStateMachine} to build the auxiliary state of a
+     * partition with tiered storage; the fetcher threads truncate via the diverging
+     * epoch in the fetch response instead.
      *
      * @param partitions A map of topic partition -> leader epoch of the replica
      *
