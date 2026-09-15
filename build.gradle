@@ -333,6 +333,12 @@ if (repo != null) {
         'docker/examples/fixtures/secrets/*',
         'docker/docker_official_images/.gitkeep'
     ])
+    doLast {
+      println("RAT scan includes list:")
+      println includes
+      println("RAT scan excludes list:")
+      println excludes
+    }
   }
 } else {
   tasks.rat.enabled = false
