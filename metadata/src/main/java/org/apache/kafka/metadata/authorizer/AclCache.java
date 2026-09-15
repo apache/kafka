@@ -40,17 +40,31 @@ public class AclCache {
      */
     private final ImmutableMap<Uuid, StandardAcl> aclsById;
 
+    /**
+     * Contains all of the current ACLs indexed by principal (e.g. "User:alice").
+     * Each entry maps a principal string to a NavigableSet of ACLs for that principal,
+     * sorted by the natural ordering of StandardAcl.
+     */
+    private final ImmutableMap<String, ImmutableNavigableSet<StandardAcl>> aclsByPrincipal;
+
     AclCache() {
-        this(ImmutableNavigableSet.empty(), ImmutableMap.empty());
+        this(ImmutableNavigableSet.empty(), ImmutableMap.empty(), ImmutableMap.empty());
     }
 
-    private AclCache(final ImmutableNavigableSet<StandardAcl> aclsByResource, final ImmutableMap<Uuid, StandardAcl> aclsById) {
+    private AclCache(final ImmutableNavigableSet<StandardAcl> aclsByResource,
+                     final ImmutableMap<Uuid, StandardAcl> aclsById,
+                     final ImmutableMap<String, ImmutableNavigableSet<StandardAcl>> aclsByPrincipal) {
         this.aclsByResource = aclsByResource;
         this.aclsById = aclsById;
+        this.aclsByPrincipal = aclsByPrincipal;
     }
 
     public ImmutableNavigableSet<StandardAcl> aclsByResource() {
         return aclsByResource;
+    }
+
+    public ImmutableNavigableSet<StandardAcl> aclsForPrincipal(String principal) {
+        return aclsByPrincipal.getOrDefault(principal, ImmutableNavigableSet.empty());
     }
 
     Iterable<AclBinding> acls(AclBindingFilter filter) {
@@ -86,7 +100,15 @@ public class AclCache {
         }
 
         ImmutableNavigableSet<StandardAcl> aclsByResource = this.aclsByResource.added(acl);
-        return new AclCache(aclsByResource, aclsById);
+
+        String principal = acl.principal();
+        ImmutableNavigableSet<StandardAcl> principalSet =
+            this.aclsByPrincipal.getOrDefault(principal, ImmutableNavigableSet.empty());
+        ImmutableNavigableSet<StandardAcl> updatedPrincipalSet = principalSet.added(acl);
+        ImmutableMap<String, ImmutableNavigableSet<StandardAcl>> aclsByPrincipal =
+            this.aclsByPrincipal.updated(principal, updatedPrincipalSet);
+
+        return new AclCache(aclsByResource, aclsById, aclsByPrincipal);
     }
 
     AclCache removeAcl(Uuid id) {
@@ -102,6 +124,21 @@ public class AclCache {
         }
 
         ImmutableNavigableSet<StandardAcl> aclsByResource = this.aclsByResource.removed(acl);
-        return new AclCache(aclsByResource, aclsById);
+
+        String principal = acl.principal();
+        ImmutableNavigableSet<StandardAcl> principalSet = this.aclsByPrincipal.get(principal);
+        ImmutableMap<String, ImmutableNavigableSet<StandardAcl>> aclsByPrincipal;
+        if (principalSet != null) {
+            ImmutableNavigableSet<StandardAcl> updatedPrincipalSet = principalSet.removed(acl);
+            if (updatedPrincipalSet.isEmpty()) {
+                aclsByPrincipal = this.aclsByPrincipal.removed(principal);
+            } else {
+                aclsByPrincipal = this.aclsByPrincipal.updated(principal, updatedPrincipalSet);
+            }
+        } else {
+            aclsByPrincipal = this.aclsByPrincipal;
+        }
+
+        return new AclCache(aclsByResource, aclsById, aclsByPrincipal);
     }
 }
