@@ -806,6 +806,15 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return null;
     }
 
+    // VisibleForTesting
+    RLMTask rlmExpirationTask(TopicIdPartition topicIdPartition) {
+        RLMTaskWithFuture task = leaderExpirationRLMTasks.get(topicIdPartition);
+        if (task != null) {
+            return task.rlmTask;
+        }
+        return null;
+    }
+
     public boolean isPartitionReady(TopicPartition partition) {
         Uuid uuid = topicIdByPartitionMap.get(partition);
         if (uuid == null) {
@@ -1365,11 +1374,18 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             brokerTopicStats.recordRemoteLogSizeBytes(topic, partition, remoteLogSizeBytes);
         }
 
-        private void updateRemoteDeleteLagWith(int segmentsLeftToDelete, long sizeOfDeletableSegmentsBytes) {
-            String topic = topicIdPartition.topic();
-            int partition = topicIdPartition.partition();
-            brokerTopicStats.recordRemoteDeleteLagSegments(topic, partition, segmentsLeftToDelete);
-            brokerTopicStats.recordRemoteDeleteLagBytes(topic, partition, sizeOfDeletableSegmentsBytes);
+        // VisibleForTesting
+        void updateRemoteDeleteLagWith(int segmentsLeftToDelete, long sizeOfDeletableSegmentsBytes) {
+            // Skip emitting metrics for a cancelled task. Otherwise, a task that is still running in the
+            // expiration thread pool while this replica transitions from leader to follower can re-register
+            // the delete-lag gauge after onLeadershipChange has already removed it (see removeRemoteTopicPartitionMetrics),
+            // leaving a phantom non-zero lag that never drains. This mirrors the guard on the copy path's recordLagStats.
+            if (!isCancelled()) {
+                String topic = topicIdPartition.topic();
+                int partition = topicIdPartition.partition();
+                brokerTopicStats.recordRemoteDeleteLagSegments(topic, partition, segmentsLeftToDelete);
+                brokerTopicStats.recordRemoteDeleteLagBytes(topic, partition, sizeOfDeletableSegmentsBytes);
+            }
         }
 
         private static class RemoteLogMetadataStats {
