@@ -51,7 +51,10 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
         } catch (Exception e) {
             throw new MetadataParseException("Error while reading " + entity, e);
         }
-        if (val > Short.MAX_VALUE) {
+        // readUnsignedVarint decodes an unsigned 32-bit value into a signed int, so any
+        // encoded value at or above 2^31 comes back negative and would otherwise slip past
+        // the upper bound and be truncated by the cast below.
+        if (val > Short.MAX_VALUE || val < 0) {
             throw new MetadataParseException("Value for " + entity + " was too large.");
         }
         return (short) val;
