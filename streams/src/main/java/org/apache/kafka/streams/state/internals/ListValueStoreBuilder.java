@@ -26,15 +26,25 @@ import java.util.Objects;
 
 public class ListValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyValueStore<K, V>> {
     private final KeyValueBytesStoreSupplier storeSupplier;
+    private final boolean headersFormat;
 
     public ListValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
                                  final Serde<K> keySerde,
                                  final Serde<V> valueSerde,
                                  final Time time) {
+        this(storeSupplier, keySerde, valueSerde, time, false);
+    }
+
+    public ListValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
+                                 final Serde<K> keySerde,
+                                 final Serde<V> valueSerde,
+                                 final Time time,
+                                 final boolean headersFormat) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
         this.storeSupplier = storeSupplier;
+        this.headersFormat = headersFormat;
     }
 
     @Override
@@ -58,6 +68,8 @@ public class ListValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyV
         if (!enableLogging) {
             return inner;
         }
-        return new ChangeLoggingListValueBytesStore(inner);
+        return headersFormat
+            ? new ChangeLoggingListValueBytesStoreWithHeaders(inner)
+            : new ChangeLoggingListValueBytesStore(inner);
     }
 }
