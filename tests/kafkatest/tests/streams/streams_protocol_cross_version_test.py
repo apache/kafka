@@ -36,8 +36,10 @@ class StreamsProtocolCrossVersionTest(Test):
         response v1 is negotiated, and so the broker may return the MISSING_CLIENT_TAGS status
         (code 6) that v0 clients do not know about (KAFKA-20744).
       - TaskOffsets/TaskEndOffsets exist in request v0, but pre-4.4 brokers reject any non-null
-        value with InvalidRequestException ("TaskOffsets are not supported yet."). A newer client
-        must strip the fields when v0 is negotiated (StreamsGroupHeartbeatRequest.Builder#build).
+        value with InvalidRequestException ("TaskOffsets are not supported yet."), and they
+        likewise reject a non-empty WarmupTasks list. A newer client must strip the offsets and
+        report no warm-up tasks when v0 is negotiated (StreamsGroupHeartbeatRequest.Builder#build,
+        KAFKA-21025).
       - StreamsGroupHeartbeatResponse v1 replaces the v0 `AcceptableRecoveryLagLegacy` (int32)
         with `AcceptableRecoveryLag` (int64, ignorable) and adds `TopologyDescriptionRequired`
         (KIP-1331).
@@ -207,8 +209,9 @@ class StreamsProtocolCrossVersionTest(Test):
         (on join, and again whenever its assignment or offsets change), the fields exist in
         request v0, and a 4.2/4.3 broker rejects any non-null value with InvalidRequestException
         ("TaskOffsets are not supported yet."). The client must strip them when v0 is negotiated
-        (unit-tested in StreamsGroupHeartbeatRequestTest#testBuildClearsTaskOffsetsForVersion0);
-        a clean session here proves the strip end to end against the real released broker.
+        (unit-tested in StreamsGroupHeartbeatRequestTest#testBuildClearsTaskOffsetsForVersion0),
+        and since KAFKA-21025 it must likewise report no warm-up tasks at v0; a clean session
+        here proves both end to end against the real released broker.
         """
         self.setup_kafka(broker_version)
         processor = self.start_processor(str(DEV_BRANCH))
@@ -278,12 +281,10 @@ class StreamsProtocolCrossVersionTest(Test):
         column added for KIP-1357 must render empty, because describe v0 has no AssignorName
         field for the broker to fill.
 
-        --describe --topology cannot be served by a v0 broker: IncludeTopologyDescription is a
-        v1-only, non-ignorable field, so serializing it at v0 raises UnsupportedVersionException
-        (see RequestResponseTest#testStreamsGroupDescribeRequestV0RejectsIncludeTopologyDescription).
-        The command must still fail in a diagnosable way rather than hang. Degrading gracefully --
-        the way --delete-offsets already reports an unsupported broker version -- is an open
-        follow-up, so this asserts only that the failure names the unsupported field or version.
+        The one describe view a v0 broker cannot serve, --describe --topology, is covered by
+        StreamsTopologyDescriptionPluginTest#test_describe_topology_fails_against_pre_kip_1331_broker
+        (IncludeTopologyDescription is a v1-only, non-ignorable field, so the request fails with
+        UnsupportedVersionException before it is sent) and is deliberately not repeated here.
         """
         self.setup_kafka(broker_version)
         processor = self.start_processor(str(DEV_BRANCH))
@@ -307,16 +308,6 @@ class StreamsProtocolCrossVersionTest(Test):
             "--describe --state against a %s broker showed an assignor name, but describe v0 " \
             "has no AssignorName field, so the column must be empty. Output:\n%s" \
             % (broker_version, state_output)
-
-        topology_output = self.run_streams_groups_command("--describe --topology --group %s" % self.group_id)
-        assert "Error:" in topology_output, \
-            "--describe --topology unexpectedly succeeded against a %s broker, which cannot " \
-            "serve describe v1. Output:\n%s" % (broker_version, topology_output)
-        assert ("includeTopologyDescription" in topology_output
-                or "UnsupportedVersion" in topology_output
-                or "not supported by the broker" in topology_output), \
-            "--describe --topology failed against a %s broker without identifying the version " \
-            "incompatibility. Output:\n%s" % (broker_version, topology_output)
 
         processor.stop()
 
@@ -351,7 +342,10 @@ class StreamsProtocolCrossVersionTest(Test):
         A DEV broker with the topology description plugin configured solicits a description push
         through TopologyDescriptionRequired, which only exists in heartbeat response v1. A 4.2/4.3
         client never receives the flag and never pushes, so the broker must report that no
-        description is stored rather than serving a stale or empty one.
+        description is stored rather than serving a stale or empty one. This observes the
+        operator-facing outcome through the CLI; the broker-side counterpart -- that the
+        coordinator never even logs a solicitation for a v0 member -- is
+        StreamsSmokeTest#test_old_client_not_solicited_for_topology_push.
         """
         self.setup_kafka(str(DEV_BRANCH),
                          extra_server_prop_overrides=[
