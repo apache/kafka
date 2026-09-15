@@ -38,6 +38,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -78,11 +79,13 @@ public class ConnectorValidationIntegrationTest {
 
     // Use a single embedded cluster for all test cases in order to cut down on runtime
     private static EmbeddedConnectCluster connect;
+    @TempDir
+    private static Path tempDir;
     private static Path providerFile;
 
     @BeforeAll
     public static void setup() throws Exception {
-        providerFile = Files.createTempFile("provider", ".properties");
+        providerFile = Files.createFile(tempDir.resolve("provider.properties"));
         Files.writeString(providerFile, KEY + "=" + VALUE);
 
         Map<String, String> workerProps = new HashMap<>();
@@ -114,7 +117,6 @@ public class ConnectorValidationIntegrationTest {
         if (connect != null) {
             Utils.closeQuietly(connect::stop, "Embedded Connect cluster");
         }
-        Files.deleteIfExists(providerFile);
     }
 
     @Test
@@ -546,14 +548,10 @@ public class ConnectorValidationIntegrationTest {
     @Test
     public void testValidationErrorMessagesDoNotContainResolvedValueOnValidatorRejection() throws Exception {
         String value = "-9999";
-        Path providerFile = Files.createTempFile("provider", ".properties");
-        try {
-            Files.writeString(providerFile, KEY + "=" + value);
-            String placeholder = "${file:" + providerFile.toAbsolutePath() + ":" + KEY + "}";
-            assertErrorMessages(placeholder, value);
-        } finally {
-            Files.deleteIfExists(providerFile);
-        }
+        Path localProviderFile = Files.createFile(tempDir.resolve("provider-validator.properties"));
+        Files.writeString(localProviderFile, KEY + "=" + value);
+        String placeholder = "${file:" + localProviderFile.toAbsolutePath() + ":" + KEY + "}";
+        assertErrorMessages(placeholder, value);
     }
 
     private void assertErrorMessages(String placeholder, String value) {
