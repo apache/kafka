@@ -113,6 +113,18 @@ public class FetchBuffer implements AutoCloseable {
         }
     }
 
+    void requeue(Collection<CompletedFetch> completedFetches) {
+        if (completedFetches == null || completedFetches.isEmpty())
+            return;
+
+        try {
+            lock.lock();
+            this.completedFetches.addAll(completedFetches);
+        } finally {
+            lock.unlock();
+        }
+    }
+
     CompletedFetch nextInLineFetch() {
         try {
             lock.lock();
