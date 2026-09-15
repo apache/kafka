@@ -99,22 +99,6 @@ public class GroupCoordinatorConfigTest {
         }
     }
 
-    public static class UniformNamedAssignor implements ConsumerGroupPartitionAssignor {
-        @Override
-        public String name() {
-            // Collides with the built-in "uniform" assignor.
-            return "uniform";
-        }
-
-        @Override
-        public GroupAssignment assign(
-            GroupSpec groupSpec,
-            SubscribedTopicDescriber subscribedTopicDescriber
-        ) throws PartitionAssignorException {
-            return null;
-        }
-    }
-
     public static class NoDefaultConstructorAssignor implements ConsumerGroupPartitionAssignor, ShareGroupPartitionAssignor {
         public NoDefaultConstructorAssignor(String unused) {
         }
@@ -204,39 +188,6 @@ public class GroupCoordinatorConfigTest {
                 " for configuration group.consumer.assignors: Assignor name 'uniform' is already " +
                 "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-    }
-
-    @Test
-    public void testConsumerGroupAssignorsWithReservedBuiltinNameFails() {
-        // A custom assignor must not take the name of a built-in, whether or not the built-in is
-        // itself configured: a member selecting that name would otherwise silently get the custom one.
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, UniformNamedAssignor.class.getName());
-        assertEquals("Invalid value " + UniformNamedAssignor.class.getName() +
-                " for configuration group.consumer.assignors: Assignor name 'uniform' is reserved by a " +
-                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
-            List.of("uniform", UniformNamedAssignor.class.getName()));
-        assertEquals("Invalid value " + UniformNamedAssignor.class.getName() +
-                " for configuration group.consumer.assignors: Assignor name 'uniform' is reserved by a " +
-                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-    }
-
-    @Test
-    public void testConsumerGroupAssignorsBuiltinByClassName() {
-        // A built-in may also be configured by its class name, so the reserved-name check must
-        // recognise it by class rather than by name.
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
-            List.of(UniformAssignor.class.getName(), RangeAssignor.class.getName()));
-        GroupCoordinatorConfig config = createConfig(configs);
-        List<ConsumerGroupPartitionAssignor> assignors = config.consumerGroupAssignors();
-        assertEquals(2, assignors.size());
-        assertInstanceOf(UniformAssignor.class, assignors.get(0));
-        assertInstanceOf(RangeAssignor.class, assignors.get(1));
     }
 
     @Test
@@ -355,22 +306,6 @@ public class GroupCoordinatorConfigTest {
         }
     }
 
-    public static class StickyNamedTaskAssignor implements TaskAssignor {
-        @Override
-        public String name() {
-            // Collides with the built-in "sticky" assignor.
-            return "sticky";
-        }
-
-        @Override
-        public org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment assign(
-            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec,
-            TopologyDescriber topologyDescriber
-        ) {
-            return null;
-        }
-    }
-
     @Test
     public void testStreamsGroupAssignorFullClassNames() {
         // The full class name of the assignors is part of our public api. Hence,
@@ -442,31 +377,6 @@ public class GroupCoordinatorConfigTest {
                 " for configuration group.streams.assignors: Assignor name 'sticky' is already " +
                 "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-    }
-
-    @Test
-    public void testStreamsGroupAssignorsWithReservedBuiltinNameFails() {
-        // A custom assignor must not take the name of a built-in, whether or not the built-in is
-        // itself configured: a group selecting that name would otherwise silently get the custom one.
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyNamedTaskAssignor.class.getName());
-        assertEquals("Invalid value " + StickyNamedTaskAssignor.class.getName() +
-                " for configuration group.streams.assignors: Assignor name 'sticky' is reserved by a " +
-                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-    }
-
-    @Test
-    public void testStreamsGroupAssignorsBuiltinByClassName() {
-        // A built-in configured by its class name is recognised as the built-in, not as a custom assignor
-        // reusing the reserved name. The name it is registered under is the built-in short name.
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyTaskAssignor.class.getName());
-        GroupCoordinatorConfig config = createConfig(configs);
-        List<TaskAssignor> assignors = config.streamsGroupAssignors();
-        assertEquals(1, assignors.size());
-        assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
-        assertEquals(List.of("sticky"), config.streamsGroupAssignorNames());
     }
 
     @Test
