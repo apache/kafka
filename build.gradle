@@ -358,6 +358,15 @@ subprojects {
     tasks.register('uploadArchives').configure { dependsOn(publish) }
   }
 
+  if (project.path == ':streams:integration-tests') {
+    // This module publishes test artifacts, but its main source set is empty.
+    // Gradle module metadata cannot represent a publication with the main
+    // component removed, so disable metadata generation for this publication.
+    tasks.withType(GenerateModuleMetadata) {
+      enabled = false
+    }
+  }
+
   tasks.withType(AbstractArchiveTask).configureEach {
     reproducibleFileOrder = false
     preserveFileTimestamps = true
@@ -432,6 +441,10 @@ subprojects {
               def task = tasks.findByName(taskName)
               if (task != null)
                 artifact task
+            }
+
+            if (project.path == ':streams:integration-tests') {
+              artifacts.removeIf { it.classifier == null }
             }
 
             artifactId = base.archivesName.get()
