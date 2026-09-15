@@ -673,7 +673,7 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> configRecords;
             if (keyToOps != null) {
                 ControllerResult<ApiError> configResult =
-                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true, forwarded);
+                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true, forwarded, context.principal());
                 if (configResult.response().isFailure()) {
                     topicErrors.put(topic.name(), configResult.response());
                     continue;
@@ -776,7 +776,7 @@ public class ReplicationControlManager {
                 Map<Integer, List<Integer>> assignments = new HashMap<>();
                 newParts.forEach((key, value) -> assignments.put(key, Replicas.toList(value.replicas)));
                 return new CreateTopicPolicy.RequestMetadata(
-                    topic.name(), null, null, assignments, creationConfigs);
+                    topic.name(), null, null, assignments, creationConfigs, context.principal());
             });
             if (error.isFailure()) return error;
         } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
@@ -819,7 +819,7 @@ public class ReplicationControlManager {
                         " time(s): " + e.getMessage());
             }
             ApiError error = maybeCheckCreateTopicPolicy(() -> new CreateTopicPolicy.RequestMetadata(
-                topic.name(), numPartitions, replicationFactor, null, creationConfigs));
+                topic.name(), numPartitions, replicationFactor, null, creationConfigs, context.principal()));
             if (error.isFailure()) return error;
         }
         int numPartitions = newParts.size();
