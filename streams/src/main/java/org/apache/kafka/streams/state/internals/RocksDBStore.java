@@ -1523,7 +1523,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final DBAccessor accessor, final Bytes prefix) {
-            final Bytes to = incrementWithoutOverflow(prefix);
+            final Bytes to = ByteUtils.incrementWithoutOverflow(prefix);
             return accessor.prefixScan(columnFamily, name, prefix, to);
         }
 
@@ -1594,22 +1594,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public Position getPosition() {
         synchronized (position) {
             return position.copy().merge(dbAccessor.uncommittedPositionDeltas());
-        }
-    }
-
-    /**
-     * Same as {@link ByteUtils#increment(Bytes)} but {@code null} is returned instead of throwing
-     * {@code IndexOutOfBoundsException} in the event of overflow.
-     *
-     * @param input bytes to increment
-     * @return A new copy of the incremented byte array, or {@code null} if incrementing would
-     *         result in overflow.
-     */
-    static Bytes incrementWithoutOverflow(final Bytes input) {
-        try {
-            return ByteUtils.increment(input);
-        } catch (final IndexOutOfBoundsException e) {
-            return null;
         }
     }
 }
