@@ -14,8 +14,8 @@ import re
 
 def verify_running(processor, message):
     node = processor.node
+    processor.start_node(node)
     with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-        processor.start()
         monitor.wait_until(message,
                            timeout_sec=60,
                            err_msg="Never saw '%s' message " % message + str(processor.node.account))
