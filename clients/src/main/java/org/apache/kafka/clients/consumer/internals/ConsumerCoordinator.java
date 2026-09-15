@@ -1117,7 +1117,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             @Override
             public void onFailure(RuntimeException e) {
                 inFlightAsyncCommits.decrementAndGet();
-
+                if (callback != null) {
+                    callback.onComplete(offsets, e);
+                }
                 Exception commitException = e;
 
                 if (e instanceof RetriableException) {
