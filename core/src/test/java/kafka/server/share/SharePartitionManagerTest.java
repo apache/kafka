@@ -2932,6 +2932,11 @@ public class SharePartitionManagerTest {
         Mockito.verify(sp1).markFenced();
         Mockito.verify(sp2).markFenced();
         Mockito.verify(sp3).markFenced();
+        // Removal from the cache must also close the share partitions to release their metrics.
+        Mockito.verify(sp0).close();
+        Mockito.verify(sp1).close();
+        Mockito.verify(sp2).close();
+        Mockito.verify(sp3).close();
     }
 
     @Test
