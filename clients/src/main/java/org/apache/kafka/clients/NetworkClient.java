@@ -1751,7 +1751,7 @@ public class NetworkClient implements KafkaClient {
     // visible for testing
     int nextCorrelationId() {
         if (SaslClientAuthenticator.isReserved(correlation)) {
-            // the numeric overflow is fine as negative values is acceptable
+            // the numeric overflow is fine as negative values are acceptable
             correlation = SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + 1;
         }
         return correlation++;
