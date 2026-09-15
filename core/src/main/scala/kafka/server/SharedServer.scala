@@ -40,6 +40,7 @@ import org.apache.kafka.server.config.DefaultSupportedConfigChecker
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics, NodeMetrics}
+import org.apache.kafka.server.util.DeferredValue
 
 import java.net.InetSocketAddress
 import java.util.Arrays
@@ -130,7 +131,11 @@ class SharedServer(
   @volatile private var snapshotGenerator: SnapshotGenerator = _
   @volatile private var metadataLoaderMetrics: MetadataLoaderMetrics = _
 
-  def clusterId: String = metaPropsEnsemble.clusterId().get()
+  val clusterId: DeferredValue[String] =
+    if (metaPropsEnsemble.clusterId().isPresent)
+      DeferredValue.completed(metaPropsEnsemble.clusterId().get())
+    else
+      DeferredValue.incomplete(null)
 
   def nodeId: Int = metaPropsEnsemble.nodeId().getAsInt
 

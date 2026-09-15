@@ -24,6 +24,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
+import org.apache.kafka.server.util.DeferredValue;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
