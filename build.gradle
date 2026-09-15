@@ -2705,7 +2705,12 @@ project(':tools') {
     implementation project(':raft')
     implementation libs.argparse4j
     implementation libs.protobuf
-    implementation libs.protobufJavaUtil
+    implementation(libs.protobufJavaUtil) {
+      // This is an empty placeholder jar Guava publishes solely to win dependency
+      // resolution against the unrelated legacy listenablefuture:1.0 artifact; it has
+      // no classes and pulling it in just adds an unmatchable LICENSE-binary entry.
+      exclude group: 'com.google.guava', module: 'listenablefuture'
+    }
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
     implementation libs.joptSimple
