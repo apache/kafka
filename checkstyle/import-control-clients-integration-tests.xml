@@ -30,6 +30,11 @@
 
     <allow pkg="com.yammer.metrics.core" />
 
+    <subpackage name="clients.consumer">
+        <allow pkg="com.nimbusds.jose"/>
+        <allow pkg="no.nav.security.mock.oauth2"/>
+    </subpackage>
+
     <subpackage name="clients.producer">
         <allow pkg="org.opentest4j"/>
     </subpackage>

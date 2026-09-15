@@ -336,7 +336,10 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
      */
 
     public boolean maybeExpediteRefresh(String keyId) {
-        if (keyId.length() > MISSING_KEY_ID_MAX_KEY_LENGTH) {
+        if (keyId == null) {
+            log.debug("Not scheduling an expedited JWKS refresh as the JWT did not include a key ID");
+            return false;
+        } else if (keyId.length() > MISSING_KEY_ID_MAX_KEY_LENGTH) {
             // Although there's no limit on the length of the key ID, they're generally
             // "reasonably" short. If we have a very long key ID length, we're going to assume
             // the JWT is malformed, and we will not actually try to resolve the key.
