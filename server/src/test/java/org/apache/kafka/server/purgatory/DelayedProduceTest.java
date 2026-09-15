@@ -19,8 +19,8 @@ package org.apache.kafka.server.purgatory;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ProduceResponseData.PartitionProduceResponse;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.purgatory.DelayedProduce.PartitionStatusValidator;
 import org.apache.kafka.server.purgatory.DelayedProduce.ProducePartitionStatus;
@@ -63,7 +63,7 @@ public class DelayedProduceTest {
     @Test
     public void testConstructorMarksPendingPartitionsAsTimedOut() {
         var tp = topicIdPartition(PARTITION0);
-        var response = new PartitionResponse(Errors.NONE);
+        var response = new PartitionProduceResponse().setErrorCode(Errors.NONE.code());
         var statusMap = Map.of(tp, new ProducePartitionStatus(REQUIRED_OFFSET, response));
 
         new DelayedProduce(
@@ -75,16 +75,16 @@ public class DelayedProduceTest {
 
         // A partition that starts with NONE still has acks pending, so it is marked with a timeout error
         // that is cleared once the required acks are received.
-        assertEquals(Errors.REQUEST_TIMED_OUT, response.error);
+        assertEquals(Errors.REQUEST_TIMED_OUT, Errors.forCode(response.errorCode()));
     }
 
     @Test
     public void testTryCompleteWhenAllPartitionsHaveEnoughReplicas() {
         var tp = topicIdPartition(PARTITION0);
-        var response = new PartitionResponse(Errors.NONE);
+        var response = new PartitionProduceResponse().setErrorCode(Errors.NONE.code());
         var statusMap = Map.of(tp, new ProducePartitionStatus(REQUIRED_OFFSET, response));
 
-        var callbackResult = new AtomicReference<Map<TopicIdPartition, PartitionResponse>>();
+        var callbackResult = new AtomicReference<Map<TopicIdPartition, PartitionProduceResponse>>();
         var delayedProduce = new DelayedProduce(
             DELAY_MS, 
             statusMap,
@@ -95,15 +95,15 @@ public class DelayedProduceTest {
         assertTrue(delayedProduce.tryComplete());
         assertTrue(delayedProduce.isCompleted());
         // Enough replicas caught up, so the timeout error is cleared.
-        assertEquals(Errors.NONE, response.error);
+        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
         assertNotNull(callbackResult.get());
-        assertEquals(Errors.NONE, callbackResult.get().get(tp).error);
+        assertEquals(Errors.NONE, Errors.forCode(callbackResult.get().get(tp).errorCode()));
     }
 
     @Test
     public void testTryCompleteWhenReplicasNotCaughtUp() {
         var tp = topicIdPartition(PARTITION0);
-        var response = new PartitionResponse(Errors.NONE);
+        var response = new PartitionProduceResponse().setErrorCode(Errors.NONE.code());
         var statusMap = Map.of(tp, new ProducePartitionStatus(REQUIRED_OFFSET, response));
 
         var callbackInvoked = new AtomicBoolean(false);
@@ -117,14 +117,14 @@ public class DelayedProduceTest {
         assertFalse(delayedProduce.tryComplete());
         assertFalse(delayedProduce.isCompleted());
         // Still waiting for acks, so the timeout error stays and the callback is not fired.
-        assertEquals(Errors.REQUEST_TIMED_OUT, response.error);
+        assertEquals(Errors.REQUEST_TIMED_OUT, Errors.forCode(response.errorCode()));
         assertFalse(callbackInvoked.get());
     }
 
     @Test
     public void testTryCompleteWhenValidationReturnsError() {
         var tp = topicIdPartition(PARTITION0);
-        var response = new PartitionResponse(Errors.NONE);
+        var response = new PartitionProduceResponse().setErrorCode(Errors.NONE.code());
         var statusMap = Map.of(tp, new ProducePartitionStatus(REQUIRED_OFFSET, response));
 
         var delayedProduce = new DelayedProduce(
@@ -137,13 +137,13 @@ public class DelayedProduceTest {
         assertTrue(delayedProduce.tryComplete());
         assertTrue(delayedProduce.isCompleted());
         // A validation error satisfies the partition and is propagated to the response.
-        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, response.error);
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(response.errorCode()));
     }
 
     @Test
     public void testTryCompleteSkipsValidationForNonPendingPartitions() {
         var tp = topicIdPartition(PARTITION0);
-        var response = new PartitionResponse(Errors.NOT_ENOUGH_REPLICAS);
+        var response = new PartitionProduceResponse().setErrorCode(Errors.NOT_ENOUGH_REPLICAS.code());
         var statusMap = Map.of(tp, new ProducePartitionStatus(REQUIRED_OFFSET, response));
 
         var validatorInvoked = new AtomicBoolean(false);
@@ -161,15 +161,15 @@ public class DelayedProduceTest {
         assertTrue(delayedProduce.tryComplete());
         assertTrue(delayedProduce.isCompleted());
         assertFalse(validatorInvoked.get());
-        assertEquals(Errors.NOT_ENOUGH_REPLICAS, response.error);
+        assertEquals(Errors.NOT_ENOUGH_REPLICAS, Errors.forCode(response.errorCode()));
     }
 
     @Test
     public void testTryCompleteWaitsWhileAnyPartitionPending() {
         var satisfied = topicIdPartition(PARTITION0);
         var pending = topicIdPartition(PARTITION1);
-        var satisfiedResponse = new PartitionResponse(Errors.NONE);
-        var pendingResponse = new PartitionResponse(Errors.NONE);
+        var satisfiedResponse = new PartitionProduceResponse().setErrorCode(Errors.NONE.code());
+        var pendingResponse = new PartitionProduceResponse().setErrorCode(Errors.NONE.code());
         var statusMap = Map.of(
             satisfied, new ProducePartitionStatus(REQUIRED_OFFSET, satisfiedResponse),
             pending, new ProducePartitionStatus(REQUIRED_OFFSET, pendingResponse)
@@ -187,8 +187,8 @@ public class DelayedProduceTest {
         // One partition is satisfied but the other still has acks pending, so the operation waits.
         assertFalse(delayedProduce.tryComplete());
         assertFalse(delayedProduce.isCompleted());
-        assertEquals(Errors.NONE, satisfiedResponse.error);
-        assertEquals(Errors.REQUEST_TIMED_OUT, pendingResponse.error);
+        assertEquals(Errors.NONE, Errors.forCode(satisfiedResponse.errorCode()));
+        assertEquals(Errors.REQUEST_TIMED_OUT, Errors.forCode(pendingResponse.errorCode()));
     }
 
     @Test

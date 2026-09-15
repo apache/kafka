@@ -26,8 +26,6 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,16 +36,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProduceResponseTest {
 
-    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseVersionTest() {
-        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         Uuid topicId = Uuid.fromString("5JkYABorYD4w0AQXe9TvBG");
         TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, 0, "test");
-        responseData.put(topicIdPartition, new ProduceResponse.PartitionResponse(Errors.NONE, 10000, RecordBatch.NO_TIMESTAMP, 100));
-        ProduceResponse v0Response = new ProduceResponse(responseData);
-        ProduceResponse v1Response = new ProduceResponse(responseData, 10);
-        ProduceResponse v2Response = new ProduceResponse(responseData, 10);
+        Map<TopicIdPartition, ProduceResponseData.PartitionProduceResponse> responseData = Map.of(
+            topicIdPartition,
+            new ProduceResponseData.PartitionProduceResponse()
+                .setIndex(0)
+                .setBaseOffset(10000)
+                .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                .setLogStartOffset(100)
+                .setErrorCode(Errors.NONE.code())
+        );
+        ProduceResponse v0Response = new ProduceResponse(responseData, List.of(), AbstractResponse.DEFAULT_THROTTLE_TIME);
+        ProduceResponse v1Response = new ProduceResponse(responseData, List.of(), 10);
+        ProduceResponse v2Response = new ProduceResponse(responseData, List.of(), 10);
         assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
         assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
         assertEquals(10, v2Response.throttleTimeMs(), "Throttle time must be 10");
@@ -71,17 +75,26 @@ public class ProduceResponseTest {
     @SuppressWarnings("deprecation")
     @Test
     public void produceResponseRecordErrorsTest() {
-        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         Uuid topicId = Uuid.fromString("4w0AQXe9TvBG5JkYABorYD");
         TopicIdPartition tp = new TopicIdPartition(topicId, 0, "test");
-        ProduceResponse.PartitionResponse partResponse = new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100,
-                Collections.singletonList(new ProduceResponse.RecordError(3, "Record error")),
-                "Produce failed");
-        responseData.put(tp, partResponse);
+        Map<TopicIdPartition, ProduceResponseData.PartitionProduceResponse> responseData = Map.of(
+            tp,
+            new ProduceResponseData.PartitionProduceResponse()
+                .setIndex(tp.partition())
+                .setBaseOffset(10000)
+                .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                .setLogStartOffset(100)
+                .setErrorCode(Errors.NONE.code())
+                .setRecordErrors(List.of(
+                    new ProduceResponseData.BatchIndexAndErrorMessage()
+                        .setBatchIndex(3)
+                        .setBatchIndexErrorMessage("Record error")
+                ))
+                .setErrorMessage("Produce failed")
+        );
 
         for (short version : PRODUCE.allVersions()) {
-            ProduceResponse response = new ProduceResponse(responseData);
+            ProduceResponse response = new ProduceResponse(responseData, List.of(), AbstractResponse.DEFAULT_THROTTLE_TIME);
 
             ProduceResponse produceResponse = ProduceResponse.parse(response.serialize(version), version);
             ProduceResponseData.TopicProduceResponse topicProduceResponse = produceResponse.data().responses().iterator().next();

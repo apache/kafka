@@ -27,12 +27,13 @@ import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common
+import org.apache.kafka.common.message.ProduceResponseData.PartitionProduceResponse
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.SimpleRecord
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
-import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
+import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicPartition, Uuid}
@@ -296,10 +297,10 @@ class ReplicaManagerConcurrencyTest extends Logging {
         new SimpleRecord(s"$clientId-${sequence + i}".getBytes)
       }
 
-      val future = new CompletableFuture[ProduceResponse.PartitionResponse]()
+      val future = new CompletableFuture[PartitionProduceResponse]()
       val topicIdPartition: common.TopicIdPartition = replicaManager.topicIdPartition(topicPartition)
 
-      def produceCallback(results: util.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
+      def produceCallback(results: util.Map[common.TopicIdPartition, PartitionProduceResponse]): Unit = {
         try {
           assertEquals(1, results.size)
 
@@ -308,7 +309,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
           val result = entry.getValue
 
           assertEquals(topicIdPartition, topicPartition)
-          assertEquals(Errors.NONE, result.error)
+          assertEquals(Errors.NONE.code, result.errorCode)
           future.complete(result)
         } catch {
           case e: Throwable => future.completeExceptionally(e)
