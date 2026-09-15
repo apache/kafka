@@ -103,6 +103,7 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private final Logger log;
+    private final java.nio.channels.spi.SelectorProvider selectorProvider;
     private final java.nio.channels.Selector nioSelector;
     private final Map<String, KafkaChannel> channels;
     private final Set<KafkaChannel> explicitlyMutedChannels;
@@ -157,7 +158,9 @@ public class Selector implements Selectable, AutoCloseable {
             MemoryPool memoryPool,
             LogContext logContext) {
         try {
-            this.nioSelector = java.nio.channels.Selector.open();
+            this.selectorProvider = SelectorProvider.provider();
+            this.nioSelector = selectorProvider.openSelector();
+
         } catch (IOException e) {
             throw new KafkaException(e);
         }
@@ -249,7 +252,7 @@ public class Selector implements Selectable, AutoCloseable {
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
         ensureNotRegistered(id);
-        SocketChannel socketChannel = SocketChannel.open();
+        SocketChannel socketChannel = selectorProvider.openSocketChannel();
         SelectionKey key = null;
         try {
             configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
