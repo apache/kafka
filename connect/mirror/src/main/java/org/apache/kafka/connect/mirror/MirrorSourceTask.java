@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -36,12 +37,14 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_LEGACY;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_NEW;
 
@@ -59,6 +62,7 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+    private boolean offsetValidationEnabled;
 
     public MirrorSourceTask() {}
 
@@ -66,12 +70,20 @@ public class MirrorSourceTask extends SourceTask {
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceLegacyMetrics metrics, String sourceClusterAlias,
                      ReplicationPolicy replicationPolicy,
                      OffsetSyncWriter offsetSyncWriter) {
+        this(consumer, metrics, sourceClusterAlias, replicationPolicy, offsetSyncWriter, false);
+    }
+
+    // for testing
+    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceLegacyMetrics metrics, String sourceClusterAlias,
+                     ReplicationPolicy replicationPolicy,
+                     OffsetSyncWriter offsetSyncWriter, boolean offsetValidationEnabled) {
         this.consumer = consumer;
         this.legacyMetrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
         consumerAccess = new Semaphore(1);
         this.offsetSyncWriter = offsetSyncWriter;
+        this.offsetValidationEnabled = offsetValidationEnabled;
     }
 
     @Override
@@ -84,10 +96,17 @@ public class MirrorSourceTask extends SourceTask {
         metrics = metricNamesFormats.contains(METRIC_NAMES_NEW) ? config.metrics(context.pluginMetrics()) : null;
         pollTimeout = config.consumerPollTimeout();
         replicationPolicy = config.replicationPolicy();
+        offsetValidationEnabled = config.offsetValidationEnabled();
         if (config.emitOffsetSyncsEnabled()) {
             offsetSyncWriter = new OffsetSyncWriter(config);
         }
-        consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
+        Map<String, Object> consumerConfig = config.sourceConsumerConfig("replication-consumer");
+        if (offsetValidationEnabled) {
+            // Without a reset policy, a stale or invalid position raises OffsetOutOfRangeException
+            // instead of being silently repositioned to the earliest offset.
+            consumerConfig.put(AUTO_OFFSET_RESET_CONFIG, "none");
+        }
+        consumer = MirrorUtils.newConsumer(consumerConfig);
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         initializeConsumer(taskTopicPartitions);
 
@@ -164,6 +183,12 @@ public class MirrorSourceTask extends SourceTask {
             }
         } catch (WakeupException e) {
             return null;
+        } catch (OffsetOutOfRangeException e) {
+            if (offsetValidationEnabled) {
+                throw classifyOffsetOutOfRange(e);
+            }
+            log.warn("Failure during poll.", e);
+            return null;
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
@@ -210,6 +235,33 @@ public class MirrorSourceTask extends SourceTask {
         }
     }
  
+    // visible for testing
+    KafkaException classifyOffsetOutOfRange(OffsetOutOfRangeException e) {
+        Map<TopicPartition, Long> requestedOffsets = e.offsetOutOfRangePartitions();
+        Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(requestedOffsets.keySet());
+        boolean dataLoss = false;
+        for (Map.Entry<TopicPartition, Long> entry : requestedOffsets.entrySet()) {
+            TopicPartition topicPartition = entry.getKey();
+            long requestedOffset = entry.getValue();
+            long earliestOffset = earliestOffsets.get(topicPartition);
+            if (earliestOffset > 0) {
+                dataLoss = true;
+                log.error("Data loss detected replicating {}: requested offset {} is no longer available; earliest available offset is {}. "
+                        + "Records were likely purged by the source topic's retention policy before they could be replicated.",
+                        topicPartition, requestedOffset, earliestOffset);
+            } else {
+                log.error("Topic reset detected replicating {}: requested offset {} is no longer available; earliest available offset is {}. "
+                        + "The source topic was likely deleted and recreated.",
+                        topicPartition, requestedOffset, earliestOffset);
+            }
+        }
+        return dataLoss
+                ? new DataLossException("Data loss detected replicating one or more partitions; earlier records were purged before "
+                        + "they could be replicated: " + requestedOffsets.keySet(), e)
+                : new TopicResetException("Topic reset detected replicating one or more partitions; the source topic was likely "
+                        + "deleted and recreated: " + requestedOffsets.keySet(), e);
+    }
+
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
         return topicPartitions.stream().collect(Collectors.toMap(x -> x, this::loadOffset));
     }
@@ -230,7 +282,14 @@ public class MirrorSourceTask extends SourceTask {
         topicPartitionOffsets.forEach((topicPartition, offset) -> {
             // Do not call seek on partitions that don't have an existing offset committed.
             if (isUncommitted(offset)) {
-                log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
+                if (offsetValidationEnabled) {
+                    // With auto.offset.reset=none, the consumer can't resolve a starting position on its
+                    // own, so replicate what the earliest reset policy used to do for free.
+                    log.trace("Seeking to beginning for topicPartition: {}", topicPartition);
+                    consumer.seekToBeginning(Collections.singleton(topicPartition));
+                } else {
+                    log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
+                }
                 return;
             }
             long nextOffsetToCommittedOffset = offset + 1L;
