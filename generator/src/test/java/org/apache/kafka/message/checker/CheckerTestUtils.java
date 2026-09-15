@@ -151,4 +151,11 @@ public class CheckerTestUtils {
         MessageGenerator.JSON_SERDE.writeValue(file, messageSpec);
         return file.getAbsolutePath();
     }
+
+    static String messageSpecStringToRawTempFile(String input) throws IOException {
+        File file = Files.createTempFile("MetadataSchemaCheckerToolTest", null).toFile();
+        file.deleteOnExit();
+        Files.writeString(file.toPath(), singleQuotesToDoubleQuotes(input));
+        return file.getAbsolutePath();
+    }
 }
