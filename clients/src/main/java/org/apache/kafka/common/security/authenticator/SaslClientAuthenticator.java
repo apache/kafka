@@ -49,6 +49,8 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.kerberos.KerberosError;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClient;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -219,6 +221,8 @@ public class SaslClientAuthenticator implements Authenticator {
                 log.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                     clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
                 SaslClient retvalSaslClient = Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                if (retvalSaslClient == null)
+                    retvalSaslClient = createSaslClientFromLocalFactory(mechs);
                 if (retvalSaslClient == null) {
                     throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism);
                 }
@@ -227,6 +231,21 @@ public class SaslClientAuthenticator implements Authenticator {
         } catch (CompletionException e) {
             throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
         }
+    }
+
+    /**
+     * Sasl finds a SaslClientFactory through the JVM-wide security provider registry, which only holds the
+     * first provider registered under a given name. When Kafka is loaded in more than one class loader, the
+     * factory found there may not be able to use this callback handler. Fall back to the factory of this
+     * class loader for the mechanisms Kafka provides itself.
+     */
+    // visible for testing
+    SaslClient createSaslClientFromLocalFactory(String[] mechs) throws SaslException {
+        if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(mechanism))
+            return null;
+        log.debug("No SaslClient from the security provider registry; using the local factory for {}", mechanism);
+        return new OAuthBearerSaslClient.OAuthBearerSaslClientFactory()
+                .createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
     }
 
     /**
