@@ -83,6 +83,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -620,88 +621,105 @@ public class SharePartition {
         */
         lock.writeLock().lock();
         try {
-            // When none of the records in the cachedState are in the AVAILABLE state, findNextFetchOffset will be false
-            if (!findNextFetchOffset) {
-                if (cachedState.isEmpty() || startOffset > cachedState.lastEntry().getValue().lastOffset()) {
-                    // 1. When cachedState is empty, endOffset is set to the next offset of the last
-                    // offset removed from batch, which is the next offset to be fetched.
-                    // 2. When startOffset has moved beyond the in-flight records, startOffset and
-                    // endOffset point to the LSO, which is the next offset to be fetched.
-                    log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
-                    return endOffset;
-                } else {
-                    log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset + 1);
-                    return endOffset + 1;
-                }
-            }
-
-            // If this piece of code is reached, it means that findNextFetchOffset is true
-            if (cachedState.isEmpty() || startOffset > cachedState.lastEntry().getValue().lastOffset()) {
-                // If cachedState is empty, there is no need of re-computing next fetch offset in future fetch requests.
-                // Same case when startOffset has moved beyond the in-flight records, startOffset and endOffset point to the LSO
-                // and the cached state is fresh.
-                updateFindNextFetchOffset(false);
-                log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
-                return endOffset;
-            }
-
-            long nextFetchOffset = -1;
-            long gapStartOffset = isPersisterReadGapWindowActive() ? persisterReadResultGapWindow.gapStartOffset() : -1;
-            for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
-                // Check if there exists any gap in the in-flight batch which needs to be fetched. If
-                // gapWindow's endOffset is equal to the share partition's endOffset, then
-                // only the initial gaps should be considered. Once share partition's endOffset is past
-                // initial read end offset then all gaps are anyway fetched.
-                if (isPersisterReadGapWindowActive()) {
-                    if (entry.getKey() > gapStartOffset) {
-                        nextFetchOffset = gapStartOffset;
-                        break;
-                    }
-                    // If the gapStartOffset is already past the last offset of the in-flight batch,
-                    // then do not consider this batch for finding the next fetch offset. For example,
-                    // consider during initialization, the gapWindow is set to 5 and the
-                    // first cached batch is 15-18. First read will happen at offset 5 and say the data
-                    // fetched is [5-6], now next fetch offset should be 7. This works fine but say
-                    // subsequent read returns batch 8-11, and the gapStartOffset will be 12. Without
-                    // the max check, the next fetch offset returned will be 7 which is incorrect.
-                    // The natural gaps for which no data is available shall be considered hence
-                    // take the max of the gapStartOffset and the last offset of the in-flight batch.
-                    gapStartOffset = Math.max(entry.getValue().lastOffset() + 1, gapStartOffset);
-                }
-
-                // Check if the state is maintained per offset or batch. If the offsetState
-                // is not maintained then the batch state is used to determine the offsets state.
-                if (entry.getValue().offsetState() == null) {
-                    if (entry.getValue().batchState() == RecordState.AVAILABLE && !entry.getValue().batchHasOngoingStateTransition()) {
-                        nextFetchOffset = entry.getValue().firstOffset();
-                        break;
-                    }
-                } else {
-                    // The offset state is maintained hence find the next available offset.
-                    for (Map.Entry<Long, InFlightState> offsetState : entry.getValue().offsetState().entrySet()) {
-                        if (offsetState.getValue().state() == RecordState.AVAILABLE && !offsetState.getValue().hasOngoingStateTransition()) {
-                            nextFetchOffset = offsetState.getKey();
-                            break;
-                        }
-                    }
-                    // Break from the outer loop if updated.
-                    if (nextFetchOffset != -1) {
-                        break;
-                    }
-                }
-            }
-
-            // If nextFetchOffset is -1, then no AVAILABLE records are found in the cachedState, so there is no need of
-            // re-computing next fetch offset in future fetch requests
-            if (nextFetchOffset == -1) {
-                updateFindNextFetchOffset(false);
-                nextFetchOffset = endOffset + 1;
-            }
-            log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, nextFetchOffset);
-            return nextFetchOffset;
+            return nextFetchOffsetUnderLock();
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    OptionalLong nextFetchOffsetIfAcquirable() {
+        lock.writeLock().lock();
+        try {
+            long nextFetchOffset = nextFetchOffsetUnderLock();
+            if (nextFetchOffset != endOffset + 1 || numInFlightRecords() < maxInFlightRecords()) {
+                return OptionalLong.of(nextFetchOffset);
+            }
+            return OptionalLong.empty();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private long nextFetchOffsetUnderLock() {
+        // When none of the records in the cachedState are in the AVAILABLE state, findNextFetchOffset will be false
+        if (!findNextFetchOffset) {
+            if (cachedState.isEmpty() || startOffset > cachedState.lastEntry().getValue().lastOffset()) {
+                // 1. When cachedState is empty, endOffset is set to the next offset of the last
+                // offset removed from batch, which is the next offset to be fetched.
+                // 2. When startOffset has moved beyond the in-flight records, startOffset and
+                // endOffset point to the LSO, which is the next offset to be fetched.
+                log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
+                return endOffset;
+            } else {
+                log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset + 1);
+                return endOffset + 1;
+            }
+        }
+
+        // If this piece of code is reached, it means that findNextFetchOffset is true
+        if (cachedState.isEmpty() || startOffset > cachedState.lastEntry().getValue().lastOffset()) {
+            // If cachedState is empty, there is no need of re-computing next fetch offset in future fetch requests.
+            // Same case when startOffset has moved beyond the in-flight records, startOffset and endOffset point to the LSO
+            // and the cached state is fresh.
+            updateFindNextFetchOffset(false);
+            log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
+            return endOffset;
+        }
+
+        long nextFetchOffset = -1;
+        long gapStartOffset = isPersisterReadGapWindowActive() ? persisterReadResultGapWindow.gapStartOffset() : -1;
+        for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
+            // Check if there exists any gap in the in-flight batch which needs to be fetched. If
+            // gapWindow's endOffset is equal to the share partition's endOffset, then
+            // only the initial gaps should be considered. Once share partition's endOffset is past
+            // initial read end offset then all gaps are anyway fetched.
+            if (isPersisterReadGapWindowActive()) {
+                if (entry.getKey() > gapStartOffset) {
+                    nextFetchOffset = gapStartOffset;
+                    break;
+                }
+                // If the gapStartOffset is already past the last offset of the in-flight batch,
+                // then do not consider this batch for finding the next fetch offset. For example,
+                // consider during initialization, the gapWindow is set to 5 and the
+                // first cached batch is 15-18. First read will happen at offset 5 and say the data
+                // fetched is [5-6], now next fetch offset should be 7. This works fine but say
+                // subsequent read returns batch 8-11, and the gapStartOffset will be 12. Without
+                // the max check, the next fetch offset returned will be 7 which is incorrect.
+                // The natural gaps for which no data is available shall be considered hence
+                // take the max of the gapStartOffset and the last offset of the in-flight batch.
+                gapStartOffset = Math.max(entry.getValue().lastOffset() + 1, gapStartOffset);
+            }
+
+            // Check if the state is maintained per offset or batch. If the offsetState
+            // is not maintained then the batch state is used to determine the offsets state.
+            if (entry.getValue().offsetState() == null) {
+                if (entry.getValue().batchState() == RecordState.AVAILABLE && !entry.getValue().batchHasOngoingStateTransition()) {
+                    nextFetchOffset = entry.getValue().firstOffset();
+                    break;
+                }
+            } else {
+                // The offset state is maintained hence find the next available offset.
+                for (Map.Entry<Long, InFlightState> offsetState : entry.getValue().offsetState().entrySet()) {
+                    if (offsetState.getValue().state() == RecordState.AVAILABLE && !offsetState.getValue().hasOngoingStateTransition()) {
+                        nextFetchOffset = offsetState.getKey();
+                        break;
+                    }
+                }
+                // Break from the outer loop if updated.
+                if (nextFetchOffset != -1) {
+                    break;
+                }
+            }
+        }
+
+        // If nextFetchOffset is -1, then no AVAILABLE records are found in the cachedState, so there is no need of
+        // re-computing next fetch offset in future fetch requests
+        if (nextFetchOffset == -1) {
+            updateFindNextFetchOffset(false);
+            nextFetchOffset = endOffset + 1;
+        }
+        log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, nextFetchOffset);
+        return nextFetchOffset;
     }
 
     /**
