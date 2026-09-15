@@ -260,7 +260,7 @@ static def projectToJUnitXmlPath(project) {
 apply from: file('wrapper.gradle')
 
 if (repo != null) {
-  rat {
+  tasks.rat {
     dependsOn subprojects.collect {
       it.tasks.matching {
         it.name == "processMessages" || it.name == "processTestMessages"
@@ -299,7 +299,7 @@ if (repo != null) {
     ])
   }
 } else {
-  rat.enabled = false
+  tasks.rat.enabled = false
 }
 println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $versions.gradle, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
