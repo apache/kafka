@@ -156,7 +156,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
-    private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_INITIAL_MS = 250;
+    static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_INITIAL_MS = 250;
     static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS = 60000;
     private static final long CONFIG_TOPIC_WRITE_PRIVILEGES_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
@@ -193,7 +193,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private ExtendedAssignment runningAssignment = ExtendedAssignment.empty();
     private final Set<ConnectorTaskId> tasksToRestart = new HashSet<>();
     // visible for testing
-    ExtendedAssignment assignment;
+    volatile ExtendedAssignment assignment;
     private boolean canReadConfigs;
     // visible for testing
     protected ClusterConfigState configState;
@@ -210,6 +210,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private Set<String> connectorTargetStateChanges = new HashSet<>();
     // Access to this map is protected by the herder's monitor
     private final Map<String, ZombieFencing> activeZombieFencings = new HashMap<>();
+    private final TaskConfigRefreshRecovery taskConfigRefreshRecovery = new TaskConfigRefreshRecovery();
     private final List<String> restNamespace;
     private boolean needsReconfigRebalance;
     private volatile boolean fencedFromConfigTopic;
@@ -1276,6 +1277,248 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         );
     }
 
+    @Override
+    public void refreshTaskConfigs(final String connName, final long expectedConfigOffset,
+                                   final Callback<Void> callback, InternalRequestSignature requestSignature) {
+        log.trace("Submitting task configuration refresh request for connector {} at config offset {}",
+                connName, expectedConfigOffset);
+        if (requestNotSignedProperly(requestSignature, callback)) {
+            return;
+        }
+
+        refreshTaskConfigs(connName, expectedConfigOffset, callback);
+    }
+
+    // Visible for testing
+    void refreshTaskConfigs(final String connName, final long expectedConfigOffset,
+                            final Callback<Void> callback) {
+        addRequest(() -> {
+            doRefreshTaskConfigs(connName, expectedConfigOffset, callback);
+            return null;
+        }, forwardErrorAndTickThreadStages(callback));
+    }
+
+    // Visible for testing
+    void doRefreshTaskConfigs(String connName, long expectedConfigOffset, Callback<Void> callback) {
+        if (!isLeader()) {
+            callback.onCompletion(
+                    new NotLeaderException("Only the leader may refresh task configurations.", leaderUrl()),
+                    null
+            );
+            return;
+        }
+
+        if (!refreshConfigSnapshot(workerSyncTimeoutMs)) {
+            callback.onCompletion(
+                    new ConnectException("Failed to read to the end of the config topic before refreshing task configurations"),
+                    null
+            );
+            return;
+        }
+
+        if (configState.offset() != expectedConfigOffset) {
+            callback.onCompletion(
+                    new RebalanceNeededException(
+                            "Cannot refresh task configurations for connector " + connName
+                                    + " because the assignment was created at config offset " + expectedConfigOffset
+                                    + " but the leader is at offset " + configState.offset()
+                    ),
+                    null
+            );
+        } else if (!configState.contains(connName)) {
+            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+        } else if (configState.targetState(connName) == TargetState.STOPPED) {
+            callback.onCompletion(
+                    new BadRequestException("Cannot refresh task configurations for stopped connector " + connName),
+                    null
+            );
+        } else {
+            int taskCount = configState.taskCount(connName);
+            if (taskCount == 0) {
+                callback.onCompletion(
+                        new ConnectException("Cannot refresh task configurations for connector " + connName
+                                + " because the leader does not have any task configurations"),
+                        null
+                );
+                return;
+            }
+            List<Map<String, String>> taskConfigs = new ArrayList<>(taskCount);
+            for (int taskIndex = 0; taskIndex < taskCount; taskIndex++) {
+                ConnectorTaskId taskId = new ConnectorTaskId(connName, taskIndex);
+                Map<String, String> taskConfig = configState.rawTaskConfig(taskId);
+                if (taskConfig == null) {
+                    callback.onCompletion(
+                            new ConnectException("Cannot refresh task configurations for connector " + connName
+                                    + " because the leader is missing the configuration for task " + taskId),
+                            null
+                    );
+                    return;
+                }
+                taskConfigs.add(taskConfig);
+            }
+
+            writeTaskConfigs(connName, taskConfigs);
+            callback.onCompletion(null, null);
+        }
+    }
+
+    // A task on this worker is missing its configuration and asks the current leader to re-publish the complete set.
+    void refreshTaskConfigs(final ConnectorTaskId id, final long expectedConfigOffset, Callback<Void> callback) {
+        refreshTaskConfigs(id.connector(), expectedConfigOffset, (error, ignored) -> {
+            if (error == null) {
+                callback.onCompletion(null, null);
+            } else if (error instanceof NotLeaderException) {
+                if (restClient != null) {
+                    String workerUrl = ((NotLeaderException) error).forwardUrl();
+                    String refreshUrl = namespacedUrl(workerUrl)
+                            .path("connectors")
+                            .path(id.connector())
+                            .path("tasks")
+                            .path("refresh")
+                            .build()
+                            .toString();
+                    log.trace("Forwarding task configuration refresh request for connector {} to leader at {}",
+                            id.connector(), refreshUrl);
+                    forwardRequestExecutor.execute(() -> {
+                        try {
+                            String stageDescription = "Forwarding task configuration refresh request to the leader at "
+                                    + workerUrl;
+                            try (TemporaryStage stage = new TemporaryStage(stageDescription, callback, time)) {
+                                restClient.httpRequest(
+                                        refreshUrl,
+                                        "POST",
+                                        null,
+                                        expectedConfigOffset,
+                                        sessionKey,
+                                        requestSignatureAlgorithm
+                                );
+                            }
+                            callback.onCompletion(null, null);
+                        } catch (Throwable t) {
+                            callback.onCompletion(t, null);
+                        }
+                    });
+                } else {
+                    callback.onCompletion(
+                            new ConnectException(
+                                    "This worker is not able to communicate with the leader of the cluster, "
+                                            + "which is required to recover task configurations missing after "
+                                            + "config topic compaction. If running MirrorMaker 2 in dedicated mode, "
+                                            + "consider enabling inter-worker communication via the "
+                                            + "'dedicated.mode.enable.internal.rest' property."
+                            ),
+                            null
+                    );
+                }
+            } else {
+                callback.onCompletion(
+                        ConnectUtils.maybeWrap(error, "Failed to refresh task configurations for connector " + id.connector()),
+                        null
+                );
+            }
+        });
+    }
+
+    // Visible for testing
+    void requestTaskConfigRefresh(ConnectorTaskId taskId) {
+        TaskConfigRefreshRecovery.Attempt refreshAttempt =
+                taskConfigRefreshRecovery.begin(taskId.connector(), assignment);
+        if (refreshAttempt == null) {
+            return;
+        }
+
+        ExponentialBackoff exponentialBackoff = new ExponentialBackoff(
+                RECONFIGURE_CONNECTOR_TASKS_BACKOFF_INITIAL_MS,
+                2,
+                RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS,
+                0
+        );
+        refreshTaskConfigsWithRetry(taskId, refreshAttempt, exponentialBackoff, 0);
+    }
+
+    private void refreshTaskConfigsWithRetry(ConnectorTaskId taskId, TaskConfigRefreshRecovery.Attempt refreshAttempt,
+                                             ExponentialBackoff exponentialBackoff, int attempts) {
+        if (!taskConfigRefreshStillNeeded(taskId.connector(), refreshAttempt)) {
+            return;
+        }
+
+        refreshTaskConfigs(taskId, refreshAttempt.configOffset(), (error, ignored) -> {
+            if (error == null) {
+                taskConfigRefreshRecovery.complete(taskId.connector(), refreshAttempt);
+                log.info("Requested recovery of the missing configuration for task {} at config offset {}",
+                        taskId, refreshAttempt.configOffset());
+                return;
+            }
+
+            if (!taskConfigRefreshStillNeeded(taskId.connector(), refreshAttempt)) {
+                return;
+            }
+
+            if (TaskConfigRefreshRecovery.requiresRejoin(error)) {
+                requestRejoinAfterTaskConfigRefreshFailure(taskId.connector(), refreshAttempt, error);
+                return;
+            }
+
+            if (attempts >= TaskConfigRefreshRecovery.MAX_RETRIES) {
+                log.warn("Failed to recover task configurations for connector {} at config offset {} after {} retries; "
+                                + "requesting a new assignment",
+                        taskId.connector(), refreshAttempt.configOffset(), attempts, error);
+                requestRejoinAfterTaskConfigRefreshFailure(taskId.connector(), refreshAttempt, error);
+                return;
+            }
+
+            long delayMs = exponentialBackoff.backoff(attempts);
+            log.warn("Failed to recover task configurations for connector {} at config offset {}; retrying in {} ms",
+                    taskId.connector(), refreshAttempt.configOffset(), delayMs, error);
+            addRequest(
+                    delayMs,
+                    () -> {
+                        refreshTaskConfigsWithRetry(
+                                taskId,
+                                refreshAttempt,
+                                exponentialBackoff,
+                                attempts + 1
+                        );
+                        return null;
+                    },
+                    (requestError, result) -> {
+                        if (requestError != null) {
+                            taskConfigRefreshRecovery.complete(taskId.connector(), refreshAttempt);
+                            log.error("Unexpected error while scheduling task configuration recovery for connector {}",
+                                    taskId.connector(), requestError);
+                        }
+                    }
+            );
+        });
+    }
+
+    private void requestRejoinAfterTaskConfigRefreshFailure(
+            String connName,
+            TaskConfigRefreshRecovery.Attempt refreshAttempt,
+            Throwable error
+    ) {
+        log.info("Task configuration recovery for connector {} at config offset {} requires a new assignment",
+                connName, refreshAttempt.configOffset(), error);
+        runOnTickThread(
+                () -> {
+                    member.requestRejoin();
+                    return null;
+                },
+                (rejoinError, result) -> { }
+        );
+    }
+
+    private synchronized boolean taskConfigRefreshStillNeeded(
+            String connName,
+            TaskConfigRefreshRecovery.Attempt refreshAttempt
+    ) {
+        if (taskConfigRefreshRecovery.isActive(connName, refreshAttempt, assignment)) {
+            return true;
+        }
+        log.debug("Skipping task configuration recovery for connector {} because its assignment changed", connName);
+        return false;
+    }
+
     // Another worker has forwarded a request to this worker (which it believes is the leader) to perform a round of zombie fencing
     @Override
     public void fenceZombieSourceTasks(final String connName, final Callback<Void> callback, InternalRequestSignature requestSignature) {
@@ -2002,13 +2245,23 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean startTask(ConnectorTaskId taskId) {
         log.info("Starting task {}", taskId);
         Map<String, String> connProps = configState.connectorConfig(taskId.connector());
+        Map<String, String> taskProps = configState.taskConfig(taskId);
+        if (taskProps == null) {
+            log.warn("Cannot start task {} because its configuration is missing; requesting that the leader "
+                    + "re-publish task configurations for the connector", taskId);
+            synchronized (this) {
+                tasksToRestart.add(taskId);
+            }
+            requestTaskConfigRefresh(taskId);
+            return false;
+        }
         switch (connectorType(connProps)) {
             case SINK:
                 return worker.startSinkTask(
                         taskId,
                         configState,
                         connProps,
-                        configState.taskConfig(taskId),
+                        taskProps,
                         this,
                         configState.targetState(taskId.connector())
                 );
@@ -2019,7 +2272,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             taskId,
                             configState,
                             connProps,
-                            configState.taskConfig(taskId),
+                            taskProps,
                             this,
                             configState.targetState(taskId.connector()),
                             () -> {
@@ -2041,7 +2294,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             taskId,
                             configState,
                             connProps,
-                            configState.taskConfig(taskId),
+                            taskProps,
                             this,
                             configState.targetState(taskId.connector())
                     );
@@ -2632,6 +2885,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             );
             synchronized (DistributedHerder.this) {
                 DistributedHerder.this.assignment = assignment;
+                taskConfigRefreshRecovery.prune(assignment);
                 DistributedHerder.this.generation = generation;
                 int delay = assignment.delay();
                 DistributedHerder.this.scheduledRebalance = delay > 0
