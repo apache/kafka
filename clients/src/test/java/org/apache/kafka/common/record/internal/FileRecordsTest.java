@@ -402,6 +402,8 @@ public class FileRecordsTest {
         int oldSize = fileRecords.sizeInBytes();
         assertEquals(this.fileRecords.sizeInBytes(), oldPosition);
         assertEquals(this.fileRecords.sizeInBytes(), oldSize);
+        fileRecords.trim();
+        fileRecords.flush();
         fileRecords.close();
 
         File tempReopen = new File(temp.getAbsolutePath());
