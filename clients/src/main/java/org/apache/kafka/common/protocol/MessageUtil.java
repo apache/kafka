@@ -111,55 +111,27 @@ public final class MessageUtil {
     }
 
     public static int jsonNodeToInt(JsonNode node, String about) {
-        if (node.isInt()) {
-            return node.asInt();
+        if (!node.isIntegralNumber()) {
+            throw new NumberFormatException(about + ": expected an integer type, but got " +
+                node.getNodeType());
         }
-        if (node.isTextual()) {
-            throw new NumberFormatException(about + ": expected an integer or " +
-                "string type, but got " + node.getNodeType());
+        if (!node.canConvertToInt()) {
+            throw new NumberFormatException(about + ": value " + node.bigIntegerValue() +
+                " does not fit in a 32-bit signed integer.");
         }
-        String text = node.asText();
-        if (text.startsWith("0x")) {
-            try {
-                return Integer.parseInt(text.substring(2), 16);
-            } catch (NumberFormatException e) {
-                throw new NumberFormatException(about + ": failed to " +
-                    "parse hexadecimal number: " + e.getMessage());
-            }
-        } else {
-            try {
-                return Integer.parseInt(text);
-            } catch (NumberFormatException e) {
-                throw new NumberFormatException(about + ": failed to " +
-                    "parse number: " + e.getMessage());
-            }
-        }
+        return node.intValue();
     }
 
     public static long jsonNodeToLong(JsonNode node, String about) {
-        if (node.isLong()) {
-            return node.asLong();
+        if (!node.isIntegralNumber()) {
+            throw new NumberFormatException(about + ": expected an integer type, but got " +
+                node.getNodeType());
         }
-        if (node.isTextual()) {
-            throw new NumberFormatException(about + ": expected an integer or " +
-                "string type, but got " + node.getNodeType());
+        if (!node.canConvertToLong()) {
+            throw new NumberFormatException(about + ": value " + node.bigIntegerValue() +
+                " does not fit in a 64-bit signed integer.");
         }
-        String text = node.asText();
-        if (text.startsWith("0x")) {
-            try {
-                return Long.parseLong(text.substring(2), 16);
-            } catch (NumberFormatException e) {
-                throw new NumberFormatException(about + ": failed to " +
-                    "parse hexadecimal number: " + e.getMessage());
-            }
-        } else {
-            try {
-                return Long.parseLong(text);
-            } catch (NumberFormatException e) {
-                throw new NumberFormatException(about + ": failed to " +
-                    "parse number: " + e.getMessage());
-            }
-        }
+        return node.longValue();
     }
 
     public static byte[] jsonNodeToBinary(JsonNode node, String about) {
