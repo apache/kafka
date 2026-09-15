@@ -19,6 +19,8 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.CreateTopicsOptions;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeAclsResult;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -30,8 +32,10 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -48,12 +52,15 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
@@ -395,6 +402,52 @@ public class MirrorSourceConnectorTest {
         }).when(connector).createNewTopics(any());
         connector.createNewTopics(Set.of(topic), Map.of(topic, 1L));
         verify(connector).createNewTopics(any(), any());
+    }
+
+    @Test
+    public void testCreateNewTopicsBatchesByEstimatedRecordCount() throws Exception {
+        Admin targetAdmin = mock(Admin.class);
+        MirrorSourceConnector connector = new MirrorSourceConnector(mock(Admin.class), targetAdmin,
+                new MirrorSourceConfig(makeProps()));
+        List<List<String>> requests = new ArrayList<>();
+        when(targetAdmin.createTopics(any(), any(CreateTopicsOptions.class))).thenAnswer(invocation -> {
+            Collection<NewTopic> topics = invocation.getArgument(0);
+            requests.add(topics.stream().map(NewTopic::name).collect(Collectors.toList()));
+            return createTopicsResult(topics, topic -> null);
+        });
+
+        Map<String, NewTopic> topics = new LinkedHashMap<>();
+        topics.put("a", new NewTopic("a", 4_999, (short) 1).configs(Map.of("cleanup.policy", "compact")));
+        topics.put("b", new NewTopic("b", 4_999, (short) 1).configs(Map.of("cleanup.policy", "compact")));
+        topics.put("c", new NewTopic("c", 1, (short) 1));
+        connector.createNewTopics(topics);
+
+        assertEquals(List.of(
+                List.of("a"),
+                List.of("b", "c")
+        ), requests);
+    }
+
+    @Test
+    public void testCreateNewTopicsSendsOversizedTopicAloneWithoutRetry() throws Exception {
+        Admin targetAdmin = mock(Admin.class);
+        MirrorSourceConnector connector = new MirrorSourceConnector(mock(Admin.class), targetAdmin,
+                new MirrorSourceConfig(makeProps()));
+        List<List<String>> requests = new ArrayList<>();
+        when(targetAdmin.createTopics(any(), any(CreateTopicsOptions.class))).thenAnswer(invocation -> {
+            Collection<NewTopic> topics = invocation.getArgument(0);
+            requests.add(topics.stream().map(NewTopic::name).collect(Collectors.toList()));
+            return createTopicsResult(topics, topic -> topic.name().equals("a")
+                    ? new PolicyViolationException("Too many partitions in request.")
+                    : null);
+        });
+
+        Map<String, NewTopic> topics = new LinkedHashMap<>();
+        topics.put("a", new NewTopic("a", 10_001, (short) 1));
+        topics.put("b", new NewTopic("b", 1, (short) 1));
+        connector.createNewTopics(topics);
+
+        assertEquals(List.of(List.of("a"), List.of("b")), requests);
     }
 
     @Test
@@ -783,5 +836,25 @@ public class MirrorSourceConnectorTest {
                 new TopicPartition(topic, partition),
                 sourceClusterAlias
         );
+    }
+
+    private static CreateTopicsResult createTopicsResult(
+            Collection<NewTopic> topics,
+            Function<NewTopic, Throwable> errorForTopic
+    ) {
+        CreateTopicsResult result = mock(CreateTopicsResult.class);
+        Map<String, KafkaFuture<Void>> futures = new HashMap<>();
+        for (NewTopic topic : topics) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            Throwable error = errorForTopic.apply(topic);
+            if (error == null) {
+                future.complete(null);
+            } else {
+                future.completeExceptionally(new CompletionException(error));
+            }
+            futures.put(topic.name(), future);
+        }
+        when(result.values()).thenReturn(futures);
+        return result;
     }
 }
