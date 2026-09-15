@@ -4671,6 +4671,8 @@ The key parts of this program are:
 `unbounded()`
      This configures the buffer used for storing events until their windows close. Production code is able to put a cap on the amount of memory to use for the buffer, but this simple example creates a buffer with no upper bound. 
 
+The suppression buffer follows the global [`dsl.store.format`](../config-streams#dsl-store-format) setting by default. To override it for one suppression, configure its buffer with `withHeadersEnabled()` or `withHeadersDisabled()`; the per-buffer setting takes precedence over the global configuration.
+
 One thing to note is that suppression is just like any other Kafka Streams operator, so you can build a topology with two branches emerging from the `count`, one suppressed, and one not, or even multiple differently configured suppressions. This allows you to apply suppressions where they are needed and otherwise rely on the default continuous update behavior. 
 
 For more detailed information, see the JavaDoc on the `Suppressed` config object and [KIP-328](https://cwiki.apache.org/confluence/x/sQU0BQ "KIP-328"). 

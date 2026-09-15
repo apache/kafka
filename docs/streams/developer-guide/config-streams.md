@@ -1402,7 +1402,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > * `DEFAULT`: Uses the existing timestamped or plain store variant per operator. Existing applications are unaffected.
 > * `HEADERS`: Uses headers-aware stores (introduced by [KIP-1271](https://cwiki.apache.org/confluence/x/QIM8G)) that can persist record headers alongside the value and timestamp.
 >
-> This config is global. Per-operator customization is possible by providing a custom `DslStoreSuppliers` via `Materialized.withStoreType(...)`, or by supplying explicit headers-aware store suppliers. Note that `dsl.store.format` is orthogonal to `dsl.store.suppliers.class`, which selects the store *implementation* (e.g., RocksDB vs in-memory); the two can be set independently.
+> This config is global. Per-operator customization is possible by providing a custom `DslStoreSuppliers` via `Materialized.withStoreType(...)`, by supplying explicit headers-aware store suppliers, or for `suppress()` by calling `Suppressed.BufferConfig.withHeadersEnabled()` or `withHeadersDisabled()`. Note that `dsl.store.format` is orthogonal to `dsl.store.suppliers.class`, which selects the store *implementation* (e.g., RocksDB vs in-memory); the two can be set independently.
 >
 > The accepted string values are `DEFAULT` and `HEADERS` (case-insensitive). These differ from the `DslStoreFormat` Java enum, which has constants `PLAIN`, `TIMESTAMPED`, and `HEADERS`; `DslStoreFormat.DEFAULT` does not exist as an enum constant.
 >
