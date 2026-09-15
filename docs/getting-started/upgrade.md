@@ -26,6 +26,15 @@ type: docs
 -->
 
 
+## Upgrading to 4.3.1
+
+### Notable changes in 4.3.1
+
+  * Includes a fix for a critical Kafka Streams native memory leak caused by RocksDB column family handles and `ColumnFamilyOptions` not being released, notably for the offsets column family introduced for [KIP-1035](https://cwiki.apache.org/confluence/x/uYvOEg) ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616), [KAFKA-20688](https://issues.apache.org/jira/browse/KAFKA-20688)).
+  * Includes a fix for a Kafka Streams stale-offset issue that could cause `OffsetOutOfRangeException` on restart ([KAFKA-20663](https://issues.apache.org/jira/browse/KAFKA-20663)).
+  * Includes a fix for `Admin` partition-leader APIs hanging when a cached leader has left the cluster ([KAFKA-20673](https://issues.apache.org/jira/browse/KAFKA-20673)).
+  * Includes fixes for spurious group coordinator errors logged after a partition leadership change ([KAFKA-20634](https://issues.apache.org/jira/browse/KAFKA-20634), [KAFKA-20635](https://issues.apache.org/jira/browse/KAFKA-20635)).
+
 ## Upgrading to 4.3.0
 
 ### Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0
