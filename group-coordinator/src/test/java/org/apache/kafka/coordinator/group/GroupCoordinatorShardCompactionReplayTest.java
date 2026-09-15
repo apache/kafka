@@ -39,6 +39,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.swing.GroupLayout.Group;
+
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.CompactionReplayTestContext.BAR_TOPIC_NAME;
@@ -96,10 +98,6 @@ public class GroupCoordinatorShardCompactionReplayTest {
             .buildCoordinatorMetadataImage();
     }
 
-    /**
-     * A fresh {@link CompactionReplayTestContext} for a single scenario, so no state is shared
-     * between test methods.
-     */
     private CompactionReplayTestContext newContext() {
         MockPartitionAssignor consumerAssignor = new MockPartitionAssignor("range");
         MockTaskAssignor streamsAssignor = new MockTaskAssignor("sticky");
@@ -650,7 +648,9 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * The positions removed by cleaning the compactable records in {@code [from, to)}.
+     * The positions removed by cleaning the compactable records. A tombstone is
+     * retained if an earlier surviving record shares its key, since the tombstone is still needed to
+     * delete that record on load.
      */
     private static Set<Integer> compactedPositions(
         List<CoordinatorRecord> log,
