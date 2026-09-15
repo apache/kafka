@@ -174,4 +174,79 @@ public final class MetaPropertiesTest {
                 setClusterId("zd2vLVrZQlCLJj8-k7A10w").
                 build()).getMessage());
     }
+
+    @Test
+    public void testV2SerializationWithoutClusterId() {
+        testV2Serialization(Optional.empty(),
+            0,
+            Optional.of(Uuid.fromString("3Adc4FjfTeypRWROmQDNIQ")),
+            "MetaProperties(version=2, nodeId=0, directoryId=3Adc4FjfTeypRWROmQDNIQ)");
+    }
+
+    @Test
+    public void testV2SerializationWithClusterId() {
+        testV2Serialization(Optional.of("zd2vLVrZQlCLJj8-k7A10w"),
+            1,
+            Optional.of(Uuid.fromString("3Adc4FjfTeypRWROmQDNIQ")),
+            "MetaProperties(version=2, clusterId=zd2vLVrZQlCLJj8-k7A10w, nodeId=1, " +
+                "directoryId=3Adc4FjfTeypRWROmQDNIQ)");
+    }
+
+    @Test
+    public void testV2SerializationWithoutDirectoryId() {
+        testV2Serialization(Optional.of("zd2vLVrZQlCLJj8-k7A10w"),
+            2,
+            Optional.empty(),
+            "MetaProperties(version=2, clusterId=zd2vLVrZQlCLJj8-k7A10w, nodeId=2)");
+    }
+
+    private void testV2Serialization(
+        Optional<String> clusterId,
+        int nodeId,
+        Optional<Uuid> directoryId,
+        String expectedToStringOutput
+    ) {
+        MetaProperties metaProperties = new MetaProperties.Builder().
+            setVersion(MetaPropertiesVersion.V2).
+            setClusterId(clusterId).
+            setNodeId(nodeId).
+            setDirectoryId(directoryId).
+            build();
+        assertEquals(MetaPropertiesVersion.V2, metaProperties.version());
+        assertEquals(clusterId, metaProperties.clusterId());
+        assertEquals(OptionalInt.of(nodeId), metaProperties.nodeId());
+        assertEquals(directoryId, metaProperties.directoryId());
+        Properties props = new Properties();
+        props.setProperty("version", "2");
+        clusterId.ifPresent(id -> props.setProperty("cluster.id", id));
+        props.setProperty("node.id", "" + nodeId);
+        directoryId.ifPresent(id -> props.setProperty("directory.id", id.toString()));
+        Properties props2 = metaProperties.toProperties();
+        assertEquals(props, props2);
+        MetaProperties metaProperties2 = new MetaProperties.Builder(props2).build();
+        assertEquals(metaProperties, metaProperties2);
+        assertEquals(metaProperties.hashCode(), metaProperties2.hashCode());
+        assertEquals(metaProperties.toString(), metaProperties2.toString());
+        assertEquals(expectedToStringOutput, metaProperties.toString());
+    }
+
+    @Test
+    public void testNodeIdRequiredInV2() {
+        assertEquals("node.id was not found.", assertThrows(RuntimeException.class,
+            () -> new MetaProperties.Builder().
+                setVersion(MetaPropertiesVersion.V2).
+                setDirectoryId(Uuid.fromString("3Adc4FjfTeypRWROmQDNIQ")).
+                build()).getMessage());
+    }
+
+    @Test
+    public void testClusterIdOptionalInV2() {
+        // This should not throw - cluster.id is optional in V2
+        MetaProperties metaProperties = new MetaProperties.Builder().
+            setVersion(MetaPropertiesVersion.V2).
+            setNodeId(1).
+            setDirectoryId(Uuid.fromString("3Adc4FjfTeypRWROmQDNIQ")).
+            build();
+        assertEquals(Optional.empty(), metaProperties.clusterId());
+    }
 }
