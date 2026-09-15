@@ -51,6 +51,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -400,7 +401,7 @@ public class TransactionalMessageCopier {
                             totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
                         }
                     } catch (ProducerFencedException e) {
-                        throw new KafkaException(String.format("The transactional.id %s has been claimed by another process", transactionalId), e);
+                        throw new KafkaException(String.format(Locale.ROOT, "The transactional.id %s has been claimed by another process", transactionalId), e);
                     } catch (KafkaException e) {
                         log.debug("Aborting transaction after catching exception", e);
                         abortTransactionAndResetPosition(producer, consumer);
