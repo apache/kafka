@@ -165,8 +165,9 @@ like the API key, version, and correlation ID).  A message's top-level
 {"0-1": "1", "2+": "2"} means versions 0-1 use header version 1, and version 2
 and up use header version 2.
 
-The ranges must start at 0, stay contiguous and non-overlapping, and end
-open-ended; header versions must never decrease as the message version rises.
+The ranges must start at 0, stay contiguous and non-overlapping, and end with
+an open-ended range; header versions must never decrease as the message version
+rises.
 A flexible message version must map to header version 2 or later (requests)
 or 1 or later (responses).  ApiVersionsResponse is the exception -- it always
 maps to header version 0, so that older brokers can parse it.

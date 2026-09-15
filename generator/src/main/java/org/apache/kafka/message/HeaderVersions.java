@@ -144,7 +144,7 @@ public final class HeaderVersions {
                     ", but it starts at version " + current.lowest() + ".");
             }
             if (currentEntry.headerVersion < previousEntry.headerVersion) {
-                throw new RuntimeException("Message " + messageName + " maps the higher message versions " + current +
+                throw new RuntimeException("Message " + messageName + " maps the higher message version range " + current +
                     " to header version " + currentEntry.headerVersion + ", which is lower than header version " +
                     previousEntry.headerVersion + " used by the earlier range " + previous +
                     "; header versions must not decrease as message versions increase.");

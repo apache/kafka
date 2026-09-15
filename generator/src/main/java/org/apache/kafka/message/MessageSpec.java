@@ -189,7 +189,7 @@ public final class MessageSpec {
      * Check that every flexible message version in {@code entry} maps to a flexible header version.
      */
     private void checkFlexibleVersionUsesFlexibleHeader(HeaderVersions.Entry entry, String typeName,
-                                                     boolean headerIsFlexible, short firstFlexibleHeader) {
+                                                        boolean headerIsFlexible, short firstFlexibleHeader) {
         short highest = (short) Math.min(entry.range().highest(), validVersions().highest());
         for (short version = entry.range().lowest(); version <= highest; version++) {
             if (!flexibleVersions.contains(version)) {
