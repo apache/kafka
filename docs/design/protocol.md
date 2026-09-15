@@ -220,11 +220,11 @@ A final question is why we don't use a system like Protocol Buffers or Thrift to
 
 ## Recommendations for 3rd‑party Clients: Member ID Format
 
-When a Kafka client participates in group protocols (e.g., `ConsumerGroupHeartbeat` RPC), it must generate a **member ID** to identify itself to the broker. While the protocol does not strictly enforce the format of this ID, we strongly recommend the following:
+When a Kafka client participates in group protocols (e.g., `ConsumerGroupHeartbeat` RPC), it must generate a **member ID** to identify itself to the broker. While the protocol does not strictly enforce the format of this ID, we recommend the following:
 
 1. **Use a base64‑encoded UUID** as the member ID.
 2. **Encode the UUID using URL‑safe base64** (without `+` or `/` characters).
-3. **Omit hyphens** — the resulting string should be a continuous sequence of alphanumeric characters (e.g., `abc123def456`).
+3. **Omit leading hyphens** — the resulting string should not include a leading hyphen
 
 **Example**  
 A standard UUID (`00000000-0000-0000-0000-000000000000`) should be transformed into a URL‑safe base64 string like: `YzYxNjQ4OTItZDE1Mi00Y2E4LWIyNzUtYmIwMzAwMDAwMDAw`
