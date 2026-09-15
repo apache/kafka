@@ -73,7 +73,6 @@ import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestCondition;
-import org.apache.kafka.test.TestUtils;
 
 import org.mockito.Mockito;
 
@@ -126,8 +125,9 @@ public final class RaftClientTestContext {
     private int electionTimeoutMs;
     private int requestTimeoutMs;
     private int appendLingerMs;
+    private boolean isBenchmarking = false;
 
-    private final QuorumStateStore quorumStateStore;
+    private final MockQuorumStateStore quorumStateStore;
     final String clusterId;
     private final OptionalInt localId;
     public final Uuid localDirectoryId;
@@ -152,6 +152,8 @@ public final class RaftClientTestContext {
 
     private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 2;
 
+    private static final int MAX_POLLS = 100;
+
     public static final class Builder {
         static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;
 
@@ -167,7 +169,7 @@ public final class RaftClientTestContext {
 
         private final MockMessageQueue messageQueue = new MockMessageQueue();
         private final MockTime time = new MockTime();
-        private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
+        private final MockQuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final MockableRandom random = new MockableRandom(1L);
         private final LogContext logContext = new LogContext();
         private final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
@@ -187,6 +189,7 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
+        private boolean isBenchmarking = false;
         private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
         private int fetchMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_MAX_BYTES;
 
@@ -406,6 +409,15 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        /**
+         * Drops fixture work a benchmark would otherwise measure as the client's own (default
+         * {@code false}): messages are no longer serialized and deserialized to mimic the network.
+         */
+        public Builder withBenchmarking(boolean isBenchmarking) {
+            this.isBenchmarking = isBenchmarking;
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
@@ -517,6 +529,7 @@ public final class RaftClientTestContext {
             context.electionTimeoutMs = electionTimeoutMs;
             context.requestTimeoutMs = requestTimeoutMs;
             context.appendLingerMs = appendLingerMs;
+            context.isBenchmarking = isBenchmarking;
 
             return context;
         }
@@ -533,7 +546,7 @@ public final class RaftClientTestContext {
         MockNetworkChannel channel,
         MockMessageQueue messageQueue,
         MockTime time,
-        QuorumStateStore quorumStateStore,
+        MockQuorumStateStore quorumStateStore,
         VoterSet startingVoters,
         Set<Integer> bootstrapIds,
         RaftProtocol raftProtocol,
@@ -567,6 +580,20 @@ public final class RaftClientTestContext {
         return electionTimeoutMs;
     }
 
+    /**
+     * Cumulative number of quorum-state-file writes. Used by the JMH raft benchmarks.
+     */
+    long quorumStateWriteCount() {
+        return quorumStateStore.writeCount();
+    }
+
+    /**
+     * Cumulative number of quorum-state-file reads. Used by the JMH raft benchmarks.
+     */
+    long quorumStateReadCount() {
+        return quorumStateStore.readCount();
+    }
+
     int requestTimeoutMs() {
         return requestTimeoutMs;
     }
@@ -575,7 +602,7 @@ public final class RaftClientTestContext {
         return appendLingerMs;
     }
 
-    MemoryRecords buildBatch(
+    public MemoryRecords buildBatch(
         long baseOffset,
         int epoch,
         List<String> records
@@ -643,7 +670,7 @@ public final class RaftClientTestContext {
             deliverResponse(request.correlationId(), request.destination(), voteResponse);
         }
 
-        client.poll();
+        pollUntil(() -> client.quorum().isLeader());
         assertElectedLeader(epoch, localIdOrThrow());
     }
 
@@ -669,8 +696,7 @@ public final class RaftClientTestContext {
             }
         }
 
-        client.poll();
-        assertTrue(client.quorum().isCandidate());
+        pollUntil(() -> client.quorum().isCandidate());
     }
 
     private int localIdOrThrow() {
@@ -717,17 +743,25 @@ public final class RaftClientTestContext {
     }
 
     public void pollUntil(TestCondition condition) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
-            poll();
-            return condition.conditionMet();
-        }, 5000, "Condition failed to be satisfied before timeout");
+        try {
+            for (int remaining = MAX_POLLS; remaining > 0; remaining--) {
+                poll();
+                if (condition.conditionMet()) {
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        throw new IllegalStateException(String.format(
+            "Condition not met within %d polls", MAX_POLLS));
     }
 
-    void pollUntilResponse() throws InterruptedException {
+    public void pollUntilResponse() throws InterruptedException {
         pollUntil(() -> !sentResponses.isEmpty());
     }
 
-    void pollUntilRequest() throws InterruptedException {
+    public void pollUntilRequest() throws InterruptedException {
         pollUntil(channel::hasSentRequests);
     }
 
@@ -965,6 +999,9 @@ public final class RaftClientTestContext {
     }
 
     private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
+        if (isBenchmarking) {
+            return message;
+        }
         ObjectSerializationCache cache =  new ObjectSerializationCache();
         ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
 
@@ -979,20 +1016,32 @@ public final class RaftClientTestContext {
         return message;
     }
 
-    void deliverRequest(ApiMessage request) {
+    public void deliverRequest(ApiMessage request) {
         short version = raftRequestVersion(request);
         deliverRequest(request, version);
     }
 
     void deliverRequest(ApiMessage request, short version) {
+        deliverRequest(inboundRequest(request, version));
+    }
+
+    public RaftRequest.Inbound inboundRequest(ApiMessage request) {
+        return inboundRequest(request, raftRequestVersion(request));
+    }
+
+    private RaftRequest.Inbound inboundRequest(ApiMessage request, short version) {
         ApiMessage versionedRequest = roundTripApiMessage(request, version);
-        RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
+        return new RaftRequest.Inbound(
             channel.listenerName(),
             channel.newCorrelationId(),
             version,
             versionedRequest,
             time.milliseconds()
         );
+    }
+
+    /** Enqueues a pre-built inbound request onto the client and collects its eventual response. */
+    private void deliverRequest(RaftRequest.Inbound inboundRequest) {
         client.handle(inboundRequest).whenComplete((response, exception) -> {
             if (exception != null) {
                 uncaughtExceptions.add(exception);
@@ -1002,7 +1051,7 @@ public final class RaftClientTestContext {
         });
     }
 
-    void deliverResponse(int correlationId, Node source, ApiMessage response) {
+    public void deliverResponse(int correlationId, Node source, ApiMessage response) {
         short version = raftResponseVersion(response);
         ApiMessage versionedResponse = roundTripApiMessage(response, version);
         channel.mockReceive(new RaftResponse.Inbound(correlationId, versionedResponse, source));
@@ -1209,7 +1258,7 @@ public final class RaftClientTestContext {
         }
     }
 
-    RaftRequest.Outbound assertSentFetchRequest() {
+    public RaftRequest.Outbound assertSentFetchRequest() {
         List<RaftRequest.Outbound> sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.FETCH));
         assertEquals(1, sentRequests.size());
         return sentRequests.get(0);
@@ -1592,7 +1641,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    EndQuorumEpochRequestData endEpochRequest(
+    public EndQuorumEpochRequestData endEpochRequest(
         int epoch,
         int leaderId,
         List<ReplicaKey> preferredCandidates
@@ -1620,7 +1669,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
+    public BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
         return beginEpochRequest(clusterId, epoch, leaderId);
     }
 
@@ -1871,7 +1920,7 @@ public final class RaftClientTestContext {
         }
     }
 
-    FetchRequestData fetchRequest(
+    public FetchRequestData fetchRequest(
         int epoch,
         ReplicaKey replicaKey,
         long fetchOffset,
@@ -1940,7 +1989,7 @@ public final class RaftClientTestContext {
             );
     }
 
-    FetchResponseData fetchResponse(
+    public FetchResponseData fetchResponse(
         int epoch,
         int leaderId,
         Records records,
@@ -2043,7 +2092,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    DescribeQuorumRequestData describeQuorumRequest() {
+    public DescribeQuorumRequestData describeQuorumRequest() {
         return RaftUtil.singletonDescribeQuorumRequest(metadataPartition);
     }
 
@@ -2305,7 +2354,8 @@ public final class RaftClientTestContext {
             // was not received early on the leader.
             assertTrue(
                 leaderAndEpoch.epoch() >= currentLeaderAndEpoch.epoch(),
-                String.format("new epoch (%d) not >= than old epoch (%d)", leaderAndEpoch.epoch(), currentLeaderAndEpoch.epoch())
+                // Lazy message
+                () -> String.format("new epoch (%d) not >= than old epoch (%d)", leaderAndEpoch.epoch(), currentLeaderAndEpoch.epoch())
             );
             assertNotEquals(currentLeaderAndEpoch, leaderAndEpoch);
             this.currentLeaderAndEpoch = leaderAndEpoch;
@@ -2357,7 +2407,7 @@ public final class RaftClientTestContext {
      * Determines what versions of RPCs are in use. Note, these are ordered from oldest to newest, and are
      * cumulative. E.g. KIP_1186_PROTOCOL includes KIP_996_PROTOCOL, KIP_853_PROTOCOL, and KIP_595_PROTOCOL changes
      */
-    enum RaftProtocol {
+    public enum RaftProtocol {
         // kraft support
         KIP_595_PROTOCOL,
         // dynamic quorum reconfiguration support
