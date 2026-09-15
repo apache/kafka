@@ -38,7 +38,11 @@ public class NamedTest {
         final String[] invalidNames = {"", "foo bar", "..", "foo:bar", "foo=bar", ".", new String(longString)};
 
         for (final String name : invalidNames) {
-            assertThrows(TopologyException.class, () -> Named.validate(name), "No exception was thrown for named with invalid name: " + name);
+            assertThrows(
+                TopologyException.class,
+                () -> Named.validate(name),
+                "should not accept invalid name: '" + name + "'"
+            );
         }
     }
 }

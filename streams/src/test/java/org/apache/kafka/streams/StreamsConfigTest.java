@@ -827,7 +827,11 @@ public class StreamsConfigTest {
     public void shouldThrowExceptionIfCommitIntervalMsIsNegative() {
         final long commitIntervalMs = -1;
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
-        final ConfigException e = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException e = assertThrows(
+            ConfigException.class,
+            () -> new StreamsConfig(props),
+            "should not accept a negative commit interval"
+        );
         assertEquals(
             "Invalid value -1 for configuration commit.interval.ms: Value must be at least 0",
             e.getMessage()
@@ -862,7 +866,11 @@ public class StreamsConfigTest {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
-        final StreamsException e = assertThrows(StreamsException.class, config::defaultKeySerde);
+        final StreamsException e = assertThrows(
+            StreamsException.class,
+            config::defaultKeySerde,
+            "should not return a default key serde that fails to configure"
+        );
         assertEquals(
             "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
             e.getMessage()
@@ -875,7 +883,11 @@ public class StreamsConfigTest {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
-        final StreamsException e = assertThrows(StreamsException.class, config::defaultValueSerde);
+        final StreamsException e = assertThrows(
+            StreamsException.class,
+            config::defaultValueSerde,
+            "should not return a default value serde that fails to configure"
+        );
         assertEquals(
             "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
             e.getMessage()
@@ -887,7 +899,11 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 7);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final ConfigException e = assertThrows(ConfigException.class, () -> streamsConfig.getProducerConfigs(clientId));
+        final ConfigException e = assertThrows(
+            ConfigException.class,
+            () -> streamsConfig.getProducerConfigs(clientId),
+            "should not accept max in flight requests above 5 when exactly-once is enabled"
+        );
         assertEquals(
             "Invalid value 7 for configuration max.in.flight.requests.per.connection:" +
                 " Can't exceed 5 when exactly-once processing is enabled",
@@ -908,7 +924,11 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "not-a-number");
 
-        final ConfigException e = assertThrows(ConfigException.class, () -> new StreamsConfig(props).getProducerConfigs(clientId));
+        final ConfigException e = assertThrows(
+            ConfigException.class,
+            () -> new StreamsConfig(props).getProducerConfigs(clientId),
+            "should not accept a non-numeric max in flight requests when exactly-once is enabled"
+        );
         assertEquals(
             "Invalid value not-a-number for configuration max.in.flight.requests.per.connection:" +
             " String value could not be parsed as 32-bit integer",

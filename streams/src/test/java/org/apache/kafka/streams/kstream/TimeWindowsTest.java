@@ -59,26 +59,42 @@ public class TimeWindowsTest {
     @Test
     public void advanceIntervalMustNotBeZero() {
         final TimeWindows windowSpec = TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE));
-        assertThrows(IllegalArgumentException.class, () -> windowSpec.advanceBy(ofMillis(0)));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> windowSpec.advanceBy(ofMillis(0)),
+            "should not accept zero advance parameter"
+        );
     }
 
     @Test
     public void advanceIntervalMustNotBeNegative() {
         final TimeWindows windowSpec = TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE));
-        assertThrows(IllegalArgumentException.class, () -> windowSpec.advanceBy(ofMillis(-1)));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> windowSpec.advanceBy(ofMillis(-1)),
+            "should not accept negative advance parameter"
+        );
     }
 
     @Test
     public void advanceIntervalMustNotBeLargerThanWindowSize() {
         final TimeWindows windowSpec = TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE));
-        assertThrows(IllegalArgumentException.class, () -> windowSpec.advanceBy(ofMillis(ANY_SIZE + 1)));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> windowSpec.advanceBy(ofMillis(ANY_SIZE + 1)),
+            "should not accept advance greater than window size"
+        );
     }
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
         TimeWindows.ofSizeAndGrace(ofMillis(3L), ofMillis(0L));
 
-        assertThrows(IllegalArgumentException.class, () -> TimeWindows.ofSizeAndGrace(ofMillis(3L), ofMillis(-1L)));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> TimeWindows.ofSizeAndGrace(ofMillis(3L), ofMillis(-1L)),
+            "should not accept a negative grace period"
+        );
     }
 
     @Test

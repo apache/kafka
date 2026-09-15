@@ -42,7 +42,11 @@ public class SessionWindowsTest {
     public void gracePeriodShouldEnforceBoundaries() {
         SessionWindows.ofInactivityGapAndGrace(ofMillis(3L), ofMillis(0));
 
-        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapAndGrace(ofMillis(3L), ofMillis(-1L)));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> SessionWindows.ofInactivityGapAndGrace(ofMillis(3L), ofMillis(-1L)),
+            "should not accept a negative grace period"
+        );
     }
 
     @Test

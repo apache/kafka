@@ -187,44 +187,72 @@ public class TopologyTest {
     @Test
     public void shouldNotAllowToAddSourcesWithSameName() {
         topology.addSource("source", "topic-1");
-        assertThrows(TopologyException.class, () -> topology.addSource("source", "topic-2"));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source", "topic-2"),
+            "should not allow a duplicate source name"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddTopicTwice() {
         topology.addSource("source", "topic-1");
-        assertThrows(TopologyException.class, () -> topology.addSource("source-2", "topic-1"));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source-2", "topic-1"),
+            "should not allow a topic that is already used"
+        );
     }
 
     @Test
     public void testPatternMatchesAlreadyProvidedTopicSource() {
         topology.addSource("source-1", "foo");
-        assertThrows(TopologyException.class, () -> topology.addSource("source-2", Pattern.compile("f.*")));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source-2", Pattern.compile("f.*")),
+            "should not allow a pattern overlapping an already registered topic"
+        );
     }
 
     @Test
     public void testNamedTopicMatchesAlreadyProvidedPattern() {
         topology.addSource("source-1", Pattern.compile("f.*"));
-        assertThrows(TopologyException.class, () -> topology.addSource("source-2", "foo"));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source-2", "foo"),
+            "should not allow a topic overlapping an already registered pattern"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddProcessorWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        assertThrows(TopologyException.class, () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source"));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source"),
+            "should not allow a duplicate processor name"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddProcessorWithEmptyParents() {
         topology.addSource("source", "topic-1");
-        assertThrows(TopologyException.class, () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>()));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>()),
+            "should not allow a processor without at least one parent node"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddProcessorWithNullParents() {
         topology.addSource("source", "topic-1");
-        assertThrows(NullPointerException.class, () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null));
+        assertThrows(
+            NullPointerException.class,
+            () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null),
+            "should not allow null parent names for a processor"
+        );
     }
 
     @Test
@@ -241,21 +269,33 @@ public class TopologyTest {
     public void shouldNotAllowToAddSinkWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addSink("sink", "topic-2", "source");
-        assertThrows(TopologyException.class, () -> topology.addSink("sink", "topic-3", "source"));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSink("sink", "topic-3", "source"),
+            "should not allow a duplicate sink name"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddSinkWithEmptyParents() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        assertThrows(TopologyException.class, () -> topology.addSink("sink", "topic-2"));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSink("sink", "topic-2"),
+            "should not allow a sink without at least one parent node"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddSinkWithNullParents() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        assertThrows(NullPointerException.class, () -> topology.addSink("sink", "topic-2", (String) null));
+        assertThrows(
+            NullPointerException.class,
+            () -> topology.addSink("sink", "topic-2", (String) null),
+            "should not allow null parent names for a sink"
+        );
     }
 
     @Test
@@ -272,7 +312,11 @@ public class TopologyTest {
     public void shouldFailIfSinkIsParent() {
         topology.addSource("source", "topic-1");
         topology.addSink("sink-1", "topic-2", "source");
-        assertThrows(TopologyException.class, () -> topology.addSink("sink-2", "topic-3", "sink-1"));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSink("sink-2", "topic-3", "sink-1"),
+            "should not allow a sink as a parent node"
+        );
     }
 
     @Test
@@ -285,7 +329,11 @@ public class TopologyTest {
     public void shouldNotAllowToAddStateStoreToSource() {
         mockStoreBuilder();
         topology.addSource("source-1", "topic-1");
-        assertThrows(TopologyException.class, () -> topology.addStateStore(storeBuilder, "source-1"));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addStateStore(storeBuilder, "source-1"),
+            "should not allow adding a state store to a source node"
+        );
     }
 
     @Test
@@ -293,7 +341,11 @@ public class TopologyTest {
         mockStoreBuilder();
         topology.addSource("source-1", "topic-1");
         topology.addSink("sink-1", "topic-1", "source-1");
-        assertThrows(TopologyException.class, () -> topology.addStateStore(storeBuilder, "sink-1"));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addStateStore(storeBuilder, "sink-1"),
+            "should not allow adding a state store to a sink node"
+        );
     }
 
     private void mockStoreBuilder() {
@@ -307,7 +359,11 @@ public class TopologyTest {
 
         final StoreBuilder<?> otherStoreBuilder = mock(StoreBuilder.class);
         when(otherStoreBuilder.name()).thenReturn("store");
-        assertThrows(TopologyException.class, () -> topology.addStateStore(otherStoreBuilder));
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addStateStore(otherStoreBuilder),
+            "should not allow the same store name with a different StoreBuilder"
+        );
     }
 
     @Test
