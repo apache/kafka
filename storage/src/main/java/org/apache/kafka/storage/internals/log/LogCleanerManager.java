@@ -630,6 +630,15 @@ public class LogCleanerManager {
         });
     }
 
+    public void markPartitionCleanable(TopicPartition partition) {
+        inLock(lock, () -> {
+            uncleanablePartitions.values().forEach(partitions -> partitions.remove(partition));
+            uncleanablePartitions.entrySet().removeIf(entry -> entry.getValue().isEmpty());
+
+            return null;
+        });
+    }
+
     private boolean isUncleanablePartition(UnifiedLog log, TopicPartition topicPartition) {
         return inLock(lock, () -> Optional.ofNullable(uncleanablePartitions.get(log.parentDir()))
                 .map(partitions -> partitions.contains(topicPartition))

@@ -302,6 +302,10 @@ public class LogCleaner {
         cleanerManager.abortCleaning(topicPartition);
     }
 
+    public void retryCleaning(TopicPartition topicPartition) {
+        cleanerManager.markPartitionCleanable(topicPartition);
+    }
+
     /**
      * Update checkpoint file to remove partitions if necessary.
      *
