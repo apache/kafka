@@ -38,6 +38,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -331,6 +332,30 @@ public class RetryWithToleranceOperatorTest {
         assertEquals(4500L, time.milliseconds());
         verify(exitLatch).countDown();
         verifyNoMoreInteractions(exitLatch);
+    }
+
+    @Test
+    public void testBackoffStaysWithinLimitForLargeAttemptCounts() throws Exception {
+        long maxDelay = 60000;
+        MockTime time = new MockTime(0, 0, 0);
+        CountDownLatch exitLatch = mock(CountDownLatch.class);
+        // errors.retry.timeout of -1 means infinite retries, which leaves the attempt count unbounded.
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator =
+                new RetryWithToleranceOperator<>(-1, maxDelay, ALL, time, errorHandlingMetrics, exitLatch);
+
+        // Walk the attempt count past the point where the exponential term overflows a long, and
+        // past the point where the shift distance wraps around to zero.
+        int attempts = 130;
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            retryWithToleranceOperator.backoff(attempt, Long.MAX_VALUE);
+        }
+
+        ArgumentCaptor<Long> delayCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(exitLatch, times(attempts)).await(delayCaptor.capture(), any());
+        for (long delay : delayCaptor.getAllValues()) {
+            assertTrue(delay >= 0 && delay <= maxDelay,
+                    "Backoff delay " + delay + " is outside the expected range [0, " + maxDelay + "]");
+        }
     }
 
     @Test
