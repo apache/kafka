@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 
 /**
- * This class just provides a static name for the methods in the {@link ConsumerRebalanceListener} interface
+ * This class just provides a static name for the methods in the {@link RebalanceListener} interface
  * for a bit more compile time assurance.
  */
 public enum ConsumerRebalanceListenerMethodName {
@@ -31,11 +31,11 @@ public enum ConsumerRebalanceListenerMethodName {
     private final String fullyQualifiedMethodName;
 
     ConsumerRebalanceListenerMethodName(String methodName) {
-        this.fullyQualifiedMethodName = String.format("%s.%s", ConsumerRebalanceListener.class.getSimpleName(), methodName);
+        this.fullyQualifiedMethodName = String.format("%s.%s", RebalanceListener.class.getSimpleName(), methodName);
     }
 
     /**
-     * Provides the fully-qualified method name, e.g. {@code ConsumerRebalanceListener.onPartitionsRevoked}. This
+     * Provides the fully-qualified method name, e.g. {@code RebalanceListener.onPartitionsRevoked}. This
      * is used for log messages.
      *
      * @return Fully-qualified method name
