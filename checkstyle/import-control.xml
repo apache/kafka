@@ -510,6 +510,7 @@
     <!-- for testing -->
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.network" />
+    <allow class="org.apache.logging.log4j.Level" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
