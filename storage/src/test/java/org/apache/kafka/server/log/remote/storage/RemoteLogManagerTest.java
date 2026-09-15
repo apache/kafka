@@ -4079,6 +4079,29 @@ public class RemoteLogManagerTest {
     }
 
     @Test
+    public void testRemoteDeleteLagResetsToZeroOnBecomingFollower() {
+        remoteLogManager.onLeadershipChange(
+                Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
+        RemoteLogManager.RLMExpirationTask rlmTask =
+                (RemoteLogManager.RLMExpirationTask) remoteLogManager.rlmExpirationTask(leaderTopicIdPartition);
+        assertNotNull(rlmTask);
+        rlmTask.updateRemoteDeleteLagWith(2, 1024);
+        assertEquals(1024, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteDeleteLagBytes());
+        assertEquals(2, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteDeleteLagSegments());
+        // The same node becomes follower now which was the previous leader
+        remoteLogManager.onLeadershipChange(Set.of(),
+                Set.of(mockPartition(leaderTopicIdPartition)), topicIds);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteDeleteLagBytes());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteDeleteLagSegments());
+
+        // If the old (now cancelled) expiration task emits the delete-lag stats, they should be discarded.
+        // Without the isCancelled() guard this re-registers a phantom non-zero lag that never drains.
+        rlmTask.updateRemoteDeleteLagWith(4, 2048);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteDeleteLagBytes());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteDeleteLagSegments());
+    }
+
+    @Test
     public void testCopyLagMetricsWithOnlyActiveSegment() {
         LogSegment activeSegment = mock(LogSegment.class);
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
