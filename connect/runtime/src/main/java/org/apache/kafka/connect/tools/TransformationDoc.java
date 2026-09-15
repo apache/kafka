@@ -23,6 +23,7 @@ import org.apache.kafka.connect.transforms.ExtractField;
 import org.apache.kafka.connect.transforms.Filter;
 import org.apache.kafka.connect.transforms.Flatten;
 import org.apache.kafka.connect.transforms.HeaderFrom;
+import org.apache.kafka.connect.transforms.HeaderRouter;
 import org.apache.kafka.connect.transforms.HoistField;
 import org.apache.kafka.connect.transforms.InsertField;
 import org.apache.kafka.connect.transforms.InsertHeader;
@@ -48,6 +49,7 @@ public class TransformationDoc {
             new DocInfo(Filter.class.getName(), Filter.OVERVIEW_DOC, Filter.CONFIG_DEF),
             new DocInfo(Flatten.class.getName(), Flatten.OVERVIEW_DOC, Flatten.CONFIG_DEF),
             new DocInfo(HeaderFrom.class.getName(), HeaderFrom.OVERVIEW_DOC, HeaderFrom.CONFIG_DEF),
+            new DocInfo(HeaderRouter.class.getName(), HeaderRouter.OVERVIEW_DOC, HeaderRouter.CONFIG_DEF),
             new DocInfo(HoistField.class.getName(), HoistField.OVERVIEW_DOC, HoistField.CONFIG_DEF),
             new DocInfo(InsertField.class.getName(), InsertField.OVERVIEW_DOC, InsertField.CONFIG_DEF),
             new DocInfo(InsertHeader.class.getName(), InsertHeader.OVERVIEW_DOC, InsertHeader.CONFIG_DEF),
