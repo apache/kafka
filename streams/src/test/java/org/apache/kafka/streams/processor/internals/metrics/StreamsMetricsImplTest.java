@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -332,6 +333,121 @@ public class StreamsMetricsImplTest {
         );
 
         assertEquals(sensor, actualSensor);
+    }
+
+    @Test
+    public void shouldRemoveSensorNameWhenSensorIsRemoved() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor sensor = streamsMetrics.topicLevelSensor(
+                THREAD_ID1, TASK_ID1, NODE_ID1, TOPIC_ID1, SENSOR_NAME_1, RecordingLevel.INFO);
+            streamsMetrics.removeSensor(sensor);
+        }
+
+        assertThat(streamsMetrics.topicLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldRemoveSensorNamesOfDistinctSensorsWhenTheyAreRemoved() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor sensor = streamsMetrics.topicLevelSensor(
+                THREAD_ID1, TASK_ID1, NODE_ID1, TOPIC_ID1 + i, SENSOR_NAME_1, RecordingLevel.INFO);
+            streamsMetrics.removeSensor(sensor);
+        }
+
+        assertThat(streamsMetrics.topicLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldRemoveSensorNameWhenTopicContainsSensorNameDelimiter() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        final Sensor sensor = streamsMetrics.topicLevelSensor(
+            THREAD_ID1, TASK_ID1, NODE_ID1, "topic.s.with.delimiter", SENSOR_NAME_1, RecordingLevel.INFO);
+        streamsMetrics.removeSensor(sensor);
+
+        assertThat(streamsMetrics.topicLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldRemoveThreadLevelSensorNameWhenSensorIsRemoved() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor sensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, RecordingLevel.INFO);
+            streamsMetrics.removeSensor(sensor);
+        }
+
+        assertThat(streamsMetrics.threadLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldKeepRemainingSensorNamesOfTheSameEntity() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+        final Sensor removed = streamsMetrics.topicLevelSensor(
+            THREAD_ID1, TASK_ID1, NODE_ID1, TOPIC_ID1, SENSOR_NAME_1, RecordingLevel.INFO);
+        final Sensor remaining = streamsMetrics.topicLevelSensor(
+            THREAD_ID1, TASK_ID1, NODE_ID1, TOPIC_ID1, SENSOR_NAME_2, RecordingLevel.INFO);
+
+        streamsMetrics.removeSensor(removed);
+
+        final Map<String, Set<String>> topicLevelSensors = streamsMetrics.topicLevelSensors();
+        assertThat(topicLevelSensors.size(), is(1));
+        assertThat(topicLevelSensors.values().iterator().next(), is(Set.of(remaining.name())));
+    }
+
+    @Test
+    public void shouldRemoveTaskLevelSensorNameWhenSensorIsRemoved() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor sensor = streamsMetrics.taskLevelSensor(
+                THREAD_ID1, TASK_ID1, SENSOR_NAME_1, RecordingLevel.INFO);
+            streamsMetrics.removeSensor(sensor);
+        }
+
+        assertThat(streamsMetrics.taskLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldRemoveNodeLevelSensorNameWhenSensorIsRemoved() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor sensor = streamsMetrics.nodeLevelSensor(
+                THREAD_ID1, TASK_ID1, NODE_ID1, SENSOR_NAME_1, RecordingLevel.INFO);
+            streamsMetrics.removeSensor(sensor);
+        }
+
+        assertThat(streamsMetrics.nodeLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldRemoveCacheLevelSensorNameWhenSensorIsRemoved() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor sensor = streamsMetrics.cacheLevelSensor(
+                THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_1, RecordingLevel.INFO);
+            streamsMetrics.removeSensor(sensor);
+        }
+
+        assertThat(streamsMetrics.cacheLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldRemoveClientLevelSensorNameWhenSensorIsRemoved() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor sensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+            streamsMetrics.removeSensor(sensor);
+        }
+
+        assertThat(streamsMetrics.clientLevelSensors().isEmpty(), is(true));
     }
 
     @Test
@@ -819,7 +935,9 @@ public class StreamsMetricsImplTest {
         final Sensor sensor3 = streamsMetrics.addRateTotalSensor(scope, entity, operation, RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
 
-        assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors());
+        assertNull(metrics.getSensor(sensor1.name()));
+        assertNull(metrics.getSensor(sensor2.name()));
+        assertNull(metrics.getSensor(sensor3.name()));
     }
 
     @Test
