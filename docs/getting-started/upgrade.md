@@ -58,6 +58,15 @@ type: docs
   * For tiered-storage topics, time-based local retention (`local.retention.ms`) now uses a segment's last modified time as the age anchor when the segment's largest record timestamp is in the future. Previously such a segment was never removed by time-based retention (its future timestamp kept it perpetually within the retention window) and was only reclaimed once `local.retention.bytes` was breached, even though it had already been uploaded to remote storage. For further details, please refer to [KAFKA-20609](https://issues.apache.org/jira/browse/KAFKA-20609).
   * `group.consumer.assignors` no longer allows a custom assignor to reuse the name of a built-in assignor (e.g. `uniform`, `range`), even when it is configured on its own to intentionally replace the built-in's behavior. Such a configuration used to be accepted and now fails broker startup with a `ConfigException`. For further details, please refer to [KAFKA-20843](https://issues.apache.org/jira/browse/KAFKA-20843).
 
+## Upgrading to 4.3.1
+
+### Notable changes in 4.3.1
+
+  * Includes a fix for a critical Kafka Streams native memory leak caused by RocksDB column family handles and `ColumnFamilyOptions` not being released, notably for the offsets column family introduced for [KIP-1035](https://cwiki.apache.org/confluence/x/uYvOEg) ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616), [KAFKA-20688](https://issues.apache.org/jira/browse/KAFKA-20688)).
+  * Includes a fix for a Kafka Streams stale-offset issue that could cause `OffsetOutOfRangeException` on restart ([KAFKA-20663](https://issues.apache.org/jira/browse/KAFKA-20663)).
+  * Includes a fix for `Admin` partition-leader APIs hanging when a cached leader has left the cluster ([KAFKA-20673](https://issues.apache.org/jira/browse/KAFKA-20673)).
+  * Includes fixes for spurious group coordinator errors logged after a partition leadership change ([KAFKA-20634](https://issues.apache.org/jira/browse/KAFKA-20634), [KAFKA-20635](https://issues.apache.org/jira/browse/KAFKA-20635)).
+
 ## Upgrading to 4.3.0
 
 ### Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0
