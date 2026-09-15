@@ -70,7 +70,12 @@ public class GetOffsetShell {
         try {
             execute(args);
             return 0;
-        } catch (TerseException e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException | TerseException e) {
             System.err.println("Error occurred: " + e.getMessage());
             return 1;
         } catch (Throwable e) {
@@ -136,7 +141,7 @@ public class GetOffsetShell {
             excludeInternalTopicsOpt = parser.accepts("exclude-internal-topics", "By default, internal topics are included. If specified, internal topics are excluded.");
 
             if (args.length == 0) {
-                CommandLineUtils.printUsageAndExit(parser, USAGE_TEXT);
+                CommandLineUtils.printUsageAndThrow(parser, USAGE_TEXT);
             }
 
             try {
@@ -154,7 +159,7 @@ public class GetOffsetShell {
             try {
                 ToolsUtils.validateBootstrapServer(brokerList);
             } catch (IllegalArgumentException e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
             }
         }
 
