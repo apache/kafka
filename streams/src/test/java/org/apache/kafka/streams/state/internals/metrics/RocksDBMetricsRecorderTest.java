@@ -33,6 +33,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.mockito.verification.VerificationMode;
 import org.rocksdb.Cache;
 import org.rocksdb.HistogramData;
 import org.rocksdb.HistogramType;
@@ -120,25 +121,7 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
-    public void shouldInitMetricsRecorder() {
-        dbMetrics.verify(() -> RocksDBMetrics.bytesWrittenToDatabaseSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.bytesReadFromDatabaseSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.memtableBytesFlushedSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.memtableHitRatioSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.memtableAvgFlushTimeSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.memtableMinFlushTimeSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.memtableMaxFlushTimeSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.writeStallDurationSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.blockCacheDataHitRatioSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.blockCacheIndexHitRatioSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.blockCacheFilterHitRatioSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.bytesWrittenDuringCompactionSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.bytesReadDuringCompactionSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.compactionTimeAvgSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.compactionTimeMinSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.compactionTimeMaxSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.numberOfOpenFilesSensor(any(), any()));
-        dbMetrics.verify(() -> RocksDBMetrics.numberOfFileErrorsSensor(any(), any()));
+    public void shouldInitGaugesWhenRecorderIsInitialised() {
         dbMetrics.verify(() -> RocksDBMetrics.addNumImmutableMemTableMetric(eq(streamsMetrics), eq(metricsContext), any()));
         dbMetrics.verify(() -> RocksDBMetrics.addCurSizeActiveMemTable(eq(streamsMetrics), eq(metricsContext), any()));
         dbMetrics.verify(() -> RocksDBMetrics.addCurSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), any()));
@@ -162,6 +145,37 @@ public class RocksDBMetricsRecorderTest {
         dbMetrics.verify(() -> RocksDBMetrics.addEstimateTableReadersMemMetric(eq(streamsMetrics), eq(metricsContext), any()));
         dbMetrics.verify(() -> RocksDBMetrics.addBackgroundErrorsMetric(eq(streamsMetrics), eq(metricsContext), any()));
         assertEquals(TASK_ID1, recorder.taskId());
+    }
+
+    @Test
+    public void shouldNotInitStatisticsBasedSensorsWhenRecorderIsInitialised() {
+        // The recorder was init()'ed in setUp() but no value providers were added yet, so the
+        // statistics-based sensors must not have been registered. See KAFKA-10397.
+        verifyStatisticsBasedSensorsRegistered(never());
+    }
+
+    @Test
+    public void shouldInitStatisticsBasedSensorsWhenValueProvidersWithStatisticsAreAdded() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+
+        verifyStatisticsBasedSensorsRegistered(times(1));
+    }
+
+    @Test
+    public void shouldNotInitStatisticsBasedSensorsWhenValueProvidersWithoutStatisticsAreAdded() {
+        // When the user supplies their own Statistics object, RocksDBStore passes null here and the
+        // statistics-based metrics can never be recorded, so they must not be registered. See KAFKA-10397.
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
+
+        verifyStatisticsBasedSensorsRegistered(never());
+    }
+
+    @Test
+    public void shouldInitStatisticsBasedSensorsOnlyOnceWhenMultipleValueProvidersWithStatisticsAreAdded() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
+
+        verifyStatisticsBasedSensorsRegistered(times(1));
     }
 
     @Test
@@ -559,6 +573,27 @@ public class RocksDBMetricsRecorderTest {
 
         verify(compactionTimeAvgSensor).record(0d, now);
         verify(memtableAvgFlushTimeSensor).record(0d, now);
+    }
+
+    private void verifyStatisticsBasedSensorsRegistered(final VerificationMode mode) {
+        dbMetrics.verify(() -> RocksDBMetrics.bytesWrittenToDatabaseSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.bytesReadFromDatabaseSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.memtableBytesFlushedSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.memtableHitRatioSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.memtableAvgFlushTimeSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.memtableMinFlushTimeSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.memtableMaxFlushTimeSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.writeStallDurationSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.blockCacheDataHitRatioSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.blockCacheIndexHitRatioSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.blockCacheFilterHitRatioSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.bytesWrittenDuringCompactionSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.bytesReadDuringCompactionSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.compactionTimeAvgSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.compactionTimeMinSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.compactionTimeMaxSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.numberOfOpenFilesSensor(any(), any()), mode);
+        dbMetrics.verify(() -> RocksDBMetrics.numberOfFileErrorsSensor(any(), any()), mode);
     }
 
     private void setUpMetricsMock() {
