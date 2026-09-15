@@ -334,21 +334,19 @@ org.apache.kafka.storage.internals.epoch.LeaderEpochFileCacheTest:
 - testGetEpochEntry
 - testPreviousEpoch
 org.apache.kafka.storage.internals.log.AbstractIndexTest:
-- testCloseInvokeFlush
 - testResizeInvokeUnmap
 org.apache.kafka.storage.internals.log.BrokerCompressionTest:
 - testBrokerSideCompression
 org.apache.kafka.storage.internals.log.LocalLogTest:
+- testCloseIdempotent
+- testClosePreventsAppend
+- testCloseQuietlyIdempotent
+- testCloseQuietlyPreventsAppend
 - testCreateAndDeleteSegment
 - testDeleteSegmentFilesAsync
 - testDeleteSegmentFilesSync
 - testFlushingNonExistentDir
 - testLogAppend
-- testLogCloseFailureWhenInMemoryBufferClosed
-- testLogCloseHandlers
-- testLogCloseHandlersIdempotent
-- testLogCloseIdempotent
-- testLogCloseSuccess
 - testLogDeleteDirName
 - testLogDeleteDirSuccessWhenEmptyAndFailureWhenNonEmpty
 - testLogDeleteSegmentsSuccess
@@ -899,7 +897,7 @@ org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - testLogOffsetsListener
 - testLogRecoversTopicId
 - testLogReinitializeAfterManualDelete
-- testLogRollAfterLogHandlerClosed
+- testLogRollAfterCloseQuietly
 - testLogRolls
 - testLogSegmentsCallCorrect
 - testLogStartOffsetMovementDeletesSnapshots
@@ -918,6 +916,7 @@ org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - testOffsetSnapshot
 - testOldProducerEpoch
 - testPeriodicProducerIdExpiration
+- testPrepareActiveSegmentForCloseAppendsTimeIndexAndTrimsIndexes
 - testProducerExpireCheckAfterDelete
 - testProducerIdExpirationOnSegmentDeletion
 - testProducerIdMapOffsetUpdatedForNonIdempotentData
