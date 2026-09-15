@@ -28,16 +28,15 @@ import java.util.List;
  * re-allocated buffer. Chunks are supplied by the caller (initial chunks via the constructor,
  * additional chunks via {@link #addBuffers(List)}).
  * <p>
- * Current/temporary behavior:
- * <ul>
- * <li>The stream does not grow on its own: a write whose size exceeds the remaining free bytes
- *     across all attached chunks throws {@link IllegalStateException}, so the caller must attach
- *     enough chunks before any such write.
- *     TODO: KAFKA-20579 (automatic mid-write growth for compression support).</li>
- * <li>{@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer},
- *     flattening all chunks into a new buffer with an extra copy.
- *     TODO: KAFKA-20580 (remove the extra copy on send, scatter-gather send).</li>
- * </ul>
+ * The stream grows on its own: when a write runs past the attached chunks it attaches one more chunk,
+ * taken from the pool without blocking and falling back to a heap-allocated chunk when the pool is
+ * exhausted mid-record (a partially written record can neither be rolled back nor blocked on).
+ * Heap-allocated chunks are tracked separately from pool-owned ones so they are never returned to the
+ * pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
+ * <p>
+ * {@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer}, flattening
+ * all chunks into a new buffer with an extra copy.
+ * TODO: KAFKA-20580 (remove the extra copy on send, scatter-gather send).
  */
 public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
@@ -373,8 +372,9 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         ensureNotDeallocated();
         // A single write can be split across several chunks, so the required bytes needn't be
         // contiguous: only the total free space matters. Advancing here would waste the tail of the
-        // current chunk, so writes advance lazily and this only validates.
-        // TODO: review with KAFKA-20579, but growth support should belong in advanceToNextChunk, not here.
+        // current chunk, so writes advance lazily and this only validates. Automatic growth lives in
+        // advanceToNextChunk; this method only checks the currently attached chunks (the accumulator
+        // uses it to decide when to attach extension chunks up front).
         if (requiredBytes > remaining())
             throw new IllegalStateException("required " + requiredBytes
                 + " bytes but only " + remaining() + " remaining across the attached chunks");

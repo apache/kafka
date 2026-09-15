@@ -182,12 +182,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     nowMs = time.milliseconds();
                 } else if (appendResult.needsNewBatch() && newBatch == null) {
                     // The open batch is done (e.g., full, closed) so start a new one. Size it for
-                    // this first record with the same estimator the full strategy uses
-                    // (RecordAccumulator.append), but reserve only enough for the record rather than
-                    // a whole batch.size.
-                    // TODO: review when compression is supported.
-                    int newBatchSize = AbstractRecords.estimateSizeInBytesUpperBound(
-                            RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
+                    // this first record only (not a whole batch.size), to the same upper bound the
+                    // first-record capacity check in ChunkedProducerBatch.tryAppend will demand.
+                    int newBatchSize = initialChunkedBatchSize(key, value, headers);
                     long remainingTimeToBlock = remainingTimeToBlockMs(deadlineMs);
                     log.trace("Allocating {} byte chunked buffer ({} byte chunks) for topic {} partition {} with remaining timeout {}ms",
                             newBatchSize, chunkedFree.poolableSize(), topic, effectivePartition, remainingTimeToBlock);
@@ -249,8 +246,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // so bufferStream was allocated (this iteration or carried from a prior one).
                     if (newBatch == null)
                         throw new IllegalStateException("needsNewBatch path reached without an allocated buffer stream");
-                    // Reuse the new-batch size estimate as the write-limit basis.
-                    // TODO: review when compression is supported.
+                    // Reuse the new-batch size estimate as the write-limit basis; fullness checks in
+                    // MemoryRecordsBuilder already fold in the estimated compression ratio.
                     final NewBatchBuffer pendingNewBatch = newBatch;
                     appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(pendingNewBatch.stream, pendingNewBatch.firstAppendSize), nowMs);
@@ -357,6 +354,23 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
     @Override
     protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
         return new ChunkedProducerBatch(tp, recordsBuilder, nowMs);
+    }
+
+    /**
+     * Upper bound on the bytes the batch's first record will write, used both to pre-size the batch's
+     * chunks and as its write-limit basis. Starts from the uncompressed record-size upper bound
+     * ({@link AbstractRecords#estimateSizeInBytesUpperBound}, which ignores compression), then for a
+     * compressed codec inflates by the same {@link MemoryRecordsBuilder#COMPRESSION_RATE_ESTIMATION_FACTOR}
+     * that {@link MemoryRecordsBuilder#estimatedBytesWrittenAfter} applies. Without the inflation that
+     * first-record check (in {@link ChunkedProducerBatch#tryAppend}) can demand ~5% more than was
+     * reserved and throw for large compressed records.
+     */
+    private int initialChunkedBatchSize(byte[] key, byte[] value, Header[] headers) {
+        int uncompressed = AbstractRecords.estimateSizeInBytesUpperBound(
+                RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
+        if (compression.type() == CompressionType.NONE)
+            return uncompressed;
+        return (int) (uncompressed * MemoryRecordsBuilder.COMPRESSION_RATE_ESTIMATION_FACTOR);
     }
 
     /**

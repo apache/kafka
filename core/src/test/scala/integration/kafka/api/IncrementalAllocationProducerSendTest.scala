@@ -41,11 +41,6 @@ class IncrementalAllocationProducerSendTest extends BaseProducerSendTest {
     props
   }
 
-  // The incremental strategy does not support compression yet; the base test would fail at
-  // producer construction. Overriding without the test annotations removes it from this
-  // subclass's run. TODO: remove this override when compression support lands.
-  override def testSendCompressedMessageWithCreateTime(groupProtocol: String): Unit = {}
-
   // batch.size=0 is below the internal chunk size, so the incremental strategy falls back to the full
   // allocation path (a batch is smaller than one chunk). Verifies that fallback yields a working producer.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -64,23 +59,29 @@ class IncrementalAllocationProducerSendTest extends BaseProducerSendTest {
     val partition = 0
     val tp = new TopicPartition(topic, partition)
     val valueSize = 600_000 // far larger than one chunk, so each record spans many chunks
-    // TODO: also exercise the compressed codecs here once the incremental strategy supports compression.
 
-    val producer = createProducer(batchSize = 1024 * 1024, bufferSize = 8L * 1024 * 1024)
-    val value = randomBytes(valueSize)
-    val metadata = producer.send(new ProducerRecord(topic, partition, "key".getBytes, value)).get
-    assertEquals(valueSize, metadata.serializedValueSize)
+    // Exercise every codec: each record dwarfs a chunk, so the compressor writes across many chunks
+    // and the batch is built through the chunked flatten-close path.
+    val codecs = Seq("none", "gzip", "snappy", "lz4", "zstd")
+    val sent = codecs.map { codec =>
+      val producer = createProducer(batchSize = 1024 * 1024, bufferSize = 8L * 1024 * 1024, compressionType = codec)
+      val value = randomBytes(valueSize)
+      val metadata = producer.send(new ProducerRecord(topic, partition, codec.getBytes, value)).get
+      assertEquals(valueSize, metadata.serializedValueSize)
+      (metadata.offset, value)
+    }
 
-    // Verify the exact bytes round-trip.
+    // Verify the exact bytes round-trip for every codec.
     val consumer = TestUtils.createConsumer(
       bootstrapServers(listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)),
       groupProtocolFromTestParameters())
     try {
       consumer.assign(JList.of(tp))
       consumer.seekToBeginning(JList.of(tp))
-      val consumed = TestUtils.consumeRecords(consumer, 1)
-      assertEquals(metadata.offset, consumed.head.offset)
-      assertArrayEquals(value, consumed.head.value)
+      val consumedByOffset = TestUtils.consumeRecords(consumer, sent.size).map(r => r.offset -> r.value).toMap
+      sent.foreach { case (offset, value) =>
+        assertArrayEquals(value, consumedByOffset(offset))
+      }
     } finally {
       consumer.close()
     }
