@@ -254,7 +254,7 @@ class LogManager(logDirs: Seq[File],
         offlineTopicPartitions.foreach { topicPartition => {
           val removedLog = removeLogAndMetrics(logs, topicPartition)
           removedLog.foreach {
-            log => log.closeHandlers()
+            log => log.closeQuietly()
           }
         }}
 
@@ -686,6 +686,7 @@ class LogManager(logDirs: Seq[File],
 
       val jobsForDir = logs.map { log =>
         val runnable: Runnable = () => {
+          log.prepareActiveSegmentForClose()
           // flush the log to ensure latest possible recovery point
           log.flush(true)
           log.close()
@@ -1277,10 +1278,10 @@ class LogManager(logDirs: Seq[File],
       destLog.newMetrics()
     } catch {
       case e: KafkaStorageException =>
-        // If sourceLog's log directory is offline, we need close its handlers here.
-        // handleLogDirFailure() will not close handlers of sourceLog because it has been removed from currentLogs map
+        // If sourceLog's log directory is offline, we need to quietly close it here.
+        // handleLogDirFailure() will not close sourceLog because it has been removed from currentLogs map
         sourceLog.foreach { srcLog =>
-          srcLog.closeHandlers()
+          srcLog.closeQuietly()
           srcLog.removeLogMetrics()
         }
         throw e

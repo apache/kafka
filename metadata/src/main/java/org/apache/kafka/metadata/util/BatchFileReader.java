@@ -159,7 +159,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
     @Override
     public void close() {
         try {
-            fileRecords.closeHandlers();
+            fileRecords.close();
         } catch (Exception e) {
             log.error("Error closing fileRecords", e);
         }

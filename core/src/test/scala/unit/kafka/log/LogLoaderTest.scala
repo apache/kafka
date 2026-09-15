@@ -1569,7 +1569,7 @@ class LogLoaderTest {
     log.flush(false)
     assertThrows(classOf[NoSuchFileException], () => log.activeSegment.sanityCheck(true))
     var lastOffset = log.logEndOffset
-    log.closeHandlers()
+    log.closeQuietly()
 
     log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
     assertEquals(lastOffset, log.recoveryPoint, s"Unexpected recovery point")

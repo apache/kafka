@@ -2385,10 +2385,10 @@ public class UnifiedLogTest {
     }
 
     @Test
-    public void testLogRollAfterLogHandlerClosed() throws IOException {
+    public void testLogRollAfterCloseQuietly() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder().build();
         UnifiedLog log = createLog(logDir, logConfig);
-        log.closeHandlers();
+        log.closeQuietly();
         assertThrows(KafkaStorageException.class, () -> log.roll(Optional.of(1L)));
     }
 
@@ -3527,7 +3527,6 @@ public class UnifiedLogTest {
         return gauge.value();
     }
 
-
     @Test
     public void testFetchOffsetByTimestampRejectsCompressedRecordExceedingMaxDecompressedMessageBytes() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
@@ -3574,5 +3573,22 @@ public class UnifiedLogTest {
         InvalidRecordException e = assertThrows(InvalidRecordException.class,
                 () -> log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
         assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
+    }
+
+    @Test
+    public void testPrepareActiveSegmentForCloseAppendsTimeIndexAndTrimsIndexes() throws IOException {
+        log = createLog(logDir, new LogConfig(new Properties()));
+        log.appendAsLeader(MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())
+        ), 0);
+
+        LogSegment activeSegment = log.activeSegment();
+        assertTrue(activeSegment.timeIndex().sizeInBytes() < activeSegment.timeIndex().maxIndexSize());
+
+        log.prepareActiveSegmentForClose();
+
+        assertEquals(activeSegment.timeIndex().entrySize(), activeSegment.timeIndex().sizeInBytes());
+        assertEquals(activeSegment.timeIndex().sizeInBytes(), activeSegment.timeIndex().length());
     }
 }
