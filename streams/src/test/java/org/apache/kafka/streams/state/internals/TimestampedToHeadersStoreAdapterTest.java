@@ -28,7 +28,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -37,12 +36,12 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -50,58 +49,65 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.withSettings;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class TimestampedToHeadersStoreAdapterTest {
 
+    // Timestamped format: an 8-byte timestamp prefix followed by the raw value.
+    private static final byte[] TIMESTAMPED_VALUE = {0, 0, 0, 0, 0, 0, 0, 42, 'v', 'a', 'l'};
+    private static final byte[] OLD_TIMESTAMPED_VALUE = {0, 0, 0, 0, 0, 0, 0, 41, 'o', 'l', 'd'};
+
+    @Mock(extraInterfaces = TimestampedBytesStore.class)
+    private KeyValueStore<Bytes, byte[]> mockStore;
+
     @Mock
     private KeyValueIterator<Bytes, byte[]> mockIterator;
 
-    @SuppressWarnings("unchecked")
-    private KeyValueStore<Bytes, byte[]> mockStore;
-
     private TimestampedToHeadersStoreAdapter adapter;
 
-    @SuppressWarnings("unchecked")
-    @BeforeEach
-    public void setUp() {
-        mockStore = mock(KeyValueStore.class, withSettings().extraInterfaces(TimestampedBytesStore.class));
-        // lenient: this fixture stub is consumed by the adapter constructor for most tests, but the
-        // constructor-validation tests build their own store and never touch this one.
-        lenient().when(mockStore.persistent()).thenReturn(true);
-        adapter = new TimestampedToHeadersStoreAdapter(mockStore);
+    private TimestampedToHeadersStoreAdapter createAdapter() {
+        when(mockStore.persistent()).thenReturn(true);
+        return new TimestampedToHeadersStoreAdapter(mockStore);
+    }
+
+    private void assertConvertsTimestampedToHeaders(final KeyValueIterator<Bytes, byte[]> result) {
+        final Bytes key = new Bytes("k".getBytes());
+        when(mockIterator.hasNext()).thenReturn(true);
+        when(mockIterator.next()).thenReturn(KeyValue.pair(key, TIMESTAMPED_VALUE));
+
+        assertTrue(result.hasNext());
+        final KeyValue<Bytes, byte[]> entry = result.next();
+        assertEquals(key, entry.key);
+        // Timestamped format only prepends empty headers; the plain conversion would also insert
+        // an 8-byte timestamp, so this array comparison proves timestampedToHeaders was wired.
+        assertArrayEquals(convertToHeaderFormat(TIMESTAMPED_VALUE), entry.value);
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowIfStoreIsNotPersistent() {
-        final KeyValueStore<Bytes, byte[]> nonPersistentStore =
-            mock(KeyValueStore.class, withSettings().extraInterfaces(TimestampedBytesStore.class));
-        when(nonPersistentStore.persistent()).thenReturn(false);
+        when(mockStore.persistent()).thenReturn(false);
 
         final IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new TimestampedToHeadersStoreAdapter(nonPersistentStore)
+            () -> new TimestampedToHeadersStoreAdapter(mockStore)
         );
 
         assertTrue(exception.getMessage().contains("Provided store must be a persistent store"));
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowIfStoreIsNotTimestamped() {
-        final KeyValueStore<Bytes, byte[]> nonTimestampedStore = mock(KeyValueStore.class);
-        when(nonTimestampedStore.persistent()).thenReturn(true);
+        @SuppressWarnings("unchecked")
+        final KeyValueStore<Bytes, byte[]> plainStore = mock(KeyValueStore.class);
+        when(plainStore.persistent()).thenReturn(true);
 
         final IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new TimestampedToHeadersStoreAdapter(nonTimestampedStore)
+            () -> new TimestampedToHeadersStoreAdapter(plainStore)
         );
 
         assertTrue(exception.getMessage().contains("Provided store must be a timestamped store"));
@@ -109,85 +115,79 @@ public class TimestampedToHeadersStoreAdapterTest {
 
     @Test
     public void shouldPutRawTimestampedValueToStore() {
+        adapter = createAdapter();
         final Bytes key = new Bytes("key".getBytes());
-        final byte[] rawTimestampedValue =
-            new byte[] {0, 0, 0, 0, 0, 0, 0, 42, 'v', 'a', 'l'};
-        final byte[] valueWithHeaders = convertToHeaderFormat(rawTimestampedValue);
+        final byte[] valueWithHeaders = convertToHeaderFormat(TIMESTAMPED_VALUE);
 
         adapter.put(key, valueWithHeaders);
 
-        verify(mockStore).put(eq(key), eq(rawTimestampedValue));
+        verify(mockStore).put(eq(key), eq(TIMESTAMPED_VALUE));
     }
 
     @Test
     public void shouldGetAndConvertToHeaderFormat() {
+        adapter = createAdapter();
         final Bytes key = new Bytes("key".getBytes());
-        final byte[] rawTimestampedValue =
-            new byte[] {0, 0, 0, 0, 0, 0, 0, 42, 'v', 'a', 'l'};
-        when(mockStore.get(key)).thenReturn(rawTimestampedValue);
+        when(mockStore.get(key)).thenReturn(TIMESTAMPED_VALUE);
 
         final byte[] result = adapter.get(key);
 
-        assertArrayEquals(convertToHeaderFormat(rawTimestampedValue), result);
+        assertArrayEquals(convertToHeaderFormat(TIMESTAMPED_VALUE), result);
     }
 
     @Test
     public void shouldReturnNullWhenStoreReturnsNull() {
+        adapter = createAdapter();
         final Bytes key = new Bytes("key".getBytes());
         when(mockStore.get(key)).thenReturn(null);
 
-        assertNull(adapter.get(key));
+        final byte[] result = adapter.get(key);
+
+        assertNull(result);
     }
 
     @Test
     public void shouldPutIfAbsentAndConvertResult() {
+        adapter = createAdapter();
         final Bytes key = new Bytes("key".getBytes());
-        final byte[] rawTimestampedValue =
-            new byte[] {0, 0, 0, 0, 0, 0, 0, 42, 'v', 'a', 'l'};
-        final byte[] valueWithHeaders = convertToHeaderFormat(rawTimestampedValue);
-        final byte[] oldRawValue =
-            new byte[] {0, 0, 0, 0, 0, 0, 0, 10, 'o', 'l', 'd'};
-        when(mockStore.putIfAbsent(eq(key), eq(rawTimestampedValue))).thenReturn(oldRawValue);
+        final byte[] valueWithHeaders = convertToHeaderFormat(TIMESTAMPED_VALUE);
+        when(mockStore.putIfAbsent(eq(key), eq(TIMESTAMPED_VALUE))).thenReturn(OLD_TIMESTAMPED_VALUE);
 
         final byte[] result = adapter.putIfAbsent(key, valueWithHeaders);
 
-        assertArrayEquals(convertToHeaderFormat(oldRawValue), result);
+        assertArrayEquals(convertToHeaderFormat(OLD_TIMESTAMPED_VALUE), result);
     }
 
     @Test
     public void shouldDeleteAndConvertResult() {
+        adapter = createAdapter();
         final Bytes key = new Bytes("key".getBytes());
-        final byte[] oldRawValue =
-            new byte[] {0, 0, 0, 0, 0, 0, 0, 10, 'o', 'l', 'd'};
-        when(mockStore.delete(key)).thenReturn(oldRawValue);
+        when(mockStore.delete(key)).thenReturn(OLD_TIMESTAMPED_VALUE);
 
         final byte[] result = adapter.delete(key);
 
-        assertArrayEquals(convertToHeaderFormat(oldRawValue), result);
+        assertArrayEquals(convertToHeaderFormat(OLD_TIMESTAMPED_VALUE), result);
     }
 
     @Test
     public void shouldPutAllEntries() {
+        adapter = createAdapter();
         final Bytes key1 = new Bytes("key1".getBytes());
         final Bytes key2 = new Bytes("key2".getBytes());
-        final byte[] rawValue1 =
-            new byte[] {0, 0, 0, 0, 0, 0, 0, 1, 'v', '1'};
-        final byte[] rawValue2 =
-            new byte[] {0, 0, 0, 0, 0, 0, 0, 2, 'v', '2'};
-        final byte[] value1 = convertToHeaderFormat(rawValue1);
-        final byte[] value2 = convertToHeaderFormat(rawValue2);
+        final List<KeyValue<Bytes, byte[]>> entries = Arrays.asList(
+            KeyValue.pair(key1, convertToHeaderFormat(TIMESTAMPED_VALUE)),
+            KeyValue.pair(key2, convertToHeaderFormat(OLD_TIMESTAMPED_VALUE))
+        );
 
-        adapter.putAll(Arrays.asList(
-            KeyValue.pair(key1, value1),
-            KeyValue.pair(key2, value2)
-        ));
+        adapter.putAll(entries);
 
-        verify(mockStore).put(eq(key1), eq(rawValue1));
-        verify(mockStore).put(eq(key2), eq(rawValue2));
+        verify(mockStore).put(eq(key1), eq(TIMESTAMPED_VALUE));
+        verify(mockStore).put(eq(key2), eq(OLD_TIMESTAMPED_VALUE));
     }
 
     @Test
     public void shouldWrapRangeIterator() {
+        adapter = createAdapter();
         final Bytes from = new Bytes("a".getBytes());
         final Bytes to = new Bytes("z".getBytes());
         when(mockStore.range(from, to)).thenReturn(mockIterator);
@@ -195,11 +195,12 @@ public class TimestampedToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.range(from, to);
 
         assertNotNull(result);
-        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, result);
+        assertConvertsTimestampedToHeaders(result);
     }
 
     @Test
     public void shouldWrapReverseRangeIterator() {
+        adapter = createAdapter();
         final Bytes from = new Bytes("a".getBytes());
         final Bytes to = new Bytes("z".getBytes());
         when(mockStore.reverseRange(from, to)).thenReturn(mockIterator);
@@ -207,60 +208,62 @@ public class TimestampedToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.reverseRange(from, to);
 
         assertNotNull(result);
-        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, result);
+        assertConvertsTimestampedToHeaders(result);
     }
 
     @Test
     public void shouldWrapAllIterator() {
+        adapter = createAdapter();
         when(mockStore.all()).thenReturn(mockIterator);
 
         final KeyValueIterator<Bytes, byte[]> result = adapter.all();
 
         assertNotNull(result);
-        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, result);
+        assertConvertsTimestampedToHeaders(result);
     }
 
     @Test
     public void shouldWrapReverseAllIterator() {
+        adapter = createAdapter();
         when(mockStore.reverseAll()).thenReturn(mockIterator);
 
         final KeyValueIterator<Bytes, byte[]> result = adapter.reverseAll();
 
         assertNotNull(result);
-        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, result);
+        assertConvertsTimestampedToHeaders(result);
     }
 
     @Test
     public void shouldWrapPrefixScanIterator() {
+        adapter = createAdapter();
         when(mockStore.prefixScan(any(), any())).thenReturn(mockIterator);
 
-        final KeyValueIterator<Bytes, byte[]> result =
-            adapter.prefixScan("prefix", (topic, data) -> data.getBytes());
+        final KeyValueIterator<Bytes, byte[]> result = adapter.prefixScan("prefix", (topic, data) -> data.getBytes());
 
         assertNotNull(result);
-        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, result);
+        assertConvertsTimestampedToHeaders(result);
     }
 
     @Test
     public void shouldHandleKeyQuery() {
+        adapter = createAdapter();
         final Bytes key = new Bytes("test-key".getBytes());
-        final byte[] rawTimestampedValue =
-            new byte[] {0, 0, 0, 0, 0, 0, 0, 42, 'v', 'a', 'l'};
+        final byte[] timestampedValue = "test-value".getBytes();
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
-        final QueryResult<byte[]> mockResult = QueryResult.forResult(rawTimestampedValue);
+        final QueryResult<byte[]> mockResult = QueryResult.forResult(timestampedValue);
         when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
-        final QueryResult<byte[]> result =
-            adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final QueryResult<byte[]> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
         assertTrue(result.isSuccess());
-        assertArrayEquals(convertToHeaderFormat(rawTimestampedValue), result.getResult());
+        assertArrayEquals(convertToHeaderFormat(timestampedValue), result.getResult());
     }
 
     @Test
     public void shouldHandleKeyQueryWithNullResult() {
+        adapter = createAdapter();
         final Bytes key = new Bytes("test-key".getBytes());
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
@@ -268,8 +271,7 @@ public class TimestampedToHeadersStoreAdapterTest {
         when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
-        final QueryResult<byte[]> result =
-            adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final QueryResult<byte[]> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
         assertTrue(result.isSuccess());
         assertNull(result.getResult());
@@ -277,6 +279,7 @@ public class TimestampedToHeadersStoreAdapterTest {
 
     @Test
     public void shouldHandleFailedKeyQuery() {
+        adapter = createAdapter();
         final Bytes key = new Bytes("test-key".getBytes());
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
@@ -284,21 +287,20 @@ public class TimestampedToHeadersStoreAdapterTest {
         when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
-        final QueryResult<byte[]> result =
-            adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final QueryResult<byte[]> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
         assertFalse(result.isSuccess());
     }
 
     @Test
     public void shouldHandleRangeQuery() {
+        adapter = createAdapter();
         final RangeQuery<Bytes, byte[]> query = RangeQuery.withRange(
             new Bytes("a".getBytes()),
             new Bytes("z".getBytes())
         );
 
-        final QueryResult<KeyValueIterator<Bytes, byte[]>> mockResult =
-            QueryResult.forResult(mockIterator);
+        final QueryResult<KeyValueIterator<Bytes, byte[]>> mockResult = QueryResult.forResult(mockIterator);
         when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
@@ -310,12 +312,13 @@ public class TimestampedToHeadersStoreAdapterTest {
 
         assertTrue(result.isSuccess());
         assertNotNull(result.getResult());
-        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, result.getResult());
+        assertConvertsTimestampedToHeaders(result.getResult());
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void shouldDelegateOtherQueryTypesToStore() {
+        adapter = createAdapter();
         // Any query that is neither KeyQuery nor RangeQuery falls through to the
         // else branch and is passed straight to the underlying store, unchanged.
         final Query<String> query = mock(Query.class);
@@ -333,41 +336,44 @@ public class TimestampedToHeadersStoreAdapterTest {
 
     @Test
     public void shouldCollectExecutionInfoForKeyQuery() {
+        adapter = createAdapter();
         final Bytes key = new Bytes("test-key".getBytes());
-        final byte[] rawTimestampedValue =
-            new byte[] {0, 0, 0, 0, 0, 0, 0, 42, 'v', 'a', 'l'};
+        final byte[] timestampedValue = "test-value".getBytes();
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
-        final QueryResult<byte[]> mockResult = QueryResult.forResult(rawTimestampedValue);
+        final QueryResult<byte[]> mockResult = QueryResult.forResult(timestampedValue);
         when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
-        final QueryResult<byte[]> result =
-            adapter.query(query, PositionBound.unbounded(), new QueryConfig(true));
+        final QueryResult<byte[]> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(true));
 
         assertTrue(result.isSuccess());
-        assertFalse(result.getExecutionInfo().isEmpty(),
-            "Expected execution info to be collected");
+        assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
         final String executionInfo = String.join("\n", result.getExecutionInfo());
-        assertTrue(executionInfo.contains("Handled in"));
-        assertTrue(executionInfo.contains(TimestampedToHeadersStoreAdapter.class.getName()));
+        assertTrue(executionInfo.contains("Handled in"), "Expected execution info to contain handling information");
+        assertTrue(executionInfo.contains(TimestampedToHeadersStoreAdapter.class.getName()),
+            "Expected execution info to mention TimestampedToHeadersStoreAdapter");
     }
 
     @Test
     public void shouldDelegateName() {
         when(mockStore.name()).thenReturn("test-store");
+        adapter = createAdapter();
 
         assertEquals("test-store", adapter.name());
     }
 
     @Test
     public void shouldReturnTrueForPersistent() {
+        adapter = createAdapter();
+
         assertTrue(adapter.persistent());
     }
 
     @Test
     public void shouldDelegateIsOpen() {
         when(mockStore.isOpen()).thenReturn(true);
+        adapter = createAdapter();
 
         assertTrue(adapter.isOpen());
     }
@@ -375,12 +381,14 @@ public class TimestampedToHeadersStoreAdapterTest {
     @Test
     public void shouldDelegateApproximateNumEntries() {
         when(mockStore.approximateNumEntries()).thenReturn(42L);
+        adapter = createAdapter();
 
         assertEquals(42L, adapter.approximateNumEntries());
     }
 
     @Test
     public void shouldDelegateGetPosition() {
+        adapter = createAdapter();
         when(mockStore.getPosition()).thenReturn(null);
 
         adapter.getPosition();
