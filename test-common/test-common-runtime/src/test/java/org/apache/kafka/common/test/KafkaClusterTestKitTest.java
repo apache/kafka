@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.test;
 
+import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -174,6 +176,30 @@ public class KafkaClusterTestKitTest {
             assertNotNull(cluster.nonFatalFaultHandler(), "Non-fatal fault handler should not be null");
         } catch (Exception e) {
             fail("Failed to initialize cluster", e);
+        }
+    }
+
+    @Test
+    public void testRestartAfterCloseIsNoOp() throws Exception {
+        KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build()).build();
+        try {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+            cluster.close();
+
+            // close() shuts the servers down synchronously and waits for their threads to exit, so the brokers
+            // are already in a terminal state here. waitForReadyBrokers() can't be used to probe this, because
+            // the cluster is closed and its controllers are gone.
+            cluster.restart(Map.of(-1, Map.of("num.io.threads", "5")));
+            cluster.brokers().values().forEach(broker ->
+                assertNotEquals(BrokerState.RUNNING, broker.brokerState()));
+        } finally {
+            cluster.close();
         }
     }
 }
