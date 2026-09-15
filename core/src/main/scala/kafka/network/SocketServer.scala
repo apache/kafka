@@ -1014,6 +1014,8 @@ private[kafka] class Processor(
                     channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
                       apiVersionsRequest.data.clientSoftwareName,
                       apiVersionsRequest.data.clientSoftwareVersion))
+                    // Update client information for ApiVersionRequest, so the client information will not be unknown for ApiVersionRequest.
+                    context.setClientInformation(channel.channelMetadataRegistry.clientInformation)
                   }
                 }
                 requestChannel.sendRequest(req)
