@@ -30,12 +30,6 @@ import java.util.Objects;
  * This class is thread-safe.
  */
 public record ScramCredentialData(byte[] salt, byte[] storedKey, byte[] serverKey, int iterations) {
-    public ScramCredentialData {
-        salt = Arrays.copyOf(salt, salt.length);
-        storedKey = Arrays.copyOf(storedKey, storedKey.length);
-        serverKey = Arrays.copyOf(serverKey, serverKey.length);
-    }
-
     public static ScramCredentialData fromRecord(
         UserScramCredentialRecord record
     ) {
@@ -46,21 +40,6 @@ public record ScramCredentialData(byte[] salt, byte[] storedKey, byte[] serverKe
             record.iterations());
     }
 
-    @Override
-    public byte[] salt() {
-        return Arrays.copyOf(salt, salt.length);
-    }
-
-    @Override
-    public byte[] storedKey() {
-        return Arrays.copyOf(storedKey, storedKey.length);
-    }
-
-    @Override
-    public byte[] serverKey() {
-        return Arrays.copyOf(serverKey, serverKey.length);
-    }
-
     public UserScramCredentialRecord toRecord(
         String userName,
         ScramMechanism mechanism
@@ -68,14 +47,14 @@ public record ScramCredentialData(byte[] salt, byte[] storedKey, byte[] serverKe
         return new UserScramCredentialRecord().
             setName(userName).
             setMechanism(mechanism.type()).
-            setSalt(salt()).
-            setStoredKey(storedKey()).
-            setServerKey(serverKey()).
+            setSalt(salt).
+            setStoredKey(storedKey).
+            setServerKey(serverKey).
             setIterations(iterations);
     }
 
     public ScramCredential toCredential() {
-        return new ScramCredential(salt(), storedKey(), serverKey(), iterations);
+        return new ScramCredential(salt, storedKey, serverKey, iterations);
     }
 
     @Override

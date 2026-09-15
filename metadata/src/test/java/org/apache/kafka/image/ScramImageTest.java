@@ -72,7 +72,7 @@ public class ScramImageTest {
     }
 
     @Test
-    public void testMechanismsAreDeeplyImmutable() {
+    public void testMechanismMapsAreImmutableSnapshots() {
         ScramCredentialData credential = new ScramCredentialData(
             new byte[] {1}, new byte[] {2}, new byte[] {3}, 4096);
         Map<String, ScramCredentialData> credentials = new HashMap<>();
