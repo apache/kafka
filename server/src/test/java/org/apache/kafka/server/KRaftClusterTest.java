@@ -1249,6 +1249,43 @@ public class KRaftClusterTest {
         }
     }
 
+    @Test
+    public void testNonJbodToJbodTransition() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV1)
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+
+            var expectedDirectoryId = cluster.brokers().get(0).logManager().directoryIds().values().stream()
+                .findFirst().orElseThrow();
+            var actualDirectories = new AtomicReference<>("");
+
+            TestUtils.waitForCondition(() -> {
+                var registration = clusterImage(cluster, 0).brokers().get(0);
+                return registration != null && registration.directories().isEmpty();
+            }, "Broker registration should not contain directories before JBOD support is enabled");
+
+            try (Admin admin = cluster.admin()) {
+                admin.updateFeatures(
+                    Map.of(MetadataVersion.FEATURE_NAME,
+                        new FeatureUpdate(MetadataVersion.IBP_3_7_IV2.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))
+                ).all().get();
+            }
+
+            TestUtils.waitForCondition(() -> {
+                var registration = clusterImage(cluster, 0).brokers().get(0);
+                actualDirectories.set(registration == null ? "<missing>" : registration.directories().toString());
+                return registration != null && registration.directories().equals(List.of(expectedDirectoryId));
+            }, () -> "Broker did not re-register with its directory after JBOD support was enabled; expected directory: " +
+                expectedDirectoryId + ", actual directories: " + actualDirectories.get());
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testDescribeKRaftVersion(boolean usingBootstrapControllers) throws Exception {
