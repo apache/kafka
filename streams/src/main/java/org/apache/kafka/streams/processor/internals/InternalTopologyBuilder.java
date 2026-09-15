@@ -1158,7 +1158,6 @@ public class InternalTopologyBuilder {
                     stateStoreMap.put(stateStoreName, store);
                 } else {
                     store = globalStateStores.get(stateStoreName);
-                    stateStoreMap.put(stateStoreName, store);
                 }
 
                 if (store.persistent()) {
