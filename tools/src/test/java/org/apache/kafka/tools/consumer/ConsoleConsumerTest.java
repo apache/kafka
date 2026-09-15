@@ -21,9 +21,9 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -35,6 +35,7 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
@@ -71,19 +72,22 @@ import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CON
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -367,8 +371,11 @@ public class ConsoleConsumerTest {
         }
     }
 
-    @ClusterTest(brokers = 3)
-    public void testGroupMetadataMessageFormatter(ClusterInstance cluster) throws Exception {
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testGroupMetadataMessageFormatterWithClassicGroupProtocol(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
@@ -381,7 +388,7 @@ public class ConsoleConsumerTest {
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
             ConsoleConsumer.ConsumerWrapper consumerWrapper = 
-                    new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster));
+                    new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster, GroupProtocol.CLASSIC));
 
             try (ByteArrayOutputStream out = new ByteArrayOutputStream();
                  PrintStream output = new PrintStream(out)) {
@@ -408,6 +415,34 @@ public class ConsoleConsumerTest {
             } finally {
                 consumerWrapper.cleanup();
             }
+        }
+    }
+
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testGroupMetadataMessageFormatterWithConsumerGroupProtocol(ClusterInstance cluster) throws Exception {
+        cluster.createTopic(topic, 1, (short) 1);
+        produceMessages(cluster);
+
+        String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster,
+            Topic.GROUP_METADATA_TOPIC_NAME,
+            "org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
+
+        ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
+        ConsoleConsumer.ConsumerWrapper consumerWrapper =
+            new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster, GroupProtocol.CONSUMER));
+
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+             PrintStream output = new PrintStream(out)) {
+            ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
+
+            JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+            // Consumer group protocol does not write GROUP_METADATA records, so the result is empty
+            assertTrue(jsonNode.isEmpty());
+        } finally {
+            consumerWrapper.cleanup();
         }
     }
 
@@ -455,9 +490,10 @@ public class ConsoleConsumerTest {
         return new KafkaConsumer<>(props);
     }
 
-    private Consumer<byte[], byte[]> createGroupMetaDataConsumer(ClusterInstance cluster) {
+    private Consumer<byte[], byte[]> createGroupMetaDataConsumer(ClusterInstance cluster, GroupProtocol groupProtocol) {
         Properties props = consumerProps(cluster);
         props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         return new KafkaConsumer<>(props);
     }
     
@@ -474,7 +510,6 @@ public class ConsoleConsumerTest {
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
         props.put(GROUP_ID_CONFIG, groupId);
         return props;
     }
