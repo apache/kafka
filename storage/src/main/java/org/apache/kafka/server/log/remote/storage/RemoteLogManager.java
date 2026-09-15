@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ChildFirstClassLoader;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.server.common.CheckpointFile;
@@ -183,6 +184,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final RLMScheduledThreadPool followerThreadPool;
 
     private final long delayInMs;
+    private final ExponentialBackoff retryBackoff;
 
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> leaderCopyRLMTasks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> leaderExpirationRLMTasks = new ConcurrentHashMap<>();
@@ -256,6 +258,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             remoteStorageManagerPlugin.get(),
             logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
+        retryBackoff = new ExponentialBackoff(rlmConfig.remoteLogManagerTaskRetryBackoffMs(), 2,
+                rlmConfig.remoteLogManagerTaskRetryBackoffMaxMs(), rlmConfig.remoteLogManagerTaskRetryJitter());
         rlmCopyThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerCopierThreadPoolSize(),
             "RLMCopyThreadPool", "kafka-rlm-copy-thread-pool-%d");
         rlmExpirationThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerExpirationThreadPoolSize(),
@@ -819,6 +823,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
         protected final TopicIdPartition topicIdPartition;
         private final Logger logger;
+        private long consecutiveFailures;
 
         public RLMTask(TopicIdPartition topicIdPartition) {
             this.topicIdPartition = topicIdPartition;
@@ -830,6 +835,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         public void run() {
+            long previousFailures = consecutiveFailures;
+            consecutiveFailures = 0;
             if (isCancelled()) {
                 logger.debug("Skipping the current run for partition {} as it is cancelled", topicIdPartition);
                 return;
@@ -852,6 +859,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     logger.warn("Current thread for partition {} is interrupted", topicIdPartition, ex);
                 }
             } catch (RetriableException | RetriableRemoteStorageException ex) {
+                consecutiveFailures = previousFailures + 1;
                 logger.debug("Encountered a retryable error while executing current task for partition {}", topicIdPartition, ex);
             } catch (Exception ex) {
                 if (!isCancelled()) {
@@ -861,6 +869,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         protected abstract void execute(UnifiedLog log) throws InterruptedException, RemoteStorageException, ExecutionException;
+
+        private long nextDelayMs() {
+            return consecutiveFailures == 0 ? delayInMs : retryBackoff.backoff(consecutiveFailures - 1);
+        }
 
         public String toString() {
             return this.getClass() + "[" + topicIdPartition + "]";
@@ -2184,16 +2196,14 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 RLMCopyTask task = new RLMCopyTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
                 // set this upfront when it is getting initialized instead of doing it after scheduling.
                 LOGGER.info("Created a new copy task: {} and getting scheduled", task);
-                ScheduledFuture<?> future = rlmCopyThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
-                return new RLMTaskWithFuture(task, future);
+                return new RLMTaskWithFuture(task, rlmCopyThreadPool);
             });
         }
 
         leaderExpirationRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
             RLMExpirationTask task = new RLMExpirationTask(topicIdPartition);
             LOGGER.info("Created a new expiration task: {} and getting scheduled", task);
-            ScheduledFuture<?> future = rlmExpirationThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
-            return new RLMTaskWithFuture(task, future);
+            return new RLMTaskWithFuture(task, rlmExpirationThreadPool);
         });
     }
 
@@ -2213,22 +2223,35 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         followerRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
             RLMFollowerTask task = new RLMFollowerTask(topicIdPartition);
             LOGGER.info("Created a new follower task: {} and getting scheduled", task);
-            ScheduledFuture<?> future = followerThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
-            return new RLMTaskWithFuture(task, future);
+            return new RLMTaskWithFuture(task, followerThreadPool);
         });
     }
 
-    static class RLMTaskWithFuture {
+    static class RLMTaskWithFuture implements Runnable {
 
         private final RLMTask rlmTask;
-        private final Future<?> future;
+        private final RLMScheduledThreadPool threadPool;
+        private Future<?> future;
 
-        RLMTaskWithFuture(RLMTask rlmTask, Future<?> future) {
+        RLMTaskWithFuture(RLMTask rlmTask, RLMScheduledThreadPool threadPool) {
             this.rlmTask = rlmTask;
-            this.future = future;
+            this.threadPool = threadPool;
+            schedule(0);
         }
 
-        public void cancel() {
+        @Override
+        public void run() {
+            rlmTask.run();
+            schedule(rlmTask.nextDelayMs());
+        }
+
+        private synchronized void schedule(long delayMs) {
+            if (!rlmTask.isCancelled()) {
+                future = threadPool.schedule(this, delayMs, TimeUnit.MILLISECONDS);
+            }
+        }
+
+        public synchronized void cancel() {
             rlmTask.cancel();
             try {
                 future.cancel(true);
@@ -2360,9 +2383,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             return 1 - (double) scheduledThreadPool.getActiveCount() / (double) scheduledThreadPool.getCorePoolSize();
         }
 
-        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable runnable, long initialDelay, long delay, TimeUnit timeUnit) {
-            LOGGER.info("Scheduling runnable {} with initial delay: {}, fixed delay: {}", runnable, initialDelay, delay);
-            return scheduledThreadPool.scheduleWithFixedDelay(runnable, initialDelay, delay, timeUnit);
+        public ScheduledFuture<?> schedule(Runnable runnable, long delay, TimeUnit timeUnit) {
+            return scheduledThreadPool.schedule(runnable, delay, timeUnit);
         }
 
         public void close() {
