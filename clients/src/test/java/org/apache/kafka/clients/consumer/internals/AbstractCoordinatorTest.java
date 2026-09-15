@@ -63,6 +63,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
@@ -87,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -712,7 +714,7 @@ public class AbstractCoordinatorTest {
             if (!(body instanceof SyncGroupRequest)) {
                 return false;
             }
-            coordinator.resetGenerationOnLeaveGroup();
+            coordinator.resetStateOnResponseError(ApiKeys.HEARTBEAT, Errors.UNKNOWN_MEMBER_ID, true);
 
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
             return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
@@ -1140,6 +1142,34 @@ public class AbstractCoordinatorTest {
             Arguments.of(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.LEAVE_GROUP),
             Arguments.of(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
         );
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CloseOptions.GroupMembershipOperation.class, names = {"DEFAULT", "REMAIN_IN_GROUP"})
+    public void testStaticMemberKeepsMemberIdWhenLeaveGroupIsSuppressed(CloseOptions.GroupMembershipOperation operation) {
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE,
+            Optional.of("groupInstanceId"), Optional.empty());
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+        coordinator.ensureActiveGroup();
+        assertEquals(memberId, coordinator.generation().memberId);
+
+        RequestFuture<Void> future = coordinator.maybeLeaveGroup(
+            operation, "test static member leaving");
+
+        // A static member must not send LeaveGroup for this membership operation...
+        assertNull(future);
+        assertFalse(mockClient.hasInFlightRequests());
+
+        // ...and must keep its member id, so that the next rejoin identifies as the existing
+        // member instead of a new instance claiming the same group.instance.id, which would
+        // fence a still-pending join attempt of this same consumer (KAFKA-20985). Generation
+        // and state are reset as before and a rejoin is requested.
+        assertEquals(memberId, coordinator.generation().memberId);
+        assertEquals(AbstractCoordinator.Generation.NO_GENERATION.generationId, coordinator.generation().generationId);
+        assertTrue(coordinator.rejoinNeededOrPending());
     }
 
     private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId)  {
