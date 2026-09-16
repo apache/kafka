@@ -32,7 +32,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -343,23 +342,29 @@ public class DefaultSslEngineFactoryTest {
     @Test
     public void testAllSupportedCipherSuitesPassThrough() {
         List<String> configured = Arrays.asList("TLS_CIPHER_A", "TLS_CIPHER_B");
-        Set<String> supported = Set.of("TLS_CIPHER_A", "TLS_CIPHER_B", "TLS_CIPHER_C");
+        String[] supported = {"TLS_CIPHER_A", "TLS_CIPHER_B", "TLS_CIPHER_C"};
         assertArrayEquals(configured.toArray(new String[0]), DefaultSslEngineFactory.filterCipherSuites(configured, supported));
     }
 
     @Test
     public void testUnsupportedCipherSuiteIsFiltered() {
         List<String> configured = Arrays.asList("TLS_CIPHER_A", "TLS_FAKE_CIPHER_DOES_NOT_EXIST");
-        Set<String> supported = Set.of("TLS_CIPHER_A", "TLS_CIPHER_B");
+        String[] supported = {"TLS_CIPHER_A", "TLS_CIPHER_B"};
         assertArrayEquals(new String[]{"TLS_CIPHER_A"}, DefaultSslEngineFactory.filterCipherSuites(configured, supported));
     }
 
     @Test
     public void testAllUnsupportedCipherSuitesThrows() {
         List<String> configured = Arrays.asList("TLS_FAKE_CIPHER_A", "TLS_FAKE_CIPHER_B");
-        Set<String> supported = Set.of("TLS_CIPHER_A", "TLS_CIPHER_B");
+        String[] supported = {"TLS_CIPHER_A", "TLS_CIPHER_B"};
         assertThrows(InvalidConfigurationException.class,
                 () -> DefaultSslEngineFactory.filterCipherSuites(configured, supported));
+    }
+
+    @Test
+    public void testNullSupportedCipherSuitesPassThrough() {
+        List<String> configured = Arrays.asList("TLS_CIPHER_A", "TLS_CIPHER_B");
+        assertArrayEquals(configured.toArray(new String[0]), DefaultSslEngineFactory.filterCipherSuites(configured, null));
     }
 
     @Test
