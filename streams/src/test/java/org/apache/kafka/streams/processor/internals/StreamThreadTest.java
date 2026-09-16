@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -132,7 +133,9 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -592,7 +595,7 @@ public class StreamThreadTest {
         final TaskId taskId = new TaskId(0, 0);
         final Task runningTask = statelessTask(taskId)
             .inState(Task.State.RUNNING).build();
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         when(taskManager.allRunningTasks()).thenReturn(Collections.singletonMap(taskId, runningTask));
         when(taskManager.commit(Collections.singleton(runningTask))).thenReturn(0);
 
@@ -622,7 +625,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -647,7 +650,7 @@ public class StreamThreadTest {
         // iteration, including the ones that return early because the group is not ready -- which is exactly when a
         // task may still be restoring.
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -690,7 +693,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -711,7 +714,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -734,7 +737,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -756,7 +759,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -1586,7 +1589,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
@@ -1607,7 +1610,7 @@ public class StreamThreadTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldNotReturnDataAfterTaskMigrated(final boolean processingThreadsEnabled) {
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final InternalTopologyBuilder internalTopologyBuilder = mock(InternalTopologyBuilder.class);
         when(internalTopologyBuilder.fullSourceTopicNames()).thenReturn(Collections.singletonList(topic1));
 
@@ -1678,7 +1681,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
@@ -1696,7 +1699,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
@@ -1713,7 +1716,7 @@ public class StreamThreadTest {
     @Test
     public void shouldRouteDefaultToRemainInGroupForClassicProtocol() {
         // Classic protocol: DEFAULT should map to consumer REMAIN_IN_GROUP
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final StreamsConfig config = new StreamsConfig(configProps(false, false));
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -1731,7 +1734,7 @@ public class StreamThreadTest {
         // buildStreamThread passes consumer as mainConsumer, so close() is called on consumer
         verify(consumer).close(captor.capture());
         assertEquals(
-                org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP,
+                GroupMembershipOperation.REMAIN_IN_GROUP,
                 captor.getValue().groupMembershipOperation()
         );
     }
@@ -1739,7 +1742,7 @@ public class StreamThreadTest {
     @Test
     public void shouldRouteDefaultToConsumerDefaultForStreamsProtocol() {
         // Streams protocol: DEFAULT should map to consumer DEFAULT (dynamic member leaves)
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final StreamsConfig config = new StreamsConfig(configProps(false, false));
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -1764,7 +1767,7 @@ public class StreamThreadTest {
                 ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
         verify(mainConsumer).close(captor.capture());
         assertEquals(
-                org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT,
+                GroupMembershipOperation.DEFAULT,
                 captor.getValue().groupMembershipOperation()
         );
     }
@@ -1772,7 +1775,7 @@ public class StreamThreadTest {
     @Test
     public void shouldRouteRemainInGroupToRemainInGroupForStreamsProtocol() {
         // Streams protocol: explicit REMAIN_IN_GROUP must always map to consumer REMAIN_IN_GROUP
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final StreamsConfig config = new StreamsConfig(configProps(false, false));
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -1797,9 +1800,119 @@ public class StreamThreadTest {
                 ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
         verify(mainConsumer).close(captor.capture());
         assertEquals(
-                org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP,
+                GroupMembershipOperation.REMAIN_IN_GROUP,
                 captor.getValue().groupMembershipOperation()
         );
+    }
+
+    /**
+     * Starts a real stream thread (classic protocol) whose run loop is parked inside poll, so a
+     * test can interleave shutdown calls deterministically before releasing it: the thread cannot
+     * consume its group membership operation while parked. On release, poll throws
+     * {@code failureOnRelease} if non-null and returns empty records otherwise. The thread is
+     * stored in {@code this.thread} for the tear-down.
+     *
+     * @return the latch releasing the parked poll
+     */
+    private CountDownLatch startThreadParkedInPoll(final RuntimeException failureOnRelease) throws InterruptedException {
+        final Time mockTime = new MockTime(1);
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, APPLICATION_ID, mockTime);
+
+        final CountDownLatch pollEntered = new CountDownLatch(1);
+        final CountDownLatch releasePoll = new CountDownLatch(1);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(consumer.poll(any())).thenAnswer(invocation -> {
+            pollEntered.countDown();
+            releasePoll.await(30, TimeUnit.SECONDS);
+            if (failureOnRelease != null) {
+                throw failureOnRelease;
+            }
+            return ConsumerRecords.empty();
+        });
+        final MockConsumerClientSupplier mockClientSupplier = new MockConsumerClientSupplier(consumer);
+        mockClientSupplier.setCluster(createCluster());
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, config),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        @SuppressWarnings("unchecked")
+        final BiConsumer<Throwable, Boolean> mockExceptionHandler = mock(BiConsumer.class);
+        thread = StreamThread.create(
+            topologyMetadata,
+            config,
+            mockClientSupplier,
+            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            PROCESS_ID,
+            CLIENT_ID,
+            streamsMetrics,
+            mockTime,
+            streamsMetadataState,
+            0,
+            -1L,
+            stateDirectory,
+            new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
+            threadIdx,
+            null,
+            mockExceptionHandler
+        );
+
+        thread.start();
+        assertTrue(pollEntered.await(10, TimeUnit.SECONDS), "StreamThread never reached poll");
+        return releasePoll;
+    }
+
+    private void awaitThreadDead() throws InterruptedException {
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.DEAD,
+            10 * 1000,
+            "Thread never shut down.");
+    }
+
+    private void verifyConsumerClosedWith(final GroupMembershipOperation expectedOperation) {
+        final ArgumentCaptor<org.apache.kafka.clients.consumer.CloseOptions> captor =
+            ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
+        verify(consumer).close(captor.capture());
+        assertEquals(expectedOperation, captor.getValue().groupMembershipOperation());
+    }
+
+    @Test
+    public void shouldNotOverrideShutdownOperationWhenThreadFailsAfterShutdownWasInitiated() throws InterruptedException {
+        // A thread that dies with an uncaught exception requests LEAVE_GROUP as the failure
+        // default, but that default must not override the operation of a caller that already
+        // initiated the thread's shutdown, such as a close with an explicit REMAIN_IN_GROUP.
+        final CountDownLatch releasePoll = startThreadParkedInPoll(new RuntimeException("stream thread failure"));
+
+        assertTrue(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+
+        releasePoll.countDown();
+        awaitThreadDead();
+
+        verifyConsumerClosedWith(GroupMembershipOperation.REMAIN_IN_GROUP);
+    }
+
+    @Test
+    public void shouldKeepGroupMembershipOperationOfTheCallerThatInitiatedShutdown() throws InterruptedException {
+        // The caller that initiates the shutdown decides the group membership operation: a later
+        // shutdown request (e.g., a client close racing a removal or replacement) loses and must
+        // not change the operation the thread shuts down with.
+        final CountDownLatch releasePoll = startThreadParkedInPoll(null);
+
+        assertTrue(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+        assertFalse(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+
+        releasePoll.countDown();
+        awaitThreadDead();
+
+        verifyConsumerClosedWith(GroupMembershipOperation.REMAIN_IN_GROUP);
     }
 
     @ParameterizedTest
@@ -2685,7 +2798,7 @@ public class StreamThreadTest {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
 
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.LATEST.name());
         consumer.assign(assignedPartitions);
         consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
@@ -2713,7 +2826,7 @@ public class StreamThreadTest {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
 
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.LATEST.name());
         consumer.assign(assignedPartitions);
         consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
@@ -2740,7 +2853,7 @@ public class StreamThreadTest {
     @SuppressWarnings("unchecked")
     public void shouldCatchHandleCorruptionOnTaskCorruptedExceptionPath(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -2803,7 +2916,7 @@ public class StreamThreadTest {
     @SuppressWarnings("unchecked")
     public void shouldCatchTimeoutExceptionFromHandleCorruptionAndInvokeExceptionHandler(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -2871,7 +2984,7 @@ public class StreamThreadTest {
     @SuppressWarnings("unchecked")
     public void shouldCatchTaskMigratedExceptionOnOnTaskCorruptedExceptionPath(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -2939,7 +3052,7 @@ public class StreamThreadTest {
     @SuppressWarnings("unchecked")
     public void shouldEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnActiveTask(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -3007,7 +3120,7 @@ public class StreamThreadTest {
     @SuppressWarnings("unchecked")
     public void shouldNotEnforceRebalanceOnTaskCorruptedExceptionUnderStreamsProtocol(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         // The Streams group protocol requires the main consumer to be an AsyncKafkaConsumer (see subscribeConsumer).
         final Consumer<byte[], byte[]> consumer = mock(AsyncKafkaConsumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
@@ -3084,7 +3197,7 @@ public class StreamThreadTest {
     @SuppressWarnings("unchecked")
     public void shouldNotEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnInactiveTask(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -3148,7 +3261,7 @@ public class StreamThreadTest {
     @ValueSource(booleans = {true, false})
     public void shouldNotCommitNonRunningNonRestoringTasks(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
@@ -3294,7 +3407,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(
@@ -3328,7 +3441,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
@@ -3390,7 +3503,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
@@ -4004,7 +4117,7 @@ public class StreamThreadTest {
             consumer,
             changelogReader,
             null,
-            mock(TaskManager.class),
+            mockTaskManager(),
             null,
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
             new TopologyMetadata(internalTopologyBuilder, config),
@@ -4066,7 +4179,7 @@ public class StreamThreadTest {
             consumer,
             changelogReader,
             null,
-            mock(TaskManager.class),
+            mockTaskManager(),
             null,
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
             new TopologyMetadata(internalTopologyBuilder, config),
@@ -4114,7 +4227,7 @@ public class StreamThreadTest {
             consumer,
             changelogReader,
             null,
-            mock(TaskManager.class),
+            mockTaskManager(),
             null,
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
             new TopologyMetadata(internalTopologyBuilder, config),
@@ -4160,7 +4273,7 @@ public class StreamThreadTest {
             consumer,
             changelogReader,
             null,
-            mock(TaskManager.class),
+            mockTaskManager(),
             null,
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
             new TopologyMetadata(internalTopologyBuilder, config),
@@ -4224,7 +4337,7 @@ public class StreamThreadTest {
                 consumer,
                 changelogReader,
                 null,
-                mock(TaskManager.class),
+                mockTaskManager(),
                 null,
                 new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
                 new TopologyMetadata(internalTopologyBuilder, config),
@@ -4298,7 +4411,7 @@ public class StreamThreadTest {
                 consumer,
                 changelogReader,
                 null,
-                mock(TaskManager.class),
+                mockTaskManager(),
                 null,
                 new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
                 new TopologyMetadata(internalTopologyBuilder, config),
@@ -4363,7 +4476,7 @@ public class StreamThreadTest {
             consumer,
             changelogReader,
             null,
-            mock(TaskManager.class),
+            mockTaskManager(),
             null,
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
             new TopologyMetadata(internalTopologyBuilder, config),
@@ -4428,7 +4541,7 @@ public class StreamThreadTest {
                 consumer,
                 changelogReader,
                 null,
-                mock(TaskManager.class),
+                mockTaskManager(),
                 null,
                 new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
                 new TopologyMetadata(internalTopologyBuilder, config),
@@ -4502,7 +4615,7 @@ public class StreamThreadTest {
                 consumer,
                 changelogReader,
                 null,
-                mock(TaskManager.class),
+                mockTaskManager(),
                 null,
                 new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
                 new TopologyMetadata(internalTopologyBuilder, config),
@@ -4662,7 +4775,7 @@ public class StreamThreadTest {
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
-        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         return new StreamThread(
@@ -4694,8 +4807,16 @@ public class StreamThreadTest {
         );
     }
 
-    private TaskManager mockTaskManager(final Task runningTask) {
+    // ThreadMetadataImpl wraps producerClientIds() in Set.of(...), so every TaskManager mock
+    // has to return a non-null value for it.
+    private TaskManager mockTaskManager() {
         final TaskManager taskManager = mock(TaskManager.class);
+        lenient().when(taskManager.producerClientIds()).thenReturn(CLIENT_ID + "-producer");
+        return taskManager;
+    }
+
+    private TaskManager mockTaskManager(final Task runningTask) {
+        final TaskManager taskManager = mockTaskManager();
         final TaskId taskId = new TaskId(0, 0);
 
         when(runningTask.state()).thenReturn(Task.State.RUNNING);

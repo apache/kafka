@@ -53,11 +53,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.everyItem;
-import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -100,8 +98,8 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
         when(serdeGetter.valueSerde()).thenReturn((Serde) new Serdes.StringSerde());
         createBuffer(Duration.ofMillis(1), null);
-        assertThat(pipeRecord("K", "V", 2L), equalTo(true));
-        assertThat(pipeRecord("K", "V", 0L), equalTo(false));
+        assertTrue(pipeRecord("K", "V", 2L));
+        assertFalse(pipeRecord("K", "V", 0L));
     }
 
     @Test
@@ -122,7 +120,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
-        assertThat(count.get(), equalTo(1));
+        assertEquals(1, count.get());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -136,12 +134,12 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
-        assertThat(count.get(), equalTo(1));
+        assertEquals(1, count.get());
         pipeRecord("2", "0", 1L);
         assertNumSizeAndTimestamp(buffer, 1, 1, 42);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
-        assertThat(count.get(), equalTo(2));
+        assertEquals(2, count.get());
     }
 
     @Test
@@ -151,11 +149,11 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
-        assertThat(count.get(), equalTo(0));
+        assertEquals(0, count.get());
         pipeRecord("2", "0", 1L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 1, 1, 42);
-        assertThat(count.get(), equalTo(1));
+        assertEquals(1, count.get());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -167,10 +165,10 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(0));
+        assertEquals(0, count.get());
         pipeRecord("2", "0", 1L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(2));
+        assertEquals(2, count.get());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -205,16 +203,16 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("2", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(0));
+        assertEquals(0, count.get());
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         pipeRecord("2", "2", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(0));
+        assertEquals(0, count.get());
         assertNumSizeAndTimestamp(buffer, 2, 0, 84);
         pipeRecord("1", "0", 7L);
         assertNumSizeAndTimestamp(buffer, 3, 0, 126);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(2));
+        assertEquals(2, count.get());
         assertNumSizeAndTimestamp(buffer, 1, 7, 42);
     }
 
@@ -242,11 +240,11 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         final List<TimeOrderedKeyValueBuffer.Eviction<String, String>> evicted = new ArrayList<>();
         buffer.evictWhile(() -> buffer.numRecords() > 0, evicted::add);
 
-        assertThat(evicted.size(), is(1));
+        assertEquals(1, evicted.size());
         // The key/value deserializers must see the headers captured at put time, not the mutated context headers.
-        assertThat(serde.capturedHeaders, hasItem(putHeaders));
-        assertThat(serde.capturedHeaders, everyItem(is(putHeaders)));
-        assertThat(evicted.get(0).recordContext().headers(), is(putHeaders));
+        assertTrue(serde.capturedHeaders.contains(putHeaders));
+        assertTrue(serde.capturedHeaders.stream().allMatch(putHeaders::equals));
+        assertEquals(putHeaders, evicted.get(0).recordContext().headers());
     }
 
     @Test
@@ -280,12 +278,12 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         buffer.evictWhile(() -> true, evicted::add);
 
         // Only the original "k" record at t=0 falls outside the grace window of t=10.
-        assertThat(evicted.size(), is(1));
-        assertThat(evicted.get(0).key(), is("k"));
+        assertEquals(1, evicted.size());
+        assertEquals("k", evicted.get(0).key());
         // The deserializers for the evicted record must see its put-time headers, not the later context headers.
-        assertThat(serde.capturedHeaders, hasItem(putHeaders));
-        assertThat(serde.capturedHeaders, everyItem(is(putHeaders)));
-        assertThat(evicted.get(0).recordContext().headers(), is(putHeaders));
+        assertTrue(serde.capturedHeaders.contains(putHeaders));
+        assertTrue(serde.capturedHeaders.stream().allMatch(putHeaders::equals));
+        assertEquals(putHeaders, evicted.get(0).recordContext().headers());
     }
 
     /**
@@ -316,8 +314,8 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
                                            final int num,
                                            final long time,
                                            final long size) {
-        assertThat(buffer.numRecords(), equalTo(num));
-        assertThat(buffer.minTimestamp(), equalTo(time));
-        assertThat(buffer.bufferSize(), equalTo(size));
+        assertEquals(num, buffer.numRecords());
+        assertEquals(time, buffer.minTimestamp());
+        assertEquals(size, buffer.bufferSize());
     }
 }

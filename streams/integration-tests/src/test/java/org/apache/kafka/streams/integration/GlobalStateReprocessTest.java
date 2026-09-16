@@ -58,8 +58,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -155,7 +154,7 @@ public class GlobalStateReprocessTest {
             30000,
             "Has not processed record within 30 seconds");
 
-        assertThat(storeContents(kafkaStreams).get(0), containsString("- this is the right value."));
+        assertTrue(storeContents(kafkaStreams).get(0).contains("- this is the right value."));
 
 
         kafkaStreams.close();
@@ -169,7 +168,7 @@ public class GlobalStateReprocessTest {
             30000,
             "Has not processed record within 30 seconds");
 
-        assertThat(storeContents(kafkaStreams).get(0), containsString("- this is the right value."));
+        assertTrue(storeContents(kafkaStreams).get(0).contains("- this is the right value."));
     }
 
     private void createTopics() throws Exception {

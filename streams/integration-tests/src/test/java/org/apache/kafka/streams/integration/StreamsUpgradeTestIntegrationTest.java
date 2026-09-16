@@ -39,8 +39,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 @Timeout(600)
@@ -83,23 +82,23 @@ public class StreamsUpgradeTestIntegrationTest {
         final AtomicInteger usedVersion4 = new AtomicInteger();
         final KafkaStreams kafkaStreams4 = buildFutureStreams(usedVersion4);
         startSync(kafkaStreams4);
-        assertThat(usedVersion4.get(), is(LATEST_SUPPORTED_VERSION));
+        assertEquals(LATEST_SUPPORTED_VERSION, usedVersion4.get());
 
         // second roll
         kafkaStreams2.close();
         final AtomicInteger usedVersion5 = new AtomicInteger();
         final KafkaStreams kafkaStreams5 = buildFutureStreams(usedVersion5);
         startSync(kafkaStreams5);
-        assertThat(usedVersion5.get(), is(LATEST_SUPPORTED_VERSION));
+        assertEquals(LATEST_SUPPORTED_VERSION, usedVersion5.get());
 
         // third roll, upgrade complete
         kafkaStreams3.close();
         final AtomicInteger usedVersion6 = new AtomicInteger();
         final KafkaStreams kafkaStreams6 = buildFutureStreams(usedVersion6);
         startSync(kafkaStreams6);
-        retryOnExceptionWithTimeout(() -> assertThat(usedVersion6.get(), is(LATEST_SUPPORTED_VERSION + 1)));
-        retryOnExceptionWithTimeout(() -> assertThat(usedVersion5.get(), is(LATEST_SUPPORTED_VERSION + 1)));
-        retryOnExceptionWithTimeout(() -> assertThat(usedVersion4.get(), is(LATEST_SUPPORTED_VERSION + 1)));
+        retryOnExceptionWithTimeout(() -> assertEquals(LATEST_SUPPORTED_VERSION + 1, usedVersion6.get()));
+        retryOnExceptionWithTimeout(() -> assertEquals(LATEST_SUPPORTED_VERSION + 1, usedVersion5.get()));
+        retryOnExceptionWithTimeout(() -> assertEquals(LATEST_SUPPORTED_VERSION + 1, usedVersion4.get()));
 
         kafkaStreams4.close(Duration.ZERO);
         kafkaStreams5.close(Duration.ZERO);

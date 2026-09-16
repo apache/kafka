@@ -604,12 +604,7 @@ public class UtilsTest {
             assertFalse(smallBuffer.hasRemaining(), "Buffer should be filled");
             assertEquals("world", new String(smallBuffer.array()), "Buffer should be populated correctly");
             // Scenario 4: test end of stream is reached before buffer is filled up
-            try {
-                Utils.readFullyOrFail(channel, largeBuffer, 0, "large");
-                fail("Expected EOFException to be raised");
-            } catch (EOFException e) {
-                // expected
-            }
+            assertThrows(EOFException.class, () -> Utils.readFullyOrFail(channel, largeBuffer, 0, "large"));
         }
     }
 

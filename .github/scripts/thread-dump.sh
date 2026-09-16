@@ -26,8 +26,8 @@ sleep 5;
 for GRADLE_WORKER_PID in `jps | grep GradleWorkerMain | awk -F" " '{print $1}'`;
 do
   echo $GRADLE_WORKER_PID >> thread-dumps/pids.txt
-  echo "Dumping threads for GradleWorkerMain pid $GRADLE_WORKER_PID into $FILENAME";
   FILENAME="thread-dumps/GradleWorkerMain-$GRADLE_WORKER_PID.txt"
+  echo "Dumping threads for GradleWorkerMain pid $GRADLE_WORKER_PID into $FILENAME";
   jstack $GRADLE_WORKER_PID > $FILENAME
   sleep 5;
 done;

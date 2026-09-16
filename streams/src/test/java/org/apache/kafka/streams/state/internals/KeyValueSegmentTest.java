@@ -38,9 +38,7 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -84,11 +82,11 @@ public class KeyValueSegmentTest {
             new KeyValueSegment("someOtherName", "someOtherName", 0L, Position.emptyPosition(), metricsRecorder);
         final KeyValueSegment segmentDifferentId = new KeyValueSegment("anyName", "anyName", 1L, Position.emptyPosition(), metricsRecorder);
 
-        assertThat(segment, equalTo(segment));
-        assertThat(segment, equalTo(segmentSameId));
-        assertThat(segment, not(equalTo(segmentDifferentId)));
-        assertThat(segment, not(equalTo(null)));
-        assertThat(segment, not(equalTo("anyName")));
+        assertTrue(segment.equals(segment));
+        assertTrue(segment.equals(segmentSameId));
+        assertFalse(segment.equals(segmentDifferentId));
+        assertFalse(segment.equals(null));
+        assertFalse(segment.equals("anyName"));
 
         segment.close();
     }
@@ -114,13 +112,13 @@ public class KeyValueSegmentTest {
         final KeyValueSegment segment2 = new KeyValueSegment("b", "B", 100L, Position.emptyPosition(), metricsRecorder);
         final KeyValueSegment segment3 = new KeyValueSegment("c", "A", 0L, Position.emptyPosition(), metricsRecorder);
 
-        assertThat(segment1.compareTo(segment1), equalTo(0));
-        assertThat(segment1.compareTo(segment2), equalTo(-1));
-        assertThat(segment2.compareTo(segment1), equalTo(1));
-        assertThat(segment1.compareTo(segment3), equalTo(1));
-        assertThat(segment3.compareTo(segment1), equalTo(-1));
-        assertThat(segment2.compareTo(segment3), equalTo(1));
-        assertThat(segment3.compareTo(segment2), equalTo(-1));
+        assertEquals(0, segment1.compareTo(segment1));
+        assertEquals(-1, segment1.compareTo(segment2));
+        assertEquals(1, segment2.compareTo(segment1));
+        assertEquals(1, segment1.compareTo(segment3));
+        assertEquals(-1, segment3.compareTo(segment1));
+        assertEquals(1, segment2.compareTo(segment3));
+        assertEquals(-1, segment3.compareTo(segment2));
 
         segment1.close();
         segment2.close();
