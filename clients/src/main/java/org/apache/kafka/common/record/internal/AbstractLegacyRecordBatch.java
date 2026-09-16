@@ -278,6 +278,17 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         return iterator(bufferSupplier, maxRecordBodySize);
     }
 
+    // the older message format versions cannot cheaply skip the record body, so both variants fully decode it
+    @Override
+    public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
+        return iterator(bufferSupplier);
+    }
+
+    @Override
+    public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
+        return iterator(bufferSupplier, maxRecordBodySize);
+    }
+
     static void writeHeader(ByteBuffer buffer, long offset, int size) {
         buffer.putLong(offset);
         buffer.putInt(size);
@@ -528,22 +539,6 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             buffer.putLong(LOG_OVERHEAD + LegacyRecord.TIMESTAMP_OFFSET, timestamp);
             long crc = record.computeChecksum();
             ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + LegacyRecord.CRC_OFFSET, crc);
-        }
-
-        /**
-         * LegacyRecordBatch does not implement this iterator and would hence fallback to the normal iterator.
-         *
-         * @return An iterator over the records contained within this batch
-         */
-        @Override
-        public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
-            return CloseableIterator.wrap(iterator(bufferSupplier));
-        }
-
-        @Override
-        public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
-            // legacy batches cannot cheaply skip the record body, so this is a full decode
-            return CloseableIterator.wrap(iterator(bufferSupplier, maxRecordBodySize));
         }
 
         @Override

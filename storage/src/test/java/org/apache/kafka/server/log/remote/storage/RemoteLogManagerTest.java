@@ -4414,4 +4414,40 @@ public class RemoteLogManagerTest {
                 () -> remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache));
         assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
     }
+
+    @Test
+    void testFindOffsetByTimestampWithCompressedRemoteRecords() throws IOException, RemoteStorageException {
+        TopicPartition tp = leaderTopicIdPartition.topicPartition();
+        long ts = time.milliseconds();
+        long startOffset = 120;
+        int targetLeaderEpoch = 10;
+
+        TreeMap<Integer, Long> validSegmentEpochs = new TreeMap<>();
+        validSegmentEpochs.put(targetLeaderEpoch, startOffset);
+
+        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
+        leaderEpochFileCache.assign(4, 99L);
+        leaderEpochFileCache.assign(5, 99L);
+        leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
+        leaderEpochFileCache.assign(12, 500L);
+
+        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+
+        // the same three records as one gzip-compressed batch
+        MemoryRecords compressed = MemoryRecords.withRecords(startOffset, Compression.gzip().build(), targetLeaderEpoch,
+                new SimpleRecord(ts - 1, "first message".getBytes()),
+                new SimpleRecord(ts + 1, "second message".getBytes()),
+                new SimpleRecord(ts + 2, "third message".getBytes()));
+        byte[] compressedBytes = new byte[compressed.sizeInBytes()];
+        compressed.buffer().get(compressedBytes);
+        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
+                .thenAnswer(a -> new ByteArrayInputStream(compressedBytes));
+
+        assertEquals(Optional.of(new FileRecords.TimestampAndOffset(ts + 1, startOffset + 1, Optional.of(targetLeaderEpoch))),
+                remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache));
+        assertEquals(Optional.of(new FileRecords.TimestampAndOffset(ts + 2, startOffset + 2, Optional.of(targetLeaderEpoch))),
+                remoteLogManager.findOffsetByTimestamp(tp, ts + 2, startOffset, leaderEpochFileCache));
+        assertEquals(Optional.empty(),
+                remoteLogManager.findOffsetByTimestamp(tp, ts + 3, startOffset, leaderEpochFileCache));
+    }
 }

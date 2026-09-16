@@ -60,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -653,6 +654,17 @@ public class DefaultRecordBatchTest {
         InvalidRecordException ex = assertThrows(InvalidRecordException.class, () -> batch.offsetOfMaxTimestamp(100));
         assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
             "expected the configured-maximum guard, got: " + ex.getMessage());
+    }
+
+    // the lookup must not decode record bodies it never reads
+    @Test
+    public void testOffsetOfMaxTimestampSkipsKeyAndValue() {
+        DefaultRecordBatch batch = spy(recordBatchWithValueSize(1000));
+
+        assertEquals(Optional.of(0L), batch.offsetOfMaxTimestamp(10_000));
+
+        verify(batch).skipKeyValueIterator(any(), eq(10_000));
+        verify(batch, never()).streamingIterator(any(), anyInt());
     }
 
     private static DefaultRecordBatch recordBatchWithValueSize(int valueSize) {

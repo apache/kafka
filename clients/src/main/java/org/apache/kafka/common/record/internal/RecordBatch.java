@@ -250,6 +250,26 @@ public interface RecordBatch extends Iterable<Record> {
     CloseableIterator<Record> streamingIterator(BufferSupplier decompressionBufferSupplier, int maxRecordBodySize);
 
     /**
+     * Return an iterator which skips parsing key, value and headers, so the returned {@link Record}s expose only the
+     * offset, timestamp, sequence and sizes. Use it when the key and value are not needed to avoid allocating them.
+     * Only compressed batches of magic v2 and above benefit: uncompressed batches slice the underlying buffer without
+     * copying, and older message formats fall back to a full decode. Callers should ensure that the iterator is closed.
+     *
+     * @param bufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
+     * @return The closeable iterator
+     */
+    CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier);
+
+    /**
+     * Variant of {@link #skipKeyValueIterator(BufferSupplier)} that rejects any record whose declared
+     * (decompressed) body size exceeds {@code maxRecordBodySize}; see
+     * {@link #streamingIterator(BufferSupplier, int)}.
+     *
+     * @return The closeable iterator
+     */
+    CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize);
+
+    /**
      * Check whether this is a control batch (i.e. whether the control bit is set in the batch attributes).
      * For magic versions prior to 2, this is always false.
      *
@@ -270,7 +290,7 @@ public interface RecordBatch extends Iterable<Record> {
     default Optional<Long> offsetOfMaxTimestamp(int maxRecordBodySize) {
         if (magic() == RecordBatch.MAGIC_VALUE_V0) return Optional.empty();
         long maxTimestamp = maxTimestamp();
-        try (CloseableIterator<Record> iter = streamingIterator(BufferSupplier.create(), maxRecordBodySize)) {
+        try (CloseableIterator<Record> iter = skipKeyValueIterator(BufferSupplier.create(), maxRecordBodySize)) {
             while (iter.hasNext()) {
                 Record record = iter.next();
                 if (maxTimestamp == record.timestamp()) return Optional.of(record.offset());
