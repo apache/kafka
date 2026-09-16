@@ -20,7 +20,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -30,9 +32,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.test.faultproxy.FaultRule;
@@ -48,7 +48,6 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.util.Collections.singletonList;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
@@ -80,7 +79,7 @@ public class FaultProxyExampleIntegrationTest {
                     .count(Materialized.<String, Long>as(Stores.persistentKeyValueStore("counts"))
                         .withKeySerde(Serdes.String()).withValueSerde(Serdes.Long()))
                     .toStream()
-                    .to(output);
+                    .to(output, Produced.with(Serdes.String(), Serdes.Long()));
 
                 final Properties props = new Properties();
                 props.put(StreamsConfig.APPLICATION_ID_CONFIG, "fault-proxy-example");
@@ -110,22 +109,24 @@ public class FaultProxyExampleIntegrationTest {
                     IntegrationTestUtils.produceKeyValuesSynchronously(
                         input, records, producerConfig, cluster.time);
 
-                    // Oracle: the summed counts converge to exactly numRecords despite the injected fence.
-                    TestUtils.waitForCondition(() -> {
-                        final ReadOnlyKeyValueStore<String, Long> store = IntegrationTestUtils.getStore(
-                            "counts", streams, QueryableStoreTypes.keyValueStore());
-                        long sum = 0L;
-                        try (final KeyValueIterator<String, Long> all = store.all()) {
-                            while (all.hasNext()) {
-                                sum += all.next().value;
-                            }
-                        }
-                        return sum == numRecords;
-                    }, 60_000L, "counts did not converge to " + numRecords);
+                     final Properties consumerConfig = new Properties();
+                    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+                    consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "fault-proxy-example-verifier");
+                    consumerConfig.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+                    consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+                    consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
 
-                    // The fault actually fired (guards against a hollow pass).
+                    IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                        consumerConfig, output,
+                        List.of(KeyValue.pair("k0", 100L), KeyValue.pair("k1", 100L), KeyValue.pair("k2", 100L)),
+                        60_000L);
+
+                    // Committed output at the target counts implies the fence fired and was recovered from.
                     assertTrue(fence.timesTriggered() >= 1, "END_TXN fence never fired");
-                    assertEquals(KafkaStreams.State.RUNNING, streams.state());
+
+                    // The app settles back to RUNNING after recovering from the fence.
+                    TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING,
+                        60_000L, "Streams did not return to RUNNING after recovering from the fence");
                 }
             }
         } finally {

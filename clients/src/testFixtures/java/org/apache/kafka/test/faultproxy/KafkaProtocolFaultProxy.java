@@ -32,13 +32,13 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
+import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.EOFException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
@@ -50,6 +50,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
@@ -132,6 +133,8 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final CopyOnWriteArrayList<FaultRule> rules = new CopyOnWriteArrayList<>();
     private final Set<String> blackholedClients = ConcurrentHashMap.newKeySet();
+    // Live connections, so close() can force sockets shut and unblock the pump reads that own them.
+    private final Set<Connection> connections = ConcurrentHashMap.newKeySet();
     private ServerSocket serverSocket;
     private volatile String proxyHost;
     private volatile int proxyPort;
@@ -238,9 +241,16 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
             try {
                 final Socket client = serverSocket.accept();
                 final Socket broker = new Socket(targetHost, targetPort);
-                final Connection conn = new Connection();
-                threadPool.submit(() -> pumpRequests(client, broker, conn));
-                threadPool.submit(() -> pumpResponses(broker, client, conn));
+                final Connection conn = new Connection(client, broker);
+                connections.add(conn);
+                // Guard the accept/close race: if close() already drained the registry, tear this one down.
+                if (!running.get()) {
+                    connections.remove(conn);
+                    conn.closeQuietly();
+                    break;
+                }
+                threadPool.submit(() -> pumpRequests(conn));
+                threadPool.submit(() -> pumpResponses(conn));
             } catch (final Exception e) {
                 if (running.get()) {
                     LOG.warn("accept loop error", e);
@@ -249,19 +259,31 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
         }
     }
 
-    /** Per-connection state: correlationId -> request header, so responses can be decoded/matched. */
+    /** Per-connection state: the socket pair and correlationId -> request header for decoding responses. */
     private static final class Connection {
+        private final Socket client;
+        private final Socket broker;
         private final Map<Integer, RequestHeader> inflight = new ConcurrentHashMap<>();
+
+        Connection(final Socket client, final Socket broker) {
+            this.client = client;
+            this.broker = broker;
+        }
+
+        void closeQuietly() {
+            Utils.closeQuietly(client, "fault-proxy client socket");
+            Utils.closeQuietly(broker, "fault-proxy broker socket");
+        }
     }
 
     // client -> broker: forward verbatim, recording each request header for response decoding. If the
     // connection's clientId is blackholed, drop the request (do NOT forward) and close the connection — this
     // simulates a one-node network partition on the REQUEST path, so the broker stops hearing that instance's
     // heartbeats and evicts it by session timeout (the ungraceful-crash path). Reversible via clearFaults().
-    private void pumpRequests(final Socket client, final Socket broker, final Connection conn) {
-        try (client; broker;
-             DataInputStream in = new DataInputStream(client.getInputStream());
-             DataOutputStream out = new DataOutputStream(broker.getOutputStream())) {
+    private void pumpRequests(final Connection conn) {
+        try {
+            final DataInputStream in = new DataInputStream(conn.client.getInputStream());
+            final DataOutputStream out = new DataOutputStream(conn.broker.getOutputStream());
             byte[] frame;
             while (running.get() && (frame = readFrame(in)) != null) {
                 try {
@@ -270,7 +292,7 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
                     if (isBlackholed(header.clientId())) {
                         LOG.info("Fault: blackholing request {} from client {} (dropping, not forwarding)",
                                 header.apiKey(), header.clientId());
-                        break; // closes both sockets via try-with-resources; broker never sees this request
+                        break; // stop pumping; the broker never sees this request
                     }
                 } catch (final Exception parseErr) {
                     LOG.debug("could not parse request header (forwarding anyway)", parseErr);
@@ -279,6 +301,9 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
             }
         } catch (final Exception e) {
             LOG.debug("request pump closed", e);
+        } finally {
+            connections.remove(conn);
+            conn.closeQuietly();
         }
     }
 
@@ -295,10 +320,10 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
     }
 
     // broker -> client: rewrite for routing and/or apply a matching fault rule; otherwise forward verbatim.
-    private void pumpResponses(final Socket broker, final Socket client, final Connection conn) {
-        try (broker; client;
-             DataInputStream in = new DataInputStream(broker.getInputStream());
-             DataOutputStream out = new DataOutputStream(client.getOutputStream())) {
+    private void pumpResponses(final Connection conn) {
+        try {
+            final DataInputStream in = new DataInputStream(conn.broker.getInputStream());
+            final DataOutputStream out = new DataOutputStream(conn.client.getOutputStream());
             byte[] frame;
             while (running.get() && (frame = readFrame(in)) != null) {
                 final int correlationId = ByteBuffer.wrap(frame).getInt(0);
@@ -315,7 +340,7 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
 
                 if (fired != null && fired.action() == FaultRule.Action.DISCONNECT) {
                     LOG.info("Fault: dropping connection on {} response ({})", apiKey, fired);
-                    break; // closes both sockets via try-with-resources
+                    break; // stop pumping; the finally closes the connection
                 }
 
                 if (fired != null && fired.action() == FaultRule.Action.DELAY) {
@@ -332,6 +357,9 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
             }
         } catch (final Exception e) {
             LOG.debug("response pump closed", e);
+        } finally {
+            connections.remove(conn);
+            conn.closeQuietly();
         }
     }
 
@@ -374,15 +402,15 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
     }
 
     private FaultRule firstFiringRule(final ApiKeys apiKey, final String clientId) {
-        FaultRule chosen = null;
         for (final FaultRule rule : rules) {
-            // Gate on apiKey AND clientId before shouldFire(), so a client-scoped rule only counts (and
-            // fires on) matching requests — a fetch fault scoped to "restore" ignores the main consumer.
-            if (rule.apiKey() == apiKey && rule.matchesClient(clientId) && rule.shouldFire() && chosen == null) {
-                chosen = rule; // keep evaluating so every matching rule still counts its match
+            // Gate on apiKey and clientId before shouldFire() so a client-scoped rule advances its counters
+            // only on matching requests. The first rule to fire consumes the response; later rules are not
+            // offered it, so each rule's counters reflect only responses it actually saw.
+            if (rule.apiKey() == apiKey && rule.matchesClient(clientId) && rule.shouldFire()) {
+                return rule;
             }
         }
-        return chosen;
+        return null;
     }
 
     /** Reads one length-prefixed Kafka frame (without the 4-byte length). Returns null on clean EOF/close. */
@@ -392,10 +420,8 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
             final byte[] frame = new byte[size];
             in.readFully(frame);
             return frame;
-        } catch (final EOFException eof) {
-            return null;
         } catch (final Exception e) {
-            return null;
+            return null; // clean EOF or torn frame; the connection is done
         }
     }
 
@@ -408,13 +434,17 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
     @Override
     public void close() {
         running.set(false);
+        Utils.closeQuietly(serverSocket, "fault-proxy server socket"); // unblocks accept()
+        connections.forEach(Connection::closeQuietly);                 // unblocks the blocking pump reads
+        connections.clear();
+        threadPool.shutdown();
         try {
-            if (serverSocket != null) {
-                serverSocket.close();
+            if (!threadPool.awaitTermination(10, TimeUnit.SECONDS)) {
+                threadPool.shutdownNow();
             }
-        } catch (final Exception ignored) {
-            // closing
+        } catch (final InterruptedException e) {
+            threadPool.shutdownNow();
+            Thread.currentThread().interrupt();
         }
-        threadPool.shutdownNow();
     }
 }

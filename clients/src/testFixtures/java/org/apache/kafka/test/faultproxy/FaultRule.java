@@ -28,9 +28,10 @@ import java.util.function.IntPredicate;
  * and returned to the caller as a handle so a test can inspect {@link #timesTriggered()} or
  * {@link #remove()} it.
  *
- * <p>A rule counts every response of its API it sees ("matches"); the {@link IntPredicate} trigger decides,
- * from the 1-based match count, whether the fault fires on that match — e.g. {@code n -> n == 1} is
- * {@code once()}, {@code n -> n <= 3} is {@code times(3)}.
+ * <p>A rule counts each response offered to it ("matches"); the {@link IntPredicate} trigger decides, from
+ * the 1-based match count, whether the fault fires on that match — e.g. {@code n -> n == 1} is {@code once()},
+ * {@code n -> n <= 3} is {@code times(3)}. Responses are offered in registration order and consumed by the
+ * first rule that fires, so a later rule is not offered a response an earlier rule already acted on.
  */
 public final class FaultRule {
 
