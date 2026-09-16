@@ -56,6 +56,7 @@ import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -901,6 +902,68 @@ public final class MessageTest {
         createTopics.unknownTaggedFields().add(field1000);
         verifyWriteRaisesUve((short) 0, "Tagged fields were set", createTopics);
         verifyWriteSucceeds((short) 6, createTopics);
+    }
+
+    private byte[] rawTaggedFieldsSection(int declaredCount, int... tagsAndSizes) {
+        ByteBuffer scratch = ByteBuffer.allocate(64);
+        ByteUtils.writeUnsignedVarint(declaredCount, scratch);
+        for (int i = 0; i < tagsAndSizes.length; i += 2) {
+            ByteUtils.writeUnsignedVarint(tagsAndSizes[i], scratch);
+            ByteUtils.writeUnsignedVarint(tagsAndSizes[i + 1], scratch);
+        }
+        scratch.flip();
+        byte[] bytes = new byte[scratch.remaining()];
+        scratch.get(bytes);
+        return bytes;
+    }
+
+    private ByteBuffer messageWithTaggedFieldsSection(short version, byte[] taggedFieldsSection) {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
+        ByteBuffer prefix = ByteBuffer.allocate(size);
+        message.write(new ByteBufferAccessor(prefix), cache, version);
+        prefix.flip();
+        byte[] prefixBytes = new byte[prefix.remaining() - 1];
+        prefix.get(prefixBytes);
+        assertEquals((byte) 0, prefix.get(), "expected an empty tagged-fields section to replace");
+        ByteBuffer result = ByteBuffer.allocate(prefixBytes.length + taggedFieldsSection.length);
+        result.put(prefixBytes);
+        result.put(taggedFieldsSection);
+        result.flip();
+        return result;
+    }
+
+    @Test
+    public void testTaggedFieldCountRejectedWhenLargerThanRemainingBytes() {
+        short version = 1;
+        ByteBuffer buf = messageWithTaggedFieldsSection(version, rawTaggedFieldsSection(1_000_000));
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        RuntimeException e = assertThrows(RuntimeException.class,
+            () -> message.read(new ByteBufferAccessor(buf), version));
+        assertTrue(e.getMessage().contains("tagged fields"),
+            "Expected a bounded-count rejection, but got: " + e.getMessage());
+    }
+
+    @Test
+    public void testTaggedFieldCountRejectedWhenExceedingHardCap() {
+        short version = 1;
+        int declaredCount = MessageUtil.MAX_TAGGED_FIELD_COUNT + 1;
+        ByteBuffer scratch = ByteBuffer.allocate(16);
+        ByteUtils.writeUnsignedVarint(declaredCount, scratch);
+        scratch.flip();
+        byte[] countBytes = new byte[scratch.remaining()];
+        scratch.get(countBytes);
+        byte[] padding = new byte[declaredCount];
+        ByteBuffer section = ByteBuffer.allocate(countBytes.length + padding.length);
+        section.put(countBytes);
+        section.put(padding);
+        ByteBuffer buf = messageWithTaggedFieldsSection(version, section.array());
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        RuntimeException e = assertThrows(RuntimeException.class,
+            () -> message.read(new ByteBufferAccessor(buf), version));
+        assertTrue(e.getMessage().contains("exceeds the maximum allowed count"),
+            "Expected a hard-cap rejection, but got: " + e.getMessage());
     }
 
     @Test
