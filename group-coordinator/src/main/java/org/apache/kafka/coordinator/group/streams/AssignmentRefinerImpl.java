@@ -347,7 +347,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             }
         }
 
-        // Warm-up tasks already restoring are funded first. If `max.warmup.replicas` config was reduced, we might
+        // Warm-up tasks already restoring are funded first. If {@code num.warmup.replicas} config was reduced, we might
         // be over warmup budget and have to give up some warmup tasks. Evicting in reverse funding order
         // keeps which ones deterministic rather than dependent on iteration order.
         // Note: revocation of warmup task happens implicitly by not adding them to the assignment patch again
