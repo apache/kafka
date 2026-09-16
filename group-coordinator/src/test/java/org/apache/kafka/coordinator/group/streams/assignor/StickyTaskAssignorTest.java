@@ -1622,8 +1622,8 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldKeepEachFlavorStickyOnlyWithinItsOwnQuotaWhenScalingUp() {
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("member1", createMemberMetadata("process1", mkMap(mkEntry("stateless", Sets.newSet(0, 1, 2, 3))), Map.of())),
-            mkEntry("member2", createMemberMetadata("process2", mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2, 3))), Map.of())),
+            mkEntry("member1", createMemberMetadata("process1", mkMap(mkEntry("stateless", Sets.newSet(0, 1, 2, 3))), Map.of(), Map.of())),
+            mkEntry("member2", createMemberMetadata("process2", mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2, 3))), Map.of(), Map.of())),
             mkEntry("member3", createMemberMetadata("process3")));
 
         final GroupAssignment result = assignor.assign(
@@ -1646,7 +1646,7 @@ public class StickyTaskAssignorTest {
     public void shouldNotLetStatefulAndStatelessQuotasAddUpBeyondTheActiveQuota() {
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", createMemberMetadata("process1",
-                mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2)), mkEntry("stateless", Sets.newSet(0, 1, 2))), Map.of())),
+                mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2)), mkEntry("stateless", Sets.newSet(0, 1, 2))), Map.of(), Map.of())),
             mkEntry("member2", createMemberMetadata("process2")));
 
         final GroupAssignment result = assignor.assign(
@@ -1716,7 +1716,7 @@ public class StickyTaskAssignorTest {
         final Map<String, MemberMetadataAndStateImpl> next = new LinkedHashMap<>();
         for (Map.Entry<String, MemberMetadataAndStateImpl> entry : members.entrySet()) {
             final MemberAssignment assignment = result.members().get(entry.getKey());
-            next.put(entry.getKey(), createMemberMetadata(entry.getValue().processId(), assignment.activeTasks(), assignment.standbyTasks()));
+            next.put(entry.getKey(), createMemberMetadata(entry.getValue().processId(), assignment.activeTasks(), assignment.standbyTasks(), Map.of()));
         }
         return next;
     }
