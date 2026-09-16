@@ -95,6 +95,7 @@ public class ShareInFlightBatch<K, V> {
 
     public void merge(ShareInFlightBatch<K, V> other) {
         inFlightRecords.putAll(other.inFlightRecords);
+        other.inFlightRecords.clear();
         if (other.checkForRenewAcknowledgements) {
             checkForRenewAcknowledgements = true;
         }

@@ -1318,6 +1318,37 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testSecondFetchBeforeCollectClearsInflightRecords() {
+        buildRequestManager();
+        assignFromSubscribed(Set.of(tp0));
+
+        // Send and receive a successful response for tip0.
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+
+        // Call fetch() again, what the next poll() call does, calls fetchMoreRecords and lets
+        // a second fetch for the same partition go out and complete before the first has been collected.
+        MemoryRecords secondRecords = buildRecords(4L, 2, 4);
+        List<ShareFetchResponseData.AcquiredRecords> secondAcquiredRecords = ShareCompletedFetchTest.acquiredRecords(4L, 2);
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fullFetchResponse(tip0, secondRecords, secondAcquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        // Draining both completed fetches for tip0 in one collect() call forces the merge in ShareFetch.add().
+        ShareFetch<byte[], byte[]> fetch = collectFetch();
+        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = fetch.records().get(tp0);
+        assertEquals(5, fetchedRecords.size(), "records from both fetches should be visible after the merge");
+
+        // Acknowledge every record the application actually received.
+        fetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+        shareConsumeRequestManager.fetch(fetch.takeAcknowledgedRecords());
+
+        // Nothing should still look buffered/pending i.e. every record the application received has been
+        // acknowledged. If the merged-away second batch's records were never cleared, tip0 leaks.
+        assertTrue(shareConsumeRequestManager.shareFetchBuffer.bufferedPartitions().isEmpty(),
+            "No partition should still be considered buffered after all delivered records are acknowledged");
+    }
+
+    @Test
     public void testDoesNotCloseSessionWhileRecordsBuffered() {
         buildRequestManager();
 
