@@ -47,8 +47,7 @@ import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.Collections;
-import java.util.stream.Collectors;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -100,7 +99,6 @@ public class ApiVersionsRequestTest {
         assertEquals(ApiKeys.API_VERSIONS.latestVersion(), apiVersion.maxVersion());
     }
 
-    // Use the latest production MV for this test
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = {
         @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
         @ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "false"),
@@ -212,7 +210,7 @@ public class ApiVersionsRequestTest {
             ApiKeys.SASL_HANDSHAKE.latestVersion());
         SaslHandshakeResponse response = IntegrationTestUtils.sendAndReceive(request, socket);
         assertEquals(Errors.NONE, response.error());
-        assertEquals(Collections.singletonList("PLAIN"), response.enabledMechanisms());
+        assertEquals(List.of("PLAIN"), response.enabledMechanisms());
     }
 
     private ApiVersionsResponse sendUnsupportedApiVersionRequest(ApiVersionsRequest request) throws IOException {
@@ -270,7 +268,7 @@ public class ApiVersionsRequestTest {
                     ApiMessageType.ListenerType.BROKER,
                     NodeApiVersions.create(ApiKeys.controllerApis().stream()
                             .map(ApiVersionsResponse::toApiVersion)
-                            .collect(Collectors.toList())).allSupportedApiVersions(),
+                            .toList()).allSupportedApiVersions(),
                     enableUnstableLastVersion,
                     false
             );
