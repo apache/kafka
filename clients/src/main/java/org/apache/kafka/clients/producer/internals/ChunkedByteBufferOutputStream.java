@@ -29,10 +29,10 @@ import java.util.List;
  * additional chunks via {@link #addBuffers(List)}).
  * <p>
  * The stream grows on its own: when a write runs past the attached chunks it attaches one more chunk,
- * taken from the pool without blocking and falling back to a heap-allocated chunk when the pool is
- * exhausted mid-record (a partially written record can neither be rolled back nor blocked on).
- * Heap-allocated chunks are tracked separately from pool-owned ones so they are never returned to the
- * pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
+ * taken from the pool without blocking and falling back to a heap-allocated chunk when the pool has no
+ * remaining chunks in the middle of a write (a partially written record can neither be rolled back nor blocked on).
+ * Heap-allocated chunks are tracked separately (in {@link poolAllocatedChunks}) from pool-owned ones so they are
+ * never returned to the pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
  * <p>
  * {@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer}, flattening
  * all chunks into a new buffer with an extra copy.
@@ -194,7 +194,6 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         ensureWritable();
         validateChunkCapacities(newChunks, chunkSize);
         chunks.addAll(newChunks);
-        // Chunks passed to addBuffers are pool-allocated by the accumulator.
         poolAllocatedChunks.addAll(newChunks);
     }
 
@@ -264,6 +263,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
                 pool.deallocate(chunk);
         }
         for (ByteBuffer chunk : unused)
+            // use references to remove deallocated chunks from poolAllocatedChunks
             removeByIdentity(poolAllocatedChunks, chunk);
         // Remove the released chunks from `chunks`, so they are
         // not deallocated again on batch completion.
