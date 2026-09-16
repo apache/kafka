@@ -807,10 +807,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     // VisibleForTesting
-    RLMTask rlmExpirationTask(TopicIdPartition topicIdPartition) {
+    RLMExpirationTask rlmExpirationTask(TopicIdPartition topicIdPartition) {
         RLMTaskWithFuture task = leaderExpirationRLMTasks.get(topicIdPartition);
         if (task != null) {
-            return task.rlmTask;
+            return (RLMExpirationTask) task.rlmTask;
         }
         return null;
     }
@@ -1380,6 +1380,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             // expiration thread pool while this replica transitions from leader to follower can re-register
             // the delete-lag gauge after onLeadershipChange has already removed it (see removeRemoteTopicPartitionMetrics),
             // leaving a phantom non-zero lag that never drains. This mirrors the guard on the copy path's recordLagStats.
+            // Note: the check is best-effort - it does not synchronize with cancellation, so it only narrows (does not
+            // fully close) the window where a concurrent leadership change removes the gauge between this check and the emit.
             if (!isCancelled()) {
                 String topic = topicIdPartition.topic();
                 int partition = topicIdPartition.partition();

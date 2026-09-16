@@ -4082,8 +4082,7 @@ public class RemoteLogManagerTest {
     public void testRemoteDeleteLagResetsToZeroOnBecomingFollower() {
         remoteLogManager.onLeadershipChange(
                 Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
-        RemoteLogManager.RLMExpirationTask rlmTask =
-                (RemoteLogManager.RLMExpirationTask) remoteLogManager.rlmExpirationTask(leaderTopicIdPartition);
+        RemoteLogManager.RLMExpirationTask rlmTask = remoteLogManager.rlmExpirationTask(leaderTopicIdPartition);
         assertNotNull(rlmTask);
         rlmTask.updateRemoteDeleteLagWith(2, 1024);
         assertEquals(1024, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteDeleteLagBytes());
