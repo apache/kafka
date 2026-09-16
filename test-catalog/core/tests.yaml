@@ -1110,16 +1110,6 @@ kafka.server.AlterUserScramCredentialsRequestTest:
 - testAlterUnknownMechanism
 - testDeleteSomethingThatDoesNotExist
 - testMetadataVersionTooLow
-kafka.server.ApiVersionsRequestTest:
-- testApiVersionsRequest
-- testApiVersionsRequestIncludesUnreleasedApis
-- testApiVersionsRequestMetadataClusterCheckFail
-- testApiVersionsRequestMetadataClusterCheckPass
-- testApiVersionsRequestThroughControllerListener
-- testApiVersionsRequestValidationV0
-- testApiVersionsRequestValidationV0ThroughControllerListener
-- testApiVersionsRequestValidationV3
-- testApiVersionsRequestWithUnsupportedVersion
 kafka.server.ApiVersionsResponseIntegrationTest:
 - testSendV3ApiVersionsRequest
 - testSendV4ApiVersionsRequest
@@ -2146,10 +2136,6 @@ kafka.server.RequestQuotaTest:
 - testShareFetchUsesSameFetchSensor
 - testUnauthorizedThrottle
 - testUnthrottledClient
-kafka.server.SaslApiVersionsRequestTest:
-- testApiVersionsRequestAfterSaslHandshakeRequest
-- testApiVersionsRequestBeforeSaslHandshakeRequest
-- testApiVersionsRequestWithUnsupportedVersion
 kafka.server.ServerMetricsTest:
 - testMetricsConfig
 kafka.server.ServerShutdownTest:

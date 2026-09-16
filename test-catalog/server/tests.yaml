@@ -75,6 +75,19 @@ org.apache.kafka.security.authorizer.AuthorizerUtilsTest:
 - testCreateAuthorizer
 org.apache.kafka.security.minikdc.MiniKdcTest:
 - shouldNotStopImmediatelyWhenStarted
+org.apache.kafka.server.ApiVersionsRequestTest:
+- testApiVersionsRequest
+- testApiVersionsRequestAfterSaslHandshakeRequest
+- testApiVersionsRequestBeforeSaslHandshakeRequest
+- testApiVersionsRequestIncludesUnreleasedApis
+- testApiVersionsRequestMetadataClusterCheckFail
+- testApiVersionsRequestMetadataClusterCheckPass
+- testApiVersionsRequestThroughControllerListener
+- testApiVersionsRequestValidationV0
+- testApiVersionsRequestValidationV0ThroughControllerListener
+- testApiVersionsRequestValidationV3
+- testApiVersionsRequestWithUnsupportedVersion
+- testApiVersionsRequestWithUnsupportedVersionOverSasl
 org.apache.kafka.server.AssignmentTest:
 - testAssignmentForNonExistentPartitionIsNotValid
 - testAssignmentForNonExistentTopicIsNotValid
