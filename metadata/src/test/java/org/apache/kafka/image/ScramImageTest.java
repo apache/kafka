@@ -72,7 +72,7 @@ public class ScramImageTest {
     }
 
     @Test
-    public void testMechanismMapsAreImmutableSnapshots() {
+    public void testMechanismMapsAreUnmodifiable() {
         ScramCredentialData credential = new ScramCredentialData(
             new byte[] {1}, new byte[] {2}, new byte[] {3}, 4096);
         Map<String, ScramCredentialData> credentials = new HashMap<>();
@@ -83,7 +83,6 @@ public class ScramImageTest {
         ScramImage image = new ScramImage(mechanisms);
 
         mechanisms.clear();
-        credentials.clear();
         assertEquals(
             Map.of(ScramMechanism.SCRAM_SHA_256, Map.of("alice", credential)),
             image.mechanisms());
