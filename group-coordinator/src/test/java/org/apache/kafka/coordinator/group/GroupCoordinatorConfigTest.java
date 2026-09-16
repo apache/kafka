@@ -99,6 +99,22 @@ public class GroupCoordinatorConfigTest {
         }
     }
 
+    public static class UniformNamedAssignor implements ConsumerGroupPartitionAssignor {
+        @Override
+        public String name() {
+            // Overrides the built-in "uniform" assignor.
+            return "uniform";
+        }
+
+        @Override
+        public GroupAssignment assign(
+            GroupSpec groupSpec,
+            SubscribedTopicDescriber subscribedTopicDescriber
+        ) throws PartitionAssignorException {
+            return null;
+        }
+    }
+
     public static class NoDefaultConstructorAssignor implements ConsumerGroupPartitionAssignor, ShareGroupPartitionAssignor {
         public NoDefaultConstructorAssignor(String unused) {
         }
@@ -185,6 +201,26 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
             List.of("uniform", UniformAssignor.class.getName()));
         assertEquals("Invalid value " + UniformAssignor.class.getName() +
+                " for configuration group.consumer.assignors: Assignor name 'uniform' is already " +
+                "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+    }
+
+    @Test
+    public void testConsumerGroupAssignorsOverridingBuiltinName() {
+        // A custom assignor may reuse the name of a built-in; members selecting that name get the custom one.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, UniformNamedAssignor.class.getName());
+        GroupCoordinatorConfig config = createConfig(configs);
+        List<ConsumerGroupPartitionAssignor> assignors = config.consumerGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(UniformNamedAssignor.class, assignors.get(0));
+        assertEquals("uniform", assignors.get(0).name());
+
+        // Configuring the built-in alongside the custom assignor overriding its name still fails the duplicate check.
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
+            List.of("uniform", UniformNamedAssignor.class.getName()));
+        assertEquals("Invalid value " + UniformNamedAssignor.class.getName() +
                 " for configuration group.consumer.assignors: Assignor name 'uniform' is already " +
                 "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
