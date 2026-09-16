@@ -445,7 +445,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * Streams -> classic offline downgrade. Related bugs: KAFKA-19862, KAFKA-20254
+     * Streams -> classic offline downgrade.
      *
      * Scenario:
      *  Streams group created and rebalanced
@@ -548,9 +548,9 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * The positions in {@code log} eligible for compaction: a record superseded by a later record
-     * with the same key is always compactable. When {@code deleteTombstones} is set, a tombstone with
-     * no later record for its key is also compactable, modelling {@code delete.retention.ms} elapsing.
+     * The positions in {@code log} eligible for compaction: any offset with a later offset with the
+     * same kay is compactable. When {@code deleteTombstones} is set, a tombstone with
+     * no later offset for its key is also compactable, modelling {@code delete.retention.ms} elapsing.
      */
     private static Set<Integer> compactablePositions(List<CoordinatorRecord> log, boolean deleteTombstones) {
         Set<ApiMessage> laterKeys = new HashSet<>();

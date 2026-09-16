@@ -60,7 +60,7 @@ import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoin
 
 /**
  * Drives group coordinator scenarios and records the resulting log for {@link
- * GroupCoordinatorShardCompactionReplayTest}. In practice the loading would 
+ * GroupCoordinatorShardCompactionReplayTest}. In practice the operations would 
  * be done by a group coordinator shard, here it uses a live {@link
  * GroupMetadataManagerTestContext} instead for convenience. Each helper appends
  * the records produced by the operation, so scenarios consist of a sequence of
