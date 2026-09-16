@@ -5325,6 +5325,9 @@ org.apache.kafka.streams.state.internals.MaybeTest:
 - shouldThrowOnGetUndefinedValue
 - shouldUpholdEqualityCorrectness
 - shouldUpholdHashCodeCorrectness
+org.apache.kafka.streams.state.internals.MemoryLRUCacheTest:
+- shouldResetRestoringFlagWhenRestoreThrows
+- shouldSuppressEvictionListenerDuringRestoreAndResumeAfter
 org.apache.kafka.streams.state.internals.MergedSortedCacheKeyValueBytesStoreIteratorTest:
 - shouldIgnoreIfDeletedInCacheButExistsInStore
 - shouldIterateCacheOnly
