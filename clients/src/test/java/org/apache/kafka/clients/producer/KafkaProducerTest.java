@@ -131,6 +131,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -158,6 +159,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -2823,6 +2825,152 @@ public class KafkaProducerTest {
 
             producer.send(record, callBack);
             assertEquals(1, MockProducerInterceptor.ON_ACKNOWLEDGEMENT_COUNT.intValue());
+        }
+    }
+
+    // Regression coverage for KAFKA-10335: Sender must not wait for its own progress.
+    @Test
+    public void testSendFromCallbackDoesNotWaitForMetadataOnSenderThread() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+        configs.put(ProducerConfig.LINGER_MS_CONFIG, 0);
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
+
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(Time.SYSTEM, metadata);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap("topic-a", 1)));
+        client.prepareResponse(produceResponse(
+                new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("topic-a", 0)),
+                0L, Errors.NONE, 0, 0));
+        CompletableFuture<Void> callbackFinished = new CompletableFuture<>();
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, Time.SYSTEM)) {
+            producer.send(new ProducerRecord<>("topic-a", "first"), (recordMetadata, exception) -> {
+                try {
+                    assertNull(exception);
+                    assertTrue(Thread.currentThread().getName().startsWith(NETWORK_THREAD_PREFIX));
+                    assertNull(metadata.fetch().partitionCountForTopic("topic-b"));
+                    // Queue a valid response. Only Sender's next client.poll() can apply it.
+                    client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWith(
+                            1, Map.of("topic-a", 1, "topic-b", 1)));
+                    AtomicReference<Exception> callbackFailure = new AtomicReference<>();
+                    Future<RecordMetadata> nestedSend = producer.send(new ProducerRecord<>("topic-b", "second"),
+                            (result, failure) -> callbackFailure.set(failure));
+                    TimeoutException failure = TestUtils.assertFutureThrows(TimeoutException.class, nestedSend);
+                    assertEquals("Topic topic-b not present in metadata after 0 ms.", failure.getMessage());
+                    assertSame(failure, callbackFailure.get());
+                    assertNull(metadata.fetch().partitionCountForTopic("topic-b"));
+                    callbackFinished.complete(null);
+                } catch (Throwable failure) {
+                    callbackFinished.completeExceptionally(failure);
+                }
+            });
+            callbackFinished.get(10, TimeUnit.SECONDS);
+            // Once the callback returns, Sender can poll and apply the queued metadata.
+            TestUtils.waitForCondition(() -> metadata.fetch().partitionCountForTopic("topic-b") != null,
+                    "Sender did not update metadata after the callback returned");
+        }
+    }
+
+    @Test
+    public void testSendFromCallbackWithCachedMetadataCompletes() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+        configs.put(ProducerConfig.LINGER_MS_CONFIG, 0);
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
+
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(Time.SYSTEM, metadata);
+        // Cache both topics before sending A.
+        metadata.add("topic-a", Time.SYSTEM.milliseconds());
+        metadata.add("topic-b", Time.SYSTEM.milliseconds());
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of("topic-a", 1, "topic-b", 1)));
+        client.prepareResponse(produceResponse(
+                new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("topic-a", 0)),
+                0L, Errors.NONE, 0, 0));
+        client.prepareResponse(produceResponse(
+                new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("topic-b", 0)),
+                0L, Errors.NONE, 0, 0));
+        CompletableFuture<Future<RecordMetadata>> callbackFinished = new CompletableFuture<>();
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, Time.SYSTEM)) {
+            producer.send(new ProducerRecord<>("topic-a", "first"), (recordMetadata, exception) -> {
+                try {
+                    assertNull(exception);
+                    assertTrue(Thread.currentThread().getName().startsWith(NETWORK_THREAD_PREFIX));
+                    assertNotNull(metadata.fetch().partitionCountForTopic("topic-b"));
+                    // B can be appended without waiting for a metadata update.
+                    Future<RecordMetadata> nestedSend = producer.send(new ProducerRecord<>("topic-b", "second"));
+                    // Sender cannot send B until this callback returns.
+                    assertFalse(nestedSend.isDone());
+                    callbackFinished.complete(nestedSend);
+                } catch (Throwable failure) {
+                    callbackFinished.completeExceptionally(failure);
+                }
+            });
+            // Wait on the application/test thread, never inside the Sender callback.
+            Future<RecordMetadata> nestedSend = callbackFinished.get(10, TimeUnit.SECONDS);
+            RecordMetadata result = nestedSend.get(5, TimeUnit.SECONDS);
+            assertEquals("topic-b", result.topic());
+            assertEquals(0, result.partition());
+            assertEquals(0L, result.offset());
+        }
+    }
+
+    // Both topics are known; only buffer availability differs from the successful comparison.
+    @Test
+    public void testSendFromCallbackDoesNotWaitForBufferOnSenderThread() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+        configs.put(ProducerConfig.LINGER_MS_CONFIG, 0);
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
+        configs.put(ProducerConfig.BATCH_SIZE_CONFIG, 1024);
+        configs.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 1024L);
+
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        metadata.add("topic-a", Time.SYSTEM.milliseconds());
+        metadata.add("topic-b", Time.SYSTEM.milliseconds());
+        MockClient client = new MockClient(Time.SYSTEM, metadata);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of("topic-a", 1, "topic-b", 1)));
+        client.prepareResponse(produceResponse(
+                new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("topic-a", 0)),
+                0L, Errors.NONE, 0, 0));
+        client.prepareResponse(produceResponse(
+                new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("topic-b", 0)),
+                0L, Errors.NONE, 0, 0));
+        CompletableFuture<Void> callbackFinished = new CompletableFuture<>();
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, Time.SYSTEM)) {
+            producer.send(new ProducerRecord<>("topic-a", "first"), (recordMetadata, exception) -> {
+                try {
+                    assertNull(exception);
+                    assertTrue(Thread.currentThread().getName().startsWith(NETWORK_THREAD_PREFIX));
+                    assertNotNull(metadata.fetch().partitionCountForTopic("topic-b"));
+                    // A still owns the only batch buffer until this callback returns.
+                    AtomicReference<Exception> callbackFailure = new AtomicReference<>();
+                    Future<RecordMetadata> nestedSend = producer.send(new ProducerRecord<>("topic-b", "second"),
+                            (result, failure) -> callbackFailure.set(failure));
+                    BufferExhaustedException failure = TestUtils.assertFutureThrows(BufferExhaustedException.class, nestedSend);
+                    assertTrue(failure.getMessage().contains("max blocking time 0 ms."));
+                    assertSame(failure, callbackFailure.get());
+                    callbackFinished.complete(null);
+                } catch (Throwable failure) {
+                    callbackFinished.completeExceptionally(failure);
+                }
+            });
+            callbackFinished.get(10, TimeUnit.SECONDS);
+            // After the callback returns, Sender releases A's buffer and B can be sent.
+            RecordMetadata result = producer.send(new ProducerRecord<>("topic-b", "retry-from-application"))
+                    .get(5, TimeUnit.SECONDS);
+            assertEquals("topic-b", result.topic());
+            assertEquals(0, result.partition());
+            assertEquals(0L, result.offset());
         }
     }
 
