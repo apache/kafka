@@ -319,6 +319,22 @@ public class GroupCoordinatorConfigTest {
         }
     }
 
+    public static class StickyNamedTaskAssignor implements TaskAssignor {
+        @Override
+        public String name() {
+            // Collides with the built-in "sticky" assignor.
+            return "sticky";
+        }
+
+        @Override
+        public org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment assign(
+            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec,
+            TopologyDescriber topologyDescriber
+        ) {
+            return null;
+        }
+    }
+
     @Test
     public void testStreamsGroupAssignorFullClassNames() {
         // The full class name of the assignors is part of our public api. Hence,
@@ -393,8 +409,21 @@ public class GroupCoordinatorConfigTest {
     }
 
     @Test
+    public void testStreamsGroupAssignorsWithReservedBuiltinNameFails() {
+        // A custom assignor must not take the name of a built-in, whether or not the built-in is
+        // itself configured: a group selecting that name would otherwise silently get the custom one.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyNamedTaskAssignor.class.getName());
+        assertEquals("Invalid value " + StickyNamedTaskAssignor.class.getName() +
+                " for configuration group.streams.assignors: Assignor name 'sticky' is reserved by a " +
+                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+    }
+
+    @Test
     public void testStreamsGroupAssignorsBuiltinByClassName() {
-        // A built-in configured by its class name resolves to the built-in and is registered under its short name.
+        // A built-in configured by its class name is recognised as the built-in, not as a custom assignor
+        // reusing the reserved name. The name it is registered under is the built-in short name.
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyTaskAssignor.class.getName());
         GroupCoordinatorConfig config = createConfig(configs);
