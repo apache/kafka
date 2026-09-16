@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -522,6 +523,204 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
+     * Decides which of the target assignment's standby placements this step has to hold back.
+     *
+     * <p>Nothing is invented or dropped permanently: every placement comes from the target assignment, and one held
+     * back here is emitted by a later step once its reason is gone. A placement of task {@code t} on member {@code m}
+     * of process {@code p} is withheld when:
+     * <ol>
+     *     <li>{@code p} currently runs {@code t} as an active task, because {@code t}'s migration off {@code p} is
+     *     staged: F moved {@code t}'s active off {@code p} and relocated its standby, but the refiner held the active
+     *     in place, so F's standby cannot land on {@code p} yet.</li>
+     *     <li>{@code t}'s migration onto {@code p} borrowed an existing standby on {@code p}. To not run
+     *     {@code num.standby.repliacs + 1} standbys, we hold back the assignment of the standby to its new owner.</li>
+     * </ol>
+     *
+     * @param targetAssignment
+     *        All members' target assignments, as computed by the task assignor.
+     * @param currentAssignment
+     *        The indexed current assignment, from {@link #indexCurrentAssignment}.
+     * @param decisions
+     *        What the case analysis decided, from {@link #analyzeTasks}.
+     * @param warmupPlan
+     *        How each staged migration is being warmed, from {@link #planWarmups}.
+     * @param members
+     *        All members of the group, used to resolve which process a member runs in.
+     * @param subtopologies
+     *        The resolved subtopologies, which tell whether a subtopology is stateful.
+     *
+     * @return The standby placements to withhold, as the tasks to drop from each member's slice, in canonical order.
+     *         A member with nothing withheld does not appear.
+     */
+    static SortedMap<String, SortedSet<TaskId>> filterStandbys(
+        final Map<String, TasksTuple> targetAssignment,
+        final CurrentAssignmentIndex currentAssignment,
+        final TaskDecisions decisions,
+        final WarmupPlan warmupPlan,
+        final Map<String, StreamsGroupMember> members,
+        final SortedMap<String, ConfiguredSubtopology> subtopologies
+    ) {
+        final StandbyConflicts conflicts =
+            indexStandbyConflicts(currentAssignment, decisions, warmupPlan, members);
+        final SortedMap<String, SortedSet<TaskId>> withheld = new TreeMap<>();
+
+        targetAssignment.forEach((memberId, tasks) -> {
+            final StreamsGroupMember member = members.get(memberId);
+            if (member == null) {
+                // The target assignment can name a member the group has already removed. Its slice reaches nobody, so
+                // there is nothing to hold back and no process to resolve it against.
+                return;
+            }
+
+            forEachStatefulTask(tasks.standbyTasks(), subtopologies, task -> {
+                if (isStandbyWithheld(memberId, member.processId(), task, currentAssignment, conflicts)) {
+                    withheld.computeIfAbsent(memberId, __ -> new TreeSet<>()).add(task);
+                }
+            });
+        });
+
+        return Collections.unmodifiableSortedMap(withheld);
+    }
+
+    /**
+     * Builds the {@link StandbyConflicts} lookups, ie, where each task is held active, which tasks are granted
+     * this step, and which migrations borrowed a copy.
+     */
+    private static StandbyConflicts indexStandbyConflicts(
+        final CurrentAssignmentIndex currentAssignment,
+        final TaskDecisions decisions,
+        final WarmupPlan warmupPlan,
+        final Map<String, StreamsGroupMember> members
+    ) {
+        final Map<TaskId, String> activeHeldOn = new HashMap<>();
+        currentAssignment.activeHolder().forEach((task, holder) ->
+            activeHeldOn.put(task, members.get(holder.memberId()).processId()));
+
+        final Set<TaskId> grantedTasks = new HashSet<>();
+        for (final TaskGrant grant : decisions.grantedTasks()) {
+            grantedTasks.add(grant.task());
+        }
+
+        return new StandbyConflicts(activeHeldOn, grantedTasks, warmupPlan.borrowedMigrations());
+    }
+
+    /**
+     * Whether this step has to hold the standby placement back.
+     */
+    private static boolean isStandbyWithheld(
+        final String memberId,
+        final String processId,
+        final TaskId task,
+        final CurrentAssignmentIndex currentAssignment,
+        final StandbyConflicts conflicts
+    ) {
+        final ActiveHolder activeHolder = currentAssignment.activeHolder().get(task);
+
+        // Rule 1: a process cannot hold `task` twice, so if this standby's process already runs the active,
+        // withhold the standby -- unless it is the demotion (this member is handing the active away this step and
+        // relabels it into the standby in place).
+        if (processId.equals(conflicts.activeHeldOn().get(task))) {
+            final boolean isDemotion =
+                memberId.equals(activeHolder.memberId()) && conflicts.grantedTasks().contains(task);
+            return !isDemotion;
+        }
+
+        // Rule 2: a borrowed migration keeps its existing copy as the group's one entitled replica, so F's
+        // relocation of the standby -- a placement on a member that does not already hold a copy -- is withheld.
+        final boolean warmedByBorrow = conflicts.borrowedMigrations().contains(task);
+        final boolean isRelocation = !holdsCopyOf(currentAssignment, memberId, task);
+        return warmedByBorrow && isRelocation;
+    }
+
+    private static boolean holdsCopyOf(
+        final CurrentAssignmentIndex currentAssignment,
+        final String memberId,
+        final TaskId task
+    ) {
+        return currentAssignment.taskCopies().getOrDefault(task, List.of()).stream()
+            .anyMatch(copy -> copy.memberId().equals(memberId));
+    }
+
+    /**
+     * Builds the intermediate assignment: the target assignment, with a patch applied.
+     *
+     * <p><b>A granted task needs no patch:</b> The target assignment already places the task on its new owner and
+     * already omits it from the old one, so letting it through unchanged <em>is</em> the grant.
+     * Only a migration this step holds back has to be written down.
+     *
+     * <p>Five kinds of patches.
+     * (Note: multiple patches might apply at once, eg, a regular warmup plant is the first three patches combined):
+     * <ul>
+     *     <li>Keep the active task on its old owner.</li>
+     *     <li>Withhold the active task from its new owner.</li>
+     *     <li>Place a warm-up task.</li>
+     *     <li>Keep a standby task on its old owner.</li>
+     *     <li>Withhold a standby task from its new owner.</li>
+     * </ul>
+     *
+     * @param targetAssignment
+     *        All members' target assignments, as computed by the task assignor.
+     * @param currentAssignment
+     *        The indexed current assignment, from {@link #indexCurrentAssignment}, used to find where a borrowed
+     *        copy sits.
+     * @param decisions
+     *        What the case analysis decided, from {@link #analyzeTasks}.
+     * @param warmupPlan
+     *        How each staged migration is being warmed, from {@link #planWarmups}.
+     * @param withheldStandbys
+     *        The standby placements to hold back, from {@link #filterStandbys}.
+     *
+     * @return The intermediate assignment, keyed by member ID. The target assignment itself when nothing diverges.
+     */
+    static Map<String, TasksTuple> assemble(
+        final Map<String, TasksTuple> targetAssignment,
+        final CurrentAssignmentIndex currentAssignment,
+        final TaskDecisions decisions,
+        final WarmupPlan warmupPlan,
+        final SortedMap<String, SortedSet<TaskId>> withheldStandbys
+    ) {
+        final Map<String, PatchedTasks> patches = new HashMap<>();
+
+        for (final StagedMigration migration : decisions.stagedMigrations()) {
+            final TaskId task = migration.task();
+            patchFor(patches, targetAssignment, migration.currentOwner()).addActive(task);
+            patchFor(patches, targetAssignment, migration.targetOwner()).removeActive(task);
+
+            if (warmupPlan.borrowedMigrations().contains(task)) {
+                findCopyOnProcess(currentAssignment, task, migration.targetProcessId().orElseThrow())
+                    .ifPresent(copy -> patchFor(patches, targetAssignment, copy.memberId()).addStandby(task));
+            }
+        }
+
+        warmupPlan.warmupTasks().forEach((task, memberId) ->
+            patchFor(patches, targetAssignment, memberId).addWarmup(task));
+
+        withheldStandbys.forEach((memberId, tasks) -> {
+            final PatchedTasks patch = patchFor(patches, targetAssignment, memberId);
+            tasks.forEach(patch::removeStandby);
+        });
+
+        if (patches.isEmpty()) {
+            return targetAssignment;
+        }
+
+        final Map<String, TasksTuple> intermediateAssignment = new HashMap<>(targetAssignment);
+        patches.forEach((memberId, patch) -> intermediateAssignment.put(memberId, patch.toTasksTuple()));
+        return Collections.unmodifiableMap(intermediateAssignment);
+    }
+
+    private static PatchedTasks patchFor(
+        final Map<String, PatchedTasks> patches,
+        final Map<String, TasksTuple> targetAssignment,
+        final String memberId
+    ) {
+        return patches.computeIfAbsent(
+            memberId,
+            __ -> new PatchedTasks(targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY))
+        );
+    }
+
+    /**
      * Whether the member has restored the task closely enough to take it over as an active task. Mirrors the client's
      * own predicate, so that both ends agree on when a warm-up task is caught up.
      *
@@ -866,6 +1065,91 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
          */
         int newWarmupsOnTargetProcess() {
             return warming == Warming.PLANT ? 1 : 0;
+        }
+    }
+
+    /**
+     * The per-task lookups {@link #filterStandbys} consults, each built once so that a rule is a map lookup rather
+     * than a fresh scan of the group.
+     *
+     * @param activeHeldOn
+     *        The process owning each task as an active task. Only granted tasks are tracked. Tasks.that sit in pending
+     *        revocation are absent.
+     * @param grantedTasks
+     *        The tasks whose active role moves in this step.
+     * @param borrowedMigrations
+     *        The migrations warmed by a standby that stays where it is, whose relocated placement therefore has to
+     *        wait.
+     */
+    private record StandbyConflicts(
+        Map<TaskId, String> activeHeldOn,
+        Set<TaskId> grantedTasks,
+        SortedSet<TaskId> borrowedMigrations
+    ) {
+    }
+
+    /**
+     * One member's slice of the target assignment, made mutable so that the assembly can patch it.
+     *
+     * <p><b>A subtopology whose partition set becomes empty is dropped, and that is load-bearing rather than
+     * tidiness.</b> The coordinator decides whether a refinement step is due by asking whether a member's slice
+     * still matches what it already holds, and that comparison is a plain map equality: a subtopology key mapped to
+     * an empty set is <em>not</em> equal to the same map without the key. A patch that removed a member's last task
+     * for some subtopology and left the key behind would therefore compare unequal forever, and the group would mint
+     * a fresh refinement step on every heartbeat without anything changing. Pruning is what makes a patched slice
+     * that ends up holding the target assignment's tasks read as the target assignment.
+     */
+    private static final class PatchedTasks {
+
+        private final Map<String, Set<Integer>> activeTasks;
+        private final Map<String, Set<Integer>> standbyTasks;
+        private final Map<String, Set<Integer>> warmupTasks;
+
+        private PatchedTasks(final TasksTuple tasks) {
+            this.activeTasks = mutableCopy(tasks.activeTasks());
+            this.standbyTasks = mutableCopy(tasks.standbyTasks());
+            this.warmupTasks = mutableCopy(tasks.warmupTasks());
+        }
+
+        private void addActive(final TaskId task) {
+            add(activeTasks, task);
+        }
+
+        private void removeActive(final TaskId task) {
+            remove(activeTasks, task);
+        }
+
+        private void addStandby(final TaskId task) {
+            add(standbyTasks, task);
+        }
+
+        private void removeStandby(final TaskId task) {
+            remove(standbyTasks, task);
+        }
+
+        private void addWarmup(final TaskId task) {
+            add(warmupTasks, task);
+        }
+
+        private TasksTuple toTasksTuple() {
+            return new TasksTuple(activeTasks, standbyTasks, warmupTasks);
+        }
+
+        private static Map<String, Set<Integer>> mutableCopy(final Map<String, Set<Integer>> tasks) {
+            final Map<String, Set<Integer>> copy = new HashMap<>();
+            tasks.forEach((subtopologyId, partitionIds) -> copy.put(subtopologyId, new HashSet<>(partitionIds)));
+            return copy;
+        }
+
+        private static void add(final Map<String, Set<Integer>> tasks, final TaskId task) {
+            tasks.computeIfAbsent(task.subtopologyId(), __ -> new HashSet<>()).add(task.partition());
+        }
+
+        private static void remove(final Map<String, Set<Integer>> tasks, final TaskId task) {
+            final Set<Integer> partitionIds = tasks.get(task.subtopologyId());
+            if (partitionIds != null && partitionIds.remove(task.partition()) && partitionIds.isEmpty()) {
+                tasks.remove(task.subtopologyId());
+            }
         }
     }
 

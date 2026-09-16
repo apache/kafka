@@ -23,17 +23,21 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AssignmentRefinerTest {
@@ -1349,6 +1353,390 @@ public class AssignmentRefinerTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------------
+    // filterStandbys
+    // ---------------------------------------------------------------------------------------------------------------
+
+    @Test
+    public void shouldWithholdAStandbyOnAProcessThatStillRunsTheTaskAsActive() {
+        // The swap shape: the assignor moves the active to memberB and leaves a standby behind on memberA. While the
+        // migration is staged the task keeps running on memberA, so the standby cannot be placed there as well.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Map.of("memberA", Set.of(STATEFUL_0)), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldEmitTheStandbyOnTheMemberGrantingTheActiveAwayInTheSameStep() {
+        // The demotion carve-out, and the reason the swap is efficient: memberA hands the active over and keeps a
+        // standby in its place, which the client does by relabelling the task it already has. Emitted a step later,
+        // that state would already be gone.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        // memberB's standby is caught up, so the migration is granted rather than staged.
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(100, 100));
+
+        assertEquals(Map.of(), filter(members, targetAssignment, taskOffsets, 1));
+    }
+
+    @Test
+    public void shouldWithholdAStandbyOnASiblingOfTheMemberGrantingTheActiveAway() {
+        // The carve-out is about the member recycling its own task, so it does not extend to a sibling: that one
+        // would be a second copy on the process until the hand-over finishes, and has to wait for it.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA1", member("memberA1", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberA2", member("memberA2", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA1", TasksTuple.EMPTY,
+            "memberA2", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(100, 100));
+
+        assertEquals(Map.of("memberA2", Set.of(STATEFUL_0)), filter(members, targetAssignment, taskOffsets, 1));
+    }
+
+    @Test
+    public void shouldEmitAStandbyBlockedOnlyByAPendingRevocation() {
+        // The filter reads the tasks members have been granted, never the ones they were told to give up: indexing
+        // revocations for this rule alone would duplicate what the reconciler already enforces, which refuses to
+        // grant a role for a task the process still physically holds. So this is emitted and the hand-over
+        // serializes itself, at the cost of an extra heartbeat or two before the group settles.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member(
+                "memberA",
+                "processA",
+                TasksTuple.EMPTY,
+                mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+            )
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Map.of(), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldWithholdTheRelocatedStandbyOfABorrowedMigration() {
+        // Borrowing keeps memberB's standby where it is and lets it serve as the warmer too. The relocated placement
+        // the target assignment wants on memberC is what makes that free: granting it as well would leave three
+        // copies where the target assignment asks for two.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Map.of("memberC", Set.of(STATEFUL_0)), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldEmitTheRelocatedStandbyOfASiblingMove() {
+        // The mirror image of the borrow, and what the sibling move's slot pays for: the copy is moving off memberB1
+        // onto memberB2 as a warm-up, so it stops being the replica the group is entitled to, and the relocated
+        // placement is emitted to backfill it.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB1", member("memberB1", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberB2", member("memberB2", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB1", TasksTuple.EMPTY,
+            "memberB2", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Map.of(), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldNotWithholdARelocatedStandbyTheMemberAlreadyHolds() {
+        // Only a placement the member does not have yet adds a replica. memberC already holds this one, so emitting
+        // it changes nothing about the replica count and the borrowing rule has no reason to hold it back.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Map.of(), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldNotWithholdStandbysOfStatelessTasks() {
+        // A stateless task has no state to restore, so it is never staged and never collides with anything the
+        // refiner decides. Its placements flow through from the target assignment untouched.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATELESS, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATELESS, 0))
+        );
+
+        assertEquals(Map.of(), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // assemble
+    // ---------------------------------------------------------------------------------------------------------------
+
+    @Test
+    public void shouldReturnTheTargetAssignmentItselfWhenNothingDiverges() {
+        // A converged group is the overwhelmingly common case, and it costs nothing: with no migration to hold back
+        // there is no patch, so the target assignment is handed straight back.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        assertSame(targetAssignment, assemble(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldKeepTheActiveWithItsCurrentOwnerAndWithholdItFromTheTargetOwner() {
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        // memberB is withheld the active and planted with the warm-up instead; memberA keeps running the task.
+        assertEquals(
+            Map.of(
+                "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+                "memberB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0))
+            ),
+            assemble(members, targetAssignment, Map.of(), 1)
+        );
+    }
+
+    @Test
+    public void shouldApplyNoPatchForAGrantedTask() {
+        // The target assignment already places the task on its new owner and omits it from the old one, so letting
+        // it through unchanged is the grant. Nothing is written down for it.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        assertSame(targetAssignment, assemble(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldKeepABorrowedStandbyWhereHistoryLeftIt() {
+        // The target assignment is relocating memberB's standby to memberC, which is exactly why borrowing it is
+        // free -- but that means it is not in the slice memberB would otherwise get. Without patching it back in,
+        // the reconciler would revoke the very copy warming memberB, and the migration would finish cold.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(
+            Map.of(
+                "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+                // the borrowed copy, kept: still the standby the group is entitled to, and the warmer as well
+                "memberB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+                // the relocated placement, withheld so that the replica count does not move
+                "memberC", TasksTuple.EMPTY
+            ),
+            assemble(members, targetAssignment, Map.of(), 1)
+        );
+    }
+
+    @Test
+    public void shouldMoveASiblingStandbyOntoTheTargetOwnerAndBackfillTheRelocatedOne() {
+        // The mirror of the borrow. memberB1's copy is not kept, because it is moving onto memberB2 as a warm-up;
+        // in exchange the relocated placement on memberC is emitted, which is what the spent slot pays for.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB1", member("memberB1", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberB2", member("memberB2", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB1", TasksTuple.EMPTY,
+            "memberB2", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(
+            Map.of(
+                "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+                "memberB1", TasksTuple.EMPTY,
+                "memberB2", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)),
+                "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+            ),
+            assemble(members, targetAssignment, Map.of(), 1)
+        );
+    }
+
+    @Test
+    public void shouldEmitTheSwapAsOneStepOnceTheWarmerIsCaughtUp() {
+        // The shape the whole design is built around: one step hands memberB the active and memberA the standby, so
+        // both sides relabel what they already hold and no restore work is wasted.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(100, 100));
+
+        assertSame(targetAssignment, assemble(members, targetAssignment, taskOffsets, 1));
+    }
+
+    @Test
+    public void shouldDropASubtopologyKeyWhoseLastTaskWasPatchedAway() {
+        // Pruning is not tidiness: the coordinator decides whether a refinement step is due with a plain map
+        // comparison, so a key left behind mapping to an empty set would read as a change on every heartbeat and
+        // mint refinement steps forever.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        final TasksTuple memberB = assemble(members, targetAssignment, Map.of(), 1).get("memberB");
+
+        // The withheld active was memberB's only task for the subtopology, so the key goes with it.
+        assertEquals(Map.of(), memberB.activeTasks());
+        assertTrue(memberB.sameTasks(withEpochs(mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)))));
+    }
+
+    @Test
+    public void shouldPreserveTheActiveTaskCountThroughEveryDerivation() {
+        // The wrapper ignores a refined assignment that drops or duplicates an active task, so a derivation that
+        // trips this check would ship a refiner the coordinator silently discards.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1))),
+            "memberB1", member("memberB1", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberB2", member("memberB2", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB1", TasksTuple.EMPTY,
+            "memberB2", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1))
+        );
+
+        for (int numWarmupReplicas = 0; numWarmupReplicas <= 3; numWarmupReplicas++) {
+            assertTrue(
+                AssignmentRefiner.preservesActiveTaskCount(
+                    targetAssignment,
+                    assemble(members, targetAssignment, Map.of(), numWarmupReplicas)
+                ),
+                "active task count not preserved at numWarmupReplicas=" + numWarmupReplicas
+            );
+        }
+    }
+
+    @Test
+    public void shouldPlaceEachTasksActiveOnExactlyOneMember() {
+        // The invariant the reconciler cannot recover from if it is broken: a task active on two members at once.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1))
+        );
+
+        final Map<TaskId, String> activeOwners = new HashMap<>();
+        assemble(members, targetAssignment, Map.of(), 1).forEach((memberId, tasks) ->
+            tasks.activeTasks().forEach((subtopologyId, partitionIds) -> partitionIds.forEach(partitionId -> {
+                final String previous = activeOwners.put(new TaskId(subtopologyId, partitionId), memberId);
+                assertNull(previous, "task active on both " + previous + " and " + memberId);
+            })));
+
+        assertEquals(Set.of(STATEFUL_0, STATEFUL_1), activeOwners.keySet());
+    }
+
+    @Test
+    public void shouldNeverPlaceATaskTwiceOnOneProcess() {
+        // A process holds a given task in at most one role. The refiner relies on this rather than enforcing it, so
+        // the derivation has to avoid producing an intermediate assignment that breaks it.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1))),
+            "memberB1", member("memberB1", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberB2", member("memberB2", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 1)),
+            "memberB1", TasksTuple.EMPTY,
+            "memberB2", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1))
+        );
+
+        final Set<String> seen = new HashSet<>();
+        assemble(members, targetAssignment, Map.of(), 2).forEach((memberId, tasks) -> {
+            final String processId = members.get(memberId).processId();
+            Map.of(
+                TaskRole.ACTIVE, tasks.activeTasks(),
+                TaskRole.STANDBY, tasks.standbyTasks(),
+                TaskRole.WARMUP, tasks.warmupTasks()
+            ).forEach((role, byRole) -> byRole.forEach((subtopologyId, partitionIds) -> partitionIds.forEach(
+                partitionId -> assertTrue(
+                    seen.add(processId + "/" + subtopologyId + "/" + partitionId),
+                    "process " + processId + " holds " + subtopologyId + "_" + partitionId + " more than once"
+                ))));
+        });
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
     // Fixtures
     // ---------------------------------------------------------------------------------------------------------------
 
@@ -1394,6 +1782,49 @@ public class AssignmentRefinerTest {
             members,
             load(members),
             numWarmupReplicas
+        );
+    }
+
+    private static SortedMap<String, SortedSet<TaskId>> filter(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final int numWarmupReplicas
+    ) {
+        final AssignmentRefinerImpl.CurrentAssignmentIndex currentAssignment = index(members, taskOffsets);
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            AssignmentRefinerImpl.analyzeTasks(currentAssignment, targetAssignment, members, subtopologies());
+        return AssignmentRefinerImpl.filterStandbys(
+            targetAssignment,
+            currentAssignment,
+            decisions,
+            AssignmentRefinerImpl.planWarmups(decisions, members, load(members), numWarmupReplicas),
+            members,
+            subtopologies()
+        );
+    }
+
+    /**
+     * The whole derivation, end to end -- which is what the go-live change will wire into {@code refine()}.
+     */
+    private static Map<String, TasksTuple> assemble(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final int numWarmupReplicas
+    ) {
+        final AssignmentRefinerImpl.CurrentAssignmentIndex currentAssignment = index(members, taskOffsets);
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            AssignmentRefinerImpl.analyzeTasks(currentAssignment, targetAssignment, members, subtopologies());
+        final AssignmentRefinerImpl.WarmupPlan warmupPlan =
+            AssignmentRefinerImpl.planWarmups(decisions, members, load(members), numWarmupReplicas);
+        return AssignmentRefinerImpl.assemble(
+            targetAssignment,
+            currentAssignment,
+            decisions,
+            warmupPlan,
+            AssignmentRefinerImpl.filterStandbys(
+                targetAssignment, currentAssignment, decisions, warmupPlan, members, subtopologies())
         );
     }
 
