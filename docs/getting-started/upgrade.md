@@ -58,6 +58,17 @@ type: docs
   * For tiered-storage topics, time-based local retention (`local.retention.ms`) now uses a segment's last modified time as the age anchor when the segment's largest record timestamp is in the future. Previously such a segment was never removed by time-based retention (its future timestamp kept it perpetually within the retention window) and was only reclaimed once `local.retention.bytes` was breached, even though it had already been uploaded to remote storage. For further details, please refer to [KAFKA-20609](https://issues.apache.org/jira/browse/KAFKA-20609).
   * `group.consumer.assignors` no longer allows a custom assignor to reuse the name of a built-in assignor (e.g. `uniform`, `range`), even when it is configured on its own to intentionally replace the built-in's behavior. Such a configuration used to be accepted and now fails broker startup with a `ConfigException`. For further details, please refer to [KAFKA-20843](https://issues.apache.org/jira/browse/KAFKA-20843).
 
+## Upgrading to 4.3.2
+
+### Notable changes in 4.3.2
+
+  * Includes a fix for a critical tiered storage bug in which size-based retention could delete data that was still within retention from both local and remote tiers after a leader election ([KAFKA-20732](https://issues.apache.org/jira/browse/KAFKA-20732)).
+  * Includes a fix for a Kafka Streams issue in which the state directory could be cleaned prematurely under [KIP-1035](https://cwiki.apache.org/confluence/x/uYvOEg), forcing a from-scratch restore ([KAFKA-20805](https://issues.apache.org/jira/browse/KAFKA-20805)).
+  * Includes fixes for several critical Kafka Streams bugs that could cause a `StreamThread` to die after task corruption, task recycling, or state updater timeouts ([KAFKA-20808](https://issues.apache.org/jira/browse/KAFKA-20808), [KAFKA-20827](https://issues.apache.org/jira/browse/KAFKA-20827), [KAFKA-20721](https://issues.apache.org/jira/browse/KAFKA-20721)).
+  * Includes a fix for a group coordinator bug in which a consumer group downgrade could leave the group in an invalid state when the classic group metadata is very large ([KAFKA-20845](https://issues.apache.org/jira/browse/KAFKA-20845)).
+  * Includes a fix for a client telemetry bug in which metrics could be sent to a stale broker IP address after a broker address change ([KAFKA-20393](https://issues.apache.org/jira/browse/KAFKA-20393)).
+  * Includes a fix for a `NullPointerException` in `MetadataCache#toCluster` that could crash request handling ([KAFKA-20746](https://issues.apache.org/jira/browse/KAFKA-20746)).
+
 ## Upgrading to 4.3.1
 
 ### Notable changes in 4.3.1
