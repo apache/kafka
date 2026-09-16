@@ -1006,6 +1006,71 @@ public class AssignmentRefinerTest {
     }
 
     @Test
+    public void shouldFundAFreshPlantAheadOfASiblingMoveEvenOnAHeavierProcess() {
+        // A plant and a sibling move both cost a slot, but a plant that misses out parks (no progress at all) while
+        // a sibling move that misses out still warms through the sibling it falls back to. So a plant takes a scarce
+        // slot first -- even when its destination is more loaded than the sibling move's, since warming category outranks load.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1))),
+            // processHeavy already runs two actives, so it is the more loaded destination (2 / 1 member = 2.0).
+            "memberH", member("memberH", "processHeavy", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 2, 3))),
+            // processLight carries only the sibling standby, spread over two members (1 / 2 members = 0.5).
+            "memberL1", member("memberL1", "processLight", TasksTuple.EMPTY),
+            "memberL2", member("memberL2", "processLight", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 1)))
+        );
+        // STATEFUL_0 moves to the heavy process, which holds no copy of it -> a fresh plant. STATEFUL_1 moves to the
+        // light process, whose sibling holds a not-caught-up standby -> a sibling move.
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberH", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 2, 3)),
+            "memberL1", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1)),
+            "memberL2", TasksTuple.EMPTY
+        );
+
+        // One slot: under a load-only order the lighter processLight sibling move would win it; warming-first gives it
+        // to the plant on the heavier processHeavy, and the sibling move falls back to a borrow.
+        final AssignmentRefinerImpl.WarmupPlan plan = plan(members, targetAssignment, Map.of(), 1);
+
+        assertEquals(Map.of(STATEFUL_0, "memberH"), plan.warmupTasks());
+        assertEquals(Set.of(STATEFUL_1), plan.borrowedMigrations());
+        assertEquals(Set.of(), plan.parkedMigrations());
+    }
+
+    @Test
+    public void shouldCountWarmupsFundedThisPassInTheSourceProcessLoad() {
+        // The source-load tie-break is read live, not precomputed: a process can be one migration's source and
+        // another's target, so funding a warm-up onto it mid-pass raises its load. Here processP is STATEFUL_1's
+        // source and STATEFUL_2's target. STATEFUL_2 funds first (its target processP is the least loaded), which
+        // raises processP's load; then STATEFUL_0 and STATEFUL_1 tie on warming and on target load (both go to
+        // processR) and split on source load -- STATEFUL_1's source processP is now heavier than STATEFUL_0's
+        // source processQ, so STATEFUL_1 takes the last slot. A precomputed (static) source load would leave the two
+        // tied and hand the slot to STATEFUL_0 on the task-id fallback, so this pins the live reading.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberP1", member("memberP1", "processP", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1))),
+            "memberP2", member("memberP2", "processP", TasksTuple.EMPTY),
+            "memberQ1", member("memberQ1", "processQ", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberQ2", member("memberQ2", "processQ", TasksTuple.EMPTY),
+            "memberR", member("memberR", "processR", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 3))),
+            "memberS", member("memberS", "processS", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 2)))
+        );
+        // processP and processQ both start at load 0.5 (one active over two members); processR is the busier
+        // destination for STATEFUL_0/1, so STATEFUL_2 -> processP is funded first.
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberP1", TasksTuple.EMPTY,
+            "memberP2", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 2)),
+            "memberQ1", TasksTuple.EMPTY,
+            "memberR", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1, 3)),
+            "memberS", TasksTuple.EMPTY
+        );
+
+        final AssignmentRefinerImpl.WarmupPlan plan = plan(members, targetAssignment, Map.of(), 2);
+
+        assertEquals(Map.of(STATEFUL_2, "memberP2", STATEFUL_1, "memberR"), plan.warmupTasks());
+        assertEquals(Set.of(), plan.borrowedMigrations());
+        assertEquals(Set.of(STATEFUL_0), plan.parkedMigrations());
+    }
+
+    @Test
     public void shouldNotFundAMigrationWhoseTargetMemberHasLeftTheGroup() {
         // Such a member cannot restore anything, so no slot may be spent on it. The task waits with its current owner
         // until the assignor names a member that still exists.

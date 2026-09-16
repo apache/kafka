@@ -240,7 +240,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             // The task moves now, for any of three reasons.
             //   1. Nobody holds it.
             //   2. Somebody holds it but is still restoring it.
-            //   3. Somebody is processing it and the target owener is caught up
+            //   3. Somebody is processing it and the target owner is caught up
             if (holder == null
                 || !holder.processing()
                 || isReady(currentAssignment, task, members.get(holder.memberId()).processId(), targetProcessId)) {
@@ -267,9 +267,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * to consider:
      * <b>(1) The task is moving between two members of one process:</b> A process cannot hold two copies of a task at
      * the same time, so we cannot put a warmup but can only migrate the task right away.
-     * <b>(2) The task is moved to a different process, but a sibling member of the target member holds a copy of the
-     * task:</b> Similar to case (1), a process cannot hold two copies of the same task at the same time; however, in
-     * contrast to (1) we can wait until the sibling copy gets caught up before we do the migration.
+     * <b>(2) The task is moved to a different process, but a sibling member of the target member holds a caught-up copy
+     * of the task:</b> We migrate the task right away.
      *
      * <p>Both cases work out fine for persistent state store, but for in-memory stores we get a cold migration.
      * Closing that gap takes a client-side cross-thread task hand-over (https://issues.apache.org/jira/browse/KAFKA-21090).
@@ -340,18 +339,18 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             switch (warming) {
                 case PARK -> parkedMigrations.add(migration.task());
                 case BORROW -> borrowedMigrations.add(migration.task());
-                case KEEP -> keptWarmups.add(fundingCandidate(migration, members, processLoad, warming));
-                // Both cases put a warm-up task on the target owner and both cost a warm-up slot, so they share one
-                // candidate list and compete on equal terms.
+                case KEEP -> keptWarmups.add(fundingCandidate(migration, members, warming));
+                // Both put a warm-up task on the target owner and both cost a warm-up slot, so they share one
+                // candidate list -- but a plant is funded ahead of a sibling move (see comparePriority).
                 case PLANT, SIBLING_MOVE ->
-                    newWarmupCandidates.add(fundingCandidate(migration, members, processLoad, warming));
+                    newWarmupCandidates.add(fundingCandidate(migration, members, warming));
             }
         }
 
         // Warm-up tasks already restoring are funded first. If `max.warmup.replicas` config was reduced, we might
         // be over warmup budget and have to give up some warmup tasks. Evicting in reverse funding order
         // keeps which ones deterministic rather than dependent on iteration order.
-        // Note: revocation of warmup task happens automatically by not adding them to the assignment patch again
+        // Note: revocation of warmup task happens implicitly by not adding them to the assignment patch again
         keptWarmups.sort((left, right) -> comparePriority(left, right, processLoad, Map.of()));
         for (int i = 0; i < keptWarmups.size(); i++) {
             final FundingCandidate keptWarmup = keptWarmups.get(i);
@@ -364,8 +363,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
         // New warm-up tasks raises its target process's load, so we need to update it while we go, and find a new
         // `best` from scratch each time
-        // note: this nested-loop is bounded by the number of unsed warm-up slots; so while it's O(unsed * candidate)
-        // it's effectively not quadratic (we can consider `unsed` a constant)
+        // note: this nested-loop is bounded by the number of unused warm-up slots; so while it's O(unused * candidate)
+        // it's effectively not quadratic (we can consider `unused` a constant)
         final Map<String, Integer> newWarmupsByProcess = new HashMap<>();
         int used = Math.min(keptWarmups.size(), numWarmupReplicas);
 
@@ -389,10 +388,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             used++;
         }
 
-        // Whatever is still in the list did not get a warm-up slot before the budget ran out. A sibling move then
-        // settles for borrowing the standby where it sits: warming through the sibling is worth more than not warming
-        // at all, and is what the migration would have done anyway had no warm-up slot ever been available. A fresh
-        // plant has no copy on the target process to fall back on, so it parks.
+        // Unfunded task migrations are parked, until warmup budget frees up again later.
+        // For SIBLING_MOVE, we can apply an optimization and convert to a BORROW, which does not require a warm-up slot
         newWarmupCandidates.forEach(candidate -> {
             if (candidate.warming() == Warming.SIBLING_MOVE) {
                 borrowedMigrations.add(candidate.task());
@@ -409,25 +406,18 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * Resolves the parts of a staged migration the funding order needs, once, so that the repeated comparisons do
-     * not each redo the lookups.
-     *
-     * <p>The current owner's process load can be resolved this early because it cannot change during the pass:
-     * funding a warm-up task adds a task to the <em>target</em> process, while the current owner keeps running the
-     * active task either way.
+     * Builds the {@link FundingCandidate} for a staged migration.
      */
     private static FundingCandidate fundingCandidate(
         final StagedMigration migration,
         final Map<String, StreamsGroupMember> members,
-        final Map<String, ProcessLoad> processLoad,
         final Warming warming
     ) {
-        final String currentProcessId = members.get(migration.currentOwner()).processId();
         return new FundingCandidate(
             migration.task(),
             migration.targetOwner(),
             migration.targetProcessId().orElseThrow(),
-            processLoad.get(currentProcessId).load(),
+            members.get(migration.currentOwner()).processId(),
             warming
         );
     }
@@ -460,21 +450,27 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
+     * Funding priority by warming category: a fresh plant (0) before a sibling move (1). All other warmings rank 0,
+     * which is harmless because only plants and sibling moves are ever ordered against each other.
+     */
+    private static int fundingRank(final Warming warming) {
+        return warming == Warming.SIBLING_MOVE ? 1 : 0;
+    }
+
+    /**
      * Orders two migrations competing for the same warm-up slot, most deserving first.
      *
-     * <p>The target process's load comes first: a lightly loaded target process restores faster, so its warm-up slot
-     * recycles sooner and the group converges quicker, and spreading the warm-up tasks spreads the restore traffic
-     * with them. The current owner's process load breaks the tie in the opposite direction -- of two migrations that
-     * could be funded, the one that relieves the busier process is worth more, which also ranks all of that process's
-     * pending migrations together so its relief arrives in one batch. The task itself breaks a full tie, purely so
-     * that the same inputs always produce the same assignment.
+     * <p>A fresh plant is funded before a sibling move. The two differ only in what happens when they are unfunded:
+     * a plant parks and makes no progress at all, while a sibling move falls back to borrowing the standby where it
+     * sits and still warms.
      *
-     * <p>This decides which migrations start warming first and nothing else. <em>Where</em> a task goes is the target
-     * assignment's decision, so being approximately right is enough here.
-     *
-     * <p>{@code newWarmupsByProcess} is empty when ordering warm-up tasks that are already restoring, since the load
-     * index counts those already; for new warm-up tasks it carries what this pass has funded so far, so that each one
-     * raises its target process before the next pick.
+     * <p>Among candidates of the same warming the target process's load comes first: a lightly loaded target process
+     * restores faster, so its warm-up slot recycles sooner and the group converges quicker, and spreading the
+     * warm-up tasks spreads the restore traffic with them.
+     * The current owner's process load breaks the tie in the opposite direction -- of two migrations that could be
+     * funded, the one that relieves the busier process is worth more, which also ranks all of that process's pending
+     * migrations together so its relief arrives in one batch.
+     * The task itself breaks a full tie, purely so that the same inputs always produce the same assignment.
      */
     private static int comparePriority(
         final FundingCandidate left,
@@ -482,6 +478,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, ProcessLoad> processLoad,
         final Map<String, Integer> newWarmupsByProcess
     ) {
+        final int byWarming = Integer.compare(fundingRank(left.warming()), fundingRank(right.warming()));
+        if (byWarming != 0) {
+            return byWarming;
+        }
+
         final int byTargetProcessLoad = Double.compare(
             targetProcessLoad(left, processLoad, newWarmupsByProcess),
             targetProcessLoad(right, processLoad, newWarmupsByProcess)
@@ -490,7 +491,10 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             return byTargetProcessLoad;
         }
 
-        final int byCurrentProcessLoad = Double.compare(right.currentProcessLoad(), left.currentProcessLoad());
+        final int byCurrentProcessLoad = Double.compare(
+            currentProcessLoad(right, processLoad, newWarmupsByProcess),
+            currentProcessLoad(left, processLoad, newWarmupsByProcess)
+        );
         if (byCurrentProcessLoad != 0) {
             return byCurrentProcessLoad;
         }
@@ -505,6 +509,15 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     ) {
         return processLoad.get(candidate.targetProcessId())
             .loadWith(newWarmupsByProcess.getOrDefault(candidate.targetProcessId(), 0));
+    }
+
+    private static double currentProcessLoad(
+        final FundingCandidate candidate,
+        final Map<String, ProcessLoad> processLoad,
+        final Map<String, Integer> newWarmupsByProcess
+    ) {
+        return processLoad.get(candidate.currentProcessId())
+            .loadWith(newWarmupsByProcess.getOrDefault(candidate.currentProcessId(), 0));
     }
 
     /**
@@ -543,11 +556,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
     /**
      * The copy of the task that the given process already holds, if any.
-     *
-     * <p>There is at most one, so no tie-break between roles is needed: a process holds a given task in at most one
-     * role, on at most one of its members. The reconciler enforces that -- {@code isUnreleasedActiveTask},
-     * {@code isUnreleasedStandbyTask} and {@code isUnreleasedWarmupTask} in {@link CurrentAssignmentBuilder} each
-     * block a role for as long as the process holds the task in any role.
      */
     private static Optional<TaskCopy> findCopyOnProcess(
         final CurrentAssignmentIndex currentAssignment,
@@ -620,7 +628,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * changelog topics and nothing about stores -- so the two are not merely equal in effect, the broker has no way to
      * tell them apart. A store configured without logging is therefore invisible here, and that is also the right
      * outcome: without a changelog there is nothing to restore, so such a task can never be warmed up and is treated
-     * exactly like a stateless one. This is narrower than "stateful" client-side, where a task can have state and no
+     * exactly like a stateless task. This is narrower than "stateful" client-side, where a task can have state and no
      * changelog.
      */
     private static boolean isStateful(
@@ -834,8 +842,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        owner, so that the warm-up can be promoted in place once it has caught up.
      * @param targetProcessId
      *        The process that member runs in, whose load the funding order reads and the accounting raises.
-     * @param currentProcessLoad
-     *        The load of the process still running the task, which cannot change during a funding pass.
+     * @param currentProcessId
+     *        The process still running the task, whose load the funding order reads (descending) as its secondary key.
      * @param warming
      *        What this migration needs from the budget, decided once when the migration is classified. Only the
      *        fall-back turns on it: a {@link Warming#SIBLING_MOVE} that does not get a warm-up slot falls back to
@@ -845,7 +853,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         TaskId task,
         String targetOwner,
         String targetProcessId,
-        double currentProcessLoad,
+        String currentProcessId,
         Warming warming
     ) {
     }
