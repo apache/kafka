@@ -59,12 +59,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -128,7 +126,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
         assertEquals(3, driver.sizeOf(store));
 
-        assertThat(store.get(0), nullValue());
+        assertNull(store.get(0));
     }
 
 
@@ -169,10 +167,10 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             }
         }
 
-        assertThat(numberOfKeysReturned, is(3));
-        assertThat(valuesWithPrefix.get(0), is("f"));
-        assertThat(valuesWithPrefix.get(1), is("d"));
-        assertThat(valuesWithPrefix.get(2), is("b"));
+        assertEquals(3, numberOfKeysReturned);
+        assertEquals("f", valuesWithPrefix.get(0));
+        assertEquals("d", valuesWithPrefix.get(1));
+        assertEquals("b", valuesWithPrefix.get(2));
     }
 
     @Test
@@ -201,7 +199,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
                 numberOfKeysReturned++;
             }
 
-            assertThat(numberOfKeysReturned, is(1));
+            assertEquals(1, numberOfKeysReturned);
         }
     }
 
@@ -234,8 +232,8 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             }
         }
 
-        assertThat(numberOfKeysReturned, is(1));
-        assertThat(valuesWithPrefix.get(0), is("a"));
+        assertEquals(1, numberOfKeysReturned);
+        assertEquals("a", valuesWithPrefix.get(0));
     }
 
     @Test
@@ -262,7 +260,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             }
         }
 
-        assertThat(numberOfKeysReturned, is(0));
+        assertEquals(0, numberOfKeysReturned);
     }
 
     @SuppressWarnings("resource")
@@ -471,7 +469,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             assertArrayEquals(bytesValue("v1-staged"), uncommitted.get(k1));
             assertArrayEquals(bytesValue("v2-staged"), uncommitted.get(k2));
             assertArrayEquals(bytesValue("v1"), committed.get(k1));
-            assertThat(committed.get(k2), nullValue());
+            assertNull(committed.get(k2));
 
             try (KeyValueIterator<Bytes, byte[]> it = committed.all()) {
                 final List<String> keys = new ArrayList<>();
@@ -502,7 +500,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
             txnStore.delete(k);
 
-            assertThat(txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED).get(k), nullValue());
+            assertNull(txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED).get(k));
             assertArrayEquals(bytesValue("v"), txnStore.readOnly(IsolationLevel.READ_COMMITTED).get(k));
         } finally {
             txnStore.close();

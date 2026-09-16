@@ -1811,6 +1811,19 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
+    private void enforceSynchronousBootstrapResolution(final Map<String, Object> clientProps, final String clientType) {
+        final Object userValue = clientProps.get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
+        if (userValue != null && !userValue.toString().equals("0")) {
+            log.warn("Unexpected user-specified {} config '{}' found. Kafka Streams does not support asynchronous" +
+                    " bootstrap resolution. User setting ({}) will be ignored and 0 will be used instead.",
+                clientType,
+                CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                userValue
+            );
+        }
+        clientProps.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, 0L);
+    }
+
     private void checkIfUnexpectedUserSpecifiedClientConfig(final Map<String, Object> clientProvidedProps,
                                                             final String[] nonConfigurableConfigs) {
         // Streams does not allow users to configure certain client configurations (consumer/producer),
@@ -1926,6 +1939,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
         checkIfUnexpectedUserSpecifiedClientConfig(mainConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         consumerProps.putAll(mainConsumerProps);
+        enforceSynchronousBootstrapResolution(consumerProps, "consumer");
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
@@ -1999,6 +2013,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
         checkIfUnexpectedUserSpecifiedClientConfig(restoreConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(restoreConsumerProps);
+        enforceSynchronousBootstrapResolution(baseConsumerProps, "restore consumer");
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -2033,6 +2048,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
         checkIfUnexpectedUserSpecifiedClientConfig(globalConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(globalConsumerProps);
+        enforceSynchronousBootstrapResolution(baseConsumerProps, "global consumer");
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -2070,6 +2086,8 @@ public class StreamsConfig extends AbstractConfig {
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
 
+        enforceSynchronousBootstrapResolution(props, "producer");
+
         return props;
     }
 
@@ -2088,6 +2106,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
+
+        enforceSynchronousBootstrapResolution(props, "admin");
+
         return props;
     }
 

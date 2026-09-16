@@ -22,6 +22,10 @@
   // Version 2 enables flexible versions.
   "validVersions": "0-2",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "0-1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "Resources", "type": "[]AlterConfigsResource", "versions": "0+", 
       "about": "The updates for each resource.", "fields": [

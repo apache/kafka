@@ -39,6 +39,7 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.PartitionMetadataProvider;
@@ -101,7 +102,7 @@ import java.util.function.Supplier;
  * and are in-flight.
  */
 @SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
-public class SharePartition {
+public class SharePartition implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(SharePartition.class);
 
@@ -1518,6 +1519,16 @@ public class SharePartition {
         // and update the cached state for start offset. Else rollback the state transition.
         rollbackOrProcessStateUpdates(future, throwable, persisterBatches);
         return future;
+    }
+
+    @Override
+    public void close() {
+        if (partitionState() == SharePartitionState.ACTIVE) {
+            log.warn("Closing share partition: {}-{} while in active state. Consider marking it fenced "
+                + "before close.", groupId, topicIdPartition);
+        }
+        // Deregister the share partition metrics on teardown.
+        Utils.closeQuietly(sharePartitionMetrics, "sharePartitionMetrics");
     }
 
     long loadStartTimeMs() {

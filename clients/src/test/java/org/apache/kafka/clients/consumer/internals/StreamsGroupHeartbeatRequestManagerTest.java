@@ -2577,11 +2577,15 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
     @Test
     public void testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin() {
+        final long retryBackoffMs = 100L;
         try (
             final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class);
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> when(mock.heartbeatIntervalMs()).thenReturn(6000L))
+                (mock, context) -> {
+                    when(mock.heartbeatIntervalMs()).thenReturn(0L);
+                    when(mock.retryBackoffMs()).thenReturn(retryBackoffMs);
+                })
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
@@ -2589,7 +2593,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
 
-            assertEquals(6000L, maximumTimeToWait);
+            assertEquals(retryBackoffMs, maximumTimeToWait);
         }
     }
 

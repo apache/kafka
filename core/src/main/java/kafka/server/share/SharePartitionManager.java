@@ -931,6 +931,8 @@ public class SharePartitionManager implements AutoCloseable {
             sharePartition.markFenced();
             metadataProvider.removePartitionListener(sharePartitionKey.topicIdPartition(), sharePartition.listener());
             delayedRequestNotifier.accept(new DelayedShareFetchGroupKey(sharePartitionKey.groupId(), sharePartitionKey.topicIdPartition()));
+            // Close the share partition to release any resources held by it.
+            sharePartition.close();
         }
     }
 

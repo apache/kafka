@@ -102,6 +102,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -120,6 +121,7 @@ import static org.apache.kafka.server.util.ServerTestUtils.clearYammerMetrics;
 import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -13769,6 +13771,47 @@ public class SharePartitionTest {
 
         // Verify readState was not called by processDlqPhase2.
         Mockito.verify(persister, Mockito.never()).readState(Mockito.any());
+    }
+
+    @Test
+    public void testCloseDeregistersMetrics() {
+        // Building the share partition registers the gauge metrics whose suppliers capture the
+        // SharePartition instance. If they are not deregistered on teardown, the metrics registry
+        // can pin the fenced SharePartition (and its cachedState) in memory indefinitely.
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
+
+        // The gauges are registered on construction; with no in-flight records their value is 0.
+        assertEquals(0, yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).intValue());
+        assertEquals(0, yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue());
+
+        sharePartition.markFenced();
+        assertEquals(SharePartitionState.FENCED, sharePartition.partitionState());
+
+        sharePartition.close();
+        // close must deregister the metrics so the registry no longer references the partition.
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT));
+
+        // close must be idempotent - a second call should not throw even though the metrics are gone.
+        assertDoesNotThrow(sharePartition::close);
+    }
+
+    @Test
+    public void testCloseWhileActiveStillDeregistersMetrics() {
+        // Even if close is invoked without fencing first (partition still ACTIVE), the metrics must
+        // still be deregistered so the registry does not retain the partition.
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+        assertEquals(0, yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).intValue());
+
+        sharePartition.close();
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT));
     }
 
     private static ShareGroupDLQManager mockDlqManager() {
