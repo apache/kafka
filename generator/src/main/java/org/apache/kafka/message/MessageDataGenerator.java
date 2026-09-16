@@ -476,6 +476,26 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         VersionConditional.forVersions(messageFlexibleVersions, curVersions).
             ifMember(curFlexibleVersions -> {
                 buffer.printf("int _numTaggedFields = _readable.readUnsignedVarint();%n");
+                buffer.printf("if (_numTaggedFields < 0) {%n");
+                buffer.incrementIndent();
+                buffer.printf("throw new RuntimeException(\"Invalid negative number of tagged fields \" + " +
+                        "_numTaggedFields);%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+                buffer.printf("if (_numTaggedFields > _readable.remaining()) {%n");
+                buffer.incrementIndent();
+                buffer.printf("throw new RuntimeException(\"Tried to read \" + _numTaggedFields + \" tagged " +
+                        "fields, but there are only \" + _readable.remaining() + \" bytes remaining.\");%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+                headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
+                buffer.printf("if (_numTaggedFields > MessageUtil.MAX_TAGGED_FIELD_COUNT) {%n");
+                buffer.incrementIndent();
+                buffer.printf("throw new RuntimeException(\"Tried to read \" + _numTaggedFields + \" tagged " +
+                        "fields, which exceeds the maximum allowed count of \" + " +
+                        "MessageUtil.MAX_TAGGED_FIELD_COUNT + \".\");%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
                 buffer.printf("for (int _i = 0; _i < _numTaggedFields; _i++) {%n");
                 buffer.incrementIndent();
                 buffer.printf("int _tag = _readable.readUnsignedVarint();%n");
@@ -649,16 +669,24 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                     "there are only \" + _readable.remaining() + \" bytes remaining.\");%n", lengthVar);
             buffer.decrementIndent();
             buffer.printf("}%n");
+            headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
+            buffer.printf("if (%s > MessageUtil.MAX_ARRAY_LENGTH) {%n", lengthVar);
+            buffer.incrementIndent();
+            buffer.printf("throw new RuntimeException(\"Tried to read a collection of size \" + %s + \", which " +
+                    "exceeds the maximum allowed size of \" + MessageUtil.MAX_ARRAY_LENGTH + \".\");%n", lengthVar);
+            buffer.decrementIndent();
+            buffer.printf("}%n");
             if (isStructArrayWithKeys) {
                 headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
-                buffer.printf("%s newCollection = new %s(%s);%n",
+                buffer.printf("%s newCollection = new %s(Math.min(%s, MessageUtil.MAX_PREALLOCATED_ARRAY_CAPACITY));%n",
                     FieldSpec.collectionType(arrayType.elementType().toString()),
                         FieldSpec.collectionType(arrayType.elementType().toString()), lengthVar);
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
                 String boxedArrayType =
                     arrayType.elementType().getBoxedJavaType(headerGenerator);
-                buffer.printf("ArrayList<%s> newCollection = new ArrayList<>(%s);%n", boxedArrayType, lengthVar);
+                buffer.printf("ArrayList<%s> newCollection = new ArrayList<>(Math.min(%s, MessageUtil.MAX_PREALLOCATED_ARRAY_CAPACITY));%n",
+                    boxedArrayType, lengthVar);
             }
             buffer.printf("for (int i = 0; i < %s; i++) {%n", lengthVar);
             buffer.incrementIndent();
