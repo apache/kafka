@@ -77,40 +77,24 @@ public class StickyTaskAssignor implements TaskAssignor {
     public GroupAssignment assign(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) throws TaskAssignorException {
         return doAssign(
             initialize(groupSpec, topologyDescriber),
-            groupSpec,
-            topologyDescriber
+            groupSpec
         );
     }
 
     private static GroupAssignment doAssign(
         final LocalState localState,
-        final GroupSpec groupSpec,
-        final TopologyDescriber topologyDescriber
+        final GroupSpec groupSpec
     ) {
         // Stateful and stateless active tasks are balanced independently: the stateful ones are placed first, then
         // the stateless ones fill up the remaining active capacity.
-        assignActive(localState, taskIds(topologyDescriber, true), true);
-        assignActive(localState, taskIds(topologyDescriber, false), false);
+        assignActive(localState, new LinkedList<>(localState.statefulActiveTaskIds), true);
+        assignActive(localState, new LinkedList<>(localState.statelessActiveTaskIds), false);
 
         if (localState.numStandbyReplicas > 0) {
-            assignStandby(localState, taskIds(topologyDescriber, true));
+            assignStandby(localState, new LinkedList<>(localState.statefulActiveTaskIds));
         }
 
         return buildGroupAssignment(localState, groupSpec.memberIds());
-    }
-
-    /** The tasks of the stateful subtopologies when {@code stateful} is true, otherwise those of the stateless ones. */
-    private static LinkedList<TaskId> taskIds(final TopologyDescriber topologyDescriber, final boolean stateful) {
-        final LinkedList<TaskId> ret = new LinkedList<>();
-        for (final String subtopology : topologyDescriber.subtopologies()) {
-            if (topologyDescriber.isStateful(subtopology) == stateful) {
-                final int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
-                for (int i = 0; i < numberOfPartitions; i++) {
-                    ret.add(new TaskId(subtopology, i));
-                }
-            }
-        }
-        return ret;
     }
 
     private static LocalState initialize(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) {
@@ -121,11 +105,18 @@ public class StickyTaskAssignor implements TaskAssignor {
         localState.totalStatefulActiveTasks = 0;
         localState.totalActiveTasks = 0;
         localState.totalTasks = 0;
+        localState.statefulActiveTaskIds = new LinkedList<>();
+        localState.statelessActiveTaskIds = new LinkedList<>();
         for (final String subtopology : topologyDescriber.subtopologies()) {
             final int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
+            final boolean stateful = topologyDescriber.isStateful(subtopology);
+            final LinkedList<TaskId> taskIds = stateful ? localState.statefulActiveTaskIds : localState.statelessActiveTaskIds;
+            for (int i = 0; i < numberOfPartitions; i++) {
+                taskIds.add(new TaskId(subtopology, i));
+            }
             localState.totalTasks += numberOfPartitions;
             localState.totalActiveTasks += numberOfPartitions;
-            if (topologyDescriber.isStateful(subtopology)) {
+            if (stateful) {
                 localState.totalStatefulActiveTasks += numberOfPartitions;
                 localState.totalTasks += numberOfPartitions * localState.numStandbyReplicas;
             }
@@ -575,6 +566,8 @@ public class StickyTaskAssignor implements TaskAssignor {
         Map<TaskId, Member> activeTaskToPrevMember;
         Map<TaskId, ArrayList<Member>> standbyTaskToPrevMember;
         Map<String, ProcessState> processIdToState;
+        LinkedList<TaskId> statefulActiveTaskIds;
+        LinkedList<TaskId> statelessActiveTaskIds;
 
         int numStandbyReplicas;
         int totalStatefulActiveTasks;
