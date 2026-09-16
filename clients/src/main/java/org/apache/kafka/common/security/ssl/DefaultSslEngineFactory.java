@@ -167,9 +167,8 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
         List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
         if (!cipherSuitesList.isEmpty()) {
-            Set<String> supportedCiphers = Set.of(
+            this.cipherSuites = filterCipherSuites(cipherSuitesList,
                     sslContext.getSupportedSSLParameters().getCipherSuites());
-            this.cipherSuites = filterCipherSuites(cipherSuitesList, supportedCiphers);
         } else {
             this.cipherSuites = null;
         }
@@ -216,18 +215,25 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     }
 
     // package access for testing
-    static String[] filterCipherSuites(List<String> configured, Set<String> supported) {
+    static String[] filterCipherSuites(List<String> configured, String[] supported) {
+        // SSLParameters#getCipherSuites may return null. If the provider does not report its supported
+        // cipher suites we cannot filter, so use the configured list unchanged to fall back to the old behavior.
+        if (supported == null) {
+            return configured.toArray(new String[0]);
+        }
+
+        Set<String> supportedCiphers = Set.of(supported);
         List<String> accepted = configured.stream()
-            .filter(supported::contains)
+            .filter(supportedCiphers::contains)
             .collect(Collectors.toList());
 
         if (accepted.isEmpty()) {
             throw new InvalidConfigurationException(
                 "None of the cipher suites in " + configured +
                     " are supported by the JDK security provider. " +
-                    "Supported cipher suites are: " + supported);
+                    "Supported cipher suites are: " + supportedCiphers);
         }
-        
+
         if (accepted.size() < configured.size()) {
             List<String> differences = new ArrayList<>(configured);
             differences.removeAll(accepted);
