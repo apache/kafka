@@ -109,7 +109,7 @@ public class FaultProxyExampleIntegrationTest {
                     IntegrationTestUtils.produceKeyValuesSynchronously(
                         input, records, producerConfig, cluster.time);
 
-                     final Properties consumerConfig = new Properties();
+                    final Properties consumerConfig = new Properties();
                     consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
                     consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "fault-proxy-example-verifier");
                     consumerConfig.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
