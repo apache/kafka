@@ -191,6 +191,19 @@ public class GroupCoordinatorConfigTest {
     }
 
     @Test
+    public void testConsumerGroupAssignorsBuiltinByClassName() {
+        // A built-in may also be configured by its class name and resolves to the built-in itself.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
+            List.of(UniformAssignor.class.getName(), RangeAssignor.class.getName()));
+        GroupCoordinatorConfig config = createConfig(configs);
+        List<ConsumerGroupPartitionAssignor> assignors = config.consumerGroupAssignors();
+        assertEquals(2, assignors.size());
+        assertInstanceOf(UniformAssignor.class, assignors.get(0));
+        assertInstanceOf(RangeAssignor.class, assignors.get(1));
+    }
+
+    @Test
     public void testShareGroupAssignorFullClassNames() {
         // The full class name of the assignors is part of our public api. Hence,
         // we should ensure that they are not changed by mistake.
@@ -377,6 +390,18 @@ public class GroupCoordinatorConfigTest {
                 " for configuration group.streams.assignors: Assignor name 'sticky' is already " +
                 "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsBuiltinByClassName() {
+        // A built-in configured by its class name resolves to the built-in and is registered under its short name.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyTaskAssignor.class.getName());
+        GroupCoordinatorConfig config = createConfig(configs);
+        List<TaskAssignor> assignors = config.streamsGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
+        assertEquals(List.of("sticky"), config.streamsGroupAssignorNames());
     }
 
     @Test
