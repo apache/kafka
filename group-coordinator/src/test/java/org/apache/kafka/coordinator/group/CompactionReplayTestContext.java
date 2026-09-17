@@ -128,17 +128,17 @@ final class CompactionReplayTestContext {
     }
 
     /**
-     * The boundaries a cleaning window may fall on: the positions in {@link #records()} at which a
+     * The boundaries a cleaning window may fall on: the offsets in {@link #records()} at which a
      * batch starts, plus the length of the log.
      */
     List<Integer> batchBoundaries() {
         List<Integer> boundaries = new ArrayList<>();
-        int position = 0;
+        int offset = 0;
         for (List<CoordinatorRecord> batch : batches) {
-            boundaries.add(position);
-            position += batch.size();
+            boundaries.add(offset);
+            offset += batch.size();
         }
-        boundaries.add(position);
+        boundaries.add(offset);
         return boundaries;
     }
 

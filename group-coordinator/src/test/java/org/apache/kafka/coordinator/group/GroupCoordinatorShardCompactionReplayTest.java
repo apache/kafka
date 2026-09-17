@@ -526,42 +526,42 @@ public class GroupCoordinatorShardCompactionReplayTest {
     private void assertCompactedVariantsLoadCleanly(CompactionReplayTestContext context) {
         List<CoordinatorRecord> log = context.records();
 
-        Set<Integer> compactableWithTombstoneDeletion = compactablePositions(log, true);
-        Set<Integer> compactableWithoutTombstoneDeletion = compactablePositions(log, false);
+        Set<Integer> compactableWithTombstoneDeletion = compactableOffsets(log, true);
+        Set<Integer> compactableWithoutTombstoneDeletion = compactableOffsets(log, false);
 
         List<Integer> boundaries = context.batchBoundaries();
 
         // Uncompacted log
-        assertLoadsCleanly(log, compactedPositions(log, compactableWithTombstoneDeletion, 0, 0));
+        assertLoadsCleanly(log, compactedOffsets(log, compactableWithTombstoneDeletion, 0, 0));
 
         // Compacted prefix
         for (int lastBatch = 1; lastBatch < boundaries.size(); lastBatch++) {
             assertLoadsCleanly(log,
-                compactedPositions(log, compactableWithTombstoneDeletion, 0, boundaries.get(lastBatch)));
+                compactedOffsets(log, compactableWithTombstoneDeletion, 0, boundaries.get(lastBatch)));
         }
 
         // Concurrent compaction: the window starts partway through the log, leaving an uncompacted
         // section before it.
         for (int firstBatch = 1; firstBatch < boundaries.size() - 1; firstBatch++) {
             for (int lastBatch = firstBatch + 1; lastBatch < boundaries.size(); lastBatch++) {
-                assertLoadsCleanly(log, compactedPositions(
+                assertLoadsCleanly(log, compactedOffsets(
                     log, compactableWithoutTombstoneDeletion, boundaries.get(firstBatch), boundaries.get(lastBatch)));
             }
         }
     }
 
     /**
-     * The positions in {@code log} eligible for compaction: any offset with a later offset with the
-     * same kay is compactable. When {@code deleteTombstones} is set, a tombstone with
+     * The offsets in {@code log} eligible for compaction: any record with a later record with the
+     * same key is compactable. When {@code deleteTombstones} is set, a tombstone with
      * no later offset for its key is also compactable, modelling {@code delete.retention.ms} elapsing.
      */
-    private static Set<Integer> compactablePositions(List<CoordinatorRecord> log, boolean deleteTombstones) {
+    private static Set<Integer> compactableOffsets(List<CoordinatorRecord> log, boolean deleteTombstones) {
         Set<ApiMessage> laterKeys = new HashSet<>();
         Set<Integer> compactable = new HashSet<>();
-        for (int position = log.size() - 1; position >= 0; position--) {
-            CoordinatorRecord record = log.get(position);
+        for (int offset = log.size() - 1; offset >= 0; offset--) {
+            CoordinatorRecord record = log.get(offset);
             if (laterKeys.contains(record.key()) || (deleteTombstones && record.value() == null)) {
-                compactable.add(position);
+                compactable.add(offset);
             }
             laterKeys.add(record.key());
         }
@@ -569,11 +569,11 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * Replays {@code log} with {@code compactedPositions} removed through a real {@link
+     * Replays {@code log} with {@code compactedOffsets} removed through a real {@link
      * GroupCoordinatorShard} over a fresh coordinator, asserting the surviving records load without
      * throwing.
      */
-    private void assertLoadsCleanly(List<CoordinatorRecord> log, Set<Integer> compactedPositions) {
+    private void assertLoadsCleanly(List<CoordinatorRecord> log, Set<Integer> compactedOffsets) {
         GroupMetadataManagerTestContext replayContext =
             new GroupMetadataManagerTestContext.Builder()
                 .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.BIDIRECTIONAL.toString())
@@ -601,23 +601,23 @@ public class GroupCoordinatorShardCompactionReplayTest {
         );
 
         int index = 0;
-        int position = 0;
+        int offset = 0;
         try {
-            for (; position < log.size(); position++) {
-                if (compactedPositions.contains(position)) {
+            for (; offset < log.size(); offset++) {
+                if (compactedOffsets.contains(offset)) {
                     continue;
                 }
-                shard.replay(index, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, log.get(position));
+                shard.replay(index, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, log.get(offset));
                 index++;
             }
         } catch (Throwable t) {
-            throw new AssertionError(formatReplayFailure(log, compactedPositions, position), t);
+            throw new AssertionError(formatReplayFailure(log, compactedOffsets, offset), t);
         }
     }
 
     /**
-     * Renders the whole log for a failed replay, one record per line with its position, marking
-     * tombstones, records removed by compaction, and the record whose replay failed. For example:
+     * Renders the whole log for a failed replay, one offset and record per line. Includes
+     * tombstones, records removed by compaction, and the failed record. For example:
      * <pre>
      *   0 | GroupMetadataKey(group='streams-lifecycle-group')
      *   ...
@@ -628,20 +628,20 @@ public class GroupCoordinatorShardCompactionReplayTest {
      */
     private static String formatReplayFailure(
         List<CoordinatorRecord> log,
-        Set<Integer> compactedPositions,
-        int failedPosition
+        Set<Integer> compactedOffsets,
+        int failedOffset
     ) {
-        StringBuilder message = new StringBuilder("Replaying the log failed to load.\n");
-        for (int position = 0; position < log.size(); position++) {
-            CoordinatorRecord record = log.get(position);
-            message.append(String.format("%3d | %s", position, record.key()));
+        StringBuilder message = new StringBuilder("Replaying the log that failed to load.\n");
+        for (int offset = 0; offset < log.size(); offset++) {
+            CoordinatorRecord record = log.get(offset);
+            message.append(String.format("%3d | %s", offset, record.key()));
             if (record.value() == null) {
                 message.append(" = tombstone");
             }
-            if (compactedPositions.contains(position)) {
+            if (compactedOffsets.contains(offset)) {
                 message.append(" [compacted]");
             }
-            if (position == failedPosition) {
+            if (offset == failedOffset) {
                 message.append(" <-- replay failed");
             }
             message.append("\n");
@@ -650,11 +650,9 @@ public class GroupCoordinatorShardCompactionReplayTest {
     }
 
     /**
-     * The positions removed by cleaning the compactable records. A tombstone is
-     * retained if an earlier surviving record shares its key, since the tombstone is still needed to
-     * delete that record on load.
+     * The offsets removed by cleaning the compactable records.
      */
-    private static Set<Integer> compactedPositions(
+    private static Set<Integer> compactedOffsets(
         List<CoordinatorRecord> log,
         Set<Integer> compactable,
         int from,
@@ -662,13 +660,13 @@ public class GroupCoordinatorShardCompactionReplayTest {
     ) {
         Set<ApiMessage> survivingKeys = new HashSet<>();
         Set<Integer> removed = new HashSet<>();
-        for (int position = 0; position < log.size(); position++) {
-            CoordinatorRecord record = log.get(position);
-            boolean cleaned = position >= from && position < to && compactable.contains(position);
+        for (int offset = 0; offset < log.size(); offset++) {
+            CoordinatorRecord record = log.get(offset);
+            boolean cleaned = offset >= from && offset < to && compactable.contains(offset);
             if (!cleaned) {
                 survivingKeys.add(record.key());
             } else {
-                removed.add(position);
+                removed.add(offset);
             }
         }
         return removed;
