@@ -171,6 +171,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
 
   val controllerMaxRecordsPerBatch: Int = getInt(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG)
 
+  def maxDecompressedMessageBytes = getInt(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG)
+
   /************* Authorizer Configuration ***********/
   def createNewAuthorizer(metrics: Metrics, role: String): Option[Plugin[Authorizer]] = {
     val className = getString(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG)
