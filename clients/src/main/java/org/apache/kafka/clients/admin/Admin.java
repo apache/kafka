@@ -510,6 +510,9 @@ public interface Admin extends AutoCloseable {
      * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
      * a particular resource are updated atomically.
      * <p>
+     * <b>Usage note:</b> To update cluster-wide default broker configs, specify a {@link ConfigResource} 
+     * with type {@link ConfigResource.Type#BROKER} and an empty string {@code ""} as the name.
+     * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
      * the returned {@link AlterConfigsResult}:
      * <ul>
