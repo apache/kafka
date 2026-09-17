@@ -158,6 +158,13 @@ public class ValuesTest {
     }
 
     @Test
+    public void shouldParseStringsBeginningWithNumberAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("1::2");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("1::2", schemaAndValue.value());
+    }
+
+    @Test
     public void shouldParseTrueAsBooleanIfSurroundedByWhitespace() {
         SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "true" + WHITESPACE);
         assertEquals(Type.BOOLEAN, schemaAndValue.schema().type());
