@@ -172,6 +172,23 @@ public class StreamsGroupTopologyDescriptionBackoffTest {
     }
 
     @Test
+    public void testArmIfNotActiveIsNoOpWhenStoredEpochIsNewer() {
+        // The conversion-delete throttle arms at the UNCERTAIN(-2) sentinel epoch on an
+        // empty group; it must not clobber a real-epoch entry left behind by heartbeats
+        // from before the group's last member departed.
+        MockTime time = new MockTime();
+        StreamsGroupTopologyDescriptionBackoff backoff = deterministicBackoff(time);
+        backoff.armOrExtend("g", 6);
+        backoff.armOrExtend("g", 6); // advances attempts to 1
+        long armedAt = backoff.entry("g").nextAttemptMs();
+
+        assertFalse(backoff.armIfNotActive("g", StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN));
+        assertEquals(6, backoff.entry("g").topologyEpoch());
+        assertEquals(1, backoff.entry("g").attempts());
+        assertEquals(armedAt, backoff.entry("g").nextAttemptMs());
+    }
+
+    @Test
     public void testArmIfNotActiveReArmsAfterEpochAdvance() {
         MockTime time = new MockTime();
         StreamsGroupTopologyDescriptionBackoff backoff = deterministicBackoff(time);

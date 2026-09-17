@@ -71,6 +71,11 @@ public class StreamsGroupTopologyDescriptionBackoff {
      * the back-off, and to preserve the exponential chain when the previous window has
      * expired without a push reaching the coordinator (e.g. the client never sent one,
      * or the push was lost in flight before {@link #armOrExtend} could run).
+     *
+     * <p>Epoch-aware like {@link #armOrExtend}: a stored entry for a newer epoch is left
+     * alone. Without this, {@link #throttleConversionDelete}'s sentinel-epoch arm on an
+     * empty group could clobber a real-epoch entry left behind from before the group's
+     * last member departed, discarding its accumulated attempt count.
      */
     public boolean armIfNotActive(String groupId, int topologyEpoch) {
         final long now = time.milliseconds();
@@ -79,6 +84,9 @@ public class StreamsGroupTopologyDescriptionBackoff {
             if (existing != null
                 && existing.topologyEpoch() == topologyEpoch
                 && now < existing.nextAttemptMs()) {
+                return existing;
+            }
+            if (existing != null && existing.topologyEpoch() > topologyEpoch) {
                 return existing;
             }
             armed.set(true);
