@@ -469,6 +469,35 @@ public class ConnectRestServerTest {
         checkCustomizedHttpResponseHeaders(headerConfig, expectedHeaders);
     }
 
+    @Test
+    public void testCustomizedHttpResponseHeadersAppliedToAdminContext() throws IOException {
+        String headerConfig =
+                "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"";
+        Map<String, String> expectedHeaders = new HashMap<>();
+        expectedHeaders.put("X-XSS-Protection", "1; mode=block");
+        expectedHeaders.put("Cache-Control", "no-cache, no-store, must-revalidate");
+
+        Map<String, String> configMap = baseServerProps();
+        configMap.put("offset.storage.file.filename", "/tmp");
+        configMap.put(RestServerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
+        configMap.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "http://localhost:0");
+
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        expectEmptyRestExtensions();
+
+        server = new ConnectRestServer(null, restClient, configMap);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        assertNotEquals(server.advertisedUrl(), server.adminUrl());
+
+        HttpResponse response = executeRequest(server.adminUrl(), new HttpGet("/admin/loggers"));
+        assertEquals(200, response.getStatusLine().getStatusCode());
+        expectedHeaders.forEach((k, v) ->
+                assertEquals(response.getFirstHeader(k).getValue(), v));
+    }
+
     static final class HeaderConnectRestExtension extends PluginsTest.TestConnectRestExtension {
         String name = "X-Header";
         int registrations = 0;
