@@ -330,7 +330,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
      *  Classic group commits an offset
      */
     @Test
-    @Disabled // Enable when KAFKA-21102 is fixed
+    @Disabled("KAFKA-21117: Consumer group loading can fail with online downgrade")
     public void testConsumerGroupDowngradeByLeave() throws Exception {
         CompactionReplayTestContext context = newContext();
         String groupId = "consumer-downgrade-by-leave-group";
@@ -403,7 +403,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
      *  Classic group commits an offset
      */
     @Test
-    @Disabled // Enable when KAFKA-21102 is fixed
+    @Disabled("KAFKA-21117: Consumer group loading can fail with online downgrade")
     public void testConsumerGroupDowngradeByStaticMemberReplacement() throws Exception {
         CompactionReplayTestContext context = newContext();
         String groupId = "consumer-downgrade-by-replacement-group";
