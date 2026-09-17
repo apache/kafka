@@ -61,6 +61,8 @@ public class StreamsUpgradeTestIntegrationTest {
 
     @Test
     public void testVersionProbingUpgrade() throws InterruptedException {
+
+        // Explicitly leave the group so each rolling replacement can proceed without waiting for the session timeout.
         final CloseOptions leave = CloseOptions.groupMembershipOperation(LEAVE_GROUP);
         final KafkaStreams kafkaStreams1 = StreamsUpgradeTest.buildStreams(mkProperties(
             mkMap(
