@@ -21252,7 +21252,6 @@ public class GroupMetadataManagerTest {
         GroupCoordinatorConfig groupCoordinatorConfig = new GroupCoordinatorConfig(kafkaConfig);
         ShareGroupConfig shareGroupConfig = new ShareGroupConfig(kafkaConfig);
         GroupConfigManager groupConfigManager = new GroupConfigManager(
-            groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig),
             groupCoordinatorConfig,
             shareGroupConfig
         );

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Metrics;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -146,6 +147,13 @@ public class FetchMetricsRegistry {
         this.partitionPreferredReadReplica = new MetricNameTemplate(
                 "preferred-read-replica", groupName,
                 "The current read replica for the partition, or -1 if reading from leader. " + DEPRECATED_TOPIC_METRICS_MESSAGE, partitionTags);
+    }
+
+    public static void main(String[] args) {
+        Set<String> tags = new HashSet<>();
+        tags.add("client-id");
+        FetchMetricsRegistry metrics = new FetchMetricsRegistry(tags, "consumer");
+        System.out.println(Metrics.toHtmlTable("kafka.consumer", metrics.getAllTemplates()));
     }
 
     public List<MetricNameTemplate> getAllTemplates() {

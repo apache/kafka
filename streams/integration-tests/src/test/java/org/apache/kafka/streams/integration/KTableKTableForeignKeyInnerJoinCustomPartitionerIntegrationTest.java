@@ -49,9 +49,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -173,21 +174,27 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
     }
 
-    @Test
-    public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldInnerJoinMultiPartitionQueryable(final boolean withHeaders) throws Exception {
         final Set<KeyValue<String, String>> expectedOne = new HashSet<>();
         expectedOne.add(new KeyValue<>("ID123-1", "value1=ID123-A1,value2=BBB"));
         expectedOne.add(new KeyValue<>("ID123-2", "value1=ID123-A2,value2=BBB"));
         expectedOne.add(new KeyValue<>("ID123-3", "value1=ID123-A3,value2=BBB"));
         expectedOne.add(new KeyValue<>("ID123-4", "value1=ID123-A4,value2=BBB"));
 
-        verifyKTableKTableJoin(expectedOne);
+        verifyKTableKTableJoin(expectedOne, withHeaders);
     }
 
-    @Test
-    public void shouldThrowIllegalArgumentExceptionWhenCustomPartitionerReturnsMultiplePartitions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowIllegalArgumentExceptionWhenCustomPartitionerReturnsMultiplePartitions(final boolean withHeaders) throws Exception {
         final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
 
         streams = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfig);
         streamsTwo = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfigTwo);
@@ -210,9 +217,13 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         waitForApplicationState(Arrays.asList(streams, streamsTwo, streamsThree), KafkaStreams.State.ERROR, ofSeconds(240));
     }
 
-    private void verifyKTableKTableJoin(final Set<KeyValue<String, String>> expectedResult) throws Exception {
+    private void verifyKTableKTableJoin(final Set<KeyValue<String, String>> expectedResult, final boolean withHeaders) throws Exception {
         final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
 
         streams = prepareTopology(queryableName, streamsConfig);
         streamsTwo = prepareTopology(queryableName, streamsConfigTwo);

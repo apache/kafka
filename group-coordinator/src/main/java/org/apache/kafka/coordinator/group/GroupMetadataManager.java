@@ -8758,7 +8758,7 @@ public class GroupMetadataManager {
      */
     private int consumerGroupSessionTimeoutMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::consumerSessionTimeoutMs)
+        return groupConfig.flatMap(GroupConfig::consumerSessionTimeoutMs)
             .orElse(config.consumerGroupSessionTimeoutMs());
     }
 
@@ -8767,7 +8767,7 @@ public class GroupMetadataManager {
      */
     private int consumerGroupHeartbeatIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::consumerHeartbeatIntervalMs)
+        return groupConfig.flatMap(GroupConfig::consumerHeartbeatIntervalMs)
             .orElse(config.consumerGroupHeartbeatIntervalMs());
     }
 
@@ -8796,7 +8796,7 @@ public class GroupMetadataManager {
      */
     private int shareGroupSessionTimeoutMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::shareSessionTimeoutMs)
+        return groupConfig.flatMap(GroupConfig::shareSessionTimeoutMs)
             .orElse(config.shareGroupSessionTimeoutMs());
     }
 
@@ -8805,7 +8805,7 @@ public class GroupMetadataManager {
      */
     private int shareGroupHeartbeatIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::shareHeartbeatIntervalMs)
+        return groupConfig.flatMap(GroupConfig::shareHeartbeatIntervalMs)
             .orElse(config.shareGroupHeartbeatIntervalMs());
     }
 
@@ -8834,7 +8834,7 @@ public class GroupMetadataManager {
      */
     private int streamsGroupSessionTimeoutMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::streamsSessionTimeoutMs)
+        return groupConfig.flatMap(GroupConfig::streamsSessionTimeoutMs)
             .orElse(config.streamsGroupSessionTimeoutMs());
     }
 
@@ -8843,7 +8843,7 @@ public class GroupMetadataManager {
      */
     private int streamsGroupHeartbeatIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::streamsHeartbeatIntervalMs)
+        return groupConfig.flatMap(GroupConfig::streamsHeartbeatIntervalMs)
             .orElse(config.streamsGroupHeartbeatIntervalMs());
     }
 
@@ -8872,7 +8872,7 @@ public class GroupMetadataManager {
      */
     private int streamsGroupTaskOffsetIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::streamsTaskOffsetIntervalMs)
+        return groupConfig.flatMap(GroupConfig::streamsTaskOffsetIntervalMs)
             .orElse(config.streamsGroupTaskOffsetIntervalMs());
     }
 
@@ -8881,7 +8881,7 @@ public class GroupMetadataManager {
      */
     private int streamsGroupInitialRebalanceDelayMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::streamsInitialRebalanceDelayMs)
+        return groupConfig.flatMap(GroupConfig::streamsInitialRebalanceDelayMs)
             .orElse(config.streamsGroupInitialRebalanceDelayMs());
     }
 
@@ -8897,7 +8897,7 @@ public class GroupMetadataManager {
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
+        final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
         return new TreeMap<>(Map.of(
             "num.standby.replicas", numStandbyReplicas.toString()

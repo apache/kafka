@@ -37,12 +37,12 @@ import java.util.Objects;
  * {@link AggregationWithHeaders} as the value wrapper and wires up the
  * header-aware store stack (change-logging, caching, metering).
  */
-public class SessionStoreBuilderWithHeaders<K, V>
+public class SessionStoreWithHeadersBuilder<K, V>
     extends AbstractStoreBuilder<K, AggregationWithHeaders<V>, SessionStoreWithHeaders<K, V>> {
 
     private final SessionBytesStoreSupplier storeSupplier;
 
-    public SessionStoreBuilderWithHeaders(final SessionBytesStoreSupplier storeSupplier,
+    public SessionStoreWithHeadersBuilder(final SessionBytesStoreSupplier storeSupplier,
                                           final Serde<K> keySerde,
                                           final Serde<V> valueSerde,
                                           final Time time) {

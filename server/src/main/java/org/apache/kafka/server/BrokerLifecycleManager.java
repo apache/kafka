@@ -570,10 +570,10 @@ public class BrokerLifecycleManager {
                 return;
             }
             if (response.authenticationException() != null) {
-                logger.error("Unable to register broker $nodeId because of an authentication exception.", response.authenticationException());
+                logger.error("Unable to register broker {} because of an authentication exception.", nodeId, response.authenticationException());
                 scheduleNextCommunicationAfterFailure();
             } else if (response.versionMismatch() != null) {
-                logger.error("Unable to register broker $nodeId because of an API version problem.", response.versionMismatch());
+                logger.error("Unable to register broker {} because of an API version problem.", nodeId, response.versionMismatch());
                 scheduleNextCommunicationAfterFailure();
             } else if (response.responseBody() == null) {
                 logger.warn("Unable to register broker {}.", nodeId);

@@ -154,7 +154,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3));
 
         final StoreBuilder<SessionStoreWithHeaders<String, Long>> storeBuilder =
-            Stores.sessionStoreBuilderWithHeaders(supplier, Serdes.String(), Serdes.Long())
+            Stores.sessionStoreWithHeadersBuilder(supplier, Serdes.String(), Serdes.Long())
                 .withLoggingDisabled();
 
         if (enableCaching && emitStrategy.type() != EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {

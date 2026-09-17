@@ -16,16 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockRecordCollector;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -43,29 +35,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TimestampedSegmentsTest {
+public class TimestampedSegmentsTest extends AbstractSegmentsTest<TimestampedSegments> {
 
     private static final int NUM_SEGMENTS = 5;
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
     private static final String METRICS_SCOPE = "test-state-id";
-    private InternalMockProcessorContext context;
-    private TimestampedSegments segments;
-    private File stateDirectory;
     private final String storeName = "test";
 
-    @BeforeEach
-    public void createContext() {
-        stateDirectory = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext<>(
-            stateDirectory,
-            Serdes.String(),
-            Serdes.Long(),
-            new MockRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
-        );
-        segments = new TimestampedSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
-        segments.openExisting(context, -1L);
+    @Override
+    TimestampedSegments getSegments() {
+        return new TimestampedSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
     }
 
     @AfterEach
@@ -295,7 +275,7 @@ public class TimestampedSegmentsTest {
 
         segments = new TimestampedSegments(storeName, METRICS_SCOPE, NUM_SEGMENTS * segmentInterval, segmentInterval);
 
-        final String storeDirectoryPath = stateDirectory.getAbsolutePath() + File.separator + storeName;
+        final String storeDirectoryPath = context.stateDir().getAbsolutePath() + File.separator + storeName;
         final File storeDirectory = new File(storeDirectoryPath);
         //noinspection ResultOfMethodCallIgnored
         storeDirectory.mkdirs();
@@ -320,7 +300,7 @@ public class TimestampedSegmentsTest {
 
     @Test
     public void shouldUpdateSegmentFileNameFromOldColonFormatToNewFormat() throws Exception {
-        final String storeDirectoryPath = stateDirectory.getAbsolutePath() + File.separator + storeName;
+        final String storeDirectoryPath = context.stateDir().getAbsolutePath() + File.separator + storeName;
         final File storeDirectory = new File(storeDirectoryPath);
         //noinspection ResultOfMethodCallIgnored
         storeDirectory.mkdirs();

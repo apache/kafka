@@ -42,6 +42,7 @@ class TimestampedSegmentsWithHeaders extends AbstractSegments<TimestampedSegment
 
     @Override
     protected void openSegmentDB(final TimestampedSegmentWithHeaders segment, final StateStoreContext context) {
+        segment.setTaskId(context.taskId());
         segment.openDB(context.appConfigs(), context.stateDir());
     }
 

@@ -541,6 +541,7 @@ public class LogCleanerIntegrationTest {
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)
+    @SuppressWarnings("removal")
     public void cleanerConfigUpdateTest(CompressionType compressionType) throws Exception {
         Compression codec = Compression.of(compressionType).build();
         int largeMessageKey = 20;

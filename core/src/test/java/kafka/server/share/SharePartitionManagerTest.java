@@ -44,6 +44,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
@@ -111,6 +112,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import scala.Tuple2;
 import scala.collection.Seq;
@@ -3185,10 +3187,18 @@ public class SharePartitionManagerTest {
     }
 
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(List<TopicIdPartition> topicIdPartitions) {
+        return buildLogReadResult(topicIdPartitions, MemoryRecords.withRecords(
+            Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes())));
+    }
+
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildEmptyLogReadResult(List<TopicIdPartition> topicIdPartitions) {
+        return buildLogReadResult(topicIdPartitions, MemoryRecords.EMPTY);
+    }
+
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(List<TopicIdPartition> topicIdPartitions, Records records) {
         List<Tuple2<TopicIdPartition, LogReadResult>> logReadResults = new ArrayList<>();
         topicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
-            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), MemoryRecords.withRecords(
-                    Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes()))),
+            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), records),
             Optional.empty(),
             -1L,
             -1L,
@@ -3237,6 +3247,7 @@ public class SharePartitionManagerTest {
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;
+        private Supplier<Boolean> shareGroupDlqEnableSupplier = () -> false;
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -3273,6 +3284,11 @@ public class SharePartitionManagerTest {
             return this;
         }
 
+        private SharePartitionManagerBuilder withShareGroupDlqEnableSupplier(Supplier<Boolean> shareGroupDlqEnableSupplier) {
+            this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+            return this;
+        }
+
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
@@ -3290,7 +3306,8 @@ public class SharePartitionManagerTest {
                 persister,
                 new ShareGroupConfigProvider(mock(GroupConfigManager.class)),
                 shareGroupMetrics,
-                brokerTopicStats
+                brokerTopicStats,
+                shareGroupDlqEnableSupplier
             );
         }
     }

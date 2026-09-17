@@ -47,10 +47,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
@@ -88,14 +88,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private static final Properties PRODUCER_CONFIG_3 = new Properties();
 
     @BeforeAll
-    public static void startCluster() throws IOException, InterruptedException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
-        //Use multiple partitions to ensure distribution of keys.
-
-        CLUSTER.createTopic(TABLE_1, 3, 1);
-        CLUSTER.createTopic(TABLE_2, 5, 1);
-        CLUSTER.createTopic(TABLE_3, 7, 1);
-        CLUSTER.createTopic(OUTPUT, 11, 1);
 
         PRODUCER_CONFIG_1.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG_1.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -111,6 +105,30 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         PRODUCER_CONFIG_3.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG_3.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         PRODUCER_CONFIG_3.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+        CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-ktable-consumer");
+        CONSUMER_CONFIG.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
+        CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+    }
+
+    @AfterAll
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
+    @BeforeEach
+    public void before() throws Exception {
+        final String stateDirBasePath = TestUtils.tempDirectory().getPath();
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
+        streamsConfigTwo.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-2");
+        streamsConfigThree.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-3");
+
+        //Use multiple partitions to ensure distribution of keys.
+        CLUSTER.createTopic(TABLE_1, 3, 1);
+        CLUSTER.createTopic(TABLE_2, 5, 1);
+        CLUSTER.createTopic(TABLE_3, 7, 1);
+        CLUSTER.createTopic(OUTPUT, 11, 1);
 
         final List<KeyValue<Integer, Float>> table1 = asList(
             new KeyValue<>(1, 1.33f),
@@ -141,28 +159,10 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, PRODUCER_CONFIG_2, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, PRODUCER_CONFIG_3, MOCK_TIME);
-
-        CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-ktable-consumer");
-        CONSUMER_CONFIG.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
-        CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-    }
-
-    @AfterAll
-    public static void closeCluster() {
-        CLUSTER.stop();
-    }
-
-    @BeforeEach
-    public void before() throws IOException {
-        final String stateDirBasePath = TestUtils.tempDirectory().getPath();
-        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
-        streamsConfigTwo.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-2");
-        streamsConfigThree.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-3");
     }
 
     @AfterEach
-    public void after() throws IOException {
+    public void after() throws Exception {
         if (streams != null) {
             streams.close(Duration.ofSeconds(60));
             streams = null;
@@ -176,20 +176,26 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             streamsThree = null;
         }
         IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
+        CLUSTER.deleteTopics(TABLE_1, TABLE_2, TABLE_3, OUTPUT);
     }
 
-    @Test
-    public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldInnerJoinMultiPartitionQueryable(final boolean withHeaders) throws Exception {
         final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
         expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
 
-        verifyKTableKTableJoin(expectedOne);
+        verifyKTableKTableJoin(expectedOne, withHeaders);
     }
 
-    private void verifyKTableKTableJoin(final Set<KeyValue<Integer, String>> expectedResult) throws Exception {
+    private void verifyKTableKTableJoin(final Set<KeyValue<Integer, String>> expectedResult, final boolean withHeaders) throws Exception {
         final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
         final String queryableNameTwo = innerJoinType + "-store2";
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
 
         streams = prepareTopology(queryableName, queryableNameTwo, streamsConfig);
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);

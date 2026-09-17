@@ -41,7 +41,7 @@ public class ShareGroupConfigProvider {
      */
     public int recordLockDurationMsOrDefault(String groupId, int defaultValue) {
         return manager.groupConfig(groupId)
-            .map(GroupConfig::shareRecordLockDurationMs)
+            .flatMap(GroupConfig::shareRecordLockDurationMs)
             .orElse(defaultValue);
     }
 
@@ -55,7 +55,7 @@ public class ShareGroupConfigProvider {
      */
     public int deliveryCountLimitOrDefault(String groupId, int defaultValue) {
         return manager.groupConfig(groupId)
-            .map(GroupConfig::shareDeliveryCountLimit)
+            .flatMap(GroupConfig::shareDeliveryCountLimit)
             .orElse(defaultValue);
     }
 
@@ -69,7 +69,7 @@ public class ShareGroupConfigProvider {
      */
     public int partitionMaxRecordLocksOrDefault(String groupId, int defaultValue) {
         return manager.groupConfig(groupId)
-            .map(GroupConfig::sharePartitionMaxRecordLocks)
+            .flatMap(GroupConfig::sharePartitionMaxRecordLocks)
             .orElse(defaultValue);
     }
 
@@ -82,7 +82,7 @@ public class ShareGroupConfigProvider {
      */
     public boolean isRenewAcknowledgeEnabled(String groupId) {
         return manager.groupConfig(groupId)
-            .map(GroupConfig::shareRenewAcknowledgeEnable)
+            .flatMap(GroupConfig::shareRenewAcknowledgeEnable)
             .orElse(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT);
     }
 
@@ -95,7 +95,7 @@ public class ShareGroupConfigProvider {
      */
     public ShareGroupAutoOffsetResetStrategy autoOffsetReset(String groupId) {
         return manager.groupConfig(groupId)
-            .map(GroupConfig::shareAutoOffsetReset)
+            .flatMap(GroupConfig::shareAutoOffsetReset)
             .orElseGet(GroupConfig::defaultShareAutoOffsetReset);
     }
 }

@@ -57,7 +57,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                     materialized.keySerde(),
                     materialized.valueSerde());
         } else if (supplier instanceof HeadersBytesStoreSupplier) {
-            builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            builder = Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 supplier,
                 materialized.keySerde(),
                 materialized.valueSerde());

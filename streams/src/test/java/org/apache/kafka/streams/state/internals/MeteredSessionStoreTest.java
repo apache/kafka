@@ -103,6 +103,7 @@ public class MeteredSessionStoreTest {
     private static final Windowed<Bytes> WINDOWED_KEY_BYTES = new Windowed<>(KEY_BYTES, new SessionWindow(0, 0));
     private static final String VALUE = "value";
     private static final byte[] VALUE_BYTES = VALUE.getBytes();
+    private static final Headers HEADERS = new RecordHeaders();
     private static final long START_TIMESTAMP = 24L;
     private static final long END_TIMESTAMP = 42L;
     private static final int RETENTION_PERIOD = 100;
@@ -139,8 +140,7 @@ public class MeteredSessionStoreTest {
         setUpWithoutContext();
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         when(context.applicationId()).thenReturn(APPLICATION_ID);
-        when(context.metrics())
-                .thenReturn(new StreamsMetricsImpl(metrics, "test", mockTime));
+        when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", mockTime));
         when(context.taskId()).thenReturn(taskId);
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
         when(innerStore.name()).thenReturn(STORE_NAME);
@@ -187,12 +187,13 @@ public class MeteredSessionStoreTest {
         final Deserializer<String> valueDeserializer = mock(Deserializer.class);
         final Serializer<String> valueSerializer = mock(Serializer.class);
         when(keySerde.serializer()).thenReturn(keySerializer);
-        when(keySerializer.serialize(topic, new RecordHeaders(), KEY)).thenReturn(KEY.getBytes());
+        when(keySerializer.serialize(topic, HEADERS, KEY)).thenReturn(KEY.getBytes());
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-        when(valueDeserializer.deserialize(topic, new RecordHeaders(), VALUE_BYTES)).thenReturn(VALUE);
+        when(valueDeserializer.deserialize(topic, HEADERS, VALUE_BYTES)).thenReturn(VALUE);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
-        when(valueSerializer.serialize(topic, new RecordHeaders(), VALUE)).thenReturn(VALUE_BYTES);
+        when(valueSerializer.serialize(topic, HEADERS, VALUE)).thenReturn(VALUE_BYTES);
         when(innerStore.fetchSession(KEY_BYTES, START_TIMESTAMP, END_TIMESTAMP)).thenReturn(VALUE_BYTES);
+        when(context.headers()).thenReturn(HEADERS);
         store = new MeteredSessionStore<>(
             innerStore,
             STORE_TYPE,

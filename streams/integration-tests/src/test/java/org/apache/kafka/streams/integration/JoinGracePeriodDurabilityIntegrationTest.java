@@ -42,9 +42,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -88,8 +89,9 @@ public class JoinGracePeriodDurabilityIntegrationTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final long COMMIT_INTERVAL = 100L;
 
-    @Test
-    public void shouldRecoverBufferAfterShutdown(final TestInfo testInfo) {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldRecoverBufferAfterShutdown(final boolean withHeaders, final TestInfo testInfo) {
         final String testId = safeUniqueTestName(testInfo);
         final String appId = "appId_" + testId;
         final String streamInput = "Streaminput" + testId;
@@ -126,7 +128,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
 
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
 
-        KafkaStreams driver = getStartedStreams(streamsConfig, builder, true);
+        KafkaStreams driver = startStream(streamsConfig, builder, true, withHeaders);
         try {
             produceSynchronouslyToPartitionZero(
                 tableInput,
@@ -170,7 +172,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             // restart the driver
             driver.close();
             assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
-            driver = getStartedStreams(streamsConfig, builder, false);
+            driver = startStream(streamsConfig, builder, false, withHeaders);
 
 
             // flush those recovered buffered events out.
@@ -224,5 +226,15 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
         IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, Optional.of(0), toProduce);
+    }
+
+    private KafkaStreams startStream(
+        final Properties streamsConfig,
+        final StreamsBuilder builder,
+        final boolean clean,
+        final boolean withHeaders) {
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        return getStartedStreams(streamsConfig, builder, clean);
     }
 }

@@ -504,7 +504,7 @@ abstract class EmbeddedConnect {
         } catch (IOException e) {
             log.error("Could not read connector state from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse connector state", e);
+            throw new ConnectException("Could not parse connector state", e);
         }
     }
     /**
@@ -525,7 +525,7 @@ abstract class EmbeddedConnect {
                 log.error("Could not parse connector list from response: {}",
                         responseToString(response), e
                 );
-                throw new ConnectException("Could not not parse connector list", e);
+                throw new ConnectException("Could not parse connector list", e);
             }
         }
         throw new ConnectRestException(response.getStatus(),
@@ -552,7 +552,7 @@ abstract class EmbeddedConnect {
         } catch (IOException e) {
             log.error("Could not read connector state from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse connector state", e);
+            throw new ConnectException("Could not parse connector state", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read connector state. Error response: " + responseToString(response));
@@ -581,7 +581,7 @@ abstract class EmbeddedConnect {
         } catch (IOException e) {
             log.error("Could not read connector state from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse connector state", e);
+            throw new ConnectException("Could not parse connector state", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read connector state. Error response: " + responseToString(response));
@@ -604,7 +604,7 @@ abstract class EmbeddedConnect {
         } catch (IOException e) {
             log.error("Could not read connector info from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse connector info", e);
+            throw new ConnectException("Could not parse connector info", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read connector info. Error response: " + responseToString(response));
@@ -629,7 +629,7 @@ abstract class EmbeddedConnect {
         } catch (IOException e) {
             log.error("Could not read task configs from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse task configs", e);
+            throw new ConnectException("Could not parse task configs", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read task configs. Error response: " + responseToString(response));
@@ -668,7 +668,7 @@ abstract class EmbeddedConnect {
                 return mapper.readerFor(ConnectorOffsets.class).readValue(responseToString(response));
             }
         } catch (IOException e) {
-            throw new ConnectException("Could not not parse connector offsets", e);
+            throw new ConnectException("Could not parse connector offsets", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not fetch connector offsets. Error response: " + responseToString(response));
@@ -768,7 +768,7 @@ abstract class EmbeddedConnect {
             } catch (IOException e) {
                 log.error("Could not read logger level from response: {}",
                         responseToString(response), e);
-                throw new ConnectException("Could not not parse logger level", e);
+                throw new ConnectException("Could not parse logger level", e);
             }
         } else {
             throw new ConnectRestException(
@@ -796,7 +796,7 @@ abstract class EmbeddedConnect {
             } catch (IOException e) {
                 log.error("Could not read logger levels from response: {}",
                         responseToString(response), e);
-                throw new ConnectException("Could not not parse logger levels", e);
+                throw new ConnectException("Could not parse logger levels", e);
             }
         } else {
             throw new ConnectRestException(
@@ -842,7 +842,7 @@ abstract class EmbeddedConnect {
             } catch (IOException e) {
                 log.error("Could not read loggers from response: {}",
                         responseToString(response), e);
-                throw new ConnectException("Could not not parse loggers", e);
+                throw new ConnectException("Could not parse loggers", e);
             }
         } else {
             throw new ConnectRestException(

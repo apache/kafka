@@ -45,6 +45,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -273,8 +274,9 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         overwritePersistedStoreStatusToOpen();
 
-        final ProcessorStateException stateException = assertThrows(ProcessorStateException.class, () -> rocksDBStore.init(eosContext, rocksDBStore));
-        assertEquals("State store " + DB_NAME + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores", stateException.getMessage());
+        final TaskCorruptedException stateException = assertThrows(TaskCorruptedException.class, () -> rocksDBStore.init(eosContext, rocksDBStore));
+        assertEquals("Tasks [0_0] are corrupted and hence need to be re-initialized", stateException.getMessage());
+        assertEquals("State store " + DB_NAME + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores", stateException.getCause().getMessage());
         rocksDBStore.close();
     }
 

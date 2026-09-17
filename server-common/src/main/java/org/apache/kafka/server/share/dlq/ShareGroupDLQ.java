@@ -30,12 +30,8 @@ public interface ShareGroupDLQ {
         }
     }
 
-    Throwable STALE_BATCH = new ShareGroupDLQThrowable("Offset part of stale batch.");
-    Throwable BEHIND_LSO = new ShareGroupDLQThrowable("Offset before LSO.");
-    Throwable ABORTED_TRANSACTION = new ShareGroupDLQThrowable("Offset part of aborted transaction.");
     Throwable CLIENT_REJECT = new ShareGroupDLQThrowable("Offset rejected by client.");
     Throwable DELIVERY_COUNT_EXCEEDED = new ShareGroupDLQThrowable("Offset delivery count exceeded the threshold.");
-    Throwable ACQUISITION_LOCK_TIMEOUT = new ShareGroupDLQThrowable("Acquisition lock timed out.");
 
     /**
      * Main method exposed to the world to enqueuing a record to the share groups dead letter queue.

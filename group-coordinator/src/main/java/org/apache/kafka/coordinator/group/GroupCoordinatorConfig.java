@@ -28,14 +28,11 @@ import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssign
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
-import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -851,54 +848,6 @@ public class GroupCoordinatorConfig {
         }
 
         return assignors;
-    }
-
-    /**
-     * Copy the subset of properties that are relevant to consumer group, share group and streams group.
-     */
-    public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
-        Map<String, Integer> defaultConfigs = new HashMap<>();
-        defaultConfigs.putAll(extractConsumerGroupConfigMap());
-        defaultConfigs.putAll(extractShareGroupConfigMap(shareGroupConfig));
-        defaultConfigs.putAll(extractStreamsGroupConfigMap());
-        return Collections.unmodifiableMap(defaultConfigs);
-    }
-
-    /**
-     * Copy the subset of properties that are relevant to consumer group.
-     */
-    public Map<String, Integer> extractConsumerGroupConfigMap() {
-        return Map.of(
-            GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs(),
-            GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
-    }
-
-    /**
-     * Copy the subset of properties that are relevant to share group. These configs include those which can be set
-     * statically (for all groups) or dynamically (for a specific group). In those cases, the default value for the
-     * group specific dynamic config (Ex. share.session.timeout.ms) should be the value set for the static config
-     * (Ex. group.share.session.timeout.ms).
-     */
-    public Map<String, Integer> extractShareGroupConfigMap(ShareGroupConfig shareGroupConfig) {
-        return Map.of(
-            GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, this.shareGroupSessionTimeoutMs(),
-            GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, this.shareGroupHeartbeatIntervalMs(),
-            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupConfig.shareGroupRecordLockDurationMs(),
-            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupConfig.shareGroupDeliveryCountLimit(),
-            GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupConfig.shareGroupPartitionMaxRecordLocks()
-        );
-    }
-
-    /**
-     * Copy the subset of properties that are relevant to streams group.
-     */
-    public Map<String, Integer> extractStreamsGroupConfigMap() {
-        return Map.of(
-            GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, streamsGroupSessionTimeoutMs(),
-            GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, streamsGroupHeartbeatIntervalMs(),
-            GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, streamsGroupNumStandbyReplicas(),
-            GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, streamsGroupInitialRebalanceDelayMs(),
-            GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, streamsGroupTaskOffsetIntervalMs());
     }
 
     /**

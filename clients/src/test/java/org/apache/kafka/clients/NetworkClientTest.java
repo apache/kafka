@@ -59,6 +59,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -1448,6 +1449,102 @@ public class NetworkClientTest {
             this.executed = true;
             this.response = response;
         }
+    }
+
+    @Test
+    public void testStickyNodeDoesNotUseStaleIpOnReconnect() throws UnknownHostException {
+        String staleIp = "10.200.20.100";
+        String freshIp  = "10.200.20.200";
+        // Both nodes share the same id to simulate a broker whose IP changed (e.g. pod replacement).
+        Node staleNode  = new Node(0, staleIp, 9092);
+        Node freshNode  = new Node(0, freshIp, 9092);
+
+        List<InetSocketAddress> connectAttempts = new ArrayList<>();
+        // boolean array so the anonymous subclass can mutate it
+        boolean[] disconnectDuringPoll = {false};
+
+        // Custom selector that (a) captures every connect address and
+        // (b) can inject a server-side disconnect INSIDE selector.poll(), simulating a
+        // disconnect detected after telemetrySender.maybeUpdate() already ran with the channel ready.
+        MockSelector capturingSelector = new MockSelector(time) {
+            @Override
+            public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize)
+                    throws IOException {
+                connectAttempts.add(address);
+                super.connect(id, address, sendBufferSize, receiveBufferSize);
+            }
+
+            @Override
+            public void poll(long timeout) throws IOException {
+                if (disconnectDuringPoll[0]) {
+                    serverDisconnect("0");
+                    disconnectDuringPoll[0] = false;
+                }
+                super.poll(timeout);
+            }
+        };
+
+        ClientTelemetrySender mockTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+        when(mockTelemetrySender.createRequest()).thenReturn(Optional.empty());
+
+        ManualMetadataUpdater updater = new ManualMetadataUpdater(Collections.singletonList(staleNode));
+
+        NetworkClient testClient = new NetworkClient(
+                updater, null, capturingSelector, "test-client",
+                Integer.MAX_VALUE,
+                0L, 0L,   // reconnectBackoffMs = 0 for instant reconnect
+                64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs,
+                connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, false, new ApiVersions(), null,
+                new LogContext(), new DefaultHostResolver(),
+                mockTelemetrySender, Long.MAX_VALUE,
+                MetadataRecoveryStrategy.NONE);
+
+        long now = time.milliseconds();
+
+        // Poll 1: stickyNode = null → staleNode; canSendRequest = false (not yet connected);
+        //         initiateConnect(staleNode); handleConnections → connectionStates["0"] = READY
+        testClient.poll(0, now);
+        assertEquals(1, connectAttempts.size());
+        assertEquals(InetAddress.getByName(staleIp), connectAttempts.get(0).getAddress());
+        connectAttempts.clear();
+
+        // Poll 2: stickyNode = null → staleNode; canSendRequest = TRUE (READY);
+        //         createRequest() = empty → stickyNode = staleNode KEPT (not cleared)
+        testClient.poll(0, now);
+        assertTrue(connectAttempts.isEmpty(), "No new connect expected in poll 2");
+        assertEquals(staleNode, testClient.telemetryConnectedNode());
+
+        // Broker replaced: metadata now points to freshNode (new IP)
+        updater.setNodes(Collections.singletonList(freshNode));
+
+        // Schedule the disconnect to fire INSIDE selector.poll() on the next NetworkClient.poll().
+        // This simulates a disconnect detected after telemetrySender.maybeUpdate() already ran:
+        //   - telemetrySender.maybeUpdate() runs first → channel still READY at this moment
+        //     → fix detects host mismatch → stickyNode updated to freshNode
+        //   - selector.poll() triggers the disconnect
+        //   - handleDisconnections() sets connectionStates["0"] = DISCONNECTED
+        disconnectDuringPoll[0] = true;
+
+        // Poll 3: fix detects that stickyNode's host differs from metadata → stickyNode = freshNode;
+        //         selector.poll() fires serverDisconnect("0");
+        //         handleDisconnections → connectionStates["0"] = DISCONNECTED
+        testClient.poll(0, now);
+        assertTrue(connectAttempts.isEmpty(), "No new connect expected in poll 3");
+        assertEquals(freshNode, testClient.telemetryConnectedNode(),
+                "fix must update stickyNode to freshNode when host mismatch is detected");
+
+        // Poll 4: stickyNode = freshNode, connectionStates["0"] = DISCONNECTED
+        //   canSendRequest = false → stickyNode = null
+        //   canConnect = true → initiateConnect with freshNode's IP
+        //   FIXED: connects to freshIp (10.200.20.200)
+        testClient.poll(0, now);
+
+        assertFalse(connectAttempts.isEmpty(), "Expected a reconnect attempt in poll 4");
+        assertEquals(InetAddress.getByName(freshIp), connectAttempts.get(0).getAddress(),
+                "Reconnect must use the fresh IP from updated metadata, not the stale IP from stickyNode");
     }
 
     // ManualMetadataUpdater with ability to keep track of failures
