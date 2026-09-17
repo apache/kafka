@@ -75,6 +75,7 @@ public class ShareFetchCollectorTest {
     private static final int DEFAULT_MAX_POLL_RECORDS = ConsumerConfig.DEFAULT_MAX_POLL_RECORDS;
     private static final Optional<Integer> DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS = Optional.of(30000);
     private final TopicIdPartition topicAPartition0 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic-a");
+    private final TopicIdPartition topicAPartition1 = new TopicIdPartition(topicAPartition0.topicId(), 1, "topic-a");
     private LogContext logContext;
 
     private SubscriptionState subscriptions;
@@ -221,6 +222,51 @@ public class ShareFetchCollectorTest {
         fetch.takeAcknowledgedRecords();
 
         // Nothing should remain buffered.
+        assertTrue(fetchBuffer.bufferedPartitions().isEmpty());
+        assertTrue(fetchBuffer.bufferedNodes().isEmpty());
+    }
+
+    @ParameterizedTest
+    @MethodSource("testErrorInInitializeSource")
+    public void testErrorInInitializeDoesNotLoseRecordsFromEarlierPartitions(RuntimeException expectedException) {
+        buildDependencies();
+        subscriptions.subscribe(Set.of(topicAPartition0.topic()));
+        subscriptions.assignFromSubscribed(Set.of(topicAPartition0.topicPartition(), topicAPartition1.topicPartition()));
+
+        // Create a ShareFetchCollector that fails on ShareCompletedFetch initialization for partition 1 only.
+        fetchCollector = new ShareFetchCollector<>(logContext,
+                metadata,
+                subscriptions,
+                shareFetchConfig,
+                deserializers) {
+
+            @Override
+            protected ShareCompletedFetch initialize(final ShareCompletedFetch completedFetch) {
+                if (completedFetch.partition.equals(topicAPartition1)) {
+                    throw expectedException;
+                }
+                return super.initialize(completedFetch);
+            }
+        };
+
+        // The failure is only discovered once partition 0's records have already been drained.
+        ShareCompletedFetch goodFetch = completedFetchBuilder.recordCount(2).build();
+        ShareCompletedFetch badFetch = completedFetchBuilder.partition(topicAPartition1).build();
+        fetchBuffer.add(List.of(goodFetch, badFetch));
+
+        // The records already collected must be returned, not dropped on the floor.
+        ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
+        assertEquals(2, fetch.numRecords());
+        assertEquals(2, fetch.records().get(topicAPartition0.topicPartition()).size());
+
+        // The failing fetch stays at the head of the queue and is surfaced on the next collect.
+        assertEquals(badFetch, fetchBuffer.peek());
+        assertThrows(expectedException.getClass(), () -> fetchCollector.collect(fetchBuffer));
+        assertTrue(fetchBuffer.isEmpty());
+
+        // Acknowledging the records that were delivered releases the completed fetch which carried them.
+        fetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+        fetch.takeAcknowledgedRecords();
         assertTrue(fetchBuffer.bufferedPartitions().isEmpty());
         assertTrue(fetchBuffer.bufferedNodes().isEmpty());
     }
@@ -408,6 +454,13 @@ public class ShareFetchCollectorTest {
 
         private Errors error = null;
 
+        private TopicIdPartition partition = topicAPartition0;
+
+        private ShareCompletedFetchBuilder partition(TopicIdPartition partition) {
+            this.partition = partition;
+            return this;
+        }
+
         private ShareCompletedFetchBuilder recordCount(int recordCount) {
             this.recordCount = recordCount;
             return this;
@@ -438,7 +491,7 @@ public class ShareFetchCollectorTest {
             }
 
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                    .setPartitionIndex(topicAPartition0.partition())
+                    .setPartitionIndex(partition.partition())
                     .setRecords(records)
                     .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(baseOffset, recordCount));
 
@@ -449,7 +502,7 @@ public class ShareFetchCollectorTest {
                     logContext,
                     BufferSupplier.create(),
                     0,
-                    topicAPartition0,
+                    partition,
                     partitionData,
                     DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
                     shareFetchMetricsAggregator,

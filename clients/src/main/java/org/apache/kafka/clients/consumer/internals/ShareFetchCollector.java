@@ -118,7 +118,10 @@ public class ShareFetchCollector<K, V> {
                     }
                 }
             }
-        } catch (KafkaException e) {
+        } catch (RuntimeException e) {
+            // Records already collected from other partitions must be returned rather than lost, otherwise
+            // they can never be acknowledged and the completed fetches which delivered them will never be drained.
+            // The failing fetch is still at the head of the queue and will be handled again on the next poll.
             if (fetch.isEmpty()) {
                 throw e;
             }
