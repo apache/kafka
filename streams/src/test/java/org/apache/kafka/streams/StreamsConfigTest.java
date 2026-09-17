@@ -295,11 +295,15 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldEnforceSynchronousBootstrapResolutionForAllClientsByDefault() {
-        assertEquals(0L, streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
-        assertEquals(0L, streamsConfig.getRestoreConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
-        assertEquals(0L, streamsConfig.getGlobalConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
-        assertEquals(0L, streamsConfig.getProducerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
-        assertEquals(0L, streamsConfig.getAdminConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertBootstrapResolveTimeoutIsZeroForAllClients(streamsConfig);
+    }
+
+    private void assertBootstrapResolveTimeoutIsZeroForAllClients(final StreamsConfig streamsConfig) {
+        assertEquals("0", streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals("0", streamsConfig.getRestoreConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals("0", streamsConfig.getGlobalConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals("0", streamsConfig.getProducerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals("0", streamsConfig.getAdminConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
     }
 
     @Test
@@ -313,11 +317,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.adminClientPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
-        assertEquals(0L, streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
-        assertEquals(0L, streamsConfig.getRestoreConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
-        assertEquals(0L, streamsConfig.getGlobalConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
-        assertEquals(0L, streamsConfig.getProducerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
-        assertEquals(0L, streamsConfig.getAdminConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertBootstrapResolveTimeoutIsZeroForAllClients(streamsConfig);
     }
 
     @Test
@@ -335,15 +335,37 @@ public class StreamsConfigTest {
             streamsConfig.getAdminConfigs(clientId);
 
             final List<String> warnings = appender.getMessages().stream()
-                .filter(msg -> msg.contains("config 'bootstrap.resolve.timeout.ms' found") && msg.contains("User setting (120000) will be ignored"))
+                .filter(msg -> msg.contains("config 'bootstrap.resolve.timeout.ms' found")
+                    && msg.contains("User setting (120000) will be ignored and the Streams default setting (0) will be used"))
                 .collect(Collectors.toList());
-            assertEquals(5, warnings.size(), "Should log exactly one warning per client type, got: " + warnings);
-            for (final String clientType : List.of("consumer", "restore consumer", "global consumer", "producer", "admin")) {
-                assertTrue(
-                    warnings.stream().anyMatch(msg -> msg.contains("Unexpected user-specified " + clientType + " config")),
-                    "Missing warning for " + clientType + " in: " + warnings
-                );
-            }
+            assertEquals(5, warnings.size(), "Should log exactly one warning per client, got: " + warnings);
+            // main, restore, and global consumer
+            assertEquals(3, warnings.stream().filter(msg -> msg.contains("Unexpected user-specified consumer config")).count());
+            assertEquals(1, warnings.stream().filter(msg -> msg.contains("Unexpected user-specified producer config")).count());
+            assertEquals(1, warnings.stream().filter(msg -> msg.contains("Unexpected user-specified admin config")).count());
+        }
+    }
+
+    @Test
+    public void shouldNotLogWarningWhenUserSpecifiedBootstrapResolveTimeoutMatchesStreamsDefault() {
+        // typed and String forms of the default must both be accepted silently
+        props.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, 0L);
+        props.put(StreamsConfig.producerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "0");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            streamsConfig.getRestoreConsumerConfigs(clientId);
+            streamsConfig.getGlobalConsumerConfigs(clientId);
+            streamsConfig.getProducerConfigs(clientId);
+            streamsConfig.getAdminConfigs(clientId);
+
+            assertTrue(
+                appender.getMessages().stream().noneMatch(msg -> msg.contains("config 'bootstrap.resolve.timeout.ms' found")),
+                "Unexpected warning(s): " + appender.getMessages()
+            );
         }
     }
 

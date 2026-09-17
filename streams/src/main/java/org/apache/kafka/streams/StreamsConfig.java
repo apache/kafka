@@ -893,6 +893,9 @@ public class StreamsConfig extends AbstractConfig {
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
     private static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
 
+    // configs that are locked down for every client Kafka Streams creates (consumers, producer, and admin client)
+    private static final String[] NON_CONFIGURABLE_CLIENT_CONFIGS =
+        new String[] {CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
         new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.GROUP_PROTOCOL_CONFIG, ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
@@ -1375,9 +1378,17 @@ public class StreamsConfig extends AbstractConfig {
                     TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC);
     }
 
+    // overrides that apply to every client Kafka Streams creates; they are merged into the
+    // consumer, producer, and admin client override maps below
+    private static final Map<String, Object> COMMON_CLIENT_OVERRIDES = Map.of(
+        // Kafka Streams does not support asynchronous bootstrap resolution
+        CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "0"
+    );
+
     // this is the list of configs for underlying clients
     // that streams prefer different default values
-    private static final Map<String, Object> PRODUCER_DEFAULT_OVERRIDES = Map.of(ProducerConfig.LINGER_MS_CONFIG, "100");
+    private static final Map<String, Object> PRODUCER_DEFAULT_OVERRIDES =
+        withCommonClientOverrides(Map.of(ProducerConfig.LINGER_MS_CONFIG, "100"));
 
     private static final Map<String, Object> PRODUCER_EOS_OVERRIDES;
     static {
@@ -1391,13 +1402,13 @@ public class StreamsConfig extends AbstractConfig {
         PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
-    private static final Map<String, Object> CONSUMER_DEFAULT_OVERRIDES = Map.of(
+    private static final Map<String, Object> CONSUMER_DEFAULT_OVERRIDES = withCommonClientOverrides(Map.of(
         ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000",
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
         ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
         ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic",
         ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false"
-    );
+    ));
 
     private static final Map<String, Object> CONSUMER_EOS_OVERRIDES;
     static {
@@ -1407,7 +1418,13 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private static final Map<String, Object> ADMIN_CLIENT_OVERRIDES =
-        Map.of(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
+        withCommonClientOverrides(Map.of(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true));
+
+    private static Map<String, Object> withCommonClientOverrides(final Map<String, Object> overrides) {
+        final Map<String, Object> merged = new HashMap<>(COMMON_CLIENT_OVERRIDES);
+        merged.putAll(overrides);
+        return Collections.unmodifiableMap(merged);
+    }
 
     public static class InternalConfig {
         // This is settable in the main Streams config, but it's a private API for now
@@ -1795,8 +1812,9 @@ public class StreamsConfig extends AbstractConfig {
 
         clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
 
-        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
-        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CLIENT_CONFIGS, "consumer");
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS, "consumer");
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS, "consumer");
 
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
         if (StreamsConfigUtils.eosEnabled(this)) {
@@ -1811,22 +1829,10 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void enforceSynchronousBootstrapResolution(final Map<String, Object> clientProps, final String clientType) {
-        final Object userValue = clientProps.get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
-        if (userValue != null && !userValue.toString().equals("0")) {
-            log.warn("Unexpected user-specified {} config '{}' found. Kafka Streams does not support asynchronous" +
-                    " bootstrap resolution. User setting ({}) will be ignored and 0 will be used instead.",
-                clientType,
-                CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
-                userValue
-            );
-        }
-        clientProps.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, 0L);
-    }
-
     private void checkIfUnexpectedUserSpecifiedClientConfig(final Map<String, Object> clientProvidedProps,
-                                                            final String[] nonConfigurableConfigs) {
-        // Streams does not allow users to configure certain client configurations (consumer/producer),
+                                                            final String[] nonConfigurableConfigs,
+                                                            final String clientType) {
+        // Streams does not allow users to configure certain client configurations (consumer/producer/admin),
         // for example, enable.auto.commit or transactional.id. In cases where user tries to override
         // such non-configurable client configurations, log a warning and remove the user defined value
         // from the Map. Thus, the default values for these client configurations that are suitable for
@@ -1838,8 +1844,20 @@ public class StreamsConfig extends AbstractConfig {
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
 
-                if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
-                    if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
+                if (COMMON_CLIENT_OVERRIDES.containsKey(config)) {
+                    if (!isSameConfigValue(clientProvidedProps.get(config), COMMON_CLIENT_OVERRIDES.get(config))) {
+                        log.warn(
+                            nonConfigurableConfigMessage,
+                            clientType,
+                            config,
+                            "User",
+                            clientProvidedProps.get(config),
+                            COMMON_CLIENT_OVERRIDES.get(config)
+                        );
+                        clientProvidedProps.remove(config);
+                    }
+                } else if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
+                    if (!isSameConfigValue(clientProvidedProps.get(config), CONSUMER_DEFAULT_OVERRIDES.get(config))) {
                         log.error(
                             nonConfigurableConfigMessage,
                             "consumer",
@@ -1852,7 +1870,7 @@ public class StreamsConfig extends AbstractConfig {
                     }
                 } else if (eosEnabled) {
                     if (CONSUMER_EOS_OVERRIDES.containsKey(config)) {
-                        if (!clientProvidedProps.get(config).equals(CONSUMER_EOS_OVERRIDES.get(config))) {
+                        if (!isSameConfigValue(clientProvidedProps.get(config), CONSUMER_EOS_OVERRIDES.get(config))) {
                             log.warn(
                                 nonConfigurableConfigMessage,
                                 "consumer",
@@ -1864,7 +1882,7 @@ public class StreamsConfig extends AbstractConfig {
                             clientProvidedProps.remove(config);
                         }
                     } else if (PRODUCER_EOS_OVERRIDES.containsKey(config)) {
-                        if (!clientProvidedProps.get(config).equals(PRODUCER_EOS_OVERRIDES.get(config))) {
+                        if (!isSameConfigValue(clientProvidedProps.get(config), PRODUCER_EOS_OVERRIDES.get(config))) {
                             log.warn(
                                 nonConfigurableConfigMessage,
                                 "producer",
@@ -1893,6 +1911,12 @@ public class StreamsConfig extends AbstractConfig {
         if (eosEnabled) {
             verifyMaxInFlightRequestPerConnection(clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
         }
+    }
+
+    // user-provided values may be Strings (e.g. from a Properties file) while the Streams defaults
+    // may be typed, or vice versa; compare their String representations to avoid spurious warnings
+    private static boolean isSameConfigValue(final Object userValue, final Object streamsDefault) {
+        return String.valueOf(userValue).equals(String.valueOf(streamsDefault));
     }
 
     private void verifyMaxInFlightRequestPerConnection(final Object maxInFlightRequests) {
@@ -1937,9 +1961,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get main consumer override configs
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
-        checkIfUnexpectedUserSpecifiedClientConfig(mainConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(mainConsumerProps, NON_CONFIGURABLE_CLIENT_CONFIGS, "consumer");
+        checkIfUnexpectedUserSpecifiedClientConfig(mainConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS, "consumer");
         consumerProps.putAll(mainConsumerProps);
-        enforceSynchronousBootstrapResolution(consumerProps, "consumer");
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
@@ -2011,9 +2035,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get restore consumer override configs
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
-        checkIfUnexpectedUserSpecifiedClientConfig(restoreConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(restoreConsumerProps, NON_CONFIGURABLE_CLIENT_CONFIGS, "consumer");
+        checkIfUnexpectedUserSpecifiedClientConfig(restoreConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS, "consumer");
         baseConsumerProps.putAll(restoreConsumerProps);
-        enforceSynchronousBootstrapResolution(baseConsumerProps, "restore consumer");
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -2046,9 +2070,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
-        checkIfUnexpectedUserSpecifiedClientConfig(globalConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(globalConsumerProps, NON_CONFIGURABLE_CLIENT_CONFIGS, "consumer");
+        checkIfUnexpectedUserSpecifiedClientConfig(globalConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS, "consumer");
         baseConsumerProps.putAll(globalConsumerProps);
-        enforceSynchronousBootstrapResolution(baseConsumerProps, "global consumer");
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -2075,7 +2099,8 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getProducerConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
-        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CLIENT_CONFIGS, "producer");
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS, "producer");
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
@@ -2085,8 +2110,6 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
-
-        enforceSynchronousBootstrapResolution(props, "producer");
 
         return props;
     }
@@ -2100,14 +2123,14 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getAdminConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames());
 
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CLIENT_CONFIGS, "admin");
+
         final Map<String, Object> props = new HashMap<>(ADMIN_CLIENT_OVERRIDES);
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
-
-        enforceSynchronousBootstrapResolution(props, "admin");
 
         return props;
     }
