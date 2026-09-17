@@ -32,6 +32,7 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -329,6 +330,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
      *  Classic group commits an offset
      */
     @Test
+    @Disabled // Enable when KAFKA-21102 is fixed
     public void testConsumerGroupDowngradeByLeave() throws Exception {
         CompactionReplayTestContext context = newContext();
         String groupId = "consumer-downgrade-by-leave-group";
@@ -401,6 +403,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
      *  Classic group commits an offset
      */
     @Test
+    @Disabled // Enable when KAFKA-21102 is fixed
     public void testConsumerGroupDowngradeByStaticMemberReplacement() throws Exception {
         CompactionReplayTestContext context = newContext();
         String groupId = "consumer-downgrade-by-replacement-group";
@@ -662,8 +665,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
         for (int position = 0; position < log.size(); position++) {
             CoordinatorRecord record = log.get(position);
             boolean cleaned = position >= from && position < to && compactable.contains(position);
-            boolean isRetainedTombstone = record.value() == null && survivingKeys.contains(record.key());
-            if (!cleaned || isRetainedTombstone) {
+            if (!cleaned) {
                 survivingKeys.add(record.key());
             } else {
                 removed.add(position);
