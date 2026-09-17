@@ -93,13 +93,11 @@ import java.util.concurrent.TimeUnit;
  * <pre>
  * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p event=FULL,STABLE,JOIN_ONE \
  *     -p distribution=EQUAL -p subscription=HOMOGENEOUS ConsumerAssignorBenchmark
- *
  * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p memberCount=10000 -p topicCount=1000 \
  *     -p subscription=HOMOGENEOUS,HETEROGENEOUS_NESTED ConsumerAssignorBenchmark
  * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p memberCount=20 -p topicCount=10000 \
  *     -p subscription=HOMOGENEOUS ConsumerAssignorBenchmark
  * </pre>
- * The GC profiler reports the bytes allocated per assignment.
  */
 @State(Scope.Benchmark)
 @Fork(value = 1)
