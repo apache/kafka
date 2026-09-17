@@ -19,6 +19,8 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 
+import java.lang.reflect.Array;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -226,12 +228,44 @@ public class TopicIds implements Set<Uuid> {
 
     @Override
     public Object[] toArray() {
-        throw new UnsupportedOperationException();
+        var topicIds = new Object[topicNames.size()];
+        var count = fill(topicIds);
+        return count == topicIds.length ? topicIds : Arrays.copyOf(topicIds, count);
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
-        throw new UnsupportedOperationException();
+        var size = topicNames.size();
+        var topicIds = a.length >= size
+            ? a
+            : (T[]) Array.newInstance(a.getClass().getComponentType(), size);
+        var count = fill(topicIds);
+        if (count < topicIds.length) {
+            if (topicIds == a) {
+                topicIds[count] = null;
+            } else {
+                topicIds = Arrays.copyOf(topicIds, count);
+            }
+        }
+        return topicIds;
+    }
+
+    /**
+     * Fills the array with the ids of the topic names which resolve, in the order of the names.
+     *
+     * @return The number of ids, which is below the size when a topic name has no id, its
+     *         topic having been deleted.
+     */
+    private int fill(Object[] topicIds) {
+        var count = 0;
+        for (var topicName : topicNames) {
+            var topicId = resolver.id(topicName);
+            if (topicId != null) {
+                topicIds[count++] = topicId;
+            }
+        }
+        return count;
     }
 
     @Override
