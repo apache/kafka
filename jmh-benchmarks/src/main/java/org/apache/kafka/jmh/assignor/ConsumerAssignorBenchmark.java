@@ -72,11 +72,9 @@ import java.util.concurrent.TimeUnit;
  *     <li>{@code memberCount}: the number of members when the assignment is computed.</li>
  *     <li>{@code topicCount}: the number of subscribed topics.</li>
  *     <li>{@code partitionCount}: the number of partitions over all topics.</li>
- *     <li>{@code topology}: how the partitions are split over the topics, see {@link Topology}.
- *     Every topic has at least one partition.</li>
- *     <li>{@code subscription}: how the members subscribe, see {@link Subscription}. The
- *     heterogeneous subscriptions put the members in five buckets, member {@code i} being in
- *     bucket {@code i mod 5}, see {@link GroupBuilder}.</li>
+ *     <li>{@code distribution}: how the partitions are split over the topics, see
+ *     {@link Distribution}. Every topic has at least one partition.</li>
+ *     <li>{@code subscription}: how the members subscribe, see {@link Subscription}.</li>
  *     <li>{@code rack}: whether the members have a rack, see {@link Rack}. Assignors which do
  *     not use racks give the same results for both values.</li>
  *     <li>{@code assignor}: the assignor.</li>
@@ -86,23 +84,22 @@ import java.util.concurrent.TimeUnit;
  *     indices, so they are spread over the buckets.</li>
  * </ul>
  *
- * <p>The full grid is a menu rather than a run. Three runs cover the points of interest: the
- * first one for scaling, the other two for the cost of the events on a large group with many
- * topics and on a small group with very many topics. The largest points hold ten thousand
- * members subscribing to ten thousand topics, which takes about 4 GB of heap for the
- * subscriptions alone, as it would in the coordinator: pass {@code -jvmArgs -Xmx8g} when the
- * default heap is smaller.
+ * <p>The parameters form 5040 combinations, too many to run at once. Three runs cover what
+ * matters: the first for scaling with the group size, the two others for the cost of the events
+ * on a large group with many topics and on a small group with very many topics. The largest
+ * combinations hold ten thousand members subscribing to ten thousand topics; the subscriptions
+ * alone take about 4 GB of heap, as they would in the coordinator, so pass
+ * {@code -jvmArgs -Xmx8g} when the default heap of the JMH forks is smaller.
  * <pre>
  * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p event=FULL,STABLE,JOIN_ONE \
- *     -p topology=EQUAL -p subscription=HOMOGENEOUS ConsumerAssignorBenchmark
+ *     -p distribution=EQUAL -p subscription=HOMOGENEOUS ConsumerAssignorBenchmark
  *
  * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p memberCount=10000 -p topicCount=1000 \
  *     -p subscription=HOMOGENEOUS,HETEROGENEOUS_NESTED ConsumerAssignorBenchmark
  * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p memberCount=20 -p topicCount=10000 \
  *     -p subscription=HOMOGENEOUS ConsumerAssignorBenchmark
  * </pre>
- * The GC profiler reports the bytes allocated per assignment, which matter as much as the
- * time since assignments are computed on the coordinator threads.
+ * The GC profiler reports the bytes allocated per assignment.
  */
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -130,7 +127,7 @@ public class ConsumerAssignorBenchmark {
     /**
      * How the partitions are split over the topics.
      */
-    public enum Topology {
+    public enum Distribution {
         /**
          * Every topic has the same number of partitions, up to the rounding remainder.
          */
@@ -141,13 +138,21 @@ public class ConsumerAssignorBenchmark {
          * every following tier holds a third of the topics of the previous one, with twice as
          * many partitions per topic. This gives a few large topics, a band of small ones and a
          * majority of topics with the smallest size, which is how topics are commonly sized.
-         * The tiers need about two partitions per topic; with fewer, the split is equal.
+         * Each tier doubles the partitions of the previous one, so the geometric split needs at
+         * least about twice as many partitions as topics. With fewer, the partitions are split
+         * equally, as with {@link #EQUAL}.
          */
         SKEWED
     }
 
     /**
      * How the members subscribe to the topics.
+     *
+     * <p>The heterogeneous subscriptions put the members in buckets, member {@code i} in bucket
+     * {@code i mod bucketCount}, and cut the topics, largest first, into as many consecutive
+     * ranges of about the same size. With 20 members, 10 topics and 5 buckets, bucket 0 holds
+     * members 0, 5, 10 and 15, and range 0 holds topics 0 and 1. The bucket count is the
+     * smallest of five, the member count and the topic count, see {@link #BUCKET_COUNT}.
      */
     public enum Subscription {
         /**
@@ -156,15 +161,15 @@ public class ConsumerAssignorBenchmark {
         HOMOGENEOUS,
 
         /**
-         * The members of a bucket subscribe to their own share of the topics, so that no topic
-         * is shared by two buckets.
+         * The members of bucket {@code b} subscribe to range {@code b} only, so every topic has
+         * a single bucket of subscribers, as when independent applications share a group.
          */
         HETEROGENEOUS_DISJOINT,
 
         /**
-         * The members of bucket {@code b} subscribe to the first {@code b + 1} shares of the
-         * topics, so that the first share is subscribed by every member and the last one by the
-         * members of the last bucket only.
+         * The members of bucket {@code b} subscribe to ranges 0 to {@code b}, so the first range
+         * is subscribed by every member and the last one by the last bucket only. Topics are
+         * shared by members whose subscriptions differ.
          */
         HETEROGENEOUS_NESTED
     }
@@ -241,25 +246,22 @@ public class ConsumerAssignorBenchmark {
      * and new views of it, so that nothing is shared between the groups built.
      *
      * <p>Topic {@code i} is called {@code topic-<i>}, and the partitions are split over the
-     * topics as the topology says, see {@link #partitionCounts}, the largest topics first. The
+     * topics as the distribution says, see {@link #partitionCounts}, the largest topics first. The
      * topics with an added partition, taken at regular intervals over the topics, have one more
      * partition than the split gives them.
      *
      * <p>The cluster has one broker per rack, and every partition has two replicas on adjacent
-     * brokers, so that it is in two racks. Topic ids are drawn from a generator with a fixed
-     * seed, so that building the cluster again with more partitions keeps the ids, and the ids
-     * are spread like real ones.
+     * brokers, so that it is in two racks. Topic ids come from a generator with a fixed seed, so
+     * that the clusters built before and after partitions were added give the same ids to the
+     * same topics, and the ids are spread like real ones.
      *
      * <p>Member {@code i} is called {@code member<i>}, is in rack {@code i mod rackCount} when
      * the members have a rack, and is in bucket {@code i mod bucketCount} for the heterogeneous
-     * subscriptions, so that members added at the end are spread over the buckets. The bucket
-     * count is fixed by the caller rather than derived from the member count, so that the
-     * topics of a bucket are the same in groups built with different member counts. Bucket
-     * {@code b} owns the {@code b}-th share of the topics, the shares being consecutive ranges
-     * of about the same size. With two members and two buckets, a joining member brings a
-     * bucket nobody subscribed to before; from ten members on, every bucket keeps members
-     * through the events. Every member holds its own copy of the topics of its bucket, as
-     * members do in the coordinator, so the largest groups take gigabytes of heap.
+     * subscriptions, see {@link Subscription}, so that members added at the end are spread over
+     * the buckets. The bucket count is fixed by the caller rather than derived from the member
+     * count, so that the topics of a bucket are the same in groups built with different member
+     * counts. Every member holds its own copy of the topics of its bucket, as members do in the
+     * coordinator, so the largest groups take gigabytes of heap.
      */
     private static final class GroupBuilder {
         /**
@@ -269,7 +271,7 @@ public class ConsumerAssignorBenchmark {
 
         private int topicCount = 0;
         private int partitionCount = 0;
-        private Topology topology = Topology.EQUAL;
+        private Distribution distribution = Distribution.EQUAL;
         private int topicsWithAddedPartition = 0;
         private int rackCount = 1;
         private Subscription subscription = Subscription.HOMOGENEOUS;
@@ -295,10 +297,10 @@ public class ConsumerAssignorBenchmark {
         }
 
         /**
-         * @param topology  How the partitions are split over the topics.
+         * @param distribution  How the partitions are split over the topics.
          */
-        GroupBuilder withTopology(Topology topology) {
-            this.topology = topology;
+        GroupBuilder withDistribution(Distribution distribution) {
+            this.distribution = distribution;
             return this;
         }
 
@@ -370,7 +372,7 @@ public class ConsumerAssignorBenchmark {
             for (int topic = 0; topic < topicCount; topic++) {
                 topicNames.add("topic-" + topic);
             }
-            var partitionCounts = partitionCounts(topology, topicCount, partitionCount);
+            var partitionCounts = partitionCounts(distribution, topicCount, partitionCount);
             for (int i = 0; i < topicsWithAddedPartition; i++) {
                 partitionCounts[(int) ((long) i * topicCount / topicsWithAddedPartition)]++;
             }
@@ -469,20 +471,20 @@ public class ConsumerAssignorBenchmark {
         }
 
         /**
-         * @param topology          How the partitions are split over the topics.
+         * @param distribution      How the partitions are split over the topics.
          * @param topicCount        The number of topics.
          * @param partitionCount    The total number of partitions.
          * @return The number of partitions of each topic, largest first and at least one, so
-         *         that the total may exceed the requested one when there are more topics than
-         *         partitions.
+         *         that the total may exceed {@code partitionCount} when there are more topics
+         *         than partitions.
          */
-        private static int[] partitionCounts(Topology topology, int topicCount, int partitionCount) {
+        private static int[] partitionCounts(Distribution distribution, int topicCount, int partitionCount) {
             int[] counts = new int[topicCount];
-            if (topology == Topology.SKEWED) {
+            if (distribution == Distribution.SKEWED) {
                 List<Integer> tierSizes = new ArrayList<>();
-                double share = 2.0 / 3.0;
-                for (int remaining = topicCount; remaining > 0; share /= 3.0) {
-                    int size = Math.min(remaining, Math.max(1, (int) Math.round(topicCount * share)));
+                double fraction = 2.0 / 3.0;
+                for (int remaining = topicCount; remaining > 0; fraction /= 3.0) {
+                    int size = Math.min(remaining, Math.max(1, (int) Math.round(topicCount * fraction)));
                     tierSizes.add(size);
                     remaining -= size;
                 }
@@ -523,8 +525,11 @@ public class ConsumerAssignorBenchmark {
     private static final int RACK_COUNT = 3;
 
     /**
-     * The number of member buckets for the heterogeneous subscriptions, when the group has that
-     * many members and topics.
+     * The number of member buckets for the heterogeneous subscriptions, or the member count or
+     * the topic count when they are smaller, see {@link Subscription}. With two members, a
+     * joining member brings a bucket nobody subscribed to before the event, so its topics are
+     * assigned for the first time; from ten members on, every bucket keeps members through the
+     * events.
      */
     private static final int BUCKET_COUNT = 5;
 
@@ -548,7 +553,7 @@ public class ConsumerAssignorBenchmark {
     private int partitionCount;
 
     @Param({"EQUAL", "SKEWED"})
-    private Topology topology;
+    private Distribution distribution;
 
     @Param({"HOMOGENEOUS", "HETEROGENEOUS_DISJOINT", "HETEROGENEOUS_NESTED"})
     private Subscription subscription;
@@ -573,7 +578,7 @@ public class ConsumerAssignorBenchmark {
         var builder = new GroupBuilder()
             .withTopicCount(topicCount)
             .withPartitionCount(partitionCount)
-            .withTopology(topology)
+            .withDistribution(distribution)
             .withRackCount(RACK_COUNT)
             .withSubscription(subscription)
             .withRack(rack)
