@@ -68,6 +68,8 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
         @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
         @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
         @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
+        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000"),
     }
 )
 public class ListConsumerGroupTest {
@@ -111,7 +113,7 @@ public class ListConsumerGroupTest {
             }
 
             removeConsumer(Set.of(topicPartitionsGroup, topicGroup, protocolGroup));
-            deleteTopic(topic);
+            clusterInstance.deleteTopic(topic);
         }
     }
 
@@ -176,7 +178,7 @@ public class ListConsumerGroupTest {
             }
 
             removeConsumer(Set.of(topicPartitionsGroup, protocolGroup));
-            deleteTopic(topic);
+            clusterInstance.deleteTopic(topic);
         }
     }
 
@@ -511,12 +513,6 @@ public class ListConsumerGroupTest {
                 opts,
                 Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
-    }
-
-    private void deleteTopic(String topic) {
-        try (Admin admin = clusterInstance.admin()) {
-            assertDoesNotThrow(() -> admin.deleteTopics(Set.of(topic)).all().get());
-        }
     }
 
     private void removeConsumer(Set<String> groupIds) {
