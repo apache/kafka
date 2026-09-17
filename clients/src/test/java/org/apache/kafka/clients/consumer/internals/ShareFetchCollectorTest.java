@@ -200,6 +200,31 @@ public class ShareFetchCollectorTest {
         assertTrue(completedFetch.isConsumed());
     }
 
+    @Test
+    public void testSecondFetchForSamePartitionMergesWithoutLeaking() {
+        buildDependencies();
+        subscribeAndAssign(topicAPartition0);
+
+        // Two completed fetches arrive for the same partition before either is drained by the application.
+        ShareCompletedFetch firstFetch = completedFetchBuilder.baseOffset(0).recordCount(1).build();
+        fetchBuffer.add(List.of(firstFetch));
+        ShareCompletedFetch secondFetch = completedFetchBuilder.baseOffset(1).recordCount(1).build();
+        fetchBuffer.add(List.of(secondFetch));
+
+        ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
+
+        // Both records were delivered to the application, merged into a single batch for the partition.
+        assertEquals(2, fetch.numRecords());
+
+        // The application acknowledges everything it was actually given.
+        fetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+        fetch.takeAcknowledgedRecords();
+
+        // Nothing should remain buffered.
+        assertTrue(fetchBuffer.bufferedPartitions().isEmpty());
+        assertTrue(fetchBuffer.bufferedNodes().isEmpty());
+    }
+
     @ParameterizedTest
     @MethodSource("testErrorInInitializeSource")
     public void testErrorInInitialize(RuntimeException expectedException) {
@@ -379,10 +404,17 @@ public class ShareFetchCollectorTest {
 
         private int recordCount = DEFAULT_RECORD_COUNT;
 
+        private long baseOffset = 0L;
+
         private Errors error = null;
 
         private ShareCompletedFetchBuilder recordCount(int recordCount) {
             this.recordCount = recordCount;
+            return this;
+        }
+
+        private ShareCompletedFetchBuilder baseOffset(long baseOffset) {
+            this.baseOffset = baseOffset;
             return this;
         }
 
@@ -398,7 +430,7 @@ public class ShareFetchCollectorTest {
             try (MemoryRecordsBuilder builder = MemoryRecords.builder(allocate,
                     Compression.NONE,
                     TimestampType.CREATE_TIME,
-                    0)) {
+                    baseOffset)) {
                 for (int i = 0; i < recordCount; i++)
                     builder.append(0L, "key".getBytes(), ("value-" + i).getBytes());
 
@@ -408,7 +440,7 @@ public class ShareFetchCollectorTest {
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                     .setPartitionIndex(topicAPartition0.partition())
                     .setRecords(records)
-                    .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(0L, recordCount));
+                    .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(baseOffset, recordCount));
 
             if (error != null)
                 partitionData.setErrorCode(error.code());
