@@ -1374,9 +1374,9 @@ public class AssignmentRefinerTest {
 
     @Test
     public void shouldEmitTheStandbyOnTheMemberGrantingTheActiveAwayInTheSameStep() {
-        // The demotion carve-out, and the reason the swap is efficient: memberA hands the active over and keeps a
-        // standby in its place, which the client does by relabelling the task it already has. Emitted a step later,
-        // that state would already be gone.
+        // The efficient half of the swap: memberA hands the active over and keeps a standby in its place, which the
+        // client does by relabelling the task it already has. Nothing is staged, so no rule holds the placement
+        // back, and the relabel happens now rather than a step later when that state is already gone.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
             "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
@@ -1392,9 +1392,10 @@ public class AssignmentRefinerTest {
     }
 
     @Test
-    public void shouldWithholdAStandbyOnASiblingOfTheMemberGrantingTheActiveAway() {
-        // The carve-out is about the member recycling its own task, so it does not extend to a sibling: that one
-        // would be a second copy on the process until the hand-over finishes, and has to wait for it.
+    public void shouldEmitAStandbyOnASiblingOfTheMemberGrantingTheActiveAway() {
+        // memberA2 would be a second copy on processA until memberA1's hand-over finishes, and it does have to wait
+        // for it -- but in the reconciler, which holds the placement back while the process still runs the task.
+        // Withholding it here as well would only add an epoch.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA1", member("memberA1", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
             "memberA2", member("memberA2", "processA", TasksTuple.EMPTY),
@@ -1407,7 +1408,7 @@ public class AssignmentRefinerTest {
         );
         final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(100, 100));
 
-        assertEquals(Map.of("memberA2", Set.of(STATEFUL_0)), filter(members, targetAssignment, taskOffsets, 1));
+        assertEquals(Map.of(), filter(members, targetAssignment, taskOffsets, 1));
     }
 
     @Test
@@ -1429,6 +1430,58 @@ public class AssignmentRefinerTest {
         );
 
         assertEquals(Map.of(), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldWithholdAStandbyOnTheProcessAMigrationIsStagedOn() {
+        // The placement rule 1 protects is the one the staged migration makes: the task runs on memberB for this
+        // step, so F's standby of it cannot land on memberB's process as well. Nothing holds the task as an active
+        // task here, so the current assignment says nothing about where it runs.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+        final AssignmentRefinerImpl.TaskDecisions decisions = new AssignmentRefinerImpl.TaskDecisions(
+            List.of(new AssignmentRefinerImpl.StagedMigration(
+                STATEFUL_0, "memberB", "memberA", Optional.of("processA"), Optional.empty())),
+            List.of()
+        );
+
+        assertEquals(
+            Map.of("memberB", Set.of(STATEFUL_0)),
+            filter(members, targetAssignment, Map.of(), decisions, 1)
+        );
+    }
+
+    @Test
+    public void shouldEmitTheStandbyOnTheProcessAMigrationIsStagedAwayFrom() {
+        // The migration is staged from memberB, so the intermediate assignment runs the task on processB and not on
+        // processA. That leaves memberA revoking the active it holds, and F's standby placement there is how it
+        // recycles that state, so only processB's placement waits.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final AssignmentRefinerImpl.TaskDecisions decisions = new AssignmentRefinerImpl.TaskDecisions(
+            List.of(new AssignmentRefinerImpl.StagedMigration(
+                STATEFUL_0, "memberB", "memberC", Optional.of("processC"), Optional.empty())),
+            List.of()
+        );
+
+        assertEquals(
+            Map.of("memberB", Set.of(STATEFUL_0)),
+            filter(members, targetAssignment, Map.of(), decisions, 1)
+        );
     }
 
     @Test
@@ -1791,9 +1844,27 @@ public class AssignmentRefinerTest {
         final Map<String, MemberTaskOffsets> taskOffsets,
         final int numWarmupReplicas
     ) {
+        return filter(
+            members,
+            targetAssignment,
+            taskOffsets,
+            analyze(members, targetAssignment, taskOffsets),
+            numWarmupReplicas
+        );
+    }
+
+    /**
+     * Filters against decisions the caller supplies, for a staged migration this group's case analysis would not
+     * produce.
+     */
+    private static SortedMap<String, SortedSet<TaskId>> filter(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final AssignmentRefinerImpl.TaskDecisions decisions,
+        final int numWarmupReplicas
+    ) {
         final AssignmentRefinerImpl.CurrentAssignmentIndex currentAssignment = index(members, taskOffsets);
-        final AssignmentRefinerImpl.TaskDecisions decisions =
-            AssignmentRefinerImpl.analyzeTasks(currentAssignment, targetAssignment, members, subtopologies());
         return AssignmentRefinerImpl.filterStandbys(
             targetAssignment,
             currentAssignment,

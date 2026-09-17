@@ -529,9 +529,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * back here is emitted by a later step once its reason is gone. A placement of task {@code t} on member {@code m}
      * of process {@code p} is withheld when:
      * <ol>
-     *     <li>{@code p} currently runs {@code t} as an active task, because {@code t}'s migration off {@code p} is
-     *     staged: F moved {@code t}'s active off {@code p} and relocated its standby, but the refiner held the active
-     *     in place, so F's standby cannot land on {@code p} yet.</li>
+     *     <li>a staged migration keeps {@code t} running as an active task on {@code p}, and a process cannot hold
+     *     {@code t} twice.</li>
      *     <li>{@code t}'s migration onto {@code p} borrowed an existing standby on {@code p}. To not run
      *     {@code num.standby.repliacs + 1} standbys, we hold back the assignment of the standby to its new owner.</li>
      * </ol>
@@ -560,8 +559,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, StreamsGroupMember> members,
         final SortedMap<String, ConfiguredSubtopology> subtopologies
     ) {
-        final StandbyConflicts conflicts =
-            indexStandbyConflicts(currentAssignment, decisions, warmupPlan, members);
+        final StandbyConflicts conflicts = indexStandbyConflicts(decisions, warmupPlan, members);
         final SortedMap<String, SortedSet<TaskId>> withheld = new TreeMap<>();
 
         targetAssignment.forEach((memberId, tasks) -> {
@@ -583,25 +581,20 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * Builds the {@link StandbyConflicts} lookups, ie, where each task is held active, which tasks are granted
-     * this step, and which migrations borrowed a copy.
+     * Builds the {@link StandbyConflicts} lookups, ie, where each staged migration keeps its task running, and which
+     * migrations borrowed a copy.
      */
     private static StandbyConflicts indexStandbyConflicts(
-        final CurrentAssignmentIndex currentAssignment,
         final TaskDecisions decisions,
         final WarmupPlan warmupPlan,
         final Map<String, StreamsGroupMember> members
     ) {
-        final Map<TaskId, String> activeHeldOn = new HashMap<>();
-        currentAssignment.activeHolder().forEach((task, holder) ->
-            activeHeldOn.put(task, members.get(holder.memberId()).processId()));
-
-        final Set<TaskId> grantedTasks = new HashSet<>();
-        for (final TaskGrant grant : decisions.grantedTasks()) {
-            grantedTasks.add(grant.task());
+        final Map<TaskId, String> activeStagedOn = new HashMap<>();
+        for (final StagedMigration migration : decisions.stagedMigrations()) {
+            activeStagedOn.put(migration.task(), members.get(migration.currentOwner()).processId());
         }
 
-        return new StandbyConflicts(activeHeldOn, grantedTasks, warmupPlan.borrowedMigrations());
+        return new StandbyConflicts(activeStagedOn, warmupPlan.borrowedMigrations());
     }
 
     /**
@@ -614,15 +607,10 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final CurrentAssignmentIndex currentAssignment,
         final StandbyConflicts conflicts
     ) {
-        final ActiveHolder activeHolder = currentAssignment.activeHolder().get(task);
-
-        // Rule 1: a process cannot hold `task` twice, so if this standby's process already runs the active,
-        // withhold the standby -- unless it is the demotion (this member is handing the active away this step and
-        // relabels it into the standby in place).
-        if (processId.equals(conflicts.activeHeldOn().get(task))) {
-            final boolean isDemotion =
-                memberId.equals(activeHolder.memberId()) && conflicts.grantedTasks().contains(task);
-            return !isDemotion;
+        // Rule 1: a process cannot hold `task` twice, so a standby on the process a staged migration keeps the
+        // active running on waits for that migration to complete.
+        if (processId.equals(conflicts.activeStagedOn().get(task))) {
+            return true;
         }
 
         // Rule 2: a borrowed migration keeps its existing copy as the group's one entitled replica, so F's
@@ -1072,18 +1060,14 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * The per-task lookups {@link #filterStandbys} consults, each built once so that a rule is a map lookup rather
      * than a fresh scan of the group.
      *
-     * @param activeHeldOn
-     *        The process owning each task as an active task. Only granted tasks are tracked. Tasks.that sit in pending
-     *        revocation are absent.
-     * @param grantedTasks
-     *        The tasks whose active role moves in this step.
+     * @param activeStagedOn
+     *        The process each staged migration keeps its task running on.
      * @param borrowedMigrations
      *        The migrations warmed by a standby that stays where it is, whose relocated placement therefore has to
      *        wait.
      */
     private record StandbyConflicts(
-        Map<TaskId, String> activeHeldOn,
-        Set<TaskId> grantedTasks,
+        Map<TaskId, String> activeStagedOn,
         SortedSet<TaskId> borrowedMigrations
     ) {
     }
