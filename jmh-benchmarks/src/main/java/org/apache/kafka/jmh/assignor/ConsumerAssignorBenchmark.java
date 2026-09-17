@@ -66,30 +66,24 @@ import java.util.concurrent.TimeUnit;
 /**
  * Benchmarks the server side partition assignors of consumer groups.
  *
- * <p>The parameters are independent, so that any combination can be selected with {@code -p}.
- * They describe the group, and what happened to it before the assignment is computed:
+ * <p>The parameters describe the group and what happened to it before the assignment:
  * <ul>
- *     <li>{@code memberCount}: the number of members when the assignment is computed.</li>
- *     <li>{@code topicCount}: the number of subscribed topics.</li>
- *     <li>{@code partitionCount}: the number of partitions over all topics.</li>
+ *     <li>{@code memberCount}, {@code topicCount} and {@code partitionCount}: the members, the
+ *     subscribed topics and the partitions over all topics.</li>
  *     <li>{@code distribution}: how the partitions are split over the topics, see
- *     {@link Distribution}. Every topic has at least one partition.</li>
+ *     {@link Distribution}.</li>
  *     <li>{@code subscription}: how the members subscribe, see {@link Subscription}.</li>
- *     <li>{@code rack}: whether the members have a rack, see {@link Rack}. Assignors which do
- *     not use racks give the same results for both values.</li>
+ *     <li>{@code rack}: whether the members have a rack, see {@link Rack}.</li>
  *     <li>{@code assignor}: the assignor.</li>
- *     <li>{@code event}: the state of the group, see {@link Event}. The group always has
- *     {@code memberCount} members when the assignment is computed, joining members included
- *     and leaving members excluded. The joining or leaving members are the ones with the highest
- *     indices, so they are spread over the buckets.</li>
+ *     <li>{@code event}: what happened to the group, see {@link Event}. The group has
+ *     {@code memberCount} members when the assignment is computed, and the joining or leaving
+ *     members are those with the highest indices.</li>
  * </ul>
  *
- * <p>The parameters form 5040 combinations, too many to run at once. Three runs cover what
- * matters: the first for scaling with the group size, the two others for the cost of the events
- * on a large group with many topics and on a small group with very many topics. The largest
- * combinations hold ten thousand members subscribing to ten thousand topics; the subscriptions
- * alone take about 4 GB of heap, as they would in the coordinator, so pass
- * {@code -jvmArgs -Xmx8g} when the default heap of the JMH forks is smaller.
+ * <p>The parameters form 5040 combinations. These three runs of {@code jmh.sh} cover the ones
+ * of interest: the scaling with the group size, then the events on a large group with many
+ * topics and on a small group with very many topics. The largest groups need about 4 GB of
+ * heap, so pass {@code -jvmArgs -Xmx8g} to {@code jmh.sh} when the default heap is smaller.
  * <pre>
  * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p event=FULL,STABLE,JOIN_ONE \
  *     -p distribution=EQUAL -p subscription=HOMOGENEOUS ConsumerAssignorBenchmark
@@ -523,11 +517,9 @@ public class ConsumerAssignorBenchmark {
     private static final int RACK_COUNT = 3;
 
     /**
-     * The number of member buckets for the heterogeneous subscriptions, or the member count or
-     * the topic count when they are smaller, see {@link Subscription}. With two members, a
-     * joining member brings a bucket nobody subscribed to before the event, so its topics are
-     * assigned for the first time; from ten members on, every bucket keeps members through the
-     * events.
+     * The number of member buckets for the heterogeneous subscriptions, at most. Groups with
+     * fewer members or topics have as many buckets as the smaller of the two counts, see
+     * {@link Subscription}.
      */
     private static final int BUCKET_COUNT = 5;
 
