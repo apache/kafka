@@ -377,6 +377,10 @@ public class ConnectRestServerTest {
         HttpResponse response = executeRequest(server.advertisedUrl(), new HttpGet("/connectors"));
         assertEquals(200, response.getStatusLine().getStatusCode());
         assertNotNull(response.getFirstHeader(extension.name));
+
+        HttpResponse adminResponse = executeRequest(server.advertisedUrl(), new HttpGet("/admin/loggers"));
+        assertEquals(200, adminResponse.getStatusLine().getStatusCode());
+        assertNotNull(adminResponse.getFirstHeader(extension.name));
     }
 
     @Test
