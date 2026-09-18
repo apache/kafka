@@ -284,16 +284,17 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 continue;
             }
 
-            // Which member the task keeps running on until the target owner is warm. Empty means nobody has state
-            // worth keeping the task on, so the target owner takes it over cold.
+            // Which member the task keeps running on until the target owner is warm. 'Empty' hands the task to the
+            // target owner in this step instead, cold unless its own process still has the state on disk.
             final Optional<String> currentOwner;
             if (holder != null && holder.hot()) {
                 currentOwner = Optional.of(holder.memberId());
             } else if (holder == null && onDisk(currentAssignment, targetProcessId, task)) {
-                // The target owner's process left this task's state on disk and can reopen it. How far behind that
-                // state is cannot be measured -- a member reports an end offset only for a task it is restoring --
-                // so this takes precedence over promoting a caught-up copy, because the common way a task ends up
-                // here is a member restarting inside the session timeout and getting its own tasks back.
+                // The target owner's process still has this task's state on disk and reopens it, so the task goes
+                // there rather than onto a copy holder: the usual way into this branch is a member that restarted
+                // inside the session timeout and got its own tasks back, where that state is exact. A stale disk
+                // state is not told apart from a fresh one -- a process reports an end offset only for a task it
+                // is restoring -- and the copy-holder detour would cost a second restore, a slot and a hand-over.
                 currentOwner = Optional.empty();
             } else {
                 currentOwner = bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad);
@@ -1053,8 +1054,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        Whether the member is still restoring the task, as opposed to processing it. See {@link #isRestoring}
      *        for how this is determined, and for why a member the coordinator has not heard from reads as processing.
      * @param caughtUp
-     *        Whether the member has restored the task to within {@code acceptable.recovery.lag}.
-     *        Should only be checked if the task is not {@code restoring}.
+     *        Whether the member has restored the task to within {@code acceptable.recovery.lag}. Only meaningful
+     *        while it is {@code restoring}: a member that is processing the task reports no offsets for it, so this
+     *        reads false there.
      */
     record ActiveHolder(String memberId, boolean restoring, boolean caughtUp) {
 

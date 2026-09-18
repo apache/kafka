@@ -1937,6 +1937,57 @@ public class AssignmentRefinerTest {
     }
 
     @Test
+    public void shouldWithholdOnlyOnePlacementWhenAPromotedMigrationBorrows() {
+        // Nobody runs the task, so memberH's caught-up copy is promoted to run it for now, and the target owner
+        // memberB warms the migration with the standby it already holds -- a borrow. Both hold-back reasons meet on
+        // one task: the target assignment's standby for memberH cannot be delivered while the promoted active runs
+        // on that process, and that is the one placement the borrowed copy stands in for, so memberX's cold
+        // placement is emitted and the group keeps the three copies the target assignment asks for.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberH", member("memberH", "processH", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberX", member("memberX", "processX", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberH", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberX", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+        // memberH is caught up and can take the task over; memberB's copy is too far behind, which is what keeps
+        // the migration staged rather than ready.
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of(
+            "memberH", offsets(1000L, 1050L),
+            "memberB", offsets(0L, 10_000L)
+        );
+
+        assertEquals(
+            Map.of("memberH", Set.of(STATEFUL_0)),
+            filter(members, targetAssignment, taskOffsets, 1)
+        );
+
+        final Map<String, TasksTuple> intermediateAssignment = assemble(members, targetAssignment, taskOffsets, 1);
+        assertEquals(
+            countCopies(targetAssignment, STATEFUL_0),
+            countCopies(intermediateAssignment, STATEFUL_0)
+        );
+        assertEquals(
+            Map.of(STATEFUL, Set.of(0)),
+            intermediateAssignment.get("memberH").activeTasks(),
+            "the promoted holder runs the task"
+        );
+        assertEquals(
+            Map.of(STATEFUL, Set.of(0)),
+            intermediateAssignment.get("memberB").standbyTasks(),
+            "the borrowed copy stays where it warms the migration"
+        );
+        assertEquals(
+            Map.of(STATEFUL, Set.of(0)),
+            intermediateAssignment.get("memberX").standbyTasks(),
+            "the cold placement is emitted"
+        );
+    }
+
+    @Test
     public void shouldNotWithholdARelocationAssignedToAMemberThatIsGone() {
         // The target assignment still names memberD, which the group has since removed, so that placement reaches
         // nobody and the borrowed copy already stands in for it. memberC's placement is emitted -- it sorts ahead
