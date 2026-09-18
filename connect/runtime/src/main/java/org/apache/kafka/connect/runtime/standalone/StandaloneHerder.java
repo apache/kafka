@@ -324,6 +324,12 @@ public final class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
+    public void refreshTaskConfigs(String connName, long expectedConfigOffset, Callback<Void> callback,
+                                   InternalRequestSignature requestSignature) {
+        throw new UnsupportedOperationException("Kafka Connect in standalone mode does not support refreshing task configurations.");
+    }
+
+    @Override
     public void fenceZombieSourceTasks(String connName, Callback<Void> callback, InternalRequestSignature requestSignature) {
         throw new UnsupportedOperationException("Kafka Connect in standalone mode does not support exactly-once source connectors.");
     }
