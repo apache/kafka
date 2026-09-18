@@ -148,14 +148,13 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
 
     private KafkaProtocolFaultProxy(final String targetBootstrap) {
         final String[] servers = targetBootstrap.split(",");
+        // Routing rewrites all addresses to this proxy (one upstream broker), so a multi-broker bootstrap
+        // would funnel every partition and coordinator to the first broker
+        // causing NOT_LEADER / NOT_COORDINATOR loops.
         if (servers.length > 1) {
             throw new IllegalArgumentException(
                     "KafkaProtocolFaultProxy proxies a single broker, but the bootstrap '" + targetBootstrap
-                    + "' lists " + servers.length + " servers. Routing rewrites every Metadata/FindCoordinator "
-                    + "address to this proxy, which forwards to one upstream broker, so a multi-broker bootstrap "
-                    + "would silently funnel every partition and coordinator to the first broker (NOT_LEADER / "
-                    + "NOT_COORDINATOR loops). Pass a single broker's address "
-                    + "(e.g. cluster.bootstrapServers().split(\",\")[0]) or front a single-broker EmbeddedKafkaCluster.");
+                    + "' lists " + servers.length + " servers");
         }
         final String hostPort = servers[0].trim();
         final int idx = hostPort.lastIndexOf(':');
