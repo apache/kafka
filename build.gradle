@@ -389,7 +389,6 @@ subprojects {
 
     publishing {
       repositories {
-        // To test locally, invoke gradlew with `-PmavenUrl=file:///some/local/path`
         maven {
           url = mavenUrl
           credentials {
