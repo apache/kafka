@@ -44,6 +44,7 @@ public class ConnectorHandle {
 
     private CountDownLatch recordsRemainingLatch;
     private CountDownLatch recordsToCommitLatch;
+    private CountDownLatch commitLatch;
     private int expectedRecords = -1;
     private int expectedCommits = -1;
 
@@ -127,6 +128,7 @@ public class ConnectorHandle {
     public void expectedCommits(int expected) {
         expectedCommits = expected;
         recordsToCommitLatch = new CountDownLatch(expected);
+        commitLatch = new CountDownLatch(1); // expect atleast one commit
     }
 
     /**
@@ -152,10 +154,19 @@ public class ConnectorHandle {
     /**
      * Record a message commit from the connector.
      */
-    public void commit() {
+    public void commitRecord() {
         if (recordsToCommitLatch != null) {
             recordsToCommitLatch.countDown();
         }
+    }
+
+    /**
+     * Record offset commits for (source) connector.
+     *
+     * @param latestCommittedOffsets committed offsets
+     */
+    public void commit(Map<Map<String, Object>, Map<String, Object>> latestCommittedOffsets) {
+        commitLatch.countDown();
     }
 
     /**
@@ -166,6 +177,9 @@ public class ConnectorHandle {
     public void commit(int batchSize) {
         if (recordsToCommitLatch != null) {
             IntStream.range(0, batchSize).forEach(i -> recordsToCommitLatch.countDown());
+            if (recordsToCommitLatch.getCount() == 0) {
+                commitLatch.countDown();
+            }
         }
     }
 
@@ -211,6 +225,12 @@ public class ConnectorHandle {
                     expectedCommits - recordsToCommitLatch.getCount());
             throw new DataException(msg);
         }
+
+        if (!commitLatch.await(timeout, TimeUnit.MILLISECONDS)) {
+            String msg = String.format("commit() not seen by connector %s in %d millis.", connectorName, timeout);
+            throw new DataException(msg);
+        }
+        log.debug("Connector {} saw commit()", connectorName);
     }
 
     /**
