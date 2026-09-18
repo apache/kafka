@@ -40,6 +40,7 @@ import org.apache.kafka.server.common.DirectoryEventHandler
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryContext, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogManager, ProducerStateManagerConfig}
@@ -98,6 +99,21 @@ class DynamicBrokerConfigTest {
       assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.valuesFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     }
+  }
+
+  @Test
+  def testAssignmentIntervalClampAppliesToEffectiveConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    val config = KafkaConfig(props)
+    val dynamicConfig = config.dynamicConfig
+    dynamicConfig.initialize(None)
+
+    val props1 = new Properties
+    props1.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "999999")
+    dynamicConfig.updateBrokerConfig(0, props1)
+
+    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT,
+      config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
   }
 
   @Test
@@ -699,6 +715,40 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testMetricReportersAreConfiguredWithBothIdConfigs(): Unit = {
+    val nodeId = 0
+    val reporterName = classOf[TestConfigCapturingReporter].getName
+    // createBrokerConfig only sets node.id, so broker.id is only visible through the synonym mechanism
+    val origProps = TestUtils.createBrokerConfig(nodeId)
+    origProps.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, reporterName)
+
+    val config = KafkaConfig(origProps)
+    config.dynamicConfig.initialize(None)
+    val m = new DynamicMetricsReporters(nodeId, config, mock(classOf[Metrics]), "clusterId")
+    config.dynamicConfig.addReconfigurable(m)
+
+    def updateReporters(reporterNames: String): Unit = {
+      val props = new Properties()
+      props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, reporterNames)
+      config.dynamicConfig.updateDefaultConfig(props)
+    }
+
+    def assertBothIdsArePassedAsStrings(): Unit = {
+      val configs = m.currentReporters(reporterName).asInstanceOf[TestConfigCapturingReporter].configs
+      assertEquals(nodeId.toString, configs.get(KRaftConfigs.NODE_ID_CONFIG))
+      assertEquals(nodeId.toString, configs.get(ServerConfigs.BROKER_ID_CONFIG))
+    }
+
+    assertBothIdsArePassedAsStrings()
+
+    // a dynamic update recreates the reporter with the parsed config values, where the ids are integers
+    updateReporters("")
+    assertTrue(m.currentReporters.isEmpty)
+    updateReporters(reporterName)
+    assertBothIdsArePassedAsStrings()
+  }
+
+  @Test
   def testDynamicLogLocalRetentionMsConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2592000000")
@@ -768,6 +818,32 @@ class DynamicBrokerConfigTest {
     verifyIncorrectLogLocalRetentionProps(-1, 1000L, 200, 100)
     // Check for incorrect case of logLocalRetentionBytes(-1 viz unlimited) > retentionBytes
     verifyIncorrectLogLocalRetentionProps(2000L, 1000L, -1, 100)
+  }
+
+  @Test
+  def testDynamicLogRemoteCopyLagConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+    assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_MS, config.remoteLogManagerConfig.logRemoteCopyLagMs)
+    assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_BYTES, config.remoteLogManagerConfig.logRemoteCopyLagBytes)
+
+    // update default config
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, "100")
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, "200")
+    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
+    config.dynamicConfig.updateDefaultConfig(newProps)
+    assertEquals(100L, config.remoteLogManagerConfig.logRemoteCopyLagMs())
+    assertEquals(200L, config.remoteLogManagerConfig.logRemoteCopyLagBytes())
+
+    // update per broker config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, "300")
+    config.dynamicConfig.updateBrokerConfig(0, newProps)
+    assertEquals(300L, config.remoteLogManagerConfig.logRemoteCopyLagBytes())
   }
 
   @Test
@@ -1307,6 +1383,16 @@ class TestDynamicThreadPool extends BrokerReconfigurable {
     assertEquals(10, newConfig.numIoThreads)
     assertEquals(100, newConfig.backgroundThreads)
   }
+}
+
+class TestConfigCapturingReporter extends MetricsReporter {
+  var configs: util.Map[String, _] = _
+
+  override def configure(configs: util.Map[String, _]): Unit = this.configs = configs
+  override def init(metrics: util.List[KafkaMetric]): Unit = {}
+  override def metricChange(metric: KafkaMetric): Unit = {}
+  override def metricRemoval(metric: KafkaMetric): Unit = {}
+  override def close(): Unit = {}
 }
 
 class TestExporterOnly extends MetricsReporter with ClientTelemetryExporterProvider {

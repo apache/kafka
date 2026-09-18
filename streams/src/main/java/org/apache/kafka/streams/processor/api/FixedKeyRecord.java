@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -36,6 +37,7 @@ import java.util.Objects;
  * @param <K> The type of the fixed key
  * @param <V> The type of the value
  */
+@InterfaceAudience.Public
 public final class FixedKeyRecord<K, V> {
 
     private final K key;

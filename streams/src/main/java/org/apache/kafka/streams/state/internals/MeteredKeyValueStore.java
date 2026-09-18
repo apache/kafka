@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -78,6 +79,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 public class MeteredKeyValueStore<K, V>
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
     implements KeyValueStore<K, V>, MeteredStateStore {
+
+    private static final Serializer<byte[]> BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
 
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
@@ -190,6 +193,10 @@ public class MeteredKeyValueStore<K, V>
                     }
             );
         }
+        StateStoreMetrics.addUncommittedBytesGauge(
+            taskId.toString(), metricsScope, name(), streamsMetrics,
+            (config, now) -> wrapped().approximateNumUncommittedBytes()
+        );
     }
 
     @Override
@@ -404,7 +411,8 @@ public class MeteredKeyValueStore<K, V>
     private <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScanInternal(
         final ReadOnlyKeyValueStore<Bytes, byte[]> store, final P prefix, final PS prefixKeySerializer
     ) {
-        return meteredKeyValueIterator(store.prefixScan(prefix, prefixKeySerializer), prefixScanSensor);
+        final byte[] keyBytes = prefixKeySerializer.serialize(null, internalContext.headers(), prefix);
+        return meteredKeyValueIterator(store.prefixScan(keyBytes, BYTE_ARRAY_SERIALIZER), prefixScanSensor);
     }
 
     @Override

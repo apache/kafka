@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.query;
 
-
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
 /**
@@ -27,6 +28,7 @@ import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
  * Intended to be used in {@link QueryResult#forFailure(FailureReason, String)}.
  */
 @Evolving
+@InterfaceAudience.Public
 public enum FailureReason {
     /**
      * Failure indicating that the store doesn't know how to handle the given query.

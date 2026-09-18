@@ -578,14 +578,14 @@ public class LogCleanerIntegrationTest {
         oldConfigMap.put(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, currentConfig.maxIoBytesPerSecond);
         oldConfigMap.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, currentConfig.backoffMs);
         oldConfigMap.put(CleanerConfig.LOG_CLEANER_ENABLE_PROP, currentConfig.enableCleaner);
-        AbstractConfig oldAbstractConfig = new AbstractConfig(configDef, oldConfigMap);
+        CleanerConfig oldCleanerConfig = new CleanerConfig(new AbstractConfig(configDef, oldConfigMap));
 
         Map<String, Object> newConfigMap = new HashMap<>(oldConfigMap);
         newConfigMap.put(CleanerConfig.LOG_CLEANER_THREADS_PROP, 2);
         newConfigMap.put(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP, 100000);
-        AbstractConfig newAbstractConfig = new AbstractConfig(configDef, newConfigMap);
+        CleanerConfig newCleanerConfig = new CleanerConfig(new AbstractConfig(configDef, newConfigMap));
 
-        cleaner.reconfigure(oldAbstractConfig, newAbstractConfig);
+        cleaner.reconfigure(oldCleanerConfig, newCleanerConfig);
 
         assertEquals(2, cleaner.cleanerCount());
         checkLastCleaned("log", 0, firstDirty);
@@ -599,8 +599,8 @@ public class LogCleanerIntegrationTest {
         cleaner = makeCleaner(TOPIC_PARTITIONS, CLEANER_BACKOFF_MS, MIN_COMPACTION_LAG, SEGMENT_SIZE);
         cleaner.startup();
 
-        AbstractConfig config1Thread = makeReconfigureConfig(1);
-        AbstractConfig config2Thread = makeReconfigureConfig(2);
+        CleanerConfig config1Thread = makeReconfigureConfig(1);
+        CleanerConfig config2Thread = makeReconfigureConfig(2);
 
         var checkError = CompletableFuture.runAsync(() -> {
             var endtime = System.currentTimeMillis() + Duration.ofSeconds(5).toMillis();
@@ -614,8 +614,8 @@ public class LogCleanerIntegrationTest {
             var useOne = true;
             var endtime = System.currentTimeMillis() + Duration.ofSeconds(5).toMillis();
             while (System.currentTimeMillis() < endtime) {
-                AbstractConfig oldCfg = useOne ? config2Thread : config1Thread;
-                AbstractConfig newCfg = useOne ? config1Thread : config2Thread;
+                CleanerConfig oldCfg = useOne ? config2Thread : config1Thread;
+                CleanerConfig newCfg = useOne ? config1Thread : config2Thread;
                 cleaner.reconfigure(oldCfg, newCfg);
                 useOne = !useOne;
             }
@@ -625,7 +625,7 @@ public class LogCleanerIntegrationTest {
         updateCleaner.join();
     }
 
-    private AbstractConfig makeReconfigureConfig(int numThreads) {
+    private CleanerConfig makeReconfigureConfig(int numThreads) {
         // Extend CleanerConfig.CONFIG_DEF with message.max.bytes, which CleanerConfig(AbstractConfig)
         // reads via ServerConfigs.MESSAGE_MAX_BYTES_CONFIG but which is not part of CleanerConfig's own ConfigDef.
         ConfigDef configDef = new ConfigDef(CleanerConfig.CONFIG_DEF)
@@ -633,7 +633,7 @@ public class LogCleanerIntegrationTest {
                         DEFAULT_MAX_MESSAGE_SIZE, ConfigDef.Importance.MEDIUM, "");
         Map<String, Object> props = new HashMap<>();
         props.put(CleanerConfig.LOG_CLEANER_THREADS_PROP, numThreads);
-        return new AbstractConfig(configDef, props);
+        return new CleanerConfig(new AbstractConfig(configDef, props));
     }
 
     private void checkLastCleaned(String topic, int partitionId, long firstDirty) throws InterruptedException {

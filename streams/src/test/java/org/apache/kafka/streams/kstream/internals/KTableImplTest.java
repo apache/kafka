@@ -29,6 +29,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.TopologyDescription.Subtopology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -67,13 +68,13 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
@@ -124,7 +125,7 @@ public class KTableImplTest {
         final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("A", "01", 5L);
@@ -194,7 +195,7 @@ public class KTableImplTest {
         final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("A", "01", 5L);
@@ -377,7 +378,7 @@ public class KTableImplTest {
         final var table1Mapped = table1.mapValues(s -> Integer.valueOf(s));
         table1Mapped.filter((key, value) -> (value % 2) == 0);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             assertEquals(0, driver.getAllStateStores().size());
         }
     }
@@ -397,7 +398,7 @@ public class KTableImplTest {
         final var table1MappedFiltered = table1Mapped.filter((key, value) -> (value % 2) == 0);
         table2.join(table1MappedFiltered, (v1, v2) -> v1 + v2);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             assertEquals(2, driver.getAllStateStores().size());
         }
     }
@@ -411,7 +412,7 @@ public class KTableImplTest {
         final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
         table.enableSendingOldValues(false);
 
-        assertThat(table.sendingOldValueEnabled(), is(false));
+        assertFalse(table.sendingOldValueEnabled());
     }
 
     @ParameterizedTest
@@ -423,7 +424,7 @@ public class KTableImplTest {
         final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
         table.enableSendingOldValues(true);
 
-        assertThat(table.sendingOldValueEnabled(), is(true));
+        assertTrue(table.sendingOldValueEnabled());
     }
 
     private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {

@@ -25,11 +25,14 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
@@ -45,6 +48,7 @@ import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -57,6 +61,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
@@ -70,6 +75,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -83,15 +90,17 @@ import org.mockito.stubbing.Answer;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -104,14 +113,9 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -164,20 +168,13 @@ public class KafkaStreamsTest {
     private MockedConstruction<GlobalStreamThread> globalStreamThreadMockedConstruction;
     private MockedConstruction<Metrics> metricsMockedConstruction;
 
-    public static class StateListenerStub implements KafkaStreams.StateListener {
-        int numChanges = 0;
-        KafkaStreams.State oldState;
-        KafkaStreams.State newState;
-        public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
+    private static class StateListenerStub implements KafkaStreams.StateListener {
+        private int numChanges = 0;
 
         @Override
         public void onChange(final KafkaStreams.State newState,
                              final KafkaStreams.State oldState) {
-            final long prevCount = mapStates.containsKey(newState) ? mapStates.get(newState) : 0;
             numChanges++;
-            this.oldState = oldState;
-            this.newState = newState;
-            mapStates.put(newState, prevCount + 1);
         }
     }
 
@@ -255,6 +252,7 @@ public class KafkaStreamsTest {
                 any(Time.class),
                 any(StreamsMetadataState.class),
                 anyLong(),
+                anyLong(),
                 any(StateDirectory.class),
                 any(StateRestoreListener.class),
                 any(StandbyUpdateListener.class),
@@ -325,7 +323,7 @@ public class KafkaStreamsTest {
 
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.PENDING_SHUTDOWN, StreamThread.State.RUNNING);
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.DEAD, StreamThread.State.PENDING_SHUTDOWN);
-            return null;
+            return true;
         };
         doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.DEFAULT);
         doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
@@ -524,7 +522,7 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
                 "Streams never stopped.");
 
-            assertThat(appender.getMessages(), not(hasItem(containsString("ERROR"))));
+            assertFalse(appender.getMessages().stream().anyMatch(message -> message.contains("ERROR")));
         }
 
         assertTrue(supplier.consumer.closed());
@@ -611,9 +609,9 @@ public class KafkaStreamsTest {
 
             streams.close();
             assertEquals(KafkaStreams.State.ERROR, streams.state(), "KafkaStreams should remain in ERROR state after close.");
-            assertThat(appender.getMessages(), hasItem(containsString("State transition from RUNNING to PENDING_ERROR")));
-            assertThat(appender.getMessages(), hasItem(containsString("State transition from PENDING_ERROR to ERROR")));
-            assertThat(appender.getMessages(), hasItem(containsString("Streams client is already in the terminal ERROR state")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("State transition from RUNNING to PENDING_ERROR")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("State transition from PENDING_ERROR to ERROR")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("Streams client is already in the terminal ERROR state")));
         }
     }
 
@@ -719,8 +717,8 @@ public class KafkaStreamsTest {
             streams.start();
             final int oldSize = streams.threads.size();
             waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
-            assertThat(streams.addStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 2)));
-            assertThat(streams.threads.size(), equalTo(oldSize + 1));
+            assertEquals(Optional.of("processId-StreamThread-" + 2), streams.addStreamThread());
+            assertEquals(oldSize + 1, streams.threads.size());
         }
     }
 
@@ -731,8 +729,8 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             final int oldSize = streams.threads.size();
-            assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
-            assertThat(streams.threads.size(), equalTo(oldSize));
+            assertEquals(Optional.empty(), streams.addStreamThread());
+            assertEquals(oldSize, streams.threads.size());
         }
     }
 
@@ -744,8 +742,8 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             final int oldSize = streams.threads.size();
             streams.close();
-            assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
-            assertThat(streams.threads.size(), equalTo(oldSize));
+            assertEquals(Optional.empty(), streams.addStreamThread());
+            assertEquals(oldSize, streams.threads.size());
         }
     }
 
@@ -763,8 +761,8 @@ public class KafkaStreamsTest {
             final int oldSize = streams.threads.size();
             streams.start();
             streams.globalStreamThread.shutdown();
-            assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
-            assertThat(streams.threads.size(), equalTo(oldSize));
+            assertEquals(Optional.empty(), streams.addStreamThread());
+            assertEquals(oldSize, streams.threads.size());
         }
     }
 
@@ -781,8 +779,8 @@ public class KafkaStreamsTest {
             streams.start();
             streamThreadOne.shutdown(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             final Set<ThreadMetadata> threads = streams.metadataForLocalThreads();
-            assertThat(threads.size(), equalTo(1));
-            assertThat(threads, hasItem(streamThreadTwo.threadMetadata()));
+            assertEquals(1, threads.size());
+            assertTrue(threads.contains(streamThreadTwo.threadMetadata()));
         }
     }
 
@@ -795,15 +793,210 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         when(streamThreadOne.groupInstanceID()).thenReturn(Optional.empty());
         when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
-        when(streamThreadOne.isThreadAlive()).thenReturn(true);
+        when(streamThreadOne.shutdown(any())).thenReturn(true);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
             final int oldSize = streams.threads.size();
             waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
                 "Kafka Streams client did not reach state RUNNING");
-            assertThat(streams.removeStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 1)));
-            assertThat(streams.threads.size(), equalTo(oldSize - 1));
+            assertEquals(Optional.of("processId-StreamThread-" + 1), streams.removeStreamThread());
+            assertEquals(oldSize - 1, streams.threads.size());
+        }
+    }
+
+    @Test
+    public void shouldRemoveStartedThreadStillInCreatedState() throws Exception {
+        // addStreamThread starts the new thread and returns immediately, but the thread's Streams
+        // state stays CREATED until run() begins executing. A removal in that scheduling window
+        // must still find the thread: it is started (Thread liveness), and shutting down a thread
+        // in CREATED completes inline within shutdown().
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadTwo, state2);
+        when(streamThreadOne.isThreadAlive()).thenReturn(true);
+        when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        doAnswer(invocation -> {
+            // The real shutdown() completes the shutdown inline for a thread in CREATED.
+            state1.set(StreamThread.State.DEAD);
+            return true;
+        }).when(streamThreadOne).shutdown(any());
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(
+                () -> streams.state() == KafkaStreams.State.RUNNING || streams.state() == KafkaStreams.State.REBALANCING,
+                15L,
+                "Kafka Streams client did not reach state RUNNING or REBALANCING");
+            assertEquals(Optional.of("processId-StreamThread-1"), streams.removeStreamThread());
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    public void shouldNotBlockOtherThreadChangesWhileRemovalWaitsForShutdown() throws Exception {
+        // A removal waits for the removed thread to reach DEAD without holding `changeThreadCount`,
+        // so other thread-count changes can proceed in the meantime. A second removal is used as the
+        // concurrent operation: it contends for the same lock, and must also pick a different thread
+        // rather than the one that is already shutting down.
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        when(streamThreadOne.groupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadTwo.groupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadTwo.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        // The real `shutdown()` moves the thread to PENDING_SHUTDOWN synchronously, which is what
+        // keeps the second removal from picking the same thread.
+        doAnswer(invocation -> {
+            state1.set(StreamThread.State.PENDING_SHUTDOWN);
+            return true;
+        }).when(streamThreadOne).shutdown(any());
+        doAnswer(invocation -> {
+            state2.set(StreamThread.State.PENDING_SHUTDOWN);
+            return true;
+        }).when(streamThreadTwo).shutdown(any());
+
+        final CountDownLatch removalIsWaiting = new CountDownLatch(1);
+        final CountDownLatch allowShutdownToComplete = new CountDownLatch(1);
+        when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenAnswer(invocation -> {
+            removalIsWaiting.countDown();
+            // Bounded so that a regression fails the assertions below instead of leaving the
+            // second removal blocked on the lock for the rest of the JVM's life.
+            allowShutdownToComplete.await(30, TimeUnit.SECONDS);
+            return true;
+        });
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+                "Kafka Streams client did not reach state RUNNING");
+
+            final ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                final Callable<Optional<String>> removeThread = streams::removeStreamThread;
+                final Future<Optional<String>> firstRemoval = executor.submit(removeThread);
+                assertTrue(removalIsWaiting.await(10, TimeUnit.SECONDS),
+                    "removeStreamThread did not reach the wait for the removed thread's shutdown");
+
+                final Future<Optional<String>> secondRemoval = executor.submit(removeThread);
+                try {
+                    assertEquals(Optional.of("processId-StreamThread-2"), secondRemoval.get(10, TimeUnit.SECONDS));
+                } catch (final java.util.concurrent.TimeoutException e) {
+                    fail("removeStreamThread held changeThreadCount while waiting for a thread to shut down");
+                }
+
+                allowShutdownToComplete.countDown();
+                assertEquals(Optional.of("processId-StreamThread-1"), firstRemoval.get(10, TimeUnit.SECONDS));
+            } finally {
+                allowShutdownToComplete.countDown();
+                executor.shutdownNow();
+            }
+        }
+    }
+
+    @Test
+    public void shouldSkipThreadWhoseShutdownWasAlreadyRequestedWhenRemovingThread() throws Exception {
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        when(streamThreadTwo.groupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadTwo.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        when(streamThreadOne.shutdown(any())).thenReturn(false);
+        doAnswer(invocation -> {
+            state2.set(StreamThread.State.PENDING_SHUTDOWN);
+            return true;
+        }).when(streamThreadTwo).shutdown(any());
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+                "Kafka Streams client did not reach state RUNNING");
+            assertEquals(Optional.of("processId-StreamThread-2"), streams.removeStreamThread());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StreamThread.State.class, names = {"RUNNING", "PENDING_SHUTDOWN", "DEAD"})
+    public void shouldRemoveStoreProviderForReusedThreadNameUnlessReplacementCanServeQueries(final StreamThread.State replacementStateAtBookkeeping) throws Exception {
+        // While a removal waits for its victim to reach DEAD it does not hold `changeThreadCount`,
+        // so a concurrent addStreamThread can trim the DEAD thread from `threads`, reuse its name,
+        // and register the replacement's state-store provider under that name. The removal's
+        // bookkeeping must not delete that registration while the replacement can serve
+        // interactive queries — but a replacement that is itself already shutting down or dead
+        // serves none and may be trimmed from `threads` at any time, so its useless provider must
+        // be removed to avoid leaking it.
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        doAnswer(invocation -> {
+            state1.set(StreamThread.State.PENDING_SHUTDOWN);
+            return true;
+        }).when(streamThreadOne).shutdown(any());
+
+        final StreamThread replacementThread = mock(StreamThread.class);
+        final AtomicReference<StreamThread.State> replacementState = prepareStreamThread(replacementThread, 1);
+        prepareThreadState(replacementThread, replacementState);
+
+        final AtomicReference<KafkaStreams> streamsRef = new AtomicReference<>();
+        when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenAnswer(invocation -> {
+            // The removal is now waiting without holding `changeThreadCount`: let the thread die
+            // and let a concurrent add trim it and reuse its name before the removal's bookkeeping.
+            state1.set(StreamThread.State.DEAD);
+            assertEquals(Optional.of("processId-StreamThread-1"), streamsRef.get().addStreamThread());
+            replacementState.set(replacementStateAtBookkeeping);
+            return true;
+        });
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final MockedConstruction<QueryableStoreProvider> queryableStoreProviderMockedConstruction =
+                 mockConstruction(QueryableStoreProvider.class);
+             final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streamsRef.set(streams);
+            // The two initial threads consumed the stubbed StreamThread.create returns; the add
+            // issued during the removal's wait must produce the thread that reuses the name.
+            streamThreadMockedStatic.when(() -> StreamThread.create(
+                    any(TopologyMetadata.class),
+                    any(StreamsConfig.class),
+                    any(KafkaClientSupplier.class),
+                    any(Admin.class),
+                    any(UUID.class),
+                    any(String.class),
+                    any(StreamsMetricsImpl.class),
+                    any(Time.class),
+                    any(StreamsMetadataState.class),
+                    anyLong(),
+                    anyLong(),
+                    any(StateDirectory.class),
+                    any(StateRestoreListener.class),
+                    any(StandbyUpdateListener.class),
+                    anyInt(),
+                    any(Runnable.class),
+                    any()
+            )).thenReturn(replacementThread);
+            streams.start();
+            waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+                "Kafka Streams client did not reach state RUNNING");
+
+            assertEquals(Optional.of("processId-StreamThread-1"), streams.removeStreamThread());
+
+            final QueryableStoreProvider queryableStoreProvider =
+                queryableStoreProviderMockedConstruction.constructed().get(0);
+            if (replacementStateAtBookkeeping == StreamThread.State.RUNNING) {
+                verify(queryableStoreProvider, never()).removeStoreProviderForThread("processId-StreamThread-1");
+                assertTrue(streams.threads.contains(replacementThread));
+            } else {
+                verify(queryableStoreProvider).removeStoreProviderForThread("processId-StreamThread-1");
+            }
         }
     }
 
@@ -814,8 +1007,8 @@ public class KafkaStreamsTest {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         try (final KafkaStreams streams =
                      new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
-            assertThat(streams.threads.size(), equalTo(1));
+            assertEquals(Optional.empty(), streams.removeStreamThread());
+            assertEquals(1, streams.threads.size());
         }
     }
 
@@ -829,12 +1022,11 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
             streams.close();
-            try {
-                streams.start();
-                fail("Should have throw IllegalStateException");
-            } catch (final IllegalStateException expected) {
-                // this is ok
-            }
+            assertThrows(
+                IllegalStateException.class,
+                streams::start,
+                "should not allow restarting after close"
+            );
         }
     }
 
@@ -847,12 +1039,11 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            try {
-                streams.setGlobalStateRestoreListener(null);
-                fail("Should throw an IllegalStateException");
-            } catch (final IllegalStateException e) {
-                // expected
-            }
+            assertThrows(
+                IllegalStateException.class,
+                () -> streams.setGlobalStateRestoreListener(null),
+                "should not allow setting the global state restore listener after start"
+            );
         }
     }
 
@@ -897,12 +1088,11 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            try {
-                streams.setStateListener(null);
-                fail("Should throw IllegalStateException");
-            } catch (final IllegalStateException e) {
-                // expected
-            }
+            assertThrows(
+                IllegalStateException.class,
+                () -> streams.setStateListener(null),
+                "should not allow setting the state listener after start"
+            );
         }
     }
 
@@ -935,12 +1125,12 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.RUNNING,
                 "Streams never started.");
 
-            try {
-                streams.cleanUp();
-                fail("Should have thrown IllegalStateException");
-            } catch (final IllegalStateException expected) {
-                assertEquals("Cannot clean up while running.", expected.getMessage());
-            }
+            final IllegalStateException expected = assertThrows(
+                IllegalStateException.class,
+                streams::cleanUp,
+                "should not allow cleanup while running"
+            );
+            assertEquals("Cannot clean up while running.", expected.getMessage());
         }
     }
 
@@ -981,9 +1171,9 @@ public class KafkaStreamsTest {
                 "Streams never started.");
 
             streams.close(Duration.ZERO);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
             assertThrows(IllegalStateException.class, streams::cleanUp);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
         }
     }
 
@@ -1009,9 +1199,9 @@ public class KafkaStreamsTest {
                     .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
 
             streams.close(closeOptions);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
             assertThrows(IllegalStateException.class, streams::cleanUp);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
         }
     }
 
@@ -1032,9 +1222,9 @@ public class KafkaStreamsTest {
             final CloseOptions closeOptions = CloseOptions.timeout(Duration.ZERO);
 
             streams.close(closeOptions);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
             assertThrows(IllegalStateException.class, streams::cleanUp);
-            assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
+            assertEquals(State.PENDING_SHUTDOWN, streams.state());
         }
     }
 
@@ -1108,13 +1298,60 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
+        final StreamPartitioner<String, Object> simplePartitioner = new SimplePartitioner();
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            assertThrows(StreamsNotStartedException.class, () -> streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(0))));
+            assertThrows(StreamsNotStartedException.class, () -> streams.queryMetadataForKey("store", "key", simplePartitioner));
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
             streams.close();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
-            assertThrows(IllegalStateException.class, () -> streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(0))));
+            assertThrows(IllegalStateException.class, () -> streams.queryMetadataForKey("store", "key", simplePartitioner));
+        }
+    }
+
+    @Test
+    public void shouldPropagateSerializerAndHeadersToStreamsMetadataState() {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StreamsMetadataState> metadataStateMockedConstruction = mockConstruction(StreamsMetadataState.class)) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                streams.start();
+                final StreamsMetadataState mockMetadataState = metadataStateMockedConstruction.constructed().get(0);
+
+                final Headers headers = new RecordHeaders();
+                headers.add("key", "value".getBytes());
+                final Serializer<String> serializer = new StringSerializer();
+
+                streams.queryMetadataForKey("store", "key", headers, serializer);
+
+                verify(mockMetadataState).keyQueryMetadataForKey("store", "key", headers, serializer);
+            }
+        }
+    }
+
+    @Test
+    public void shouldPropagatePartitionerAndHeadersToStreamsMetadataState() {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StreamsMetadataState> metadataStateMockedConstruction = mockConstruction(StreamsMetadataState.class)) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                streams.start();
+                final StreamsMetadataState mockMetadataState = metadataStateMockedConstruction.constructed().get(0);
+
+                final Headers headers = new RecordHeaders();
+                headers.add("key", "value".getBytes());
+
+                @SuppressWarnings("unchecked")
+                final StreamPartitioner<String, Object> partitioner = mock(StreamPartitioner.class);
+
+                streams.queryMetadataForKey("store", "key", headers, partitioner);
+
+                verify(mockMetadataState).keyQueryMetadataForKey("store", "key", headers, partitioner);
+            }
         }
     }
 
@@ -1527,10 +1764,11 @@ public class KafkaStreamsTest {
         try (final KafkaStreams ignored = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
             fail("Should have thrown TopologyException");
         } catch (final TopologyException e) {
-            assertThat(
-                e.getMessage(),
-                equalTo("Invalid topology: Topology has no stream threads and no global threads, " +
-                            "must subscribe to at least one source topic or global table."));
+            assertEquals(
+                "Invalid topology: Topology has no stream threads and no global threads, " +
+                    "must subscribe to at least one source topic or global table.",
+                e.getMessage()
+            );
         }
     }
 
@@ -1540,7 +1778,7 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
-            assertThat(streams.threads.size(), equalTo(0));
+            assertEquals(0, streams.threads.size());
         }
     }
 
@@ -1551,7 +1789,7 @@ public class KafkaStreamsTest {
         builder.globalTable("anyTopic");
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
 
-            assertThat(streams.threads.size(), equalTo(0));
+            assertEquals(0, streams.threads.size());
             assertEquals(KafkaStreams.State.CREATED, streams.state());
 
             streams.start();
@@ -1578,10 +1816,7 @@ public class KafkaStreamsTest {
                 IllegalArgumentException.class,
                 () -> streams.clientInstanceIds(Duration.ofMillis(-1L))
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("The timeout cannot be negative.")
-            );
+            assertEquals("The timeout cannot be negative.", error.getMessage());
         }
     }
 
@@ -1596,10 +1831,7 @@ public class KafkaStreamsTest {
                 IllegalStateException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("KafkaStreams has not been started, you can retry after calling start().")
-            );
+            assertEquals("KafkaStreams has not been started, you can retry after calling start().", error.getMessage());
         }
     }
 
@@ -1616,10 +1848,7 @@ public class KafkaStreamsTest {
                 IllegalStateException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("KafkaStreams has been stopped (NOT_RUNNING).")
-            );
+            assertEquals("KafkaStreams has been stopped (NOT_RUNNING).", error.getMessage());
         }
     }
 
@@ -1636,17 +1865,11 @@ public class KafkaStreamsTest {
                 StreamsException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("Could not retrieve admin client instance id.")
-            );
+            assertEquals("Could not retrieve admin client instance id.", error.getMessage());
 
             final Throwable cause = error.getCause();
-            assertThat(cause, instanceOf(UnsupportedOperationException.class));
-            assertThat(
-                cause.getMessage(),
-                equalTo("clientInstanceId not set")
-            );
+            assertInstanceOf(UnsupportedOperationException.class, cause);
+            assertEquals("clientInstanceId not set", cause.getMessage());
         }
     }
 
@@ -1666,9 +1889,9 @@ public class KafkaStreamsTest {
                 IllegalStateException.class,
                 clientInstanceIds::adminInstanceId
             );
-            assertThat(
-                error.getMessage(),
-                equalTo("Telemetry is not enabled on the admin client. Set config `enable.metrics.push` to `true`.")
+            assertEquals(
+                "Telemetry is not enabled on the admin client. Set config `enable.metrics.push` to `true`.",
+                error.getMessage()
             );
         }
     }
@@ -1703,10 +1926,7 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
 
-            assertThat(
-                streams.clientInstanceIds(Duration.ZERO).adminInstanceId(),
-                equalTo(instanceId)
-            );
+            assertEquals(instanceId, streams.clientInstanceIds(Duration.ZERO).adminInstanceId());
         }
     }
 
@@ -1730,11 +1950,11 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ZERO);
-            assertThat(clientInstanceIds.consumerInstanceIds().size(), equalTo(1));
-            assertThat(clientInstanceIds.consumerInstanceIds().get("main-consumer"), equalTo(mainConsumerInstanceId));
-            assertThat(clientInstanceIds.producerInstanceIds().size(),  equalTo(1));
-            assertThat(clientInstanceIds.producerInstanceIds().get("some-thread-producer"), equalTo(producerInstanceId));
-            assertThat(clientInstanceIds.adminInstanceId(), equalTo(adminInstanceId));
+            assertEquals(1, clientInstanceIds.consumerInstanceIds().size());
+            assertEquals(mainConsumerInstanceId, clientInstanceIds.consumerInstanceIds().get("main-consumer"));
+            assertEquals(1, clientInstanceIds.producerInstanceIds().size());
+            assertEquals(producerInstanceId, clientInstanceIds.producerInstanceIds().get("some-thread-producer"));
+            assertEquals(adminInstanceId, clientInstanceIds.adminInstanceId());
         }
     }
 
@@ -1754,8 +1974,8 @@ public class KafkaStreamsTest {
                 TimeoutException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve consumer/producer instance id for some-client."));
-            assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
+            assertEquals("Could not retrieve consumer/producer instance id for some-client.", timeoutException.getMessage());
+            assertInstanceOf(java.util.concurrent.TimeoutException.class, timeoutException.getCause());
         }
     }
 
@@ -1779,8 +1999,8 @@ public class KafkaStreamsTest {
                 TimeoutException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve global consumer client instance id."));
-            assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
+            assertEquals("Could not retrieve global consumer client instance id.", timeoutException.getMessage());
+            assertInstanceOf(java.util.concurrent.TimeoutException.class, timeoutException.getCause());
         }
     }
 
@@ -1804,7 +2024,7 @@ public class KafkaStreamsTest {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertThreadOne.set(true);
-                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-10L)));
+                    assertEquals(expectedTimeout.getAndAdd(-10L), timeout);
                     mockTime.sleep(10L);
                     return null;
                 }
@@ -1814,7 +2034,7 @@ public class KafkaStreamsTest {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertThreadTwo.set(true);
-                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-5L)));
+                    assertEquals(expectedTimeout.getAndAdd(-5L), timeout);
                     mockTime.sleep(5L);
                     return null;
                 }
@@ -1831,7 +2051,7 @@ public class KafkaStreamsTest {
                     @Override
                     public Uuid get(final long timeout, final TimeUnit timeUnit) {
                         didAssertGlobalThread.set(true);
-                        assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-8L)));
+                        assertEquals(expectedTimeout.getAndAdd(-8L), timeout);
                         mockTime.sleep(8L);
                         return null;
                     }
@@ -1840,9 +2060,9 @@ public class KafkaStreamsTest {
             streams.clientInstanceIds(Duration.ofMillis(60L));
         }
 
-        assertThat(didAssertThreadOne.get(), equalTo(true));
-        assertThat(didAssertThreadTwo.get(), equalTo(true));
-        assertThat(didAssertGlobalThread.get(), equalTo(true));
+        assertTrue(didAssertThreadOne.get());
+        assertTrue(didAssertThreadTwo.get());
+        assertTrue(didAssertGlobalThread.get());
     }
 
     @Test
@@ -2053,6 +2273,19 @@ public class KafkaStreamsTest {
                 // verify that stateDirectory constructor was called
                 assertFalse(stateDirectoryMockedConstruction.constructed().isEmpty());
             }
+        }
+    }
+
+    private static class SimplePartitioner implements StreamPartitioner<String, Object> {
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+            return Optional.of(Collections.singleton(0));
         }
     }
 }

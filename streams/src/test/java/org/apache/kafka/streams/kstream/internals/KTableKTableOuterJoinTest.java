@@ -25,6 +25,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -46,9 +47,6 @@ import java.util.Collection;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -84,7 +82,7 @@ public class KTableKTableOuterJoinTest {
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         setDslStoreFormat(withHeaders);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -206,7 +204,7 @@ public class KTableKTableOuterJoinTest {
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         setDslStoreFormat(withHeaders);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -319,7 +317,7 @@ public class KTableKTableOuterJoinTest {
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         setDslStoreFormat(withHeaders);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -431,10 +429,9 @@ public class KTableKTableOuterJoinTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableOuterJoin.class)) {
             join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]"
+            ));
         }
     }
 
@@ -442,7 +439,7 @@ public class KTableKTableOuterJoinTest {
                                                final Integer expectedKey,
                                                final String expectedValue,
                                                final long expectedTimestamp) {
-        assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
+        assertEquals(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp), outputTopic.readRecord());
     }
 
     /**

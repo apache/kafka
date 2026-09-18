@@ -62,22 +62,22 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         ShareGroupMetrics shareGroupMetrics,
         LogReader logReader
     ) {
-        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
+        stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
     }
 
     private void start() {
-        this.stateManager.start();
+        stateManager.start();
     }
 
     @Override
     public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
         try {
-            validate(param);
+            ShareGroupDLQValidator.validateParam(param);
+            return stateManager.dlq(param);
         } catch (Exception e) {
-            log.error("Unable to validate dlq record parameters", e);
+            log.error("Unable to enqueue DLQ request", e);
             return CompletableFuture.failedFuture(e);
         }
-        return stateManager.dlq(param);
     }
 
     @Override
@@ -86,41 +86,6 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
             stateManager.stop();
         } catch (Exception e) {
             log.error("Unable to stop DLQ state manager", e);
-        }
-    }
-
-    private static void validate(ShareGroupDLQRecordParameter param) {
-        String prefix = "DLQ records parameters";
-        if (param == null) {
-            throw new IllegalArgumentException(prefix + " cannot be null.");
-        }
-
-        if (param.groupId() == null || param.groupId().isEmpty()) {
-            throw new IllegalArgumentException(prefix + " group cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition() == null) {
-            throw new IllegalArgumentException(prefix + " topic/partition data cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition().topicId() == null) {
-            throw new IllegalArgumentException(prefix + " topic id data cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition().partition() < 0) {
-            throw new IllegalArgumentException(prefix + " partition cannot be negative.");
-        }
-
-        if (param.lastOffset() < param.firstOffset()) {
-            throw new IllegalArgumentException(prefix + " last offset cannot be less than first offset.");
-        }
-
-        if (param.firstOffset() < 0) {
-            throw new IllegalArgumentException(prefix + " first offset cannot be negative.");
-        }
-
-        if (param.lastOffset() < 0) {
-            throw new IllegalArgumentException(prefix + " last offset cannot be negative.");
         }
     }
 }

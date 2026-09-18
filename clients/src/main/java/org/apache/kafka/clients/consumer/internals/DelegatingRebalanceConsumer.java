@@ -35,7 +35,7 @@ import java.util.Set;
 
 /**
  * A restricted view of a {@link Consumer} that delegates permitted operations and enforces
- * lifecycle constraints. Instances are created by {@link ConsumerAwareRebalanceListener} for
+ * lifecycle constraints. Instances are created by {@link SubscriptionState} for
  * each callback invocation and closed automatically when the callback returns.
  */
 class DelegatingRebalanceConsumer implements RebalanceConsumer, AutoCloseable {

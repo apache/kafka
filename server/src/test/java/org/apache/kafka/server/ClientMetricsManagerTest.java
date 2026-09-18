@@ -19,6 +19,7 @@ package org.apache.kafka.server;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -1120,6 +1121,51 @@ public class ClientMetricsManagerTest {
             // Should have default NaN value, must not register export time.
             assertEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
             assertEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
+        }
+    }
+
+    @Test
+    public void testPushTelemetryPluginTooLargeException() throws Exception {
+        // An oversize decompressed payload must be reported as TELEMETRY_TOO_LARGE (retryable at the normal
+        // interval), not INVALID_RECORD (which tells the client to stop pushing telemetry entirely).
+        ClientTelemetryExporterPlugin receiverPlugin = Mockito.mock(ClientTelemetryExporterPlugin.class);
+        Mockito.doThrow(new TelemetryTooLargeException("Decompressed telemetry metrics exceed maximum allowed size: 100"))
+                .when(receiverPlugin).exportMetrics(Mockito.any(), Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
+
+        try (
+                Metrics kafkaMetrics = new Metrics();
+                ClientMetricsManager clientMetricsManager = new ClientMetricsManager(receiverPlugin, 100, time, 100, kafkaMetrics)
+        ) {
+
+            clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultTestProperties());
+            assertEquals(1, clientMetricsManager.subscriptions().size());
+
+            GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
+                    new GetTelemetrySubscriptionsRequestData(), true).build();
+
+            GetTelemetrySubscriptionsResponse subscriptionsResponse = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+                    subscriptionsRequest, ClientMetricsTestUtils.requestContext());
+
+            ClientMetricsInstance instance = clientMetricsManager.clientInstance(subscriptionsResponse.data().clientInstanceId());
+            assertNotNull(instance);
+
+            PushTelemetryRequest request = new Builder(
+                    new PushTelemetryRequestData()
+                            .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
+                            .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
+                            .setCompressionType(CompressionType.NONE.id)
+                            .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
+
+            PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
+                    request, ClientMetricsTestUtils.requestContext());
+
+            assertEquals(Errors.TELEMETRY_TOO_LARGE, response.error());
+            assertFalse(instance.terminating());
+            assertEquals(Errors.TELEMETRY_TOO_LARGE, instance.lastKnownError());
+            // Metrics should report 1 plugin export error and 0 successful export, same accounting as any other
+            // plugin export failure.
+            assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+            assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
         }
     }
 

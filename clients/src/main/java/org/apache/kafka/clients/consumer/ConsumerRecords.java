@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.internals.AbstractIterator;
 
 import org.slf4j.Logger;
@@ -36,6 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * particular topic. There is one {@link ConsumerRecord} list for every topic
  * partition returned by a {@link Consumer#poll(java.time.Duration)} operation.
  */
+@InterfaceAudience.Public
 public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     private static final Logger log = LoggerFactory.getLogger(ConsumerRecords.class);
 

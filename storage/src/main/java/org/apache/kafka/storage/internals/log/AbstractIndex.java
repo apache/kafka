@@ -190,7 +190,7 @@ public abstract class AbstractIndex implements Closeable {
 
     /**
      * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
-     * trimToValidSize() which is called at closing the segment or new segment being rolled; (2) at
+     * trimToValidSize() which is called when a segment becomes inactive (e.g. rolled or prepared for shutdown); (2) at
      * loading segments from disk or truncating back to an old segment where a new log segment became active;
      * we want to reset the index size to maximum index size to avoid rolling new segment.
      *
@@ -240,11 +240,14 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     /**
-     * Flush the data in the index to disk
+     * Flush the data in the index and its metadata to disk
      */
-    public void flush() {
+    public void flush() throws IOException {
         inLock(() -> {
-            mmap.force();
+            if (mmap != null) {
+                mmap.force();
+                Utils.flushFileIfExists(file.toPath());
+            }
         });
     }
 
@@ -256,13 +259,12 @@ public abstract class AbstractIndex implements Closeable {
      *         not exist
      */
     public boolean deleteIfExists() throws IOException {
-        closeHandler();
+        close();
         return Files.deleteIfExists(file.toPath());
     }
 
     /**
-     * Trim this segment to fit just the valid entries, deleting all trailing unwritten bytes from
-     * the file.
+     * Trim this index to fit just the valid entries, deleting all trailing unwritten bytes from the file.
      */
     public void trimToValidSize() throws IOException {
         inLock(() -> {
@@ -280,11 +282,6 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     public void close() throws IOException {
-        trimToValidSize();
-        closeHandler();
-    }
-
-    public void closeHandler() {
         // On JVM, a memory mapping is typically unmapped by garbage collector.
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.

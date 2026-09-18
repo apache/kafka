@@ -601,57 +601,6 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("TaskOffsets are not supported yet."),
-                Map.of(),
-                -1,
-                -1,
-                -1
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("TaskEndOffsets are not supported yet."),
-                Map.of(),
-                -1,
-                -1,
-                -1
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setTaskEndOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("WarmupTasks are not supported yet."),
-                Map.of(),
-                -1,
-                -1,
-                -1
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setWarmupTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()))
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Regular expressions for source topics are not supported yet."),
                 Map.of(),
                 -1,
@@ -667,6 +616,49 @@ public class GroupCoordinatorServiceTest {
                         ))
                     )
             ).get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatAcceptsTaskOffsetsAndWarmupTasks() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime)
+            .setConfig(createConfig())
+            .build(true);
+
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
+            .setGroupId("foo")
+            .setMemberId(Uuid.randomUuid().toString())
+            .setMemberEpoch(1)
+            .setActiveTasks(List.of())
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()))
+            .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
+            .setTaskEndOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("streams-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData(),
+                Map.of(),
+                -1,
+                -1,
+                -1
+            )
+        ));
+
+        CompletableFuture<StreamsGroupHeartbeatResult> future = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
+            request
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), -1, -1, -1),
+            future.get(5, TimeUnit.SECONDS)
         );
     }
 
@@ -1100,9 +1092,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(
-            new JoinGroupResponseData()
-        ));
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
 
         CompletableFuture<JoinGroupResponseData> responseFuture = service.joinGroup(
             requestContext(ApiKeys.JOIN_GROUP),
@@ -2180,7 +2170,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(describedGroupFuture);
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("group-id-1", "group-id-2"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("group-id-1", "group-id-2"), false);
 
         assertFalse(future.isDone());
         describedGroupFuture.complete(new StreamsGroupDescribeResult(List.of(describedGroup2), Map.of()));
@@ -2220,7 +2210,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup)));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("", null));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("", null), false);
 
         assertEquals(expectedDescribedGroups, future.get());
     }
@@ -2244,7 +2234,7 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"), false);
 
         assertEquals(
             List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
@@ -2271,7 +2261,7 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"), false);
 
         assertEquals(
             List.of(new StreamsGroupDescribeResponseData.DescribedGroup()

@@ -26,10 +26,11 @@ import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.slf4j.Logger;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
-public class FollowerState implements EpochState {
+public final class FollowerState implements EpochState {
     private final Logger log;
 
     private final int fetchTimeoutMs;
@@ -92,6 +93,11 @@ public class FollowerState implements EpochState {
     }
 
     @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(OptionalInt.of(leaderId), epoch);
+    }
+
+    @Override
     public Endpoints leaderEndpoints() {
         return leaderEndpoints;
     }
@@ -149,9 +155,14 @@ public class FollowerState implements EpochState {
     }
 
     private long updateVoterPeriodMs() {
-        // Allow for a few rounds of fetch request before attempting to update
-        // the voter state
-        return fetchTimeoutMs;
+        /* Allow for a few rounds of fetch requests before attempting to update the voter state.
+         *
+         * In the default configuration, both the request timeout and the fetch timeout are set to 2
+         * seconds. For this operation, they should not be the same, otherwise the leader can be
+         * prevented from accepting voter changes if the ApiVersions request times out for as long as
+         * the follower keeps retrying.
+         */
+        return 2 * fetchTimeoutMs;
     }
 
     public boolean hasUpdateVoterSetPeriodExpired(long currentTimeMs) {

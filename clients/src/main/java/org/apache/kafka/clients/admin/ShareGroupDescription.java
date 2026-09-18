@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -31,6 +32,7 @@ import java.util.stream.Collectors;
 /**
  * A detailed description of a single share group in the cluster.
  */
+@InterfaceAudience.Public
 public class ShareGroupDescription {
     private final String groupId;
     private final Collection<ShareMemberDescription> members;

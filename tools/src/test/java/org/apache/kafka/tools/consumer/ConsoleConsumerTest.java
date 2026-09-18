@@ -45,10 +45,9 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKeyJsonConverter;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValueJsonConverter;
+import org.apache.kafka.coordinator.transaction.TransactionState;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonConverter;
-import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
-import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJsonConverter;
 import org.apache.kafka.server.util.MockTime;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -297,7 +296,7 @@ public class ConsoleConsumerTest {
             admin.createTopics(Set.of(newTopic));
             produceMessagesWithTxn(cluster);
 
-            String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster, 
+            String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster,
                     Topic.TRANSACTION_STATE_TOPIC_NAME, 
                     "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter");
 
@@ -316,12 +315,10 @@ public class ConsoleConsumerTest {
                 assertNotNull(logKey);
                 assertEquals(transactionId, logKey.transactionalId());
 
-                JsonNode valueNode = jsonNode.get("value");
-                TransactionLogValue logValue =
-                        TransactionLogValueJsonConverter.read(valueNode.get("data"), TransactionLogValue.HIGHEST_SUPPORTED_VERSION);
-                assertNotNull(logValue);
-                assertEquals(0, logValue.producerId());
-                assertEquals(0, logValue.transactionStatus());
+                JsonNode valueData = jsonNode.get("value").get("data");
+                assertNotNull(valueData);
+                assertEquals(0, valueData.get("producerId").asInt());
+                assertEquals(TransactionState.EMPTY.stateName(), valueData.get("transactionStatus").asText());
             } finally {
                 consumerWrapper.cleanup();
             }

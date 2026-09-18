@@ -79,7 +79,7 @@ help|-h|--help
 
 up [-n|--num-nodes NUM_NODES] [-f|--force] [-c|--clean-build] [docker-image]
         [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [-j|--jdk JDK_VERSION] [--ipv6]
-        [--memory MEMORY_LIMIT]
+        [--memory MEMORY_LIMIT] [--build-arg KEY=VALUE]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
@@ -105,6 +105,12 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [-c|--clean-build] [docker-image]
     If -c|--clean-build is passed, a clean rebuild of the native image tarball (releaseTarGz) is
     forced during prepare_native_dir, even if the tarball already exists. Can also be triggered via
     the CLEAN_BUILD environment variable (e.g., CLEAN_BUILD=true).
+
+    If --build-arg is specified, the given KEY=VALUE pair is passed as a Docker build argument
+    to the image build. This flag can be repeated to pass multiple build arguments. Can also be
+    set via the DOCKER_BUILD_ARGS environment variable (e.g.,
+    DOCKER_BUILD_ARGS="--build-arg KEY1=VAL1 --build-arg KEY2=VAL2"). The --build-arg flag
+    takes precedence over the environment variable.
 
     Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678
     on your local machine to enable debugging in VS Code.
@@ -417,10 +423,12 @@ ducker_up() {
             -c|--clean-build) set_once clean_build "true" "clean build"; shift;;
             -m|--kafka_mode) set_once kafka_mode "${2}" "the mode in which kafka will run"; shift 2;;
             --memory) set_once docker_run_memory_limit "${2}" "the container memory limit"; shift 2;;
+            --build-arg) verify_command_line_argument "${2}" "docker build arg"; docker_args="${docker_args} --build-arg ${2}"; shift 2;;
             --ipv6) set_once ipv6 "true" "enable IPv6"; shift;;
             *) set_once image_name "${1}" "container image name"; shift;;
         esac
     done
+    [[ -n "${docker_args}" ]] || docker_args="${DOCKER_BUILD_ARGS:-}"
     [[ -n "${clean_build}" ]] || clean_build="${CLEAN_BUILD:-}"
     [[ -n "${num_nodes}" ]] || num_nodes="${default_num_nodes}"
     [[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"

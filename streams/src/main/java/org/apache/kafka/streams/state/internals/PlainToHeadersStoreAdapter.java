@@ -122,6 +122,11 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void close() {
         store.close();
     }

@@ -59,6 +59,8 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
     private static final String EXPECTED_ISSUER = "https://idp.legit.example/";
 
+    private static final String EXPECTED_AUDIENCE = "kafka-cluster";
+
     @AfterEach
     public void tearDown() {
         System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
@@ -209,7 +211,8 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
         Map<String, ?> configs = getSaslConfigs(Map.of(
             SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, fileUrl,
-            SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER));
+            SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+            SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
 
         OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
         assertDoesNotThrow(() -> handler.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
@@ -225,6 +228,32 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         } finally {
             handler.close();
         }
+    }
+
+    @Test
+    public void testFailsToStartWhenExpectedAudienceMissingWithJwksUrl() {
+        // A broker validator handler configured with a JWKS endpoint URL and expected.issuer but no expected.audience
+        // must fail to start, rather than come up and accept tokens whose audience cannot be verified.
+        Map<String, ?> configs = getSaslConfigs(Map.of(
+            SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "https://example.com/jwks",
+            SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER));
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        assertThrowsWithMessage(ConfigException.class,
+            () -> handler.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()),
+            SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
+    }
+
+    @Test
+    public void testFailsToStartWhenExpectedIssuerMissingWithJwksUrl() {
+        // A broker validator handler configured with a JWKS endpoint URL and expected.audience but no expected.issuer
+        // must fail to start, rather than come up and accept tokens whose issuer cannot be verified.
+        Map<String, ?> configs = getSaslConfigs(Map.of(
+            SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "https://example.com/jwks",
+            SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        assertThrowsWithMessage(ConfigException.class,
+            () -> handler.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()),
+            SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER);
     }
 
     @Test
@@ -244,7 +273,10 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
     private void assertInvalidAccessTokenFails(String accessToken, String expectedMessageSubstring) throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder()
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
-        Map<String, ?> configs = getSaslConfigs();
+        // The injected resolver routes to BrokerJwtValidator, which requires expected.issuer and expected.audience.
+        Map<String, ?> configs = getSaslConfigs(Map.of(
+            SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+            SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
         CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
         JwtValidator jwtValidator = createJwtValidator(verificationKeyResolver);
 

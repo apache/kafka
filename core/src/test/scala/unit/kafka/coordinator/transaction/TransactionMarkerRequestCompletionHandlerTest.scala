@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
-import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, TransactionMetadata, TransactionState}
+import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, PendingCompleteTxn, PendingCompleteTxnAndMarkerEntry, TransactionMetadata, TransactionState}
 import org.apache.kafka.server.common.TransactionVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -44,8 +44,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
     producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(topicPartition), 0L, 0L, TransactionVersion.TV_2)
   private val pendingCompleteTxnAndMarkers = util.List.of(
-    PendingCompleteTxnAndMarkerEntry(
-      PendingCompleteTxn(transactionalId, coordinatorEpoch, txnMetadata, txnMetadata.prepareComplete(42)),
+    new PendingCompleteTxnAndMarkerEntry(
+      new PendingCompleteTxn(transactionalId, coordinatorEpoch, txnMetadata, txnMetadata.prepareComplete(42)),
       new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, util.List.of(topicPartition), 0)))
 
   private val markerChannelManager: TransactionMarkerChannelManager =

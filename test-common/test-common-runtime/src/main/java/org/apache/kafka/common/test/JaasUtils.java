@@ -21,13 +21,38 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.security.auth.login.Configuration;
 
 public class JaasUtils {
+    public static JaasModule plainLoginModule(String username, String password, boolean debug, Map<String, String> validUsers) {
+        String name = "org.apache.kafka.common.security.plain.PlainLoginModule";
+
+        Map<String, String> entries = new HashMap<>();
+        entries.put("username", username);
+        entries.put("password", password);
+        validUsers.forEach((user, pass) -> entries.put("user_" + user, pass));
+
+        return new JaasModule(
+            name,
+            debug,
+            entries
+        );
+    }
+    public record JaasModule(String name, boolean debug, Map<String, String> entries) {
+        @Override
+        public String toString() {
+            return String.format("%s required%n  debug=%b%n  %s;%n", name, debug, entries.entrySet().stream()
+                    .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
+                    .collect(Collectors.joining("\n  ")));
+        }
+    }
+
     public record JaasSection(String contextName, List<JaasModule> modules) {
         @Override
         public String toString() {

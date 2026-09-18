@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -178,7 +177,7 @@ public class MultiThreadedEventProcessorTest {
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
-            List<FutureEvent<Integer>> events = Arrays.asList(
+            List<FutureEvent<Integer>> events = List.of(
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
                 new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
                 new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
@@ -215,7 +214,7 @@ public class MultiThreadedEventProcessorTest {
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
-            List<FutureEvent<Integer>> events = Arrays.asList(
+            List<FutureEvent<Integer>> events = List.of(
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 0
                 new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true), // Event 1
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 2
@@ -323,7 +322,7 @@ public class MultiThreadedEventProcessorTest {
                 true
             );
 
-            List<FutureEvent<Integer>> events = Arrays.asList(
+            List<FutureEvent<Integer>> events = List.of(
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
@@ -482,7 +481,7 @@ public class MultiThreadedEventProcessorTest {
                 return null;
             }).when(mockRuntimeMetrics).recordThreadIdleTime(idleTimeCaptured.capture());
 
-            List<FutureEvent<Integer>> events = Arrays.asList(
+            List<FutureEvent<Integer>> events = List.of(
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
                 new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
                 new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),

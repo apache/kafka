@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -48,6 +49,7 @@ import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor
  * <p>
  * The implementation can extend {@link Configurable} to get configs from consumer.
  */
+@InterfaceAudience.Public
 public interface ConsumerPartitionAssignor {
 
     /**

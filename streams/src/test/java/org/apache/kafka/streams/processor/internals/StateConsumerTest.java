@@ -145,6 +145,11 @@ public class StateConsumerTest {
         public void maybeCheckpoint() {
             flushState();
         }
+
+        @Override
+        public long approximateNumUncommittedBytes() {
+            return 0;
+        }
     }
 
 }

@@ -18,8 +18,10 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -49,6 +51,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -72,6 +76,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
     protected static final String INPUT_TOPIC = "inputTopic";
     protected static final String OUTPUT_TOPIC = "outputTopic";
+    protected static final String GROUP_INSTANCE_ID = "someGroupInstance";
 
     protected Properties streamsConfig;
     protected static KafkaStreams streams;
@@ -111,7 +116,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
         streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
-        streamsConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "someGroupInstance");
+        streamsConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, GROUP_INSTANCE_ID);
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath());
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -212,7 +217,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
             .withTimeout(Duration.ofSeconds(30)));
 
-        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), TestUtils.DEFAULT_MAX_WAIT_MS);
     }
 
     @Test
@@ -227,7 +232,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.DEFAULT)
             .withTimeout(Duration.ofSeconds(30)));
 
-        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), TestUtils.DEFAULT_MAX_WAIT_MS);
     }
 
     @Test
@@ -244,6 +249,44 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
         assertFalse(isEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)),
             "Group should still have a member after REMAIN_IN_GROUP close under Streams protocol");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CloseOptions.GroupMembershipOperation.class, names = {"DEFAULT", "REMAIN_IN_GROUP"})
+    public void testStaticMemberCloseUsesStaticLeaveEpochStreamsProtocol(
+        final CloseOptions.GroupMembershipOperation operation
+    ) throws Exception {
+        final int numStreamThreads = 2;
+        streamsConfig.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numStreamThreads);
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(operation)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        waitForStaticStreamsGroupMembersEpoch(
+            streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
+            GROUP_INSTANCE_ID,
+            StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH,
+            numStreamThreads
+        );
+    }
+
+    @Test
+    public void testStaticMemberLeaveGroupStreamsProtocol() throws Exception {
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), TestUtils.DEFAULT_MAX_WAIT_MS);
     }
 
     protected Topology setupTopologyWithoutIntermediateUserTopic() {
@@ -271,5 +314,27 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
             mockTime.sleep(10);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), producerConfig, mockTime.milliseconds());
         }
+    }
+
+    private void waitForStaticStreamsGroupMembersEpoch(
+        final String applicationId,
+        final String baseInstanceId,
+        final int expectedEpoch,
+        final int expectedMemberCount
+    ) throws Exception {
+        TestUtils.waitForCondition(() -> {
+            final StreamsGroupDescription groupDescription =
+                adminClient.describeStreamsGroups(Collections.singletonList(applicationId))
+                    .describedGroups()
+                    .get(applicationId)
+                    .get();
+
+            return groupDescription.members().size() == expectedMemberCount &&
+                groupDescription.members().stream().allMatch(member ->
+                    member.instanceId()
+                        .filter(instanceId -> instanceId.startsWith(baseInstanceId + "-"))
+                        .isPresent() &&
+                        member.memberEpoch() == expectedEpoch);
+        }, "Static streams group members did not reach expected member epoch " + expectedEpoch);
     }
 }

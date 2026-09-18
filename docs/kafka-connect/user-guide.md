@@ -26,7 +26,7 @@ type: docs
 -->
 
 
-The [quickstart](../getting-started/quickstart) provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.
+The [quickstart](../../getting-started/quickstart) provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.
 
 ## Running Kafka Connect
 
@@ -618,7 +618,7 @@ Offsets topic used by the connector
 
 This is the value of the `offsets.storage.topic` property in the connector’s configuration if provided,
 
-or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
+or the value of the `offset.storage.topic` property in the worker’s configuration if not.
 </td>
 <td>
 
@@ -686,7 +686,7 @@ the name of the connector
 
 or the value of `consumer.group.id` if present in the Connect configuration,
 
-or the value of `consumer.overrides.group.id` if present in the Connector configuration
+or the value of `consumer.override.group.id` if present in the Connector configuration
 </td><td> </td></tr>
 <tr><td>Read</td><td>Topic</td><td>sink topic(s) that the connector will consume from</td><td>
 

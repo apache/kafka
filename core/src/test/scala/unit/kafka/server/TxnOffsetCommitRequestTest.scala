@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{EndTxnRequest, JoinGroupRequest}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.utils.ProducerIdAndEpoch
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.junit.jupiter.api.Assertions.{assertNotEquals, assertThrows}

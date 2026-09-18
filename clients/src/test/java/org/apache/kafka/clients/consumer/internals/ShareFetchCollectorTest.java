@@ -335,7 +335,7 @@ public class ShareFetchCollectorTest {
     }
 
     private void subscribeAndAssign(TopicIdPartition tp) {
-        subscriptions.subscribe(Set.of(tp.topic()), Optional.empty());
+        subscriptions.subscribe(Set.of(tp.topic()));
         subscriptions.assignFromSubscribed(Set.of(tp.topicPartition()));
     }
 

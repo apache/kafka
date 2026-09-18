@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
+import org.apache.kafka.server.quota.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler

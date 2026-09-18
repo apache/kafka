@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.time.Duration;
@@ -67,6 +68,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see TimestampExtractor
  */
+@InterfaceAudience.Public
 public class JoinWindows extends Windows<Window> {
 
     /** Maximum time difference for tuples that are before the join tuple. */

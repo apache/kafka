@@ -67,8 +67,4 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         return new DescribeLogDirsResponse(new DescribeLogDirsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
 }

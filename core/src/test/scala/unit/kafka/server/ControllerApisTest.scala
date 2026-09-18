@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
@@ -59,7 +59,7 @@ import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.ServerConfigs
-import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicationQuotaManager}
+import org.apache.kafka.server.quota.{ClientQuotaManager, ClientRequestQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicationQuotaManager}
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -436,6 +436,15 @@ class ControllerApisTest {
   }
 
   @Test
+  def testUnauthorizedHandleUnregisterController(): Unit = {
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleUnregisterController(buildRequest(new UnregisterControllerRequest.Builder(
+        new UnregisterControllerRequestData()).build(0)))
+    })
+  }
+
+  @Test
   def testClose(): Unit = {
     controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller]))
     controllerApis.close()
@@ -738,8 +747,8 @@ class ControllerApisTest {
         setErrorMessage(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited."))
     assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
       hasClusterAuth = false,
-      _ => Set("baz", "indescribable"),
-      _ => Set("baz"),
+      _ => util.Set.of("baz", "indescribable"),
+      _ => util.Set.of("baz"),
       forwarded = false).get().topics().asScala.toSet)
   }
 
@@ -788,8 +797,8 @@ class ControllerApisTest {
     assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       hasClusterAuth = true,
-      _ => Set.empty,
-      _ => Set.empty).get().asScala.toSet)
+      _ => util.Set.of[String](),
+      _ => util.Set.of[String]()).get().asScala.toSet)
   }
 
   @Test
@@ -814,8 +823,8 @@ class ControllerApisTest {
     assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       hasClusterAuth = true,
-      _ => Set.empty,
-      _ => Set.empty).get().asScala.toSet)
+      _ => util.Set.of[String](),
+      _ => util.Set.of[String]()).get().asScala.toSet)
   }
 
   @Test
@@ -856,8 +865,8 @@ class ControllerApisTest {
     assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       hasClusterAuth = false,
-      names => names.toSet,
-      names => names.toSet).get().asScala.toSet)
+      names => names.asScala.toSet.asJava,
+      names => names.asScala.toSet.asJava).get().asScala.toSet)
   }
 
   @Test
@@ -892,8 +901,8 @@ class ControllerApisTest {
     assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       hasClusterAuth = false,
-      _ => Set("foo", "baz"),
-      _ => Set.empty).get().asScala.toSet)
+      _ => util.Set.of("foo", "baz"),
+      _ => util.Set.of[String]()).get().asScala.toSet)
   }
 
   @Test
@@ -917,8 +926,8 @@ class ControllerApisTest {
     assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       hasClusterAuth = false,
-      _ => Set("foo"),
-      _ => Set.empty).get().asScala.toSet)
+      _ => util.Set.of("foo"),
+      _ => util.Set.of[String]()).get().asScala.toSet)
   }
 
   @Test
@@ -936,8 +945,8 @@ class ControllerApisTest {
       classOf[ExecutionException], () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         ApiKeys.DELETE_TOPICS.latestVersion().toInt,
         hasClusterAuth = false,
-        _ => Set("foo", "bar"),
-        _ => Set("foo", "bar")).get()).getCause.getClass)
+        _ => util.Set.of("foo", "bar"),
+        _ => util.Set.of("foo", "bar")).get()).getCause.getClass)
   }
 
   @Test
@@ -954,14 +963,14 @@ class ControllerApisTest {
     TestUtils.assertFutureThrows(classOf[TopicDeletionDisabledException], controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       hasClusterAuth = false,
-      _ => Set("foo", "bar"),
-      _ => Set("foo", "bar")))
+      _ => util.Set.of("foo", "bar"),
+      _ => util.Set.of("foo", "bar")))
 
     TestUtils.assertFutureThrows(classOf[InvalidRequestException], controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       1,
       hasClusterAuth = false,
-      _ => Set("foo", "bar"),
-      _ => Set("foo", "bar")))
+      _ => util.Set.of("foo", "bar"),
+      _ => util.Set.of("foo", "bar")))
   }
 
   @ParameterizedTest
@@ -999,7 +1008,7 @@ class ControllerApisTest {
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
         setErrorMessage(null)),
       controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
-        _ => Set("foo", "bar")).get().asScala.toSet)
+        _ => util.Set.of("foo", "bar")).get().asScala.toSet)
   }
 
   @Test

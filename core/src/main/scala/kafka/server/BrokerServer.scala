@@ -47,6 +47,7 @@ import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublish
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
@@ -750,16 +751,16 @@ class BrokerServer(
   }
 
   private def createShareStatePersister(): Persister = {
-    if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
-      val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
-      if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
+    val className = config.shareGroupConfig.shareGroupPersisterClassName
+    if (className.nonEmpty) {
+      if (className.equals(classOf[DefaultStatePersister].getName)) {
         DefaultStatePersister.instance(
           NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
-          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
+          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer
         )
-      } else if (klass.getName.equals(classOf[NoOpStatePersister].getName)) {
+      } else if (className.equals(classOf[NoOpStatePersister].getName)) {
         info("Using no-op persister")
         new NoOpStatePersister()
       } else {
@@ -774,18 +775,18 @@ class BrokerServer(
   }
 
   private def createShareGroupDLQManager(): ShareGroupDLQManager = {
-    if (config.shareGroupConfig.shareGroupDLQManagerClassName.nonEmpty) {
-      val klass = Utils.loadClass(config.shareGroupConfig.shareGroupDLQManagerClassName, classOf[Object]).asInstanceOf[Class[ShareGroupDLQManager]]
-      if (klass.getName.equals(classOf[DefaultShareGroupDLQManager].getName)) {
+    val className = config.shareGroupConfig.shareGroupDLQManagerClassName
+    if (className.nonEmpty) {
+      if (className.equals(classOf[DefaultShareGroupDLQManager].getName)) {
         DefaultShareGroupDLQManager.instance(
           NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
-          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
+          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer,
           shareGroupMetrics,
           shareGroupLogReader
         )
-      } else if (klass.getName.equals(classOf[NoOpShareGroupDLQManager].getName)) {
+      } else if (className.equals(classOf[NoOpShareGroupDLQManager].getName)) {
         info("Using no-op share group DLQ manager")
         new NoOpShareGroupDLQManager()
       } else {
@@ -929,9 +930,16 @@ class BrokerServer(
       Utils.closeQuietly(brokerTopicStats, "broker topic stats")
       Utils.closeQuietly(sharePartitionManager, "share partition manager")
 
+      // The order of closing sharePartitionManager, groupCoordinator and persister matters.
+      // groupCoordinator, sharePartitionManager must be closed before the persister so that
+      // new requests from sharePartitionManager, groupCoordinator do not encounter a stopped
+      // persister.
       if (persister != null)
         Utils.swallow(this.logger.underlying, () => persister.stop())
 
+      // The order of closing sharePartitionManager and shareGroupDLQManager matters.
+      // sharePartitionManager must be closed before the shareGroupDLQManager so any new
+      // requests from sharePartitionManager do not encounter a stopped shareGroupDLQManager.
       if (shareGroupDLQManager != null)
         Utils.swallow(this.logger.underlying, () => shareGroupDLQManager.stop())
 

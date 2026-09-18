@@ -56,8 +56,4 @@ public class ListGroupsResponse extends AbstractResponse {
         return new ListGroupsResponse(new ListGroupsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
 }

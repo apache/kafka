@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.time.Duration;
@@ -69,6 +70,7 @@ import static org.apache.kafka.streams.kstream.Windows.NO_GRACE_PERIOD;
  * @see KGroupedStream#windowedBy(SessionWindows)
  * @see TimestampExtractor
  */
+@InterfaceAudience.Public
 public final class SessionWindows {
 
     private final long gapMs;

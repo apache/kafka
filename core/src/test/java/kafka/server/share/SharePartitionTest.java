@@ -101,6 +101,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -119,6 +120,7 @@ import static org.apache.kafka.server.util.ServerTestUtils.clearYammerMetrics;
 import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1032,6 +1034,31 @@ public class SharePartitionTest {
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(IllegalStateException.class, result);
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
+    }
+
+    @Test
+    public void testMaybeInitializeWithEqualButDistinctTopicIdResponse() {
+        // The response's topicId is a different Uuid instance than TOPIC_ID_PARTITION.topicId()
+        // but represents the same UUID value. Initialization should succeed since topicId is
+        // compared by value, not by reference.
+        Uuid equalButDistinctTopicId = new Uuid(
+            TOPIC_ID_PARTITION.topicId().getMostSignificantBits(),
+            TOPIC_ID_PARTITION.topicId().getLeastSignificantBits());
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(equalButDistinctTopicId, List.of(
+                PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
+                    List.of(
+                        new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
+                        new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3)))))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
     }
 
     @Test
@@ -7724,6 +7751,29 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testWriteShareGroupStateWithEqualButDistinctTopicIdResponse() {
+        // The response's topicId is a different Uuid instance than TOPIC_ID_PARTITION.topicId()
+        // but represents the same UUID value. The write should succeed since topicId is
+        // compared by value, not by reference.
+        Uuid equalButDistinctTopicId = new Uuid(
+            TOPIC_ID_PARTITION.topicId().getMostSignificantBits(),
+            TOPIC_ID_PARTITION.topicId().getLeastSignificantBits());
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+                new TopicData<>(equalButDistinctTopicId, List.of(
+                        PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        CompletableFuture<Void> result = sharePartition.writeShareGroupState(anyList());
+        assertNull(result.join());
+        assertFalse(result.isCompletedExceptionally());
+    }
+
+    @Test
     public void testWriteShareGroupStateWithWriteException() {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
@@ -13659,6 +13709,47 @@ public class SharePartitionTest {
 
         // Verify readState was not called by processDlqPhase2.
         Mockito.verify(persister, Mockito.never()).readState(Mockito.any());
+    }
+
+    @Test
+    public void testCloseDeregistersMetrics() {
+        // Building the share partition registers the gauge metrics whose suppliers capture the
+        // SharePartition instance. If they are not deregistered on teardown, the metrics registry
+        // can pin the fenced SharePartition (and its cachedState) in memory indefinitely.
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
+
+        // The gauges are registered on construction; with no in-flight records their value is 0.
+        assertEquals(0, yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).intValue());
+        assertEquals(0, yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue());
+
+        sharePartition.markFenced();
+        assertEquals(SharePartitionState.FENCED, sharePartition.partitionState());
+
+        sharePartition.close();
+        // close must deregister the metrics so the registry no longer references the partition.
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT));
+
+        // close must be idempotent - a second call should not throw even though the metrics are gone.
+        assertDoesNotThrow(sharePartition::close);
+    }
+
+    @Test
+    public void testCloseWhileActiveStillDeregistersMetrics() {
+        // Even if close is invoked without fencing first (partition still ACTIVE), the metrics must
+        // still be deregistered so the registry does not retain the partition.
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+        assertEquals(0, yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).intValue());
+
+        sharePartition.close();
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT));
     }
 
     private static ShareGroupDLQManager mockDlqManager() {

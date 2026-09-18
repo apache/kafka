@@ -21,8 +21,7 @@ package kafka.server
 import java.util.{Objects, Optional, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.api.SaslSetup
-import kafka.security.JaasTestUtils
-import kafka.security.JaasTestUtils.JaasSection
+import org.apache.kafka.security.JaasTestUtils.JaasSection
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewTopic}
@@ -36,6 +35,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.KRaftConfigs
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest

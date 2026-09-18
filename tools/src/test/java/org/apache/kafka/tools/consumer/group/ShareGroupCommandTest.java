@@ -1618,14 +1618,14 @@ public class ShareGroupCommandTest {
             Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetsForGroups = service.resetOffsets();
             writeContentToFile(file, service.exportOffsetsToCsv(offsetsForGroups));
 
-            String[] cgcArgsExec = new String[]{"--bootstrap-server", bootstrapServer, "--reset-offsets", "--from-file", file.getCanonicalPath(), "--execute", "--topic", topic, "--group", group};
+            String[] cgcArgsExec = new String[]{"--bootstrap-server", bootstrapServer, "--reset-offsets", "--from-file", file.getCanonicalPath(), "--execute", "--group", group};
             try (ShareGroupService serviceExec = getShareGroupService(cgcArgsExec, adminClient)) {
                 Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetsForGroupsExec = serviceExec.resetOffsets();
                 assertEquals(1, offsetsForGroupsExec.size());
                 assertEquals(1, offsetsForGroupsExec.get(group).size());
                 assertEquals(10, offsetsForGroupsExec.get(group).get(new TopicPartition(topic, 0)).offset());
                 verify(adminClient).alterShareGroupOffsets(eq(group), anyMap(), any(AlterShareGroupOffsetsOptions.class));
-                verify(adminClient, times(6)).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
+                verify(adminClient, times(5)).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
                 verify(alterShareGroupOffsetsResult, times(1)).all();
                 verify(adminClient, times(2)).describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class));
             }
@@ -1685,7 +1685,7 @@ public class ShareGroupCommandTest {
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
 
-        String[] cgcArgsExec = new String[]{"--bootstrap-server", bootstrapServer, "--reset-offsets", "--from-file", file.getCanonicalPath(), "--execute", "--all-topics", "--group", group};
+        String[] cgcArgsExec = new String[]{"--bootstrap-server", bootstrapServer, "--reset-offsets", "--from-file", file.getCanonicalPath(), "--execute", "--group", group};
         try (ShareGroupService serviceExec = getShareGroupService(cgcArgsExec, adminClient)) {
             Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetsForGroupsExec = serviceExec.resetOffsets();
             assertEquals(1, offsetsForGroupsExec.size());
