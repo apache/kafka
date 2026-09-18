@@ -28,6 +28,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
@@ -40,6 +41,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -74,9 +76,11 @@ public class ProducerPerformanceTest {
     @Spy
     ProducerPerformance producerPerformanceSpy;
 
+    @TempDir
+    private Path tempDir;
+
     private File createTempFile(String contents) throws IOException {
-        File file = File.createTempFile("ProducerPerformanceTest", ".tmp");
-        file.deleteOnExit();
+        File file = Files.createFile(tempDir.resolve("ProducerPerformanceTest-" + System.nanoTime() + ".tmp")).toFile();
         Files.write(file.toPath(), contents.getBytes());
         return file;
     }

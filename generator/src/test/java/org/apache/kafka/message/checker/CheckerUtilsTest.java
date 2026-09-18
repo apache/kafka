@@ -20,6 +20,9 @@ package org.apache.kafka.message.checker;
 import org.apache.kafka.message.Versions;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
 
 import static org.apache.kafka.message.checker.CheckerTestUtils.field;
 import static org.apache.kafka.message.checker.CheckerTestUtils.fieldWithTag;
@@ -28,6 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CheckerUtilsTest {
+    @TempDir
+    private Path tempDir;
+
     @Test
     public void testMin0and1() {
         assertEquals((short) 0, CheckerUtils.min((short) 0, (short) 1));
@@ -82,7 +88,7 @@ public class CheckerUtilsTest {
 
     @Test
     public void testReadMessageSpecFromFile() throws Exception {
-        CheckerUtils.readMessageSpecFromFile(messageSpecStringToTempFile(
+        CheckerUtils.readMessageSpecFromFile(messageSpecStringToTempFile(tempDir,
             "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
             "'validVersions': '0-2', 'flexibleVersions': '0+', " +
             "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}"));
