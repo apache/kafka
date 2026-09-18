@@ -30,6 +30,7 @@ import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
@@ -369,7 +370,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(propsWithStringDefaults(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -426,6 +427,38 @@ public class KTableTransformValuesTest {
             assertEquals(ValueAndTimestamp.make("B->b!", 10L), keyValueStore.get("B"));
             assertEquals(ValueAndTimestamp.make("C->null!", 15L), keyValueStore.get("C"));
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldMaterializeStatefulTransformForDownstreamLookup(final boolean withHeaders) {
+        final String counterStoreName = "counter-store";
+        builder.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore(counterStoreName),
+            Serdes.String(),
+            Serdes.Integer()
+        ));
+
+        final KTable<String, String> transformed = builder
+            .table(INPUT_TOPIC, CONSUMED)
+            .transformValues(new StoreBackedCounterTransformerSupplier(counterStoreName), counterStoreName);
+
+        builder
+            .stream("probe", CONSUMED)
+            .join(transformed, (probe, transformedValue) -> probe + "->" + transformedValue)
+            .process(capture);
+
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(propsWithStringDefaults(withHeaders)).build();
+        final TestInputTopic<String, String> inputTopic =
+            driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+        final TestInputTopic<String, String> probeTopic =
+            driver.createInputTopic("probe", new StringSerializer(), new StringSerializer());
+
+        inputTopic.pipeInput("A", "ignored", 5L);
+        inputTopic.pipeInput("B", "ignored", 10L);
+        probeTopic.pipeInput("A", "lookup", 15L);
+
+        assertThat(output(), equalTo(List.of(new KeyValueTimestamp<>("A", "lookup->1", 15L))));
     }
 
     @ParameterizedTest
@@ -555,6 +588,13 @@ public class KTableTransformValuesTest {
         return props;
     }
 
+    private static Properties propsWithStringDefaults(final boolean withHeaders) {
+        final Properties props = props(withHeaders);
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        return props;
+    }
+
     private static void throwIfStoresNotAvailable(final ProcessorContext context,
                                                   final List<String> expectedStoredNames) {
         final List<String> missing = new ArrayList<>();
@@ -651,5 +691,37 @@ public class KTableTransformValuesTest {
 
         @Override
         public void close() {}
+    }
+
+    private static class StoreBackedCounterTransformerSupplier
+        implements ValueTransformerWithKeySupplier<String, String, String> {
+        private final String storeName;
+
+        private StoreBackedCounterTransformerSupplier(final String storeName) {
+            this.storeName = storeName;
+        }
+
+        @Override
+        public ValueTransformerWithKey<String, String, String> get() {
+            return new ValueTransformerWithKey<>() {
+                private KeyValueStore<String, Integer> store;
+
+                @Override
+                public void init(final ProcessorContext context) {
+                    store = context.getStateStore(storeName);
+                }
+
+                @Override
+                public String transform(final String readOnlyKey, final String value) {
+                    final Integer currentCount = store.get("count");
+                    final int nextCount = currentCount == null ? 1 : currentCount + 1;
+                    store.put("count", nextCount);
+                    return Integer.toString(nextCount);
+                }
+
+                @Override
+                public void close() {}
+            };
+        }
     }
 }
