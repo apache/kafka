@@ -39,7 +39,7 @@ import java.util.function.Consumer;
  * state.
  *
  * <p>{@link #refine} returns the target assignment unchanged, like {@link NoOpAssignmentRefiner} for now,
- * because this class is WIP is not used yet.
+ * because this class is still a work in progress and not used yet.
  */
 public class AssignmentRefinerImpl implements AssignmentRefiner {
 
@@ -219,7 +219,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
             // Because of assignment offloading and member fencing, the target assignment could contain a member which
             // was removed from the group in the meantime. For this case, all previously owned tasks of this member
-            // (which did not get move to a new owner) will be "dandling" which will be fixed by the next assignor run.
+            // (which were not moved to a new owner) will be dangling, which the next assignor run fixes.
             // Furthermore, we stage all tasks the assignor moves to this member on their old owners to keep them
             // "online".
             final StreamsGroupMember targetMember = members.get(targetOwner);
@@ -290,7 +290,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     /**
      * Decides which of the staged migrations get a warm-up task, under the warmup budget.
      *
-     * <p>There is different scenarios:
+     * <p>There are several scenarios:
      * <ul>
      *     <li>A warm-up task already restoring keeps its warm-up slot if the target assignment didn't change, and the
      *     warm-up task is not caught up yet. It could also get revoked if the warmup budget was reduced and keeping

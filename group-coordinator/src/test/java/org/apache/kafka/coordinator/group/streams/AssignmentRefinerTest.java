@@ -673,7 +673,7 @@ public class AssignmentRefinerTest {
 
     @Test
     public void shouldDecideNothingForATaskTheTargetAssignmentNoLongerContains() {
-        // A topology change removed the task. It belongs in nobody's slice, and its current holder revokes it the
+        // A topology change removed the task. It belongs to nobody now, and its current holder revokes it the
         // ordinary way.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)))
@@ -1639,7 +1639,7 @@ public class AssignmentRefinerTest {
     @Test
     public void shouldKeepABorrowedStandbyWhereHistoryLeftIt() {
         // The target assignment is relocating memberB's standby to memberC, which is exactly why borrowing it is
-        // free -- but that means it is not in the slice memberB would otherwise get. Without patching it back in,
+        // free -- but that means the target assignment does not give it to memberB. Without patching it back in,
         // the reconciler would revoke the very copy warming memberB, and the migration would finish cold.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
