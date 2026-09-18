@@ -115,6 +115,18 @@ public class ClientTelemetryUtilsTest {
         assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, ClientTelemetryUtils.validateIntervalMs(pushIntervalMs));
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {1, 1_048_576, Integer.MAX_VALUE})
+    public void testValidateTelemetryMaxBytesValid(int telemetryMaxBytes) {
+        assertEquals(telemetryMaxBytes, ClientTelemetryUtils.validateTelemetryMaxBytes(telemetryMaxBytes));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {Integer.MIN_VALUE, -1, 0})
+    public void testValidateTelemetryMaxBytesInvalid(int telemetryMaxBytes) {
+        assertEquals(Integer.MAX_VALUE, ClientTelemetryUtils.validateTelemetryMaxBytes(telemetryMaxBytes));
+    }
+
     @Test
     public void testPreferredCompressionType() {
         // Test with no unsupported types
