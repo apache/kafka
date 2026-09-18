@@ -26,14 +26,18 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
@@ -182,6 +186,57 @@ public class FetchBufferTest {
             waitingThread.start();
             fetchBuffer.wakeup();
             waitingThread.join(Duration.ofSeconds(30).toMillis());
+            assertFalse(waitingThread.isAlive());
+        }
+    }
+
+    @Test
+    public void testRequeueDoesNotWakeUpBuffer() throws Exception {
+        try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
+            CompletedFetch completedFetch = completedFetch(topicAPartition0);
+            fetchBuffer.requeue(List.of(completedFetch));
+
+            FutureTask<Void> awaitWakeup = new FutureTask<>(() -> {
+                fetchBuffer.awaitWakeup(time.timer(Duration.ofMinutes(1)));
+                return null;
+            });
+            Thread waitingThread = new Thread(awaitWakeup);
+            waitingThread.start();
+            try {
+                TestUtils.waitForCondition(
+                    () -> waitingThread.getState() == Thread.State.TIMED_WAITING,
+                    "Thread did not start waiting on the fetch buffer"
+                );
+                assertFalse(awaitWakeup.isDone(), "Requeuing fetches must not wake up the buffer");
+                assertSame(completedFetch, fetchBuffer.poll());
+                assertTrue(fetchBuffer.isEmpty());
+            } finally {
+                fetchBuffer.wakeup();
+                waitingThread.join(Duration.ofSeconds(30).toMillis());
+            }
+            assertFalse(waitingThread.isAlive());
+            awaitWakeup.get(30, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    public void testRequeuePreservesPendingWakeup() throws Exception {
+        try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
+            fetchBuffer.wakeup();
+            fetchBuffer.requeue(List.of(completedFetch(topicAPartition0)));
+
+            FutureTask<Void> awaitWakeup = new FutureTask<>(() -> {
+                fetchBuffer.awaitWakeup(time.timer(Duration.ofMinutes(1)));
+                return null;
+            });
+            Thread waitingThread = new Thread(awaitWakeup);
+            waitingThread.start();
+            try {
+                awaitWakeup.get(30, TimeUnit.SECONDS);
+            } finally {
+                fetchBuffer.wakeup();
+                waitingThread.join(Duration.ofSeconds(30).toMillis());
+            }
             assertFalse(waitingThread.isAlive());
         }
     }
