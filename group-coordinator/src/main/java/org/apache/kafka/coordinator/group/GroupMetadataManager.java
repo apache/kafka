@@ -167,6 +167,7 @@ import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentView;
@@ -2389,6 +2390,11 @@ public class GroupMetadataManager {
 
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
             response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage, replaceStaticOldMember));
+            if (requestApiVersion >= 2) {
+                response.setTopicPartitionCounts(
+                    EndpointToPartitionsManager.topicPartitionCounts(group, metadataImage)
+                );
+            }
         }
         if (groups.containsKey(group.groupId())) {
             // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.

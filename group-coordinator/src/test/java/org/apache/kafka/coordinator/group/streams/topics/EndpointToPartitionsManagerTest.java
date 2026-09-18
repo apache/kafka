@@ -231,6 +231,47 @@ class EndpointToPartitionsManagerTest {
         assertEquals(topicBExpectedPartitions, topicBPartition.partitions().stream().sorted().toList());
     }
 
+    @Test
+    void testTopicPartitionCountsAreIndependentOfCurrentAssignment() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "Topic-A", 4)
+            .build();
+        ConfiguredSubtopology subtopology = new ConfiguredSubtopology(
+            4,
+            Set.of("Topic-A"),
+            new HashMap<>(),
+            new HashSet<>(),
+            new HashMap<>()
+        );
+        ConfiguredTopology topology = mock(ConfiguredTopology.class);
+        StreamsGroup group = mock(StreamsGroup.class);
+        SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>();
+        subtopologies.put("0", subtopology);
+        when(topology.subtopologies()).thenReturn(Optional.of(subtopologies));
+        when(group.configuredTopology()).thenReturn(Optional.of(topology));
+
+        List<StreamsGroupHeartbeatResponseData.TopicPartitionCount> counts =
+            EndpointToPartitionsManager.topicPartitionCounts(group, new KRaftCoordinatorMetadataImage(metadataImage));
+
+        assertEquals(1, counts.size());
+        assertEquals("Topic-A", counts.get(0).topic());
+        assertEquals(4, counts.get(0).partitionCount());
+    }
+
+    @Test
+    void testTopicPartitionCountsEmptyWhenTopologyIsNotConfigured() {
+        StreamsGroup group = mock(StreamsGroup.class);
+        when(group.configuredTopology()).thenReturn(Optional.empty());
+
+        assertEquals(
+            List.of(),
+            EndpointToPartitionsManager.topicPartitionCounts(
+                group,
+                new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build())
+            )
+        );
+    }
+
     static Stream<Arguments> argsProvider() {
         return Stream.of(
                 arguments(2, 5, List.of(0, 1), List.of(0, 1, 2, 3, 4), "Should assign correct partitions when partitions differ between topics"),

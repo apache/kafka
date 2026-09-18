@@ -3999,6 +3999,13 @@ public class RequestResponseTest {
         if (version >= 1) {
             data.setTopologyDescriptionRequired(true);
         }
+        if (version >= 2) {
+            data.setTopicPartitionCounts(List.of(
+                new StreamsGroupHeartbeatResponseData.TopicPartitionCount()
+                    .setTopic("topic")
+                    .setPartitionCount(4)
+            ));
+        }
         return new StreamsGroupHeartbeatResponse(data);
     }
 
