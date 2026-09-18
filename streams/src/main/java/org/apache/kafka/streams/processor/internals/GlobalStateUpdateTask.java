@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -109,7 +111,8 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     @Override
     public void update(final ConsumerRecord<byte[], byte[]> record) {
         final RecordDeserializer sourceNodeAndDeserializer = deserializers.get(record.topic());
-        final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.deserialize(processorContext, record);
+        final Headers sourceRawHeaders = new RecordHeaders(record.headers());
+        final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.deserialize(processorContext, record, sourceRawHeaders);
 
         if (deserialized != null) {
             final ProcessorRecordContext recordContext =
@@ -118,7 +121,10 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                     deserialized.offset(),
                     deserialized.partition(),
                     deserialized.topic(),
-                    deserialized.headers());
+                    deserialized.headers(),
+                    null,
+                    null,
+                    sourceRawHeaders);
             processorContext.setRecordContext(recordContext);
             processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode());
             final Record<Object, Object> toProcess = new Record<>(
