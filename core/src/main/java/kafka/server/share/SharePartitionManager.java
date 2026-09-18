@@ -477,15 +477,19 @@ public class SharePartitionManager implements AutoCloseable {
                     log.error("Acknowledge data present in Initial Fetch Request for group {} member {}", groupId, memberId);
                     throw Errors.INVALID_REQUEST.exception();
                 }
-                if (cache.remove(key) != null) {
-                    log.debug("Removed share session with key {}", key);
+                // The remove and the subsequent create must happen atomically under the cache's lock.
+                ShareSessionKey responseShareSessionKey;
+                synchronized (cache) {
+                    if (cache.remove(key) != null) {
+                        log.debug("Removed share session with key {}", key);
+                    }
+                    ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new
+                            ImplicitLinkedHashCollection<>(shareFetchData.size());
+                    shareFetchData.forEach(topicIdPartition ->
+                        cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
+                    responseShareSessionKey = cache.maybeCreateSession(groupId, memberId,
+                        cachedSharePartitions, clientConnectionId);
                 }
-                ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new
-                        ImplicitLinkedHashCollection<>(shareFetchData.size());
-                shareFetchData.forEach(topicIdPartition ->
-                    cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
-                ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, memberId,
-                    cachedSharePartitions, clientConnectionId);
                 if (responseShareSessionKey == null) {
                     log.error("Could not create a share session for group {} member {}", groupId, memberId);
                     throw Errors.SHARE_SESSION_LIMIT_REACHED.exception();

@@ -109,7 +109,12 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 
 import scala.Tuple2;
 import scala.collection.Seq;
@@ -343,8 +348,67 @@ public class SharePartitionManagerTest {
         // and delete the older one.
         ShareFetchContext context2 = sharePartitionManager.newContext(groupId, reqData, EMPTY_PART_LIST, memberId, ShareRequestMetadata.INITIAL_EPOCH, false, CONNECTION_ID);
         assertInstanceOf(ShareSessionContext.class, context2);
-        assertFalse(((ShareSessionContext) context1).isSubsequent());
+        assertFalse(((ShareSessionContext) context2).isSubsequent());
         assertEquals(1, cache.size());
+    }
+
+    @Test
+    @SuppressWarnings("resource")
+    public void testConcurrentInitialEpochRequestsClearsState() throws Exception {
+        // Enough iterations to make catching a regression here reliable, tests complete under a sec
+        // with 1000 iterations.
+        int iterations = 1000;
+        ShareSessionCache cache = new ShareSessionCache(iterations * 2);
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .withPartitionCache(partitionCache)
+            .withReplicaManager(mockReplicaManager)
+            .build();
+
+        SharePartition sharePartition = mock(SharePartition.class);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            for (int i = 0; i < iterations; i++) {
+                String groupId = "grp-" + i;
+                String memberId = Uuid.randomUuid().toString();
+                String connectionA = "conn-a-" + i;
+                String connectionB = "conn-b-" + i;
+                TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(),
+                    new TopicPartition("topic-" + i, 0));
+                List<TopicIdPartition> reqData = List.of(tp);
+
+                partitionCache.computeIfAbsent(new SharePartitionKey(groupId, tp),
+                    k -> sharePartition);
+
+                Future<?> futureA = executor.submit(
+                    () -> sharePartitionManager.newContext(groupId, reqData,
+                        EMPTY_PART_LIST, memberId, ShareRequestMetadata.INITIAL_EPOCH, false,
+                        connectionA));
+                Future<?> futureB = executor.submit(
+                    () -> sharePartitionManager.newContext(groupId, reqData,
+                        EMPTY_PART_LIST, memberId, ShareRequestMetadata.INITIAL_EPOCH, false,
+                        connectionB));
+                futureA.get(10, TimeUnit.SECONDS);
+                futureB.get(10, TimeUnit.SECONDS);
+
+                cache.connectionDisconnectListener().onDisconnect(connectionA);
+                cache.connectionDisconnectListener().onDisconnect(connectionB);
+            }
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+        }
+
+        // Every session must be fully cleaned up. No leaked sessions, no phantom member/partition counts,
+        // and no share partitions retained past the point where the group should have gone empty.
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+        assertEquals(0, partitionCache.size());
+        IntStream.range(0, iterations).forEach(i -> {
+            Integer numMembers = cache.numMembers("grp-" + i);
+            assertEquals(0, numMembers == null ? 0 : numMembers);
+        });
     }
 
     @Test
