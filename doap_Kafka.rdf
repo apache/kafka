@@ -32,13 +32,14 @@
     <bug-database rdf:resource="https://issues.apache.org/jira/browse/KAFKA" />
     <mailing-list rdf:resource="https://kafka.apache.org/contact.html" />
     <download-page rdf:resource="https://kafka.apache.org/downloads.html" />
+    <programming-language>Java</programming-language>
     <programming-language>Scala</programming-language>
     <category rdf:resource="http://projects.apache.org/category/big-data" />
     <repository>
-      <SVNRepository>
+      <GitRepository>
         <location rdf:resource="https://gitbox.apache.org/repos/asf/kafka.git"/>
         <browse rdf:resource="https://github.com/apache/kafka"/>
-      </SVNRepository>
+      </GitRepository>
     </repository>
     <maintainer>
       <foaf:Person>
