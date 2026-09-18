@@ -17,11 +17,13 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -68,5 +70,35 @@ public final class AssignorHelpers {
      */
     static <K> HashSet<K> newHashSet(int numElements) {
         return new HashSet<>((int) (((numElements + 1) / 0.75f) + 1));
+    }
+
+
+    /**
+     * Checks if the member's rack matches any of the partition's racks.
+     * @param memberRackId The member's rack id.
+     * @param partitionRackIds The partition's rack ids.
+     * @return True if the member's rack matches any of the partition's racks, false otherwise.
+     */
+    public static boolean isRackMatch(Optional<String> memberRackId, Set<String> partitionRackIds) {
+        return memberRackId.isPresent() && partitionRackIds.contains(memberRackId.get());
+    }
+
+    /**
+     * Determines whether rack-aware assignment should be used based on the provided racks.
+     * @param allMemberRacks The set of all member racks.
+     * @param allPartitionRacks The set of all partition racks.
+     * @param racksPerPartition A map of partitions to their respective racks.
+     * @return True if member racks and partition racks overlap and not all partitions have the same set of racks, false otherwise.
+     */
+    public static boolean useRackAwareAssignment(
+        Set<String> allMemberRacks,
+        Set<String> allPartitionRacks,
+        Map<TopicIdPartition, Set<String>> racksPerPartition
+    ) {
+        if (allMemberRacks.isEmpty() || Collections.disjoint(allMemberRacks, allPartitionRacks))
+            return false;
+        else {
+            return !racksPerPartition.values().stream().allMatch(allPartitionRacks::equals);
+        }
     }
 }
