@@ -266,7 +266,7 @@ public class ShareSessionCache {
     }
 
     // Visible for testing.
-    Integer numMembers(String groupId) {
+    public Integer numMembers(String groupId) {
         return numMembersPerGroup.get(groupId);
     }
 
