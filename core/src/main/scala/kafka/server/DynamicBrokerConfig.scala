@@ -218,7 +218,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       // only add these if the controller isn't also running the broker role
       // because these would already be added via the broker in that case
       addReconfigurable(controller.kafkaYammerMetrics)
-      addReconfigurable(new DynamicMetricsReporters(kafkaConfig.nodeId, controller.config, controller.metrics, controller.clusterId))
+      addReconfigurable(new DynamicMetricsReporters(kafkaConfig.nodeId, controller.config, controller.metrics, controller.clusterId.getOrThrow()))
     }
     addReconfigurable(new DynamicClientQuotaCallback(controller.quotaManagers, controller.config))
     addBrokerReconfigurable(new ControllerDynamicThreadPool(controller))

@@ -52,7 +52,7 @@ import org.apache.kafka.server.controller.ControllerRegistrationManager
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
-import org.apache.kafka.server.util.{Deadline, FutureUtils}
+import org.apache.kafka.server.util.{Deadline, DeferredValue, FutureUtils}
 import org.apache.kafka.server.NodeToControllerChannelManagerImpl
 import org.apache.kafka.server.RaftControllerNodeProvider
 
@@ -126,7 +126,7 @@ class ControllerServer(
     true
   }
 
-  def clusterId: String = sharedServer.clusterId
+  def clusterId: DeferredValue[String] = sharedServer.clusterId
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -138,7 +138,6 @@ class ControllerServer(
 
       maybeChangeStatus(STARTING, STARTED)
 
-      metricsGroup.newGauge("ClusterId", () => clusterId)
       metricsGroup.newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
       linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time)
@@ -192,17 +191,6 @@ class ControllerServer(
         .withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
 
-      val endpointReadyFutures = {
-        val builder = new EndpointReadyFutures.Builder()
-        builder.build(authorizerPlugin.toJava,
-          new KafkaAuthorizerServerInfo(
-            new ClusterResource(clusterId),
-            config.nodeId,
-            listenerInfo.listeners().values(),
-            listenerInfo.firstListener(),
-            config.earlyStartListeners.map(_.value()).asJava))
-      }
-
       sharedServer.startForController(listenerInfo)
 
       createTopicPolicy = Option(config.
@@ -239,7 +227,7 @@ class ControllerServer(
 
         quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.brokerSessionTimeoutMs)
 
-        new QuorumController.Builder(config.nodeId, sharedServer.clusterId).
+        new QuorumController.Builder(config.nodeId, clusterId).
           setTime(time).
           setThreadNamePrefix(s"quorum-controller-${config.nodeId}-").
           setConfigSchema(configSchema).
@@ -315,6 +303,11 @@ class ControllerServer(
       // Set up the controller registrations publisher.
       metadataPublishers.add(registrationsPublisher)
 
+      // Wait for the cluster ID to be known before proceeding
+      val knownClusterId = clusterId.waitWithLogging(logger.underlying, logIdent,
+        "the clusterId to be known", startupDeadline, time)
+      metricsGroup.newGauge("ClusterId", () => knownClusterId)
+
       // Create the registration manager, which handles sending KIP-919 controller registrations.
       registrationManager = new ControllerRegistrationManager(config.nodeId,
         time,
@@ -356,7 +349,7 @@ class ControllerServer(
 
       // Set up the DynamicTopicClusterQuotaPublisher. This will enable quotas for the cluster and topics.
       metadataPublishers.add(new DynamicTopicClusterQuotaPublisher(
-        clusterId,
+        knownClusterId,
         config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
@@ -401,6 +394,16 @@ class ControllerServer(
         "the controller metadata publishers to be installed",
         sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
 
+      val endpointReadyFutures = {
+        val builder = new EndpointReadyFutures.Builder()
+        builder.build(authorizerPlugin.toJava,
+          new KafkaAuthorizerServerInfo(
+            new ClusterResource(knownClusterId),
+            config.nodeId,
+            listenerInfo.listeners().values(),
+            listenerInfo.firstListener(),
+            config.earlyStartListeners.map(_.value()).asJava))
+      }
       val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = endpointReadyFutures.futures().asScala.toMap
 
       /**
