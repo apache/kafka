@@ -93,11 +93,13 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
     private Serde<K> keySerde;
     private FullChangeSerde<V> valueSerde;
+    private final Boolean headersEnabled;
 
-    // When headers-aware stores are enabled (dsl.store.format=HEADERS) each buffered value part is
-    // stored as a ValueTimestampHeaders blob so that the old and new value can carry their own
-    // headers and timestamp independently. Otherwise plain values are stored (the pre-existing V3
-    // behavior) to avoid inflating memory/changelog size for users who do not use header stores.
+    // When headers-aware stores are enabled per buffer or via dsl.store.format=HEADERS, each buffered
+    // value part is stored as a ValueTimestampHeaders blob so that the old and new value can carry
+    // their own headers and timestamp independently. Otherwise plain values are stored (the
+    // pre-existing V3 behavior) to avoid inflating memory/changelog size for users who do not use
+    // header stores.
     private boolean storeHeaders;
     private ValueTimestampHeadersSerializer<V> valueTimestampHeadersSerializer;
     private ValueTimestampHeadersDeserializer<V> valueTimestampHeadersDeserializer;
@@ -122,11 +124,20 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         private final Serde<V> valueSerde;
         private boolean loggingEnabled = true;
         private Map<String, String> logConfig = new HashMap<>();
+        private final Boolean headersEnabled;
 
         public Builder(final String storeName, final Serde<K> keySerde, final Serde<V> valueSerde) {
+            this(storeName, keySerde, valueSerde, null);
+        }
+
+        public Builder(final String storeName,
+                       final Serde<K> keySerde,
+                       final Serde<V> valueSerde,
+                       final Boolean headersEnabled) {
             this.storeName = storeName;
             this.keySerde = keySerde;
             this.valueSerde = valueSerde;
+            this.headersEnabled = headersEnabled;
         }
 
         /**
@@ -167,7 +178,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
         @Override
         public InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>> build() {
-            return new InMemoryTimeOrderedKeyValueChangeBuffer<>(storeName, loggingEnabled, keySerde, valueSerde);
+            return new InMemoryTimeOrderedKeyValueChangeBuffer<>(storeName, loggingEnabled, keySerde, valueSerde, headersEnabled);
         }
 
         @Override
@@ -189,11 +200,13 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     private InMemoryTimeOrderedKeyValueChangeBuffer(final String storeName,
                                                     final boolean loggingEnabled,
                                                     final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde) {
+                                                    final Serde<V> valueSerde,
+                                                    final Boolean headersEnabled) {
         this.storeName = storeName;
         this.loggingEnabled = loggingEnabled;
         this.keySerde = keySerde;
         this.valueSerde = FullChangeSerde.wrap(valueSerde);
+        this.headersEnabled = headersEnabled;
     }
 
     @Override
@@ -220,9 +233,13 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         taskId = context.taskId().toString();
         streamsMetrics = context.metrics();
 
-        final Object dslStoreFormat = stateStoreContext.appConfigs().get(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
-        storeHeaders = dslStoreFormat != null
-            && StreamsConfig.DSL_STORE_FORMAT_HEADERS.equalsIgnoreCase(dslStoreFormat.toString());
+        if (headersEnabled == null) {
+            final Object dslStoreFormat = stateStoreContext.appConfigs().get(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+            storeHeaders = dslStoreFormat != null
+                && StreamsConfig.DSL_STORE_FORMAT_HEADERS.equalsIgnoreCase(dslStoreFormat.toString());
+        } else {
+            storeHeaders = headersEnabled;
+        }
 
         bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
             taskId,
