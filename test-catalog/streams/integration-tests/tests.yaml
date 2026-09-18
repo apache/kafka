@@ -44,6 +44,12 @@ org.apache.kafka.streams.integration.EosIntegrationTest:
 - shouldNotViolateEosIfOneTaskFailsWithState
 - shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances
 - shouldWriteLatestOffsetsToCheckpointOnShutdown
+org.apache.kafka.streams.integration.FaultProxyDelayIntegrationTest:
+- shouldDelayASingleProduceResponse
+org.apache.kafka.streams.integration.FaultProxyExampleIntegrationTest:
+- shouldStayExactlyOnceWhenCommitIsFencedOnce
+org.apache.kafka.streams.integration.FaultProxyPlainClientsExampleIntegrationTest:
+- producerRetriesAroundInjectedProduceErrorAndConsumerReadsAll
 org.apache.kafka.streams.integration.FineGrainedAutoResetIntegrationTest:
 - shouldFailForResetNone
 - shouldOnlyReadRecordsWhereEarliestSpecifiedWithInvalidCommittedOffsets

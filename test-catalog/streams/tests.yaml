@@ -2778,6 +2778,7 @@ org.apache.kafka.streams.processor.internals.StoreChangelogReaderTest:
 - shouldCheckCompletionIfPositionLargerThanEndOffset
 - shouldDecrementRemainingRecordsToZeroWithOffsetGaps
 - shouldFallBackNoStoredOffsetToBeginningAndStoredOffsetToItsFloor
+- shouldFallBackToFloorWhenNothingHasExpiredYet
 - shouldFallBackToStoredOffsetAndBackOffWhenProbeNeverAnswers
 - shouldInitializeChangelogAndCheckForCompletion
 - shouldKeepPollingWhileTheWindowIsStillResolvingPartitions
@@ -2788,6 +2789,7 @@ org.apache.kafka.streams.processor.internals.StoreChangelogReaderTest:
 - shouldNotGiveUpOnPollsThatHaveNotWaited
 - shouldNotProbeStandbyWithStoredOffset
 - shouldNotProbeWhenStoredOffsetGapIsSmall
+- shouldNotProbeWindowedStoreWithUnboundedRetention
 - shouldNotRegisterSameStoreMultipleTimes
 - shouldNotRegisterStoreWithoutMetadata
 - shouldNotSeekBelowStoredOffsetWhenTimestampOffsetIsBehindIt
@@ -2804,6 +2806,7 @@ org.apache.kafka.streams.processor.internals.StoreChangelogReaderTest:
 - shouldRestoreMultipleChangelogs
 - shouldRestoreToLimitInStandbyState
 - shouldRetryProbePollBeforeFallingBackToLogStart
+- shouldRouteEachStoredOffsetPartitionIndependentlyInOneRestore
 - shouldSeekByTimestampForWindowedStoreWithoutStoredOffset
 - shouldSeekFromTheNewestTimestampInTheProbedWindow
 - shouldSeekPastStoredOffsetByTimestampWhenGapIsLarge

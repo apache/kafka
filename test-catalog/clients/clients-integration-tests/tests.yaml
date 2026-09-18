@@ -25,6 +25,7 @@ org.apache.kafka.clients.MetricsDuringTopicCreationDeletionTest:
 - testMetricsDuringTopicCreateDelete
 org.apache.kafka.clients.admin.AddPartitionsTest:
 - testCreatePartitions
+- testCreatePartitionsAcrossMetadataVersions
 - testIncrementPartitions
 - testManualAssignmentOfReplicas
 - testMissingPartitionsInCreatePartitions
@@ -79,6 +80,9 @@ org.apache.kafka.clients.admin.ClientTelemetryTest:
 - testMetrics
 org.apache.kafka.clients.admin.ConcurrentListOffsetsRequestTest:
 - correctlyHandleConcurrentModificationOfPartitionLeaderCache
+org.apache.kafka.clients.admin.CreateTopicsTest:
+- testCreateTopicsRespectsConfiguredMaxRecordsPerBatch
+- testOverlyLargeCreateTopics
 org.apache.kafka.clients.admin.DeleteTopicTest:
 - testAddPartitionDuringDeleteTopic
 - testDeleteNonExistingTopic
@@ -99,12 +103,15 @@ org.apache.kafka.clients.admin.DescribeConfigsTest:
 - testDescribeConfigsNonexistent
 org.apache.kafka.clients.admin.DescribeFeaturesTest:
 - testApiVersions
+- testDescribeKRaftVersion
 - testSendRequestToWrongNodeType
 - testUnstableApiVersions
 org.apache.kafka.clients.admin.DescribeProducersWithBrokerIdTest:
 - testDescribeProducersDefaultRoutesToLeader
 - testDescribeProducersFromFollower
 - testDescribeProducersWithInvalidBrokerId
+org.apache.kafka.clients.admin.DynamicBrokerConfigTest:
+- testIncreaseNumIoThreads
 org.apache.kafka.clients.admin.DynamicGroupConfigIntegrationTest:
 - testDescribeGroupConfigSynonymsWithBrokerSynonym
 - testDescribeGroupConfigSynonymsWithStaticBrokerConfig

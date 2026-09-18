@@ -215,6 +215,7 @@ org.apache.kafka.server.log.remote.storage.RemoteLogManagerTest:
 - testReadForFirstBatchInLogCompaction
 - testReadForFirstBatchMoreThanMaxFetchBytes
 - testReadForMissingFirstBatchInRemote
+- testRemoteDeleteLagResetsToZeroOnBecomingFollower
 - testRemoteDeleteLagsOnRetentionBreachedSegments
 - testRemoteLogManagerRemoteMetrics
 - testRemoteLogManagerTasksAvgIdlePercentAndMetadataCountMetrics
