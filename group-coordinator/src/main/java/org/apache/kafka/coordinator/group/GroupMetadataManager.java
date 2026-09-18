@@ -1038,8 +1038,8 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false.
-     * @throws IllegalStateException    if the group does not have the expected type.
+     * @throws GroupIdNotFoundException if createIfNotExists is false and the group is absent or classic.
+     * @throws IllegalStateException    if the group is neither a consumer group nor a classic group.
      * Package private for testing.
      */
     ConsumerGroup getOrMaybeCreatePersistedConsumerGroup(
@@ -1058,11 +1058,15 @@ public class GroupMetadataManager {
             return consumerGroup;
         } else if (group.type() == CONSUMER) {
             return (ConsumerGroup) group;
-        } else if (group.type() == CLASSIC && ((ClassicGroup) group).isSimpleGroup()) {
-            // If the group is a simple classic group, it was automatically created to hold committed
-            // offsets if no group existed. Simple classic groups are not backed by any records
-            // in the __consumer_offsets topic hence we can safely replace it here. Without this,
-            // replaying consumer group records after offset commit records would not work.
+        } else if (group.type() == CLASSIC) {
+            if (!createIfNotExists) {
+                // A consumer tombstone must not replace or delete a classic group.
+                throw new GroupIdNotFoundException(String.format("Consumer group %s not found.", groupId));
+            }
+            // During a concurrent load and compaction, the loader may read classic metadata
+            // before its upgrade tombstone is compacted away by a subsequent downgrade.
+            // Consumer values must therefore be allowed to replace the classic group.
+            // This also handles simple classic groups created by offset commit records.
             ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
