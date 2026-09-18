@@ -104,6 +104,132 @@ import static org.mockito.Mockito.when;
 public class UtilsTest {
 
     @Test
+    public void testLoadClassFallsBackToKafkaClassLoader() throws ClassNotFoundException {
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        String className = UtilsTest.class.getName();
+        try {
+            Thread.currentThread().setContextClassLoader(new ClassLoader(originalClassLoader) {
+                @Override
+                public Class<?> loadClass(String name) throws ClassNotFoundException {
+                    if (className.equals(name)) {
+                        throw new ClassNotFoundException("Rejected by context class loader");
+                    }
+                    return super.loadClass(name);
+                }
+            });
+
+            assertEquals(UtilsTest.class, Utils.loadClass(className, Object.class));
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    @Test
+    public void testLoadClassPrefersContextClassLoader() throws ClassNotFoundException {
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        String className = UtilsTest.class.getName();
+        try {
+            Thread.currentThread().setContextClassLoader(new ClassLoader(originalClassLoader) {
+                @Override
+                public Class<?> loadClass(String name) throws ClassNotFoundException {
+                    if (className.equals(name)) {
+                        return Utils.class;
+                    }
+                    return super.loadClass(name);
+                }
+            });
+
+            assertEquals(Utils.class, Utils.loadClass(className, Object.class));
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    @Test
+    public void testLoadClassWithNullContextClassLoader() throws ClassNotFoundException {
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        try {
+            Thread.currentThread().setContextClassLoader(null);
+            assertEquals(UtilsTest.class, Utils.loadClass(UtilsTest.class.getName(), Object.class));
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    @Test
+    public void testLoadClassRetainsBothFailures() {
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        String missingClassName = "org.apache.kafka.MissingClass";
+        try {
+            Thread.currentThread().setContextClassLoader(new ClassLoader(null) {
+                @Override
+                public Class<?> loadClass(String name) throws ClassNotFoundException {
+                    throw new ClassNotFoundException("Rejected by context class loader: " + name);
+                }
+            });
+
+            ClassNotFoundException exception = assertThrows(ClassNotFoundException.class,
+                    () -> Utils.loadClass(missingClassName, Object.class));
+            assertEquals(missingClassName, exception.getMessage());
+            assertEquals(1, exception.getSuppressed().length);
+            assertEquals("Rejected by context class loader: " + missingClassName,
+                    exception.getSuppressed()[0].getMessage());
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    @Test
+    public void testLoadClassDoesNotMaskLinkageError() {
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        String className = UtilsTest.class.getName();
+        LinkageError expected = new LinkageError("Failed to link class");
+        try {
+            Thread.currentThread().setContextClassLoader(new ClassLoader(originalClassLoader) {
+                @Override
+                public Class<?> loadClass(String name) throws ClassNotFoundException {
+                    if (className.equals(name)) {
+                        throw expected;
+                    }
+                    return super.loadClass(name);
+                }
+            });
+
+            assertEquals(expected, assertThrows(LinkageError.class,
+                    () -> Utils.loadClass(className, Object.class)));
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    @Test
+    public void testLoadClassDoesNotFallbackDuringInitialization() {
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        String alias = "TestAlias";
+        String className = UtilsTest.class.getName();
+        try {
+            Thread.currentThread().setContextClassLoader(new ClassLoader(originalClassLoader) {
+                @Override
+                public Class<?> loadClass(String name) throws ClassNotFoundException {
+                    if (alias.equals(name)) {
+                        return UtilsTest.class;
+                    }
+                    if (className.equals(name)) {
+                        throw new ClassNotFoundException("Rejected during initialization");
+                    }
+                    return super.loadClass(name);
+                }
+            });
+
+            ClassNotFoundException exception = assertThrows(ClassNotFoundException.class,
+                    () -> Utils.loadClass(alias, Object.class));
+            assertEquals("Rejected during initialization", exception.getMessage());
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    @Test
     public void testMurmur2() {
         Map<byte[], Integer> cases = new java.util.HashMap<>();
         cases.put("21".getBytes(), -973932308);

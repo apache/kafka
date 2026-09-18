@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import org.junit.jupiter.api.Test;
 
@@ -677,6 +678,27 @@ public class ConfigDefTest {
                 }
             });
             ConfigDef.parseType("Test config", alias, Type.CLASS);
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    @Test
+    public void testClassFallsBackToKafkaClassLoader() {
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        String className = StringSerializer.class.getName();
+        try {
+            Thread.currentThread().setContextClassLoader(new ClassLoader(originalClassLoader) {
+                @Override
+                public Class<?> loadClass(String name) throws ClassNotFoundException {
+                    if (className.equals(name)) {
+                        throw new ClassNotFoundException(name);
+                    }
+                    return super.loadClass(name);
+                }
+            });
+
+            assertEquals(StringSerializer.class, ConfigDef.parseType("Test config", className, Type.CLASS));
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
