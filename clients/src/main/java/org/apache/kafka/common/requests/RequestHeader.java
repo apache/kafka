@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.RequestHeaderData;
@@ -67,6 +68,10 @@ public class RequestHeader implements AbstractRequestResponse {
 
     public int correlationId() {
         return data.correlationId();
+    }
+
+    public Uuid clientInstanceId() {
+        return data.clientInstanceId();
     }
 
     public RequestHeaderData data() {
@@ -166,6 +171,7 @@ public class RequestHeader implements AbstractRequestResponse {
                 ", apiVersion=" + apiVersion() +
                 ", clientId=" + clientId() +
                 ", correlationId=" + correlationId() +
+                ", clientInstanceId=" + clientInstanceId() +
                 ", headerVersion=" + headerVersion +
                 ")";
     }
