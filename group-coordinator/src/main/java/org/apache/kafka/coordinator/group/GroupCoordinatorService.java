@@ -985,14 +985,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Batched smart-finalize write after the cleanup cycle's plugin delete. Per group: if stored
-     * is still UNCERTAIN no push raced and it is cleared to NONE (the next sweep tombstones it); if
-     * stored advanced past UNCERTAIN a push raced our delete and it is forced back to UNCERTAIN to
-     * re-solicit. All groups in the batch hash to the same __consumer_offsets partition. Runtime
-     * write failures (NOT_COORDINATOR etc.) are logged here and swallowed so a single failed write
-     * does not poison the cycle's allOf — the next cycle retries because the persisted storedEpoch
-     * is still non-default.
+     * After the plugin delete, tidy up each group's storedEpoch based on whether a push
+     * sneaked in while we were deleting.
+     *
+     * Earlier in the cycle each group was marked UNCERTAIN, then the topology was deleted. Now, per group:
+     * - storedEpoch == UNCERTAIN  -> nothing changed it, so no push raced us -> clear to NONE (next sweep tombstones it).
+     * - storedEpoch != UNCERTAIN  -> a push wrote a real epoch mid-delete -> set back to UNCERTAIN to re-request a push.
+     *
+     * All groups share one __consumer_offsets partition. A write failure (e.g. NOT_COORDINATOR) is logged and
+     * ignored so it doesn't fail the cycle; the next cycle retries because storedEpoch stays non-default.
      */
+
     private CompletableFuture<Void> finalizeAfterDeleteBatchAsync(
         TopicPartition tp,
         Set<String> groupIds
