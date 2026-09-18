@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -58,6 +59,40 @@ public class RequestHeaderTest {
         assertEquals(11, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
+    }
+
+    @Test
+    public void testRequestHeaderV3() {
+        // OffsetDelete v1 is the first RPC version mapped to the v3 request header.
+        short apiVersion = 1;
+        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, apiVersion, "", 10);
+        assertEquals(3, header.headerVersion());
+
+        // The client instance ID is tagged, so a v3 header which leaves it unset is the size of a v2 header.
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
+        assertEquals(11, buffer.remaining());
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header, deserialized);
+        assertEquals(Uuid.ZERO_UUID, deserialized.data().clientInstanceId());
+    }
+
+    @Test
+    public void testRequestHeaderV3WithClientInstanceId() {
+        Uuid clientInstanceId = Uuid.randomUuid();
+        RequestHeaderData headerData = new RequestHeaderData().
+            setRequestApiKey(ApiKeys.OFFSET_DELETE.id).
+            setRequestApiVersion((short) 1).
+            setClientId("").
+            setCorrelationId(10).
+            setClientInstanceId(clientInstanceId);
+        RequestHeader header = new RequestHeader(headerData, (short) 3);
+
+        // The 11 bytes of a v2 header, plus the tagged field's count, tag, size and 16-byte UUID.
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
+        assertEquals(29, buffer.remaining());
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header, deserialized);
+        assertEquals(clientInstanceId, deserialized.data().clientInstanceId());
     }
 
     @Test
