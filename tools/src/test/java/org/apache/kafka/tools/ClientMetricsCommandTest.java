@@ -27,7 +27,6 @@ import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.ListConfigResourcesResult;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -52,8 +51,7 @@ public class ClientMetricsCommandTest {
 
     @Test
     public void testOptionsNoActionFails() {
-        assertInitializeInvalidOptionsExitCode(1,
-            new String[] {"--bootstrap-server", bootstrapServer});
+        assertInvalidOptions(new String[] {"--bootstrap-server", bootstrapServer});
     }
 
     @Test
@@ -79,8 +77,7 @@ public class ClientMetricsCommandTest {
 
     @Test
     public void testOptionsDeleteNoNameFails() {
-        assertInitializeInvalidOptionsExitCode(1,
-            new String[] {"--bootstrap-server", bootstrapServer, "--delete"});
+        assertInvalidOptions(new String[] {"--bootstrap-server", bootstrapServer, "--delete"});
     }
 
     @Test
@@ -92,8 +89,7 @@ public class ClientMetricsCommandTest {
 
     @Test
     public void testOptionsAlterNoNameFails() {
-        assertInitializeInvalidOptionsExitCode(1,
-            new String[] {"--bootstrap-server", bootstrapServer, "--alter"});
+        assertInvalidOptions(new String[] {"--bootstrap-server", bootstrapServer, "--alter"});
     }
 
     @Test
@@ -328,15 +324,7 @@ public class ClientMetricsCommandTest {
         assertThrows(ExecutionException.class, service::listClientMetrics);
     }
 
-    private void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {
-        Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(expected, exitCode);
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> new ClientMetricsCommand.ClientMetricsCommandOptions(options));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+    private void assertInvalidOptions(String[] options) {
+        assertThrows(IllegalArgumentException.class, () -> new ClientMetricsCommand.ClientMetricsCommandOptions(options));
     }
 }

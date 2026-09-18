@@ -30,6 +30,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.server.util.CommandLineUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,9 +58,16 @@ public class ConsoleConsumer {
     static int messageCount = 0;
 
     public static void main(String[] args) throws Exception {
-        ConsoleConsumerOptions opts = new ConsoleConsumerOptions(args);
         try {
+            ConsoleConsumerOptions opts = new ConsoleConsumerOptions(args);
             run(opts);
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            Exit.exit(1);
         } catch (AuthenticationException ae) {
             LOG.error("Authentication failed: terminating consumer process", ae);
             Exit.exit(1);
