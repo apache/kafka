@@ -308,4 +308,73 @@ public class ChunkedByteBufferOutputStreamTest {
         assertEquals(total, p.availableMemory(),
             "pool must be exactly restored; released chunks must not be returned twice on completion");
     }
+
+    /**
+     * A write that runs past the attached chunks grows the stream by pulling more chunks from the
+     * pool (no heap fallback while the pool has room). The extra chunks return to the pool on
+     * deallocate.
+     */
+    @Test
+    public void testWriteGrowsFromPoolBeyondInitialChunks() throws Exception {
+        int chunkSize = 8;
+        long total = 64; // room for 8 chunks
+        BufferPool p = pool(total, chunkSize);
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
+            // Start with 1 chunk but write 3 chunks' worth: the stream must attach 2 more from the pool.
+            byte[] payload = new byte[3 * chunkSize];
+            for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
+            stream.write(payload, 0, payload.length);
+
+            assertEquals(0, stream.fallbackAllocations(), "growth should come from the pool, not the heap");
+            assertEquals(total - 3L * chunkSize, p.availableMemory(), "two extra chunks pulled from the pool");
+
+            stream.close();
+            ByteBuffer flat = stream.buffer();
+            flat.flip();
+            byte[] out = new byte[flat.remaining()];
+            flat.get(out);
+            assertArrayEquals(payload, out);
+
+            stream.deallocate();
+        }
+        assertEquals(total, p.availableMemory(), "pool fully restored after deallocate");
+    }
+
+    /**
+     * When the pool is exhausted mid-record, growth falls back to a heap-allocated chunk so the
+     * write still completes. The heap chunk is off the pool's books: {@code fallbackAllocations()}
+     * counts it, and {@code deallocate()} must return only the pool-owned chunks so the pool is
+     * restored to exactly its size and never over-credited.
+     */
+    @Test
+    public void testGrowthFallsBackToHeapWhenPoolExhausted() throws Exception {
+        int chunkSize = 8;
+        long total = 2L * chunkSize; // pool holds exactly 2 chunks
+        BufferPool p = pool(total, chunkSize);
+        // Take both chunks as the stream's initial chunks: the pool is now empty.
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+            assertEquals(0, p.availableMemory(), "pool drained by the initial allocation");
+
+            // Write a third chunk's worth. The pool is empty, so the non-blocking grow must fall
+            // back to the heap rather than throw or block.
+            byte[] payload = new byte[3 * chunkSize];
+            for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
+            stream.write(payload, 0, payload.length);
+
+            assertEquals(1, stream.fallbackAllocations(), "one heap chunk allocated when the pool was empty");
+
+            // Data still round-trips across the pool and heap chunks.
+            stream.close();
+            ByteBuffer flat = stream.buffer();
+            flat.flip();
+            byte[] out = new byte[flat.remaining()];
+            flat.get(out);
+            assertArrayEquals(payload, out);
+
+            stream.deallocate();
+        }
+        // Returning the heap chunk here would push availableMemory to 3 chunks and break the bound.
+        assertEquals(total, p.availableMemory(),
+            "pool must be restored to exactly its capacity; the heap chunk must not be returned to the pool");
+    }
 }

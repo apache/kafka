@@ -28,6 +28,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
@@ -43,6 +44,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.IdentityHashMap;
@@ -58,6 +60,7 @@ import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -166,6 +169,64 @@ public class ChunkedRecordAccumulatorTest {
         assertEquals(2, dq.peekFirst().recordCount,
                 "Second record should land in the extended batch");
         accum.close();
+    }
+
+    /**
+     * End-to-end compression on the incremental path: records appended with each codec build a valid
+     * compressed batch (the flatten-close writes the header and CRC over the compressed buffer) that
+     * declares the codec on the wire and decodes back to exactly the bytes appended.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"none", "gzip", "snappy", "lz4", "zstd"})
+    public void testCompressedRecordsRoundTripThroughChunkedBatch(String codec) throws Exception {
+        int chunkSize = 256;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        ChunkedRecordAccumulator accum = newAccumulator(8192, chunkSize, 64L * chunkSize, compression);
+
+        // Enough sizeable records that the batch spans several chunks, so the compressor writes
+        // across chunk boundaries rather than fitting in the first chunk.
+        int recordCount = 20;
+        List<byte[]> values = new ArrayList<>();
+        for (int i = 0; i < recordCount; i++) {
+            byte[] value = new byte[300];
+            Arrays.fill(value, (byte) i);
+            values.add(value);
+            accum.append(topic, partition1, i, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+        }
+
+        Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+        assertEquals(1, dq.size());
+        ProducerBatch batch = dq.peekFirst();
+        assertNotNull(batch);
+        assertEquals(recordCount, batch.recordCount);
+
+        // Finalize the batch: the flatten-close path writes the header + CRC over the (compressed)
+        // contiguous buffer.
+        batch.close();
+        MemoryRecords records = batch.records();
+
+        // The built batch must declare the configured codec on the wire.
+        for (RecordBatch rb : records.batches())
+            assertEquals(compression.type(), rb.compressionType());
+
+        // Every record must decode back to exactly the bytes appended, in order.
+        int i = 0;
+        for (Record r : records.records()) {
+            assertArrayEquals(key, readBytes(r.key()));
+            assertArrayEquals(values.get(i), readBytes(r.value()));
+            i++;
+        }
+        assertEquals(recordCount, i, "all appended records must be present");
+
+        accum.deallocate(batch);
+        accum.close();
+    }
+
+    private static byte[] readBytes(ByteBuffer buf) {
+        byte[] out = new byte[buf.remaining()];
+        buf.duplicate().get(out);
+        return out;
     }
 
     /**

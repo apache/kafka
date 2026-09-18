@@ -47,7 +47,8 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * This will release resources like compression buffers that can be relatively large (64 KB for LZ4).
  */
 public class MemoryRecordsBuilder implements AutoCloseable {
-    private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
+    // Public for use in ChunkedRecordAccumulator
+    public static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
     private static final DataOutputStream CLOSED_STREAM = new DataOutputStream(new OutputStream() {
         @Override
         public void write(int b) {
