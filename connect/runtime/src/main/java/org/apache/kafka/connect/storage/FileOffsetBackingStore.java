@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -98,8 +99,12 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
         try (ObjectOutputStream os = new ObjectOutputStream(Files.newOutputStream(file.toPath()))) {
             Map<byte[], byte[]> raw = new HashMap<>();
             for (Map.Entry<ByteBuffer, ByteBuffer> mapEntry : data.entrySet()) {
-                byte[] key = (mapEntry.getKey() != null) ? mapEntry.getKey().array() : null;
-                byte[] value = (mapEntry.getValue() != null) ? mapEntry.getValue().array() : null;
+                // Honor position/limit/arrayOffset and support direct buffers;
+                // ByteBuffer.array() would persist the entire backing array, so
+                // a sliced buffer could not be looked up under its logical key
+                // on restore.
+                byte[] key = (mapEntry.getKey() != null) ? Utils.toArray(mapEntry.getKey()) : null;
+                byte[] value = (mapEntry.getValue() != null) ? Utils.toArray(mapEntry.getValue()) : null;
                 raw.put(key, value);
                 OffsetUtils.processPartitionKey(key, value, keyConverter, connectorPartitions);
             }
