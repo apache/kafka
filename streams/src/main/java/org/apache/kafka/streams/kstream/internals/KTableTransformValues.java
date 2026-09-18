@@ -36,6 +36,7 @@ import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNul
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
 import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
+@SuppressWarnings("deprecation")
 class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V, K, VOut> {
     private final KTableImpl<K, ?, V> parent;
     private final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier;
