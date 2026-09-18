@@ -74,6 +74,27 @@ public class TasksTupleWithEpochsTest {
 
 
     @Test
+    public void testActiveTasks() {
+        TasksTupleWithEpochs tuple = new TasksTupleWithEpochs(
+            Map.of(
+                SUBTOPOLOGY_1, Map.of(1, 10, 2, 11, 3, 12),
+                SUBTOPOLOGY_2, Map.of(4, 20)
+            ),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 8)),
+            Map.of(SUBTOPOLOGY_3, Set.of(9))
+        );
+
+        // activeTasks() drops the assignment epochs from the active tasks.
+        assertEquals(
+            mkTasksPerSubtopology(
+                mkTasks(SUBTOPOLOGY_1, 1, 2, 3),
+                mkTasks(SUBTOPOLOGY_2, 4)
+            ),
+            tuple.activeTasks()
+        );
+    }
+
+    @Test
     public void testFromCurrentAssignmentRecord() {
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> activeTasks = new ArrayList<>();
         activeTasks.add(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
