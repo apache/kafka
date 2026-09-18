@@ -400,9 +400,23 @@ public class ConfigurationControlManagerTest {
 
     @Test
     public void testIncrementalDeletePolicyIncludesUnsetConfigs() {
-        MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(List.of(
-            new RequestMetadata(MYTOPIC, toMap(entry("abc", null))),
-            new RequestMetadata(BROKER0, toMap(entry("foo.bar", null)))));
+        List<RequestMetadata> validations = new ArrayList<>();
+        AlterConfigPolicy policy = new AlterConfigPolicy() {
+            @Override
+            public void validate(RequestMetadata requestMetadata) {
+                validations.add(requestMetadata);
+            }
+
+            @Override
+            public void close() {
+                // nothing to do
+            }
+
+            @Override
+            public void configure(Map<String, ?> configs) {
+                // nothing to do
+            }
+        };
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
@@ -414,6 +428,9 @@ public class ConfigurationControlManagerTest {
             MYTOPIC, toMap(entry("abc", entry(DELETE, null))), false, false).response());
         assertEquals(ApiError.NONE, manager.incrementalAlterConfig(
             BROKER0, toMap(entry("foo.bar", entry(DELETE, null))), false, false).response());
+        assertEquals(List.of(
+            new RequestMetadata(MYTOPIC, toMap(entry("abc", null))),
+            new RequestMetadata(BROKER0, toMap(entry("foo.bar", null)))), validations);
     }
 
     private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
