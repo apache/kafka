@@ -33,7 +33,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -57,8 +56,7 @@ public class GroupsCommand {
             execute(args);
             return 0;
         } catch (Throwable e) {
-            System.err.println(e.getMessage());
-            System.err.println(Utils.stackTrace(e));
+            printException(e);
             return 1;
         }
     }
@@ -69,20 +67,13 @@ public class GroupsCommand {
         Properties config = opts.commandConfig();
         config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServer());
 
-        int exitCode = 0;
         try (GroupsService service = new GroupsService(config)) {
             if (opts.hasListOption()) {
                 service.listGroups(opts);
             }
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            printException(Objects.requireNonNullElse(cause, e));
-            exitCode = 1;
-        } catch (Throwable t) {
-            printException(t);
-            exitCode = 1;
-        } finally {
-            Exit.exit(exitCode);
+            throw cause instanceof Exception ? (Exception) cause : e;
         }
     }
 

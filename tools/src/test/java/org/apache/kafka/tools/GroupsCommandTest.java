@@ -52,6 +52,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +64,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -461,6 +465,43 @@ public class GroupsCommandTest {
         assertThrows(ExecutionException.class, () -> service.listGroups(new GroupsCommand.GroupsCommandOptions(
             new String[]{"--bootstrap-server", bootstrapServer, "--list"}
         )));
+    }
+
+    @Test
+    public void testMainNoExitReturnsNonZeroWithoutExitingOnFailure() throws Exception {
+        // An invalid security protocol makes the admin client creation inside execute() fail.
+        // mainNoExit must report that failure by returning a non-zero code, and execute() must
+        // not terminate the JVM itself.
+        assertEquals(1, GroupsCommand.mainNoExit(
+            "--bootstrap-server", bootstrapServer,
+            "--list",
+            "--command-config", invalidCommandConfig()));
+        assertFalse(exitProcedure.hasExited(), "execute() must not call Exit.exit(); only main() may exit");
+    }
+
+    @Test
+    public void testExecuteDoesNotExitOnFailure() throws Exception {
+        // execute() propagates the failure to its caller rather than terminating the JVM.
+        String commandConfig = invalidCommandConfig();
+        assertThrows(Exception.class, () -> GroupsCommand.execute(
+            "--bootstrap-server", bootstrapServer,
+            "--list",
+            "--command-config", commandConfig));
+        assertFalse(exitProcedure.hasExited(), "execute() must not call Exit.exit(); only main() may exit");
+    }
+
+    /**
+     * Writes a command config file which parses correctly but makes the admin client creation
+     * inside {@link GroupsCommand#execute} fail.
+     */
+    private String invalidCommandConfig() throws IOException {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.SECURITY_PROTOCOL_CONFIG, "NOT_A_PROTOCOL");
+        File file = TestUtils.tempFile();
+        try (FileOutputStream out = new FileOutputStream(file)) {
+            props.store(out, "invalid admin client config");
+        }
+        return file.getAbsolutePath();
     }
 
     @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
