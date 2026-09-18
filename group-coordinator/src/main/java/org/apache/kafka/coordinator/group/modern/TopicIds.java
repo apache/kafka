@@ -252,10 +252,9 @@ public class TopicIds implements Set<Uuid> {
     }
 
     /**
-     * Fills the array with the ids of the topic names which resolve, in the order of the names.
+     * Fills the array with the ids of the topics. Unresolvable topic names are skipped.
      *
-     * @return The number of ids, which is below the size when a topic name has no id, its
-     *         topic having been deleted.
+     * @return The number of successfully resolved ids.
      */
     private int fill(Object[] topicIds) {
         var count = 0;
