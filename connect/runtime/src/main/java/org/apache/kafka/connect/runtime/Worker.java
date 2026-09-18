@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -1920,6 +1921,10 @@ public final class Worker {
             Map<String, Object> consumerProps = baseConsumerConfigs(
                     id.connector(),  "connector-consumer-" + id, config, connectorConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
+            Object groupProtocol = consumerProps.get(ConsumerConfig.GROUP_PROTOCOL_CONFIG);
+            if (groupProtocol != null && GroupProtocol.CONSUMER.name().equalsIgnoreCase(groupProtocol.toString())) {
+                log.warn("Sink task {} uses group.protocol=CONSUMER, which has not been fully tested for production use with Kafka Connect.", id);
+            }
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverterPlugin,
