@@ -40,13 +40,20 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.time.Instant;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainToHeaderFormat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -58,6 +65,8 @@ public class PlainToHeadersWindowStoreAdapterTest {
     private static final long WINDOW_SIZE = 10_000L;
     private static final long RETENTION_PERIOD = 60_000L;
     private static final long SEGMENT_INTERVAL = 30_000L;
+    private static final Bytes KEY = new Bytes("key".getBytes());
+    private static final byte[] PLAIN_VALUE = "value".getBytes();
 
     private PlainToHeadersWindowStoreAdapter adapter;
     private RocksDBWindowStore underlyingStore;
@@ -98,6 +107,48 @@ public class PlainToHeadersWindowStoreAdapterTest {
         if (adapter != null) {
             adapter.close();
         }
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("valueConvertingAccessors")
+    public void shouldConvertValue(final WindowIteratorAccessor accessor) {
+        underlyingStore.put(KEY, PLAIN_VALUE, 1000L);
+
+        try (final KeyValueIterator<?, byte[]> iterator = accessor.apply(adapter)) {
+            assertTrue(iterator.hasNext(), "Expected the stored window to be returned");
+            assertArrayEquals(convertFromPlainToHeaderFormat(PLAIN_VALUE), iterator.next().value,
+                "Expected the plain value to be converted to the headers format");
+        }
+    }
+
+    private static Stream<Arguments> valueConvertingAccessors() {
+        return Stream.of(
+            Arguments.of(Named.of("fetch", (WindowIteratorAccessor) a -> a.fetch(KEY, 0L, 10000L))),
+            Arguments.of(Named.of("backwardFetch", (WindowIteratorAccessor) a -> a.backwardFetch(KEY, 0L, 10000L))),
+            Arguments.of(Named.of("fetchAll", (WindowIteratorAccessor) a -> a.fetchAll(0L, 10000L))),
+            Arguments.of(Named.of("fetchWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.fetch(KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("backwardFetchWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.backwardFetch(KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("keyRangeFetch", (WindowIteratorAccessor) a -> a.fetch(KEY, KEY, 0L, 10000L))),
+            Arguments.of(Named.of("keyRangeFetchWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.fetch(KEY, KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("keyRangeBackwardFetch", (WindowIteratorAccessor) a -> a.backwardFetch(KEY, KEY, 0L, 10000L))),
+            Arguments.of(Named.of("keyRangeBackwardFetchWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.backwardFetch(KEY, KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("fetchAllWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.fetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("backwardFetchAll", (WindowIteratorAccessor) a -> a.backwardFetchAll(0L, 10000L))),
+            Arguments.of(Named.of("backwardFetchAllWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.backwardFetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("all", (WindowIteratorAccessor) a -> a.all())),
+            Arguments.of(Named.of("backwardAll", (WindowIteratorAccessor) a -> a.backwardAll()))
+        );
+    }
+
+    @FunctionalInterface
+    private interface WindowIteratorAccessor {
+        KeyValueIterator<?, byte[]> apply(PlainToHeadersWindowStoreAdapter adapter);
     }
 
     @Test
