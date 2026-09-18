@@ -391,6 +391,136 @@ public final class MetaPropertiesEnsembleTest {
             assertThrows(RuntimeException.class, copier::verify).getMessage());
     }
 
+    @Test
+    public void testVerifyV2WithClusterIdAndNodeId() {
+        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
+            Set.of(),
+            Set.of(),
+            Map.of("/tmp/dir1", new MetaProperties.Builder().
+                setVersion(MetaPropertiesVersion.V2).
+                setClusterId("testClusterId").
+                setNodeId(1).
+                build()),
+            Optional.of("/tmp/dir1"));
+        ensemble.verify(Optional.empty(),
+            OptionalInt.empty(),
+            EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR));
+    }
+
+    @Test
+    public void testVerifyV2WithoutClusterId() {
+        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
+            Set.of(),
+            Set.of(),
+            Map.of("/tmp/dir1", new MetaProperties.Builder().
+                setVersion(MetaPropertiesVersion.V2).
+                setNodeId(1).
+                build()),
+            Optional.of("/tmp/dir1"));
+        ensemble.verify(Optional.empty(),
+            OptionalInt.empty(),
+            EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR));
+    }
+
+    @Test
+    public void testVerifyV2WithExpectedClusterIdAndNodeId() {
+        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
+            Set.of(),
+            Set.of(),
+            Map.of("/tmp/dir1", new MetaProperties.Builder().
+                setVersion(MetaPropertiesVersion.V2).
+                setClusterId("testClusterId").
+                setNodeId(5).
+                build()),
+            Optional.of("/tmp/dir1"));
+        ensemble.verify(Optional.of("testClusterId"),
+            OptionalInt.of(5),
+            EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR));
+    }
+
+    @Test
+    public void testVerifyV2ClusterIdMismatchFails() {
+        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
+            Set.of(),
+            Set.of(),
+            Map.of("/tmp/dir1", new MetaProperties.Builder().
+                setVersion(MetaPropertiesVersion.V2).
+                setClusterId("actualClusterId").
+                setNodeId(1).
+                build()),
+            Optional.empty());
+        assertEquals("Invalid cluster.id in: /tmp/dir1/meta.properties. Expected " +
+            "expectedClusterId, but read actualClusterId",
+            assertThrows(RuntimeException.class, () ->
+                ensemble.verify(Optional.of("expectedClusterId"),
+                    OptionalInt.empty(),
+                    EnumSet.noneOf(MetaPropertiesEnsemble.VerificationFlag.class))).
+                        getMessage());
+    }
+
+    @Test
+    public void testVerifyV2NodeIdMismatchFails() {
+        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
+            Set.of(),
+            Set.of(),
+            Map.of("/tmp/dir1", new MetaProperties.Builder().
+                setVersion(MetaPropertiesVersion.V2).
+                setClusterId("testClusterId").
+                setNodeId(2).
+                build()),
+            Optional.empty());
+        assertEquals("Stored node id 2 doesn't match previous node id 1 in " +
+            "/tmp/dir1/meta.properties. If you moved your data, make sure your configured " +
+            "node id matches. If you intend to create a new node, you should remove all data " +
+            "in your data directories.",
+            assertThrows(RuntimeException.class, () ->
+                ensemble.verify(Optional.empty(),
+                    OptionalInt.of(1),
+                    EnumSet.noneOf(MetaPropertiesEnsemble.VerificationFlag.class))).
+                        getMessage());
+    }
+
+    @Test
+    public void testVerifyV2MixedWithV1() {
+        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
+            Set.of(),
+            Set.of(),
+            Map.of("/tmp/dir1", new MetaProperties.Builder().
+                    setVersion(MetaPropertiesVersion.V1).
+                    setClusterId("sharedClusterId").
+                    setNodeId(3).
+                    build(),
+                "/tmp/dir2", new MetaProperties.Builder().
+                    setVersion(MetaPropertiesVersion.V2).
+                    setClusterId("sharedClusterId").
+                    setNodeId(3).
+                    build()),
+            Optional.of("/tmp/dir1"));
+        ensemble.verify(Optional.empty(),
+            OptionalInt.empty(),
+            EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR));
+    }
+
+    @Test
+    public void testVerifyV2WithoutClusterIdMixedWithV1() {
+        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
+            Set.of(),
+            Set.of(),
+            Map.of("/tmp/dir1", new MetaProperties.Builder().
+                    setVersion(MetaPropertiesVersion.V1).
+                    setClusterId("sharedClusterId").
+                    setNodeId(3).
+                    build(),
+                "/tmp/dir2", new MetaProperties.Builder().
+                    setVersion(MetaPropertiesVersion.V2).
+                    setNodeId(3).
+                    build()),
+            Optional.of("/tmp/dir1"));
+        ensemble.verify(Optional.empty(),
+            OptionalInt.empty(),
+            EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR));
+    }
+
     private static final List<MetaProperties> SAMPLE_META_PROPS_LIST = List.of(
         new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).

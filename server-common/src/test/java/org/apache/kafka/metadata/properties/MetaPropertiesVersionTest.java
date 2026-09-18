@@ -66,10 +66,30 @@ public final class MetaPropertiesVersionTest {
     }
 
     @Test
+    public void testV2ToNumber() {
+        assertEquals(2, MetaPropertiesVersion.V2.number());
+    }
+
+    @Test
+    public void testV2ToNumberString() {
+        assertEquals("2", MetaPropertiesVersion.V2.numberString());
+    }
+
+    @Test
+    public void testV2FromNumber() {
+        assertEquals(MetaPropertiesVersion.V2, MetaPropertiesVersion.fromNumber(2));
+    }
+
+    @Test
+    public void testV2FromNumberString() {
+        assertEquals(MetaPropertiesVersion.V2, MetaPropertiesVersion.fromNumberString("2"));
+    }
+
+    @Test
     public void testFromInvalidNumber() {
-        assertEquals("Unknown meta.properties version number 2",
+        assertEquals("Unknown meta.properties version number 3",
             assertThrows(RuntimeException.class,
-                () -> MetaPropertiesVersion.fromNumber(2)).getMessage());
+                () -> MetaPropertiesVersion.fromNumber(3)).getMessage());
     }
 
     @Test
@@ -83,17 +103,21 @@ public final class MetaPropertiesVersionTest {
     public void testHasBrokerId() {
         assertTrue(MetaPropertiesVersion.V0.hasBrokerId());
         assertFalse(MetaPropertiesVersion.V1.hasBrokerId());
+        assertFalse(MetaPropertiesVersion.V2.hasBrokerId());
     }
 
     @Test
     public void testAlwaysHasNodeId() {
         assertFalse(MetaPropertiesVersion.V0.alwaysHasNodeId());
         assertTrue(MetaPropertiesVersion.V1.alwaysHasNodeId());
+        assertTrue(MetaPropertiesVersion.V2.alwaysHasNodeId());
     }
 
     @Test
     public void testAlwaysHasClusterId() {
         assertFalse(MetaPropertiesVersion.V0.alwaysHasClusterId());
         assertTrue(MetaPropertiesVersion.V1.alwaysHasClusterId());
+        assertFalse(MetaPropertiesVersion.V2.alwaysHasClusterId());
     }
+
 }
