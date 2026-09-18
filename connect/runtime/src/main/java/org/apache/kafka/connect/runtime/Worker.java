@@ -870,7 +870,7 @@ public final class Worker {
                                            connectorClientConfigOverridePolicy);
         producerProps.putAll(producerOverrides);
 
-        ConnectUtils.enforceSynchronousBootstrapResolution(producerProps);
+        ConnectUtils.applyDefaultTaskBootstrapResolveTimeout(producerProps);
 
         return producerProps;
     }
@@ -940,7 +940,7 @@ public final class Worker {
                                            connectorClientConfigOverridePolicy);
         consumerProps.putAll(consumerOverrides);
 
-        ConnectUtils.enforceSynchronousBootstrapResolution(consumerProps);
+        ConnectUtils.applyDefaultTaskBootstrapResolveTimeout(consumerProps);
 
         return consumerProps;
     }
@@ -981,7 +981,7 @@ public final class Worker {
         //add client metrics.context properties
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
 
-        ConnectUtils.enforceSynchronousBootstrapResolution(adminProps);
+        ConnectUtils.applyDefaultTaskBootstrapResolveTimeout(adminProps);
 
         return adminProps;
     }

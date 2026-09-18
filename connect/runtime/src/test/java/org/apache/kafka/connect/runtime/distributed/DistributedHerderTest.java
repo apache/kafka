@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -359,6 +360,17 @@ public class DistributedHerderTest {
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
         verifyNoMoreInteractions(member, configBackingStore, statusBackingStore, worker);
+    }
+
+    @Test
+    public void testTickPropagatesBootstrapResolutionExceptionFromEnsureActive() {
+        // A terminal, non-retriable bootstrap resolution failure from the group member must not be
+        // swallowed by tick(); it should propagate so that run()'s top-level handler can classify it
+        // and exit the worker.
+        doThrow(new BootstrapResolutionException("bootstrap servers could not be resolved"))
+                .when(member).ensureActive(any());
+
+        assertThrows(BootstrapResolutionException.class, () -> herder.tick());
     }
 
     @Test
