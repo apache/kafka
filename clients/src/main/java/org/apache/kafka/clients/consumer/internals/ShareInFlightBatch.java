@@ -93,7 +93,7 @@ public class ShareInFlightBatch<K, V> {
         acknowledgements.addGap(offset);
     }
 
-    public boolean isInFlight(long offset) {
+    boolean isInFlight(long offset) {
         return inFlightRecords.containsKey(offset);
     }
 

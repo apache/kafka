@@ -118,7 +118,7 @@ public class ShareFetchCollector<K, V> {
                     }
                 }
             }
-        } catch (RuntimeException e) {
+        } catch (KafkaException e) {
             // Records already collected from other partitions must be returned rather than lost, otherwise
             // they can never be acknowledged and the completed fetches which delivered them will never be drained.
             // The failing fetch is still at the head of the queue and will be handled again on the next poll.
@@ -185,7 +185,7 @@ public class ShareFetchCollector<K, V> {
             throw new KafkaException("Encountered corrupt message when fetching topic-partition "
                     + tp.topicPartition());
         } else {
-            throw new IllegalStateException("Unexpected error code " + error.code()
+            throw new KafkaException("Unexpected error code " + error.code()
                     + " while fetching from topic-partition " + tp.topicPartition());
         }
     }

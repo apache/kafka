@@ -59,7 +59,8 @@ public class ShareFetch<K, V> {
     /**
      * Add another {@link ShareInFlightBatch} to this one; all of its records will be added to this object's
      * {@link #records() records}. Generally, we will only have one {@link ShareInFlightBatch} for a partition
-     * at a time, but in some rare cases (such as partition leader changes), there might be more than one.
+     * at a time, but in some cases (such as a repeated request after an empty response, or partition leader
+     * changes), there might be more than one.
      *
      * @param partition the topic-partition
      * @param batch the batch to add; may not be null
@@ -243,9 +244,8 @@ public class ShareFetch<K, V> {
                 for (ShareInFlightBatch<K, V> batch : batchList) {
                     acknowledgements.merge(batch.takeAcknowledgedRecords());
                 }
-                if (!acknowledgements.isEmpty()) {
+                if (!acknowledgements.isEmpty())
                     acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
-                }
             }
         });
         return acknowledgementMap;

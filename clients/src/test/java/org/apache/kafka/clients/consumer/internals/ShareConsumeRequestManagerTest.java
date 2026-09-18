@@ -1349,6 +1349,49 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testEmptyResponseThenDataResponseBeforeCollectClearsInflightRecords() {
+        buildRequestManager();
+        assignFromSubscribed(Set.of(tp0));
+
+        // The first request returns no acquired records. The empty result is still placed in the fetch buffer.
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fullFetchResponse(tip0, MemoryRecords.EMPTY, emptyAcquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        // Because no records were acquired, the request manager polls the same node straight away, without the
+        // application having collected anything. The second response carries records and lands behind the empty
+        // completed fetch for the same partition.
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        // Drive the application side the way poll() does in implicit mode: collect, acknowledge everything,
+        // take the acknowledgements, and repeat until the buffer has been drained.
+        int recordsDelivered = 0;
+        int acksTaken = 0;
+        for (int i = 0; i < 10; i++) {
+            ShareFetch<byte[], byte[]> fetch = collectFetch();
+            recordsDelivered += fetch.numRecords();
+            fetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+            Map<TopicIdPartition, NodeAcknowledgements> acks = fetch.takeAcknowledgedRecords();
+            if (acks.containsKey(tip0)) {
+                acksTaken += acks.get(tip0).acknowledgements().size();
+            }
+            assertTrue(fetch.isEmpty());
+            if (!shareConsumeRequestManager.hasCompletedFetches()) {
+                break;
+            }
+        }
+        assertEquals(3, recordsDelivered);
+        assertEquals(3, acksTaken);
+
+        // Every delivered record has been acknowledged, so no partition should still be considered buffered.
+        assertTrue(shareConsumeRequestManager.shareFetchBuffer.bufferedPartitions().isEmpty(),
+            "No partition should still be considered buffered after all delivered records are acknowledged");
+    }
+
+    @Test
     public void testDoesNotCloseSessionWhileRecordsBuffered() {
         buildRequestManager();
 

@@ -226,6 +226,46 @@ public class ShareFetchCollectorTest {
         assertTrue(fetchBuffer.bufferedNodes().isEmpty());
     }
 
+    @Test
+    public void testEmptyFetchFollowedByDataFetchForSamePartitionDoesNotLeak() {
+        buildDependencies();
+        subscribeAndAssign(topicAPartition0);
+
+        ShareCompletedFetch emptyFetch = completedFetchBuilder.recordCount(0).build();
+        ShareCompletedFetch dataFetch = completedFetchBuilder.baseOffset(0).recordCount(DEFAULT_RECORD_COUNT).build();
+        fetchBuffer.add(List.of(emptyFetch, dataFetch));
+
+        assertEquals(DEFAULT_RECORD_COUNT, drainAndAcknowledge());
+
+        // Every delivered record has been acknowledged, so the fetch that carried them must not report
+        // pending acknowledgements, and the buffer must not retain it once it stops being next-in-line.
+        assertFalse(dataFetch.hasPendingAcknowledgements());
+        fetchBuffer.add(List.of(completedFetchBuilder.recordCount(0).build()));
+        assertEquals(0, drainAndAcknowledge());
+        assertTrue(fetchBuffer.bufferedPartitions().isEmpty());
+        assertTrue(fetchBuffer.bufferedNodes().isEmpty());
+    }
+
+    @Test
+    public void testRepeatedFetchesForSamePartitionDoNoAccumulateRetainedFetches() {
+        buildDependencies();
+        subscribeAndAssign(topicAPartition0);
+
+        // Repeat empty-then-data pattern, acknowledging all each time. If a completed fetch were retained on each
+        // iteration, the buffer would still consider the node buffered at the end.
+        for (int i = 0; i < 50; i++) {
+            fetchBuffer.add(List.of(
+                completedFetchBuilder.recordCount(0).build(),
+                completedFetchBuilder.baseOffset((long) i * DEFAULT_RECORD_COUNT).recordCount(DEFAULT_RECORD_COUNT).build()));
+            assertEquals(DEFAULT_RECORD_COUNT, drainAndAcknowledge());
+        }
+
+        fetchBuffer.add(List.of(completedFetchBuilder.recordCount(0).build()));
+        assertEquals(0, drainAndAcknowledge());
+        assertTrue(fetchBuffer.bufferedPartitions().isEmpty());
+        assertTrue(fetchBuffer.bufferedNodes().isEmpty());
+    }
+
     @ParameterizedTest
     @MethodSource("testErrorInInitializeSource")
     public void testErrorInInitializeDoesNotLoseRecordsFromEarlierPartitions(RuntimeException expectedException) {
@@ -363,7 +403,7 @@ public class ShareFetchCollectorTest {
                 .error(error)
                 .build();
         fetchBuffer.add(List.of(completedFetch));
-        assertThrows(IllegalStateException.class, () -> fetchCollector.collect(fetchBuffer));
+        assertThrows(KafkaException.class, () -> fetchCollector.collect(fetchBuffer));
     }
 
     private void buildDependencies() {
@@ -410,6 +450,25 @@ public class ShareFetchCollectorTest {
         subscriptions.assignFromSubscribed(Set.of(tp.topicPartition()));
     }
 
+    private int drainAndAcknowledge() {
+        int delivered = 0;
+        for (int i = 0; i < 20; i++) {
+            ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
+            delivered += fetch.numRecords();
+            fetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+            fetch.takeAcknowledgedRecords();
+            assertTrue(fetch.isEmpty());
+            // The background thread's poll() prunes retained fetches which no longer have pending acknowledgements.
+            fetchBuffer.bufferedNodes();
+            ShareCompletedFetch nextInLine = fetchBuffer.nextInLineFetch();
+            if (fetchBuffer.isEmpty() && (nextInLine == null || nextInLine.isConsumed())) {
+                break;
+            }
+        }
+        assertTrue(fetchBuffer.isEmpty());
+        return delivered;
+    }
+
     /**
      * Supplies the {@link Arguments} to {@link #testFetchWithOtherErrors(Errors)}.
      */
@@ -441,8 +500,8 @@ public class ShareFetchCollectorTest {
      */
     private static Stream<Arguments> testErrorInInitializeSource() {
         return Stream.of(
-                Arguments.of(new RuntimeException()),
-                Arguments.of(new KafkaException())
+                Arguments.of(new KafkaException()),
+                Arguments.of(new TopicAuthorizationException(Set.of("topic-a")))
         );
     }
 
@@ -490,10 +549,15 @@ public class ShareFetchCollectorTest {
                 records = builder.build();
             }
 
+            // A response which acquired no records carries no AcquiredRecords entries at all.
+            List<ShareFetchResponseData.AcquiredRecords> acquiredRecords = recordCount == 0
+                ? List.of()
+                : ShareCompletedFetchTest.acquiredRecords(baseOffset, recordCount);
+
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                     .setPartitionIndex(partition.partition())
                     .setRecords(records)
-                    .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(baseOffset, recordCount));
+                    .setAcquiredRecords(acquiredRecords);
 
             if (error != null)
                 partitionData.setErrorCode(error.code());
