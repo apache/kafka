@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -42,6 +44,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
@@ -145,13 +148,19 @@ public class MeteredVersionedKeyValueStore<K, V>
         }
 
         public long put(final K key, final V value, final long timestamp) {
+            return put(key, value, timestamp, internalContext.headers());
+        }
+
+        public long put(final K key, final V value, final long timestamp, final Headers headers) {
             Objects.requireNonNull(key, "key cannot be null");
+            final Headers nonNullHeaders = headers == null ? new RecordHeaders() : headers;
             try {
                 final long validTo = maybeMeasureLatency(
                     () -> inner.put(
-                        serializeKey(key),
-                        plainValueSerdes.rawValue(value, internalContext.headers()),
-                        timestamp
+                        Bytes.wrap(serdes.rawKey(key, nonNullHeaders)),
+                        plainValueSerdes.rawValue(value, nonNullHeaders),
+                        timestamp,
+                        nonNullHeaders
                     ),
                     time,
                     putSensor
@@ -174,6 +183,34 @@ public class MeteredVersionedKeyValueStore<K, V>
             }
         }
 
+        public ValueTimestampHeaders<V> getWithHeaders(final K key) {
+            return getWithHeaders(inner, key);
+        }
+
+        public ValueTimestampHeaders<V> getWithHeaders(final VersionedBytesStore store, final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                return maybeMeasureLatency(() -> deserializeValueWithHeaders(store.get(serializeKey(key))), time, getSensor);
+            } catch (final ProcessorStateException e) {
+                final String message = String.format(e.getMessage(), key);
+                throw new ProcessorStateException(message, e);
+            }
+        }
+
+        public ValueTimestampHeaders<V> getWithHeaders(final K key, final long asOfTimestamp) {
+            return getWithHeaders(inner, key, asOfTimestamp);
+        }
+
+        public ValueTimestampHeaders<V> getWithHeaders(final VersionedBytesStore store, final K key, final long asOfTimestamp) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                return maybeMeasureLatency(() -> deserializeValueWithHeaders(store.get(serializeKey(key), asOfTimestamp)), time, getSensor);
+            } catch (final ProcessorStateException e) {
+                final String message = String.format(e.getMessage(), key);
+                throw new ProcessorStateException(message, e);
+            }
+        }
+
         public ValueAndTimestamp<V> delete(final K key, final long timestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
@@ -182,6 +219,24 @@ public class MeteredVersionedKeyValueStore<K, V>
                 final String message = String.format(e.getMessage(), key);
                 throw new ProcessorStateException(message, e);
             }
+        }
+
+        public ValueTimestampHeaders<V> deleteWithHeaders(final K key, final long timestamp) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                return maybeMeasureLatency(() -> deserializeValueWithHeaders(inner.delete(serializeKey(key), timestamp)), time, deleteSensor);
+            } catch (final ProcessorStateException e) {
+                final String message = String.format(e.getMessage(), key);
+                throw new ProcessorStateException(message, e);
+            }
+        }
+
+        private ValueTimestampHeaders<V> deserializeValueWithHeaders(final byte[] rawValueTimestampHeaders) {
+            if (rawValueTimestampHeaders == null) {
+                return null;
+            }
+            return new ValueTimestampHeadersDeserializer<>(plainValueSerdes.valueDeserializer())
+                .deserialize(plainValueSerdes.topic(), rawValueTimestampHeaders);
         }
 
         @SuppressWarnings("unchecked")
@@ -341,6 +396,30 @@ public class MeteredVersionedKeyValueStore<K, V>
         return internal.put(key, value, timestamp);
     }
 
+    protected long putWithHeaders(final K key, final V value, final long timestamp, final Headers headers) {
+        return internal.put(key, value, timestamp, headers);
+    }
+
+    protected VersionedRecord<V> getWithHeaders(final K key) {
+        return toVersionedRecord(internal.getWithHeaders(key));
+    }
+
+    protected VersionedRecord<V> getWithHeaders(final K key, final long asOfTimestamp) {
+        return toVersionedRecord(internal.getWithHeaders(key, asOfTimestamp));
+    }
+
+    protected VersionedRecord<V> getWithHeaders(final VersionedBytesStore store, final K key) {
+        return toVersionedRecord(internal.getWithHeaders(store, key));
+    }
+
+    protected VersionedRecord<V> getWithHeaders(final VersionedBytesStore store, final K key, final long asOfTimestamp) {
+        return toVersionedRecord(internal.getWithHeaders(store, key, asOfTimestamp));
+    }
+
+    protected VersionedRecord<V> deleteWithHeaders(final K key, final long timestamp) {
+        return toVersionedRecord(internal.deleteWithHeaders(key, timestamp));
+    }
+
     @Override
     public VersionedRecord<V> delete(final K key, final long timestamp) {
         final ValueAndTimestamp<V> valueAndTimestamp = internal.delete(key, timestamp);
@@ -363,6 +442,16 @@ public class MeteredVersionedKeyValueStore<K, V>
         return valueAndTimestamp == null
             ? null
             : new VersionedRecord<>(valueAndTimestamp.value(), valueAndTimestamp.timestamp());
+    }
+
+    private VersionedRecord<V> toVersionedRecord(final ValueTimestampHeaders<V> valueTimestampHeaders) {
+        return valueTimestampHeaders == null
+            ? null
+            : new VersionedRecord<>(
+                valueTimestampHeaders.value(),
+                valueTimestampHeaders.timestamp(),
+                valueTimestampHeaders.headers()
+            );
     }
 
     @Override
