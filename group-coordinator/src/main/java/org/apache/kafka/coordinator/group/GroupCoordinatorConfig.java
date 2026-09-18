@@ -820,19 +820,25 @@ public class GroupCoordinatorConfig {
      * @param props The full Kafka config containing properties to be clamped.
      */
     public static void clampDynamicConfigs(Map<String, String> props) {
-        // Parse configs but do not validate mins and maxes.
+        // Parse configs but do not validate mins and maxes. Config providers referenced in `props`
+        // have already been vetted against org.apache.kafka.automatic.config.providers earlier in the
+        // reconfiguration pipeline (see DynamicBrokerConfig#validate), so they are passed explicitly
+        // as configProviderProps here to resolve any provider-backed values without re-applying that
+        // allowlist a second time.
         AbstractConfig groupCoordinatorConfig = new AbstractConfig(
             GroupCoordinatorConfig.CONFIG_DEF,
-            props
+            props,
+            Utils.castToStringObjectMap(props),
+            false
         );
 
-        clampDynamicIntConfig(props, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        clampDynamicIntConfig(groupCoordinatorConfig, props, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.getInt(CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
             groupCoordinatorConfig.getInt(CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
-        clampDynamicIntConfig(props, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        clampDynamicIntConfig(groupCoordinatorConfig, props, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.getInt(SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
             groupCoordinatorConfig.getInt(SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
-        clampDynamicIntConfig(props, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        clampDynamicIntConfig(groupCoordinatorConfig, props, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.getInt(STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
             groupCoordinatorConfig.getInt(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
     }
@@ -841,21 +847,22 @@ public class GroupCoordinatorConfig {
      * Clamp a config value to [min, max]. A WARN log is emitted on adjustment.
      * No-op when the key is absent from props.
      *
-     * @param props   The properties to modify in place.
-     * @param key     The config key.
-     * @param min     The minimum allowed value (inclusive).
-     * @param max     The maximum allowed value (inclusive).
+     * @param groupCoordinatorConfig The parsed config, used to read the config-provider-resolved value.
+     * @param props                  The properties to modify in place.
+     * @param key                    The config key.
+     * @param min                    The minimum allowed value (inclusive).
+     * @param max                    The maximum allowed value (inclusive).
      */
     private static void clampDynamicIntConfig(
+        AbstractConfig groupCoordinatorConfig,
         Map<String, String> props,
         String key,
         int min,
         int max
     ) {
-        Object rawValue = props.get(key);
-        if (rawValue == null) return;
+        if (!props.containsKey(key)) return;
 
-        int value = Integer.parseInt(rawValue.toString());
+        int value = groupCoordinatorConfig.getInt(key);
         if (value < min) {
             LOG.warn("The config '{}' has value {} which is below the " +
                     "allowed minimum {}. The effective value will be capped to {}.",
