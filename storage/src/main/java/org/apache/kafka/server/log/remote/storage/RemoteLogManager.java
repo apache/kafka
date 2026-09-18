@@ -643,8 +643,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return remoteLogMetadataManagerPlugin.get().nextSegmentWithTxnIndex(tpId, epochForOffset, offset);
     }
 
-    Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset)
-            throws RemoteStorageException, IOException {
+    Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset,
+                                                             int maxRecordBodySize) throws RemoteStorageException, IOException {
         int startPos = indexCache.lookupTimestamp(rlsMetadata, timestamp, startingOffset);
 
         InputStream remoteSegInputStream = null;
@@ -657,7 +657,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 RecordBatch batch = remoteLogInputStream.nextBatch();
                 if (batch == null) break;
                 if (batch.maxTimestamp() >= timestamp && batch.lastOffset() >= startingOffset) {
-                    try (CloseableIterator<Record> recordStreamingIterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                    try (CloseableIterator<Record> recordStreamingIterator = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
                         while (recordStreamingIterator.hasNext()) {
                             Record record = recordStreamingIterator.next();
                             if (record.timestamp() >= timestamp && record.offset() >= startingOffset)
@@ -731,6 +731,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             throw new KafkaException("UnifiedLog does not exist for topic partition: " + tp);
         }
         UnifiedLog unifiedLog = unifiedLogOptional.get();
+        int maxRecordBodySize = unifiedLog.config().maxDecompressedMessageBytes();
 
         // Get the respective epoch in which the starting-offset exists.
         OptionalInt maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
@@ -751,12 +752,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     List<LogSegment> segmentsCopy = unifiedLog.logSegments();
                     if (segmentsCopy.isEmpty() || rlsMetadata.startOffset() < segmentsCopy.get(0).baseOffset()) {
                         // search in remote-log
-                        return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
+                        return lookupTimestamp(rlsMetadata, timestamp, startingOffset, maxRecordBodySize);
                     } else {
                         // search in local-log
                         for (LogSegment segment : segmentsCopy) {
                             if (segment.largestTimestamp() >= timestamp) {
-                                return segment.findOffsetByTimestamp(timestamp, startingOffset);
+                                return segment.findOffsetByTimestamp(timestamp, startingOffset, maxRecordBodySize);
                             }
                         }
                     }
@@ -801,6 +802,15 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         RLMTaskWithFuture task = leaderCopyRLMTasks.get(topicIdPartition);
         if (task != null) {
             return task.rlmTask;
+        }
+        return null;
+    }
+
+    // VisibleForTesting
+    RLMExpirationTask rlmExpirationTask(TopicIdPartition topicIdPartition) {
+        RLMTaskWithFuture task = leaderExpirationRLMTasks.get(topicIdPartition);
+        if (task != null) {
+            return (RLMExpirationTask) task.rlmTask;
         }
         return null;
     }
@@ -1364,11 +1374,20 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             brokerTopicStats.recordRemoteLogSizeBytes(topic, partition, remoteLogSizeBytes);
         }
 
-        private void updateRemoteDeleteLagWith(int segmentsLeftToDelete, long sizeOfDeletableSegmentsBytes) {
-            String topic = topicIdPartition.topic();
-            int partition = topicIdPartition.partition();
-            brokerTopicStats.recordRemoteDeleteLagSegments(topic, partition, segmentsLeftToDelete);
-            brokerTopicStats.recordRemoteDeleteLagBytes(topic, partition, sizeOfDeletableSegmentsBytes);
+        // VisibleForTesting
+        void updateRemoteDeleteLagWith(int segmentsLeftToDelete, long sizeOfDeletableSegmentsBytes) {
+            // Skip emitting metrics for a cancelled task. Otherwise, a task that is still running in the
+            // expiration thread pool while this replica transitions from leader to follower can re-register
+            // the delete-lag gauge after onLeadershipChange has already removed it (see removeRemoteTopicPartitionMetrics),
+            // leaving a phantom non-zero lag that never drains. This mirrors the guard on the copy path's recordLagStats.
+            // Note: the check is best-effort - it does not synchronize with cancellation, so it only narrows (does not
+            // fully close) the window where a concurrent leadership change removes the gauge between this check and the emit.
+            if (!isCancelled()) {
+                String topic = topicIdPartition.topic();
+                int partition = topicIdPartition.partition();
+                brokerTopicStats.recordRemoteDeleteLagSegments(topic, partition, segmentsLeftToDelete);
+                brokerTopicStats.recordRemoteDeleteLagBytes(topic, partition, sizeOfDeletableSegmentsBytes);
+            }
         }
 
         private static class RemoteLogMetadataStats {

@@ -57,9 +57,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -536,5 +538,89 @@ public class AdjustStreamThreadCountTest {
             }
         }
         fail();
+    }
+
+    @Test
+    public void shouldNotReplaceFailedThreadWhoseShutdownWasInitiatedByRemoval() throws Exception {
+        // If a thread hits its uncaught-exception handler after a concurrent removeStreamThread
+        // already initiated its shutdown, REPLACE_THREAD must not spawn a replacement: the
+        // removal owns the thread's death, and a replacement would silently undo it while the
+        // removal still reports success.
+        //
+        // The client runs a single thread so that the removal deterministically picks the thread
+        // that is parked in the punctuator, independently of how tasks are assigned.
+        final AtomicBoolean injectError = new AtomicBoolean(false);
+        final AtomicReference<String> parkedThreadName = new AtomicReference<>();
+        final CountDownLatch punctuatorParked = new CountDownLatch(1);
+        final CountDownLatch releaseFailure = new CountDownLatch(1);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> stream = builder.stream(inputTopic);
+        stream.process(() -> new Processor<String, String, String, String>() {
+            ProcessorContext<String, String> context;
+
+            @Override
+            public void init(final ProcessorContext<String, String> context) {
+                this.context = context;
+                context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+                    if (injectError.compareAndSet(true, false)) {
+                        // Park the thread here so the removal below deterministically wins the
+                        // shutdown before the thread fails.
+                        parkedThreadName.set(Thread.currentThread().getName());
+                        punctuatorParked.countDown();
+                        try {
+                            releaseFailure.await(60, TimeUnit.SECONDS);
+                        } catch (final InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                        throw new RuntimeException("BOOM");
+                    }
+                });
+            }
+
+            @Override
+            public void process(final Record<String, String> record) {
+                context.forward(record);
+            }
+        });
+
+        properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties);
+             final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            addStreamStateChangeListener(kafkaStreams);
+            kafkaStreams.setUncaughtExceptionHandler(e -> StreamThreadExceptionResponse.REPLACE_THREAD);
+            startStreamsAndWaitForRunning(kafkaStreams);
+
+            injectError.set(true);
+            assertTrue(punctuatorParked.await(60, TimeUnit.SECONDS), "The stream thread never reached the parked punctuator");
+
+            final ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                // The removal picks the only thread (parked in the punctuator), wins its shutdown,
+                // and then waits for the thread to reach DEAD.
+                final Callable<Optional<String>> removeStreamThread = kafkaStreams::removeStreamThread;
+                final Future<Optional<String>> removed = executor.submit(removeStreamThread);
+                waitForCondition(
+                    () -> appender.getMessages().stream()
+                        .anyMatch(message -> message.contains("Removing StreamThread") && message.contains(parkedThreadName.get())),
+                    DEFAULT_DURATION.toMillis(),
+                    () -> "The removal did not initiate the shutdown of " + parkedThreadName.get());
+
+                // Fail the thread now: its REPLACE_THREAD handler loses the shutdown race and
+                // must let the thread die without compensation.
+                releaseFailure.countDown();
+
+                assertEquals(Optional.of(parkedThreadName.get()), removed.get(DEFAULT_DURATION.toMillis(), TimeUnit.MILLISECONDS),
+                    "The removal did not report the failed thread as removed");
+            } finally {
+                executor.shutdownNow();
+            }
+
+            // The handler runs before the thread reaches DEAD, so by the time the removal
+            // returned, the replacement decision was already made: no thread may have been added.
+            assertEquals(0, kafkaStreams.metadataForLocalThreads().size());
+            assertTrue(appender.getMessages().stream().noneMatch(message -> message.contains("Adding StreamThread-")),
+                "A replacement thread was added even though the removal owned the shutdown");
+        }
     }
 }

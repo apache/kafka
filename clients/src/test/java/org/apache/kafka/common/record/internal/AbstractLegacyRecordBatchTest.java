@@ -21,9 +21,16 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
@@ -242,6 +249,65 @@ public class AbstractLegacyRecordBatchTest {
             batch.iterator();
         });
         assertEquals("ZStandard compression is not supported for magic 1", e2.getMessage());
+    }
+
+    /**
+     * A compressed legacy (v0/v1) wrapper whose decompressed payload declares a single inner record
+     * with a forged size and no payload bytes. The deep-decode path must reject the declared size
+     * before allocating it.
+     */
+    private static ByteBufferLegacyRecordBatch poisonedCompressedLegacyBatch(byte magic, int forgedInnerSize) throws IOException {
+        ByteBufferOutputStream innerOut = new SingleByteBufferOutputStream(64);
+        try (DataOutputStream compressed = new DataOutputStream(
+                Compression.gzip().build().wrapForOutput(innerOut, magic))) {
+            compressed.writeLong(0L);              // inner offset
+            compressed.writeInt(forgedInnerSize);  // forged inner record size, no payload follows
+        }
+        ByteBuffer inner = innerOut.buffer();
+        inner.flip();
+        byte[] compressedBytes = new byte[inner.remaining()];
+        inner.get(compressedBytes);
+
+        LegacyRecord wrapper = LegacyRecord.create(magic, 1L, null, compressedBytes,
+            CompressionType.GZIP, TimestampType.CREATE_TIME);
+        ByteBuffer buffer = ByteBuffer.allocate(Records.LOG_OVERHEAD + wrapper.sizeInBytes());
+        AbstractLegacyRecordBatch.writeHeader(buffer, 0L, wrapper.sizeInBytes());
+        buffer.put(wrapper.buffer().duplicate());
+        buffer.flip();
+        return new ByteBufferLegacyRecordBatch(buffer);
+    }
+
+    // The compressed deep-decode path constructs its inner stream with maxMessageSize =
+    // Integer.MAX_VALUE, so only the per-record guard stands between a forged inner size and
+    // ByteBuffer.allocate. SOFT_MAX_ARRAY_LENGTH + 1 pins the default (array-length) threshold
+    // without attempting a ~2 GiB allocation.
+    @Test
+    public void testCompressedDeepDecodeRejectsForgedInnerSizeExceedingArrayLengthLimit() throws IOException {
+        ByteBufferLegacyRecordBatch batch = poisonedCompressedLegacyBatch(
+            RecordBatch.MAGIC_VALUE_V1, Records.SOFT_MAX_ARRAY_LENGTH + 1);
+        // the deep iterator decodes eagerly in its constructor
+        InvalidRecordException ex = assertThrows(InvalidRecordException.class,
+            () -> batch.streamingIterator(BufferSupplier.NO_CACHING));
+        assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
+            "expected the pre-allocation record-size guard, got: " + ex.getMessage());
+    }
+
+    // A genuine compressed legacy record whose inner size exceeds the configured limit is rejected
+    // before allocation, while a generous limit decodes it.
+    @Test
+    public void testCompressedDeepDecodeEnforcesConfiguredMaxRecordBodySize() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
+            Compression.gzip().build(), TimestampType.CREATE_TIME,
+            new SimpleRecord(1L, "key".getBytes(), new byte[1000]));
+        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING, 10_000)) {
+            assertTrue(iterator.hasNext());
+        }
+        InvalidRecordException ex = assertThrows(InvalidRecordException.class,
+            () -> batch.streamingIterator(BufferSupplier.NO_CACHING, 100));
+        assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
+            "expected the configured-maximum guard, got: " + ex.getMessage());
     }
 
 }

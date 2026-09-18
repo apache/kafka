@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -35,9 +36,14 @@ public final class MessageSpec {
 
     private final Versions flexibleVersions;
 
+    private final Optional<HeaderVersions> headerVersions;
+
     private final List<RequestListenerType> listeners;
 
     private final boolean latestVersionUnstable;
+
+    // ApiVersionsResponse always uses a v0 header so that older brokers can parse it (KIP-511).
+    static final short API_VERSIONS_API_KEY = 18;
 
     @JsonCreator
     @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
@@ -49,6 +55,7 @@ public final class MessageSpec {
                        @JsonProperty("type") MessageSpecType type,
                        @JsonProperty("commonStructs") List<StructSpec> commonStructs,
                        @JsonProperty("flexibleVersions") String flexibleVersions,
+                       @JsonProperty("headerVersions") Map<String, String> headerVersions,
                        @JsonProperty("listeners") List<RequestListenerType> listeners,
                        @JsonProperty("latestVersionUnstable") boolean latestVersionUnstable
     ) {
@@ -64,6 +71,7 @@ public final class MessageSpec {
             this.flexibleVersions = Versions.NONE;
             this.listeners = List.of();
             this.latestVersionUnstable = false;
+            this.headerVersions = Optional.empty();
         } else {
             if (flexibleVersions == null) {
                 throw new RuntimeException("You must specify a value for flexibleVersions. " +
@@ -89,6 +97,13 @@ public final class MessageSpec {
             }
             this.latestVersionUnstable = latestVersionUnstable;
 
+            if (headerVersions != null && type != MessageSpecType.REQUEST && type != MessageSpecType.RESPONSE) {
+                throw new RuntimeException("The `headerVersions` property is only valid for " +
+                        "messages with type `request` or `response`");
+            }
+            this.headerVersions = Optional.ofNullable(
+                    HeaderVersions.parse(name, headerVersions, this.validVersions()));
+
             if (type == MessageSpecType.COORDINATOR_KEY) {
                 if (this.apiKey.isEmpty()) {
                     throw new RuntimeException("The ApiKey must be set for messages " + name + " with type `coordinator-key`");
@@ -105,6 +120,96 @@ public final class MessageSpec {
                 if (this.apiKey.isEmpty()) {
                     throw new RuntimeException("The ApiKey must be set for messages with type `coordinator-value`");
                 }
+            }
+        }
+    }
+
+    /**
+     * Check that every header version exists, and that a message version and its header version agree on
+     * flexibility: a flexible message version maps to a flexible header version, and a non-flexible message
+     * version maps to a non-flexible header version. The bounds come from the header schemas passed in:
+     * {@code lowestHeader} and {@code highestHeader} are the lowest and highest valid versions of
+     * RequestHeader / ResponseHeader, and {@code firstFlexibleHeader} is its first flexible version.
+     * ApiVersionsResponse is the exception and is pinned to header v0 (KIP-511).
+     *
+     * @param requestHeader  the RequestHeader schema, or null if it was not found in the same directory
+     * @param responseHeader the ResponseHeader schema, or null if it was not found in the same directory
+     */
+    void checkHeaderVersions(MessageSpec requestHeader, MessageSpec responseHeader) {
+        if (headerVersions.isEmpty()) {
+            return;
+        }
+        boolean isRequest = type == MessageSpecType.REQUEST;
+        String typeName = isRequest ? "request" : "response";
+        MessageSpec header = isRequest ? requestHeader : responseHeader;
+        if (header == null) {
+            throw new RuntimeException("Message " + name() + " specifies headerVersions, but no " +
+                (isRequest ? "RequestHeader" : "ResponseHeader") + " schema was found in the same directory; " +
+                "the header schema is needed to check which header versions exist.");
+        }
+        // A header version must be one the header schema actually defines, i.e. within its valid range.
+        short highestHeader = header.validVersions().highest();
+        short lowestHeader = header.validVersions().lowest();
+        boolean headerIsFlexible = !header.flexibleVersions().empty();
+        short firstFlexibleHeader = headerIsFlexible ? header.flexibleVersions().lowest() : Short.MAX_VALUE;
+        boolean apiVersionsResponse = !isRequest && apiKey.isPresent() && apiKey.get() == API_VERSIONS_API_KEY;
+        for (HeaderVersions.Entry entry : headerVersions.get().entries()) {
+            checkHeaderVersionExists(entry, typeName, lowestHeader, highestHeader);
+            if (apiVersionsResponse) {
+                if (entry.headerVersion() != 0) {
+                    throw new RuntimeException("Message " + name() + " maps versions " + entry.range() +
+                        " to response header version " + entry.headerVersion() + ", but ApiVersionsResponse must " +
+                        "use a v0 response header at every version so that older brokers can parse it (KIP-511).");
+                }
+                continue;
+            }
+            checkVersionFlexibilityMatchesHeader(entry, typeName, headerIsFlexible, firstFlexibleHeader);
+        }
+    }
+
+    /**
+     * Check that {@code entry}'s header version is one the header schema defines (within its valid range).
+     */
+    private void checkHeaderVersionExists(HeaderVersions.Entry entry, String typeName,
+                                          short lowestHeader, short highestHeader) {
+        if (entry.headerVersion() > highestHeader) {
+            throw new RuntimeException("Message " + name() + " maps versions " + entry.range() + " to " +
+                typeName + " header version " + entry.headerVersion() + ", which does not exist; the highest " +
+                typeName + " header version is " + highestHeader + ".");
+        }
+        if (entry.headerVersion() < lowestHeader) {
+            throw new RuntimeException("Message " + name() + " maps versions " + entry.range() + " to " +
+                typeName + " header version " + entry.headerVersion() + ", which does not exist; the lowest " +
+                typeName + " header version is " + lowestHeader + ".");
+        }
+    }
+
+    /**
+     * Check that every message version in {@code entry} agrees with its header version on flexibility:
+     * a flexible message version maps to a flexible header version, and a non-flexible message version
+     * maps to a non-flexible header version.
+     */
+    private void checkVersionFlexibilityMatchesHeader(HeaderVersions.Entry entry, String typeName,
+                                                      boolean headerIsFlexible, short firstFlexibleHeader) {
+        short highest = (short) Math.min(entry.range().highest(), validVersions().highest());
+        for (short version = entry.range().lowest(); version <= highest; version++) {
+            if (flexibleVersions.contains(version)) {
+                if (!headerIsFlexible) {
+                    throw new RuntimeException("Message " + name() + " maps version " + version +
+                        ", which is flexible, to " + typeName + " header version " + entry.headerVersion() +
+                        ", but the " + typeName + " header schema has no flexible version.");
+                }
+                if (entry.headerVersion() < firstFlexibleHeader) {
+                    throw new RuntimeException("Message " + name() + " maps version " + version +
+                        ", which is flexible, to " + typeName + " header version " + entry.headerVersion() +
+                        ", but a flexible " + typeName + " must use header version " + firstFlexibleHeader +
+                        " or higher.");
+                }
+            } else if (entry.headerVersion() >= firstFlexibleHeader) {
+                throw new RuntimeException("Message " + name() + " maps version " + version +
+                    ", which is not flexible, to " + typeName + " header version " + entry.headerVersion() +
+                    ", but a non-flexible " + typeName + " must use a header version below the first flexible " +
+                    typeName + " header version " + firstFlexibleHeader + ".");
             }
         }
     }
@@ -158,6 +263,15 @@ public final class MessageSpec {
     @JsonProperty("flexibleVersions")
     public String flexibleVersionsString() {
         return flexibleVersions.toString();
+    }
+
+    public Optional<HeaderVersions> headerVersions() {
+        return headerVersions;
+    }
+
+    @JsonProperty("headerVersions")
+    public Map<String, String> headerVersionsStrings() {
+        return headerVersions.map(HeaderVersions::toMap).orElse(null);
     }
 
     @JsonProperty("listeners")
