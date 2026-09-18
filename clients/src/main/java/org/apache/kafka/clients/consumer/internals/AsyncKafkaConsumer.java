@@ -971,7 +971,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                     return interceptors.onConsume(new ConsumerRecords<>(fetch.records(), fetch.nextOffsets()));
                 }
-                // We will wait for retryBackoffMs
             } while (timer.notExpired());
 
             return ConsumerRecords.empty();
@@ -1989,6 +1988,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         // Bound the wait when background progress may make fetching possible soon.
         // Use the current application-thread state to avoid relying on stale state from the network thread.
+        //
+        // Do not clamp just because there are fetchable partitions without buffered data. That is the
+        // steady-state in-flight fetch case: FetchRequestManager.maximumTimeToWait() is already
+        // Long.MAX_VALUE and the in-flight request's completion wakes the buffer. Clamping to
+        // retryBackoffMs here, combined with submitting a new AsyncPollEvent on each inner poll
+        // iteration (KAFKA-20780), caused the application and network threads to cycle every
+        // retryBackoffMs while waiting for a fetch (KAFKA-20904). Transient skip reasons such as
+        // reconnect backoff or an unknown leader already surface as retryBackoffMs via
+        // FetchRequestManager.maximumTimeToWait() when nothing is in flight.
         if (pollTimeout > retryBackoffMs) {
             if (subscriptions.numAssignedPartitions() == 0) {
                 // If there are no assigned partitions, reduce the fetch buffer wait time. This may happen when
@@ -2001,14 +2009,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // failure. Reduce the wait time so the application thread can consume data promptly once positions are
                 // resolved.
                 pollTimeout = retryBackoffMs;
-            } else {
-                Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
-                if (subscriptions.hasFetchablePartitions(tp -> !buffered.contains(tp))) {
-                    // If any fetchable partition has no buffered data, it may have been skipped due to reconnect
-                    // backoff, an in-flight request, or a missing leader. Bound the wait so the application thread
-                    // can retry once the condition clears.
-                    pollTimeout = retryBackoffMs;
-                }
             }
         }
 

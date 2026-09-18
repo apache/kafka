@@ -475,6 +475,32 @@ public class FetchRequestManagerTest {
     }
 
     @Test
+    public void testInflightFetchDoesNotWakeUpBuffer() throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(3_600_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+
+        // The node already has a request in flight, so prepare() skips the partition. Waking here would
+        // busy-loop the application thread for as long as the request is outstanding (KAFKA-20904 / KAFKA-20915).
+        assertEquals(0, sendFetches());
+
+        blockedOnBuffer.join(500);
+        assertTrue(blockedOnBuffer.isAlive(),
+                "In-flight fetch must not wake the thread blocked on the fetch buffer");
+
+        fetcher.fetchBuffer.wakeup();
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive());
+    }
+
+    @Test
     public void testInflightFetchOnPendingPartitions() {
         buildFetcher();
 
