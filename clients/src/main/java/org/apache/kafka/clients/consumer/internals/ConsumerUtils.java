@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -87,7 +88,8 @@ public final class ConsumerUtils {
                                                                     Metadata metadata,
                                                                     Sensor throttleTimeSensor,
                                                                     long retryBackoffMs,
-                                                                    ClientTelemetrySender clientTelemetrySender) {
+                                                                    ClientTelemetrySender clientTelemetrySender,
+                                                                    Uuid clientInstanceId) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
                 config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
                 metrics,
@@ -98,7 +100,8 @@ public final class ConsumerUtils {
                 CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                 metadata,
                 throttleTimeSensor,
-                clientTelemetrySender);
+                clientTelemetrySender,
+                clientInstanceId);
 
         // Will avoid blocking an extended period of time to prevent heartbeat thread starvation
         int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);

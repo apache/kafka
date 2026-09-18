@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -238,7 +239,8 @@ public final class ClientUtils {
                                                     int maxInFlightRequestsPerConnection,
                                                     Metadata metadata,
                                                     Sensor throttleTimeSensor,
-                                                    ClientTelemetrySender clientTelemetrySender) {
+                                                    ClientTelemetrySender clientTelemetrySender,
+                                                    Uuid clientInstanceId) {
         return createNetworkClient(config,
                 bootstrapServers,
                 config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
@@ -253,7 +255,8 @@ public final class ClientUtils {
                 null,
                 new DefaultHostResolver(),
                 throttleTimeSensor,
-                clientTelemetrySender);
+                clientTelemetrySender,
+                clientInstanceId);
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
@@ -270,7 +273,8 @@ public final class ClientUtils {
                                                     MetadataUpdater metadataUpdater,
                                                     HostResolver hostResolver,
                                                     Sensor throttleTimeSensor,
-                                                    ClientTelemetrySender clientTelemetrySender) {
+                                                    ClientTelemetrySender clientTelemetrySender,
+                                                    Uuid clientInstanceId) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
 
@@ -288,6 +292,7 @@ public final class ClientUtils {
                     metadata,
                     selector,
                     clientId,
+                    clientInstanceId,
                     maxInFlightRequestsPerConnection,
                     config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),

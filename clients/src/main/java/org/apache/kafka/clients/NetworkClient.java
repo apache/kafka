@@ -21,6 +21,7 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -115,6 +116,9 @@ public class NetworkClient implements KafkaClient {
 
     /* the client id used to identify this client in requests to the server */
     private final String clientId;
+
+    /* the client instance id sent in the v3 request header, or null if this client does not have one */
+    private final Uuid clientInstanceId;
 
     /* the current correlation id to use when sending requests to servers */
     private int correlation;
@@ -226,6 +230,7 @@ public class NetworkClient implements KafkaClient {
                 metadata,
                 selector,
                 clientId,
+                null,
                 maxInFlightRequestsPerConnection,
                 reconnectBackoffMs,
                 reconnectBackoffMax,
@@ -269,6 +274,7 @@ public class NetworkClient implements KafkaClient {
              metadata,
              selector,
              clientId,
+             null,
              maxInFlightRequestsPerConnection,
              reconnectBackoffMs,
              reconnectBackoffMax,
@@ -312,6 +318,7 @@ public class NetworkClient implements KafkaClient {
              null,
              selector,
              clientId,
+             null,
              maxInFlightRequestsPerConnection,
              reconnectBackoffMs,
              reconnectBackoffMax,
@@ -337,6 +344,7 @@ public class NetworkClient implements KafkaClient {
                          Metadata metadata,
                          Selectable selector,
                          String clientId,
+                         Uuid clientInstanceId,
                          int maxInFlightRequestsPerConnection,
                          long reconnectBackoffMs,
                          long reconnectBackoffMax,
@@ -369,6 +377,7 @@ public class NetworkClient implements KafkaClient {
         }
         this.selector = selector;
         this.clientId = clientId;
+        this.clientInstanceId = clientInstanceId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
         this.connectionStates = new ClusterConnectionStates(
                 reconnectBackoffMs, reconnectBackoffMax,
@@ -1770,7 +1779,7 @@ public class NetworkClient implements KafkaClient {
                                           int requestTimeoutMs,
                                           RequestCompletionHandler callback) {
         return new ClientRequest(nodeId, requestBuilder, nextCorrelationId(), clientId, createdTimeMs, expectResponse,
-                requestTimeoutMs, callback);
+                requestTimeoutMs, callback, clientInstanceId);
     }
 
     public boolean discoverBrokerVersions() {

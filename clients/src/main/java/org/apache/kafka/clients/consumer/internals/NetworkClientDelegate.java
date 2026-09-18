@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -482,6 +483,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final Metrics metrics,
                                                            final Sensor throttleTimeSensor,
                                                            final ClientTelemetrySender clientTelemetrySender,
+                                                           final Uuid clientInstanceId,
                                                            final BackgroundEventHandler backgroundEventHandler,
                                                            final boolean notifyMetadataErrorsViaErrorQueue,
                                                            final AsyncConsumerMetrics asyncConsumerMetrics) {
@@ -498,7 +500,8 @@ public class NetworkClientDelegate implements AutoCloseable {
                         CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                         metadata,
                         throttleTimeSensor,
-                        clientTelemetrySender);
+                        clientTelemetrySender,
+                        clientInstanceId);
                 return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
             }
         };

@@ -96,6 +96,41 @@ public class RequestHeaderTest {
     }
 
     @Test
+    public void testClientInstanceIdIsSetForTheV3Header() {
+        Uuid clientInstanceId = Uuid.randomUuid();
+        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 1, "", 10, clientInstanceId);
+        assertEquals(3, header.headerVersion());
+        assertEquals(clientInstanceId, header.clientInstanceId());
+
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
+        assertEquals(29, buffer.remaining());
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header, deserialized);
+        assertEquals(clientInstanceId, deserialized.clientInstanceId());
+    }
+
+    @Test
+    public void testClientInstanceIdIsDroppedBelowTheV3Header() {
+        // OffsetDelete v0 uses the v1 header, which has no room for the client instance ID. The
+        // header drops it rather than failing when the request is written.
+        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 0, "", 10, Uuid.randomUuid());
+        assertEquals(1, header.headerVersion());
+        assertEquals(Uuid.ZERO_UUID, header.clientInstanceId());
+
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
+        assertEquals(10, buffer.remaining());
+        assertEquals(header, RequestHeader.parse(buffer));
+    }
+
+    @Test
+    public void testNullClientInstanceIdLeavesTheV3HeaderUnset() {
+        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 1, "", 10, null);
+        assertEquals(3, header.headerVersion());
+        assertEquals(Uuid.ZERO_UUID, header.clientInstanceId());
+        assertEquals(11, RequestTestUtils.serializeRequestHeader(header).remaining());
+    }
+
+    @Test
     public void parseHeaderFromBufferWithNonZeroPosition() {
         ByteBuffer buffer = ByteBuffer.allocate(64);
         buffer.position(10);

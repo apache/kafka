@@ -37,12 +37,21 @@ public class RequestHeader implements AbstractRequestResponse {
     private int size = SIZE_NOT_INITIALIZED;
 
     public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
-        this(new RequestHeaderData().
+        this(requestApiKey, requestVersion, clientId, correlationId, null);
+    }
+
+    public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId,
+                         Uuid clientInstanceId) {
+        this.headerVersion = requestApiKey.requestHeaderVersion(requestVersion);
+        this.data = new RequestHeaderData().
                 setRequestApiKey(requestApiKey.id).
                 setRequestApiVersion(requestVersion).
                 setClientId(clientId).
-                setCorrelationId(correlationId),
-            requestApiKey.requestHeaderVersion(requestVersion));
+                setCorrelationId(correlationId);
+        // The client instance ID is a tagged field of the v3 header, so writing it on an older
+        // header fails. Drop it for request versions which do not map to the v3 header.
+        if (clientInstanceId != null && headerVersion >= 3)
+            this.data.setClientInstanceId(clientInstanceId);
     }
 
     public RequestHeader(RequestHeaderData data, short headerVersion) {
