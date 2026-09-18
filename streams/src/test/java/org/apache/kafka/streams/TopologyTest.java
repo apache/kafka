@@ -85,7 +85,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -188,65 +187,72 @@ public class TopologyTest {
     @Test
     public void shouldNotAllowToAddSourcesWithSameName() {
         topology.addSource("source", "topic-1");
-        try {
-            topology.addSource("source", "topic-2");
-            fail("Should throw TopologyException for duplicate source name");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source", "topic-2"),
+            "should not allow a duplicate source name"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddTopicTwice() {
         topology.addSource("source", "topic-1");
-        try {
-            topology.addSource("source-2", "topic-1");
-            fail("Should throw TopologyException for already used topic");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source-2", "topic-1"),
+            "should not allow a topic that is already used"
+        );
     }
 
     @Test
     public void testPatternMatchesAlreadyProvidedTopicSource() {
         topology.addSource("source-1", "foo");
-        try {
-            topology.addSource("source-2", Pattern.compile("f.*"));
-            fail("Should have thrown TopologyException for overlapping pattern with already registered topic");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source-2", Pattern.compile("f.*")),
+            "should not allow a pattern overlapping an already registered topic"
+        );
     }
 
     @Test
     public void testNamedTopicMatchesAlreadyProvidedPattern() {
         topology.addSource("source-1", Pattern.compile("f.*"));
-        try {
-            topology.addSource("source-2", "foo");
-            fail("Should have thrown TopologyException for overlapping topic with already registered pattern");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source-2", "foo"),
+            "should not allow a topic overlapping an already registered pattern"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddProcessorWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        try {
-            topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-            fail("Should throw TopologyException for duplicate processor name");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source"),
+            "should not allow a duplicate processor name"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddProcessorWithEmptyParents() {
         topology.addSource("source", "topic-1");
-        try {
-            topology.addProcessor("processor", new MockApiProcessorSupplier<>());
-            fail("Should throw TopologyException for processor without at least one parent node");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>()),
+            "should not allow a processor without at least one parent node"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddProcessorWithNullParents() {
         topology.addSource("source", "topic-1");
-        try {
-            topology.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null);
-            fail("Should throw NullPointerException for processor when null parent names are provided");
-        } catch (final NullPointerException expected) { }
+        assertThrows(
+            NullPointerException.class,
+            () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null),
+            "should not allow null parent names for a processor"
+        );
     }
 
     @Test
@@ -263,30 +269,33 @@ public class TopologyTest {
     public void shouldNotAllowToAddSinkWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addSink("sink", "topic-2", "source");
-        try {
-            topology.addSink("sink", "topic-3", "source");
-            fail("Should throw TopologyException for duplicate sink name");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSink("sink", "topic-3", "source"),
+            "should not allow a duplicate sink name"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddSinkWithEmptyParents() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        try {
-            topology.addSink("sink", "topic-2");
-            fail("Should throw TopologyException for sink without at least one parent node");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSink("sink", "topic-2"),
+            "should not allow a sink without at least one parent node"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddSinkWithNullParents() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        try {
-            topology.addSink("sink", "topic-2", (String) null);
-            fail("Should throw NullPointerException for sink when null parent names are provided");
-        } catch (final NullPointerException expected) { }
+        assertThrows(
+            NullPointerException.class,
+            () -> topology.addSink("sink", "topic-2", (String) null),
+            "should not allow null parent names for a sink"
+        );
     }
 
     @Test
@@ -303,10 +312,11 @@ public class TopologyTest {
     public void shouldFailIfSinkIsParent() {
         topology.addSource("source", "topic-1");
         topology.addSink("sink-1", "topic-2", "source");
-        try {
-            topology.addSink("sink-2", "topic-3", "sink-1");
-            fail("Should throw TopologyException for using sink as parent");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSink("sink-2", "topic-3", "sink-1"),
+            "should not allow a sink as a parent node"
+        );
     }
 
     @Test
@@ -319,10 +329,11 @@ public class TopologyTest {
     public void shouldNotAllowToAddStateStoreToSource() {
         mockStoreBuilder();
         topology.addSource("source-1", "topic-1");
-        try {
-            topology.addStateStore(storeBuilder, "source-1");
-            fail("Should have thrown TopologyException for adding store to source node");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addStateStore(storeBuilder, "source-1"),
+            "should not allow adding a state store to a source node"
+        );
     }
 
     @Test
@@ -330,10 +341,11 @@ public class TopologyTest {
         mockStoreBuilder();
         topology.addSource("source-1", "topic-1");
         topology.addSink("sink-1", "topic-1", "source-1");
-        try {
-            topology.addStateStore(storeBuilder, "sink-1");
-            fail("Should have thrown TopologyException for adding store to sink node");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addStateStore(storeBuilder, "sink-1"),
+            "should not allow adding a state store to a sink node"
+        );
     }
 
     private void mockStoreBuilder() {
@@ -347,10 +359,11 @@ public class TopologyTest {
 
         final StoreBuilder<?> otherStoreBuilder = mock(StoreBuilder.class);
         when(otherStoreBuilder.name()).thenReturn("store");
-        try {
-            topology.addStateStore(otherStoreBuilder);
-            fail("Should have thrown TopologyException for same store name with different StoreBuilder");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addStateStore(otherStoreBuilder),
+            "should not allow the same store name with a different StoreBuilder"
+        );
     }
 
     @Test

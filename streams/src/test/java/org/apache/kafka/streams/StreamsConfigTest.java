@@ -882,15 +882,15 @@ public class StreamsConfigTest {
     public void shouldThrowExceptionIfCommitIntervalMsIsNegative() {
         final long commitIntervalMs = -1;
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
-        try {
-            new StreamsConfig(props);
-            fail("Should throw ConfigException when commitIntervalMs is set to a negative value");
-        } catch (final ConfigException e) {
-            assertEquals(
-                "Invalid value -1 for configuration commit.interval.ms: Value must be at least 0",
-                e.getMessage()
-            );
-        }
+        final ConfigException e = assertThrows(
+            ConfigException.class,
+            () -> new StreamsConfig(props),
+            "should not accept a negative commit interval"
+        );
+        assertEquals(
+            "Invalid value -1 for configuration commit.interval.ms: Value must be at least 0",
+            e.getMessage()
+        );
     }
 
     @Test
@@ -921,15 +921,15 @@ public class StreamsConfigTest {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
-        try {
-            config.defaultKeySerde();
-            fail("Test should throw a StreamsException");
-        } catch (final StreamsException e) {
-            assertEquals(
-                "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
-                e.getMessage()
-            );
-        }
+        final StreamsException e = assertThrows(
+            StreamsException.class,
+            config::defaultKeySerde,
+            "should not return a default key serde that fails to configure"
+        );
+        assertEquals(
+            "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+            e.getMessage()
+        );
     }
 
     @SuppressWarnings("resource")
@@ -938,15 +938,15 @@ public class StreamsConfigTest {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
-        try {
-            config.defaultValueSerde();
-            fail("Test should throw a StreamsException");
-        } catch (final StreamsException e) {
-            assertEquals(
-                "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
-                e.getMessage()
-            );
-        }
+        final StreamsException e = assertThrows(
+            StreamsException.class,
+            config::defaultValueSerde,
+            "should not return a default value serde that fails to configure"
+        );
+        assertEquals(
+            "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+            e.getMessage()
+        );
     }
 
     @Test
@@ -954,16 +954,16 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 7);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        try {
-            streamsConfig.getProducerConfigs(clientId);
-            fail("Should throw ConfigException when ESO is enabled and maxInFlight requests exceeds 5");
-        } catch (final ConfigException e) {
-            assertEquals(
-                "Invalid value 7 for configuration max.in.flight.requests.per.connection:" +
-                    " Can't exceed 5 when exactly-once processing is enabled",
-                e.getMessage()
-            );
-        }
+        final ConfigException e = assertThrows(
+            ConfigException.class,
+            () -> streamsConfig.getProducerConfigs(clientId),
+            "should not accept max in flight requests above 5 when exactly-once is enabled"
+        );
+        assertEquals(
+            "Invalid value 7 for configuration max.in.flight.requests.per.connection:" +
+                " Can't exceed 5 when exactly-once processing is enabled",
+            e.getMessage()
+        );
     }
 
     @Test
@@ -979,16 +979,16 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "not-a-number");
 
-        try {
-            new StreamsConfig(props).getProducerConfigs(clientId);
-            fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be parsed into an integer");
-        } catch (final ConfigException e) {
-            assertEquals(
-                "Invalid value not-a-number for configuration max.in.flight.requests.per.connection:" +
-                " String value could not be parsed as 32-bit integer",
-                e.getMessage()
-            );
-        }
+        final ConfigException e = assertThrows(
+            ConfigException.class,
+            () -> new StreamsConfig(props).getProducerConfigs(clientId),
+            "should not accept a non-numeric max in flight requests when exactly-once is enabled"
+        );
+        assertEquals(
+            "Invalid value not-a-number for configuration max.in.flight.requests.per.connection:" +
+            " String value could not be parsed as 32-bit integer",
+            e.getMessage()
+        );
     }
 
     @Test
