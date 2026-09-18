@@ -175,6 +175,8 @@ jobs:
           fi
       - name: Verify license file
         run: python committer-tools/verify_license.py --skip-build
+      - name: Verify NOTICE-binary file
+        run: python committer-tools/verify_notice.py --skip-build
 
   test:
     needs: [configure, validate, load-catalog]
