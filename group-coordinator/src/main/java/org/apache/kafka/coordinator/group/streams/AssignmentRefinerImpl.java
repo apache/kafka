@@ -532,7 +532,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *     <li>a staged migration keeps {@code t} running as an active task on {@code p}, and a process cannot hold
      *     {@code t} twice.</li>
      *     <li>{@code t}'s migration onto {@code p} borrowed an existing standby on {@code p}. To not run
-     *     {@code num.standby.repliacs + 1} standbys, we hold back the assignment of the standby to its new owner.</li>
+     *     {@code num.standby.replicas + 1} standbys, we hold back one assignment of the standby to a new owner.</li>
      * </ol>
      *
      * @param targetAssignment
@@ -548,8 +548,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * @param subtopologies
      *        The resolved subtopologies, which tell whether a subtopology is stateful.
      *
-     * @return The standby placements to withhold, as the tasks to drop from each member's slice, in canonical order.
-     *         A member with nothing withheld does not appear.
+     * @return The standby placements to withhold, as the tasks to drop from each member's target assignment, in
+     *         canonical order. A member with nothing withheld does not appear.
      */
     static SortedMap<String, SortedSet<TaskId>> filterStandbys(
         final Map<String, TasksTuple> targetAssignment,
@@ -559,19 +559,26 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, StreamsGroupMember> members,
         final SortedMap<String, ConfiguredSubtopology> subtopologies
     ) {
-        final StandbyConflicts conflicts = indexStandbyConflicts(decisions, warmupPlan, members);
+        final StandbyConflicts conflicts = indexStandbyConflicts(
+            targetAssignment,
+            currentAssignment,
+            decisions,
+            warmupPlan,
+            members,
+            subtopologies
+        );
         final SortedMap<String, SortedSet<TaskId>> withheld = new TreeMap<>();
 
         targetAssignment.forEach((memberId, tasks) -> {
             final StreamsGroupMember member = members.get(memberId);
             if (member == null) {
-                // The target assignment can name a member the group has already removed. Its slice reaches nobody, so
+                // The target assignment can name a member the group has already removed. Its tasks reach nobody, so
                 // there is nothing to hold back and no process to resolve it against.
                 return;
             }
 
             forEachStatefulTask(tasks.standbyTasks(), subtopologies, task -> {
-                if (isStandbyWithheld(memberId, member.processId(), task, currentAssignment, conflicts)) {
+                if (isStandbyWithheld(memberId, member.processId(), task, conflicts)) {
                     withheld.computeIfAbsent(memberId, __ -> new TreeSet<>()).add(task);
                 }
             });
@@ -582,19 +589,31 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
     /**
      * Builds the {@link StandbyConflicts} lookups, ie, where each staged migration keeps its task running, and which
-     * migrations borrowed a copy.
+     * placement pays for each borrowed copy.
      */
     private static StandbyConflicts indexStandbyConflicts(
+        final Map<String, TasksTuple> targetAssignment,
+        final CurrentAssignmentIndex currentAssignment,
         final TaskDecisions decisions,
         final WarmupPlan warmupPlan,
-        final Map<String, StreamsGroupMember> members
+        final Map<String, StreamsGroupMember> members,
+        final SortedMap<String, ConfiguredSubtopology> subtopologies
     ) {
         final Map<TaskId, String> activeStagedOn = new HashMap<>();
         for (final StagedMigration migration : decisions.stagedMigrations()) {
             activeStagedOn.put(migration.task(), members.get(migration.currentOwner()).processId());
         }
 
-        return new StandbyConflicts(activeStagedOn, warmupPlan.borrowedMigrations());
+        final Map<TaskId, String> borrowPaidBy = new HashMap<>();
+        targetAssignment.forEach((memberId, tasks) ->
+            forEachStatefulTask(tasks.standbyTasks(), subtopologies, task -> {
+                if (warmupPlan.borrowedMigrations().contains(task)
+                    && !holdsCopyOf(currentAssignment, memberId, task)) {
+                    borrowPaidBy.merge(task, memberId, (left, right) -> left.compareTo(right) <= 0 ? left : right);
+                }
+            }));
+
+        return new StandbyConflicts(activeStagedOn, borrowPaidBy);
     }
 
     /**
@@ -604,7 +623,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final String memberId,
         final String processId,
         final TaskId task,
-        final CurrentAssignmentIndex currentAssignment,
         final StandbyConflicts conflicts
     ) {
         // Rule 1: a process cannot hold `task` twice, so a standby on the process a staged migration keeps the
@@ -613,11 +631,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             return true;
         }
 
-        // Rule 2: a borrowed migration keeps its existing copy as the group's one entitled replica, so F's
-        // relocation of the standby -- a placement on a member that does not already hold a copy -- is withheld.
-        final boolean warmedByBorrow = conflicts.borrowedMigrations().contains(task);
-        final boolean isRelocation = !holdsCopyOf(currentAssignment, memberId, task);
-        return warmedByBorrow && isRelocation;
+        // Rule 2: a borrowed migration keeps its existing copy as one of the group's entitled replicas, so the one
+        // relocated placement that pays for it waits.
+        return memberId.equals(conflicts.borrowPaidBy().get(task));
     }
 
     private static boolean holdsCopyOf(
@@ -1062,26 +1078,27 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *
      * @param activeStagedOn
      *        The process each staged migration keeps its task running on.
-     * @param borrowedMigrations
-     *        The migrations warmed by a standby that stays where it is, whose relocated placement therefore has to
-     *        wait.
+     * @param borrowPaidBy
+     *        For each migration warmed by a standby that stays where it is, the one member whose relocated placement
+     *        of that task waits in the borrowed copy's stead. Tasks warmed some other way are absent, as is a
+     *        borrowed migration whose every placement sits on a member that already holds a copy.
      */
     private record StandbyConflicts(
         Map<TaskId, String> activeStagedOn,
-        SortedSet<TaskId> borrowedMigrations
+        Map<TaskId, String> borrowPaidBy
     ) {
     }
 
     /**
-     * One member's slice of the target assignment, made mutable so that the assembly can patch it.
+     * One member's tasks in the target assignment, made mutable so that the assembly can patch them.
      *
      * <p><b>A subtopology whose partition set becomes empty is dropped, and that is load-bearing rather than
-     * tidiness.</b> The coordinator decides whether a refinement step is due by asking whether a member's slice
-     * still matches what it already holds, and that comparison is a plain map equality: a subtopology key mapped to
-     * an empty set is <em>not</em> equal to the same map without the key. A patch that removed a member's last task
-     * for some subtopology and left the key behind would therefore compare unequal forever, and the group would mint
-     * a fresh refinement step on every heartbeat without anything changing. Pruning is what makes a patched slice
-     * that ends up holding the target assignment's tasks read as the target assignment.
+     * tidiness.</b> The coordinator decides whether a refinement step is due by asking whether a member's assigned
+     * tasks still match what it already holds, and that comparison is a plain map equality: a subtopology key mapped
+     * to an empty set is <em>not</em> equal to the same map without the key. A patch that removed a member's last
+     * task for some subtopology and left the key behind would therefore compare unequal forever, and the group would
+     * mint a fresh refinement step on every heartbeat without anything changing. Pruning is what makes a patch that
+     * ends up holding the target assignment's tasks read as the target assignment.
      */
     private static final class PatchedTasks {
 

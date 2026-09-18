@@ -1435,7 +1435,7 @@ public class AssignmentRefinerTest {
     @Test
     public void shouldWithholdAStandbyOnTheProcessAMigrationIsStagedOn() {
         // The placement rule 1 protects is the one the staged migration makes: the task runs on memberB for this
-        // step, so F's standby of it cannot land on memberB's process as well. Nothing holds the task as an active
+        // step, so the target assignment's standby of it cannot land on memberB's process as well. Nothing holds it
         // task here, so the current assignment says nothing about where it runs.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", TasksTuple.EMPTY),
@@ -1460,7 +1460,7 @@ public class AssignmentRefinerTest {
     @Test
     public void shouldEmitTheStandbyOnTheProcessAMigrationIsStagedAwayFrom() {
         // The migration is staged from memberB, so the intermediate assignment runs the task on processB and not on
-        // processA. That leaves memberA revoking the active it holds, and F's standby placement there is how it
+        // processA. That leaves memberA revoking the active it holds, and the standby placement there is how it
         // recycles that state, so only processB's placement waits.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
@@ -1498,6 +1498,31 @@ public class AssignmentRefinerTest {
             "memberA", TasksTuple.EMPTY,
             "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
             "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Map.of("memberC", Set.of(STATEFUL_0)), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldWithholdOnlyOneRelocatedStandbyOfABorrowedMigration() {
+        // The borrowed copy is one replica, so it is worth one placement -- not every placement the target
+        // assignment relocated. With two standby replicas configured, memberB's borrowed copy pays for memberC's
+        // placement and memberE's is emitted, which leaves the group on the two replicas it is entitled to.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY),
+            "memberD", member("memberD", "processD", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberE", member("memberE", "processE", TasksTuple.EMPTY)
+        );
+        // The active moves onto memberB, which holds one of the two standbys, so the target assignment has to
+        // relocate both of them: memberB's because it runs the active now, memberD's for balance.
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberD", TasksTuple.EMPTY,
+            "memberE", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
         );
 
         assertEquals(Map.of("memberC", Set.of(STATEFUL_0)), filter(members, targetAssignment, Map.of(), 1));
@@ -1734,7 +1759,7 @@ public class AssignmentRefinerTest {
     }
 
     @Test
-    public void shouldPlaceEachTasksActiveOnExactlyOneMember() {
+    public void shouldPlaceEveryActiveTaskOnExactlyOneMember() {
         // The invariant the reconciler cannot recover from if it is broken: a task active on two members at once.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1))),
@@ -1755,6 +1780,32 @@ public class AssignmentRefinerTest {
             })));
 
         assertEquals(Set.of(STATEFUL_0, STATEFUL_1), activeOwners.keySet());
+    }
+
+    @Test
+    public void shouldPreserveTheReplicaCountOfABorrowedMigration() {
+        // What makes a borrow free is that it spends a replica the group already has rather than a warm-up slot, so
+        // the copy count has to come out exactly as the target assignment has it -- one active and two standbys
+        // here, with the borrowed copy standing in for the placement that waits.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY),
+            "memberD", member("memberD", "processD", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberE", member("memberE", "processE", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberD", TasksTuple.EMPTY,
+            "memberE", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(
+            countCopies(targetAssignment, STATEFUL_0),
+            countCopies(assemble(members, targetAssignment, Map.of(), 1), STATEFUL_0)
+        );
     }
 
     @Test
@@ -1897,6 +1948,22 @@ public class AssignmentRefinerTest {
             AssignmentRefinerImpl.filterStandbys(
                 targetAssignment, currentAssignment, decisions, warmupPlan, members, subtopologies())
         );
+    }
+
+    /**
+     * How many copies of the task the assignment holds, counting every role.
+     */
+    private static int countCopies(final Map<String, TasksTuple> assignment, final TaskId task) {
+        int copies = 0;
+        for (final TasksTuple tasks : assignment.values()) {
+            for (final Map<String, Set<Integer>> byRole
+                : List.of(tasks.activeTasks(), tasks.standbyTasks(), tasks.warmupTasks())) {
+                if (byRole.getOrDefault(task.subtopologyId(), Set.of()).contains(task.partition())) {
+                    copies++;
+                }
+            }
+        }
+        return copies;
     }
 
     private static SortedMap<String, ConfiguredSubtopology> subtopologies() {
