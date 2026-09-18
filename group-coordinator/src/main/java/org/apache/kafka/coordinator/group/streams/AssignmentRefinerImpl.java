@@ -292,7 +292,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * <p>There is different scenarios:
      * <ul>
      *     <li>A warm-up task already restoring keeps its warm-up slot if the target assignment didn't change, and the
-     *     warmu-up task is not caught up yet. It could also get revoked if the warmup budget was reduced and keeping
+     *     warm-up task is not caught up yet. It could also get revoked if the warmup budget was reduced and keeping
      *     the warmup would now exceed the budget.
      *     <li>A <b>fresh plant</b> puts a warm-up task on a target owner whose process holds nothing for the task,
      *     and spends a warm-up slot.</li>
@@ -361,8 +361,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             }
         }
 
-        // New warm-up tasks raises its target process's load, so we need to update it while we go, and find a new
-        // `best` from scratch each time
+        // A warm-up task new to its target process raises that process's load, so we need to update it while we go,
+        // and find a new `best` from scratch each time. A sibling move relocates the copy the process already holds,
+        // which the load counts where that copy sits today, so it leaves the load unchanged.
         // note: this nested-loop is bounded by the number of unused warm-up slots; so while it's O(unused * candidate)
         // it's effectively not quadratic (we can consider `unused` a constant)
         final Map<String, Integer> newWarmupsByProcess = new HashMap<>();
@@ -384,7 +385,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
             final FundingCandidate funded = newWarmupCandidates.remove(best);
             warmupTasks.put(funded.task(), funded.targetOwner());
-            newWarmupsByProcess.merge(funded.targetProcessId(), 1, Integer::sum);
+            newWarmupsByProcess.merge(funded.targetProcessId(), funded.newWarmupsOnTargetProcess(), Integer::sum);
             used++;
         }
 
@@ -659,8 +660,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * How much stateful work a process is carrying, for the warm-up funding order.
      *
      * <p>The count and the divisor are kept separately because the funding order needs the quotient while the
-     * accounting needs the count: each warm-up task funded within one pass raises its target process's load before
-     * the next pick is made, which {@link #loadWith(int)} does without disturbing the index itself.
+     * accounting needs the count: a warm-up task funded within one pass raises its target process's load before the
+     * next pick is made, which {@link #loadWith(int)} does without disturbing the index itself.
      *
      * @param statefulTaskCount
      *        How many stateful tasks the process has been granted, counting every role. See
@@ -826,7 +827,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
         /**
          * Its target owner's process holds a standby of the task, but on one of its <em>other</em> members.
-         * Cost a warmu-up slot.
+         * Costs a warm-up slot.
          */
         SIBLING_MOVE
     }
@@ -845,9 +846,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * @param currentProcessId
      *        The process still running the task, whose load the funding order reads (descending) as its secondary key.
      * @param warming
-     *        What this migration needs from the budget, decided once when the migration is classified. Only the
-     *        fall-back turns on it: a {@link Warming#SIBLING_MOVE} that does not get a warm-up slot falls back to
-     *        borrowing the standby where it sits, everything else parks.
+     *        What this migration needs from the budget, decided once when the migration is classified. The funding
+     *        order reads it, as does the fall-back: a {@link Warming#SIBLING_MOVE} that does not get a warm-up slot
+     *        falls back to borrowing the standby where it sits, everything else parks.
      */
     private record FundingCandidate(
         TaskId task,
@@ -856,6 +857,16 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         String currentProcessId,
         Warming warming
     ) {
+
+        /**
+         * How many warm-up tasks funding this migration adds to the target process, which is what raises that
+         * process's load for the picks that follow. A plant adds one, to a process that holds no copy of the task.
+         * A sibling move adds none: the copy it moves onto the target owner is one the process already holds, and
+         * the process load counts it where it sits today.
+         */
+        int newWarmupsOnTargetProcess() {
+            return warming == Warming.PLANT ? 1 : 0;
+        }
     }
 
     /**

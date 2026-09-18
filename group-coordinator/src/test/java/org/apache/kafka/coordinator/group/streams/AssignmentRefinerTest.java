@@ -1266,6 +1266,45 @@ public class AssignmentRefinerTest {
     }
 
     @Test
+    public void shouldNotCountAFundedSiblingMoveTowardsItsTargetProcessLoad() {
+        // A sibling move relocates a copy within the destination process, so the process runs no more stateful tasks
+        // after it than before, and its load -- which counts that copy where it sits today -- stays put. Raising it
+        // would hand the next slot to a process that is in fact the busier one.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1, 2))),
+            // processX spreads the two standbys that warm STATEFUL_0 and STATEFUL_1 over four members: 2 / 4 = 0.5.
+            "memberX1", member("memberX1", "processX", TasksTuple.EMPTY),
+            "memberX2", member("memberX2", "processX", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0, 1))),
+            "memberX3", member("memberX3", "processX", TasksTuple.EMPTY),
+            "memberX4", member("memberX4", "processX", TasksTuple.EMPTY),
+            // processY carries the standby that warms STATEFUL_2 and the active of STATEFUL_3: 2 / 3 = 0.67.
+            "memberY1", member("memberY1", "processY", TasksTuple.EMPTY),
+            "memberY2", member("memberY2", "processY", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 2))),
+            "memberY3", member("memberY3", "processY", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 3)))
+        );
+        // All three migrations are sibling moves: each destination process holds the task on a member next to its
+        // target owner. STATEFUL_3 already runs where it belongs.
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberX1", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1)),
+            "memberX2", TasksTuple.EMPTY,
+            "memberX3", TasksTuple.EMPTY,
+            "memberX4", TasksTuple.EMPTY,
+            "memberY1", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 2)),
+            "memberY2", TasksTuple.EMPTY,
+            "memberY3", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 3))
+        );
+
+        // Two slots, and processX is the lighter destination for both of its migrations, so it takes both. Counting
+        // the first move against processX would lift it to 0.75 and give the second slot to the heavier processY.
+        final AssignmentRefinerImpl.WarmupPlan plan = plan(members, targetAssignment, Map.of(), 2);
+
+        assertEquals(Map.of(STATEFUL_0, "memberX1", STATEFUL_1, "memberX1"), plan.warmupTasks());
+        assertEquals(Set.of(STATEFUL_2), plan.borrowedMigrations());
+        assertEquals(Set.of(), plan.parkedMigrations());
+    }
+
+    @Test
     public void shouldEvictWarmupsInReverseFundingOrderWhenTheBudgetShrinks() {
         // Only a config change can lower the budget below the warm-ups already in flight. Which ones survive follows
         // the funding order rather than iteration order, so the outcome is reproducible.
