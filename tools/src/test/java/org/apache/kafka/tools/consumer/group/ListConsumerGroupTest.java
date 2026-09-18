@@ -107,12 +107,12 @@ public class ListConsumerGroupTest {
                 final AtomicReference<Set<String>> foundGroups = new AtomicReference<>();
 
                 TestUtils.waitForCondition(() -> {
-                    foundGroups.set(new HashSet<>(service.listConsumerGroups()));
+                    foundGroups.set(Set.copyOf(service.listConsumerGroups()));
                     return Objects.equals(expectedGroups, foundGroups.get());
                 }, () -> "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
             }
 
-            removeConsumer(Set.of(topicPartitionsGroup, topicGroup, protocolGroup));
+            deleteConsumerGroups(Set.of(topicPartitionsGroup, topicGroup, protocolGroup));
             clusterInstance.deleteTopic(topic);
         }
     }
@@ -177,7 +177,7 @@ public class ListConsumerGroupTest {
                 );
             }
 
-            removeConsumer(Set.of(topicPartitionsGroup, protocolGroup));
+            deleteConsumerGroups(Set.of(topicPartitionsGroup, protocolGroup));
             clusterInstance.deleteTopic(topic);
         }
     }
@@ -515,7 +515,7 @@ public class ListConsumerGroupTest {
         );
     }
 
-    private void removeConsumer(Set<String> groupIds) {
+    private void deleteConsumerGroups(Set<String> groupIds) {
         try (Admin admin = clusterInstance.admin()) {
             assertDoesNotThrow(() -> admin.deleteConsumerGroups(groupIds).all().get());
         }

@@ -21,9 +21,14 @@ import org.apache.kafka.common.GroupType;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import joptsimple.OptionException;
 
@@ -69,52 +74,46 @@ public class ConsumerGroupCommandTest {
         assertThrows(OptionException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
     }
 
-    @Test
-    public void testConsumerGroupStatesFromString() {
-        Set<GroupState> result = ConsumerGroupCommand.groupStatesFromString("Stable");
-        assertEquals(Set.of(GroupState.STABLE), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("Stable, PreparingRebalance");
-        assertEquals(Set.of(GroupState.STABLE, GroupState.PREPARING_REBALANCE), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("Dead,CompletingRebalance,");
-        assertEquals(Set.of(GroupState.DEAD, GroupState.COMPLETING_REBALANCE), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("stable");
-        assertEquals(Set.of(GroupState.STABLE), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("stable, assigning");
-        assertEquals(Set.of(GroupState.STABLE, GroupState.ASSIGNING), result);
-
-        result = ConsumerGroupCommand.groupStatesFromString("dead,reconciling,");
-        assertEquals(Set.of(GroupState.DEAD, GroupState.RECONCILING), result);
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("bad, wrong"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("  bad, Stable"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("   ,   ,"));
+    private static Stream<Arguments> validConsumerGroupStates() {
+        return Stream.of(
+                Arguments.of("Stable", Set.of(GroupState.STABLE)),
+                Arguments.of("Stable, PreparingRebalance", Set.of(GroupState.STABLE, GroupState.PREPARING_REBALANCE)),
+                Arguments.of("Dead,CompletingRebalance,", Set.of(GroupState.DEAD, GroupState.COMPLETING_REBALANCE)),
+                Arguments.of("stable", Set.of(GroupState.STABLE)),
+                Arguments.of("stable, assigning", Set.of(GroupState.STABLE, GroupState.ASSIGNING)),
+                Arguments.of("dead,reconciling,", Set.of(GroupState.DEAD, GroupState.RECONCILING))
+        );
     }
 
-    @Test
-    public void testConsumerGroupTypesFromString() {
-        Set<GroupType> result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer");
-        assertEquals(Set.of(GroupType.CONSUMER), result);
+    @ParameterizedTest
+    @MethodSource("validConsumerGroupStates")
+    public void testConsumerGroupStatesFromString(String input, Set<GroupState> expected) {
+        assertEquals(expected, ConsumerGroupCommand.groupStatesFromString(input));
+    }
 
-        result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer, classic");
-        assertEquals(Set.of(GroupType.CONSUMER, GroupType.CLASSIC), result);
+    @ParameterizedTest
+    @ValueSource(strings = {"bad, wrong", "  bad, Stable", "   ,   ,"})
+    public void testConsumerGroupStatesFromInvalidString(String input) {
+        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString(input));
+    }
 
-        result = ConsumerGroupCommand.consumerGroupTypesFromString("Consumer, Classic");
-        assertEquals(Set.of(GroupType.CONSUMER, GroupType.CLASSIC), result);
+    private static Stream<Arguments> validConsumerGroupTypes() {
+        return Stream.of(
+                Arguments.of("consumer", Set.of(GroupType.CONSUMER)),
+                Arguments.of("consumer, classic", Set.of(GroupType.CONSUMER, GroupType.CLASSIC)),
+                Arguments.of("Consumer, Classic", Set.of(GroupType.CONSUMER, GroupType.CLASSIC))
+        );
+    }
 
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("Share"));
+    @ParameterizedTest
+    @MethodSource("validConsumerGroupTypes")
+    public void testConsumerGroupTypesFromString(String input, Set<GroupType> expected) {
+        assertEquals(expected, ConsumerGroupCommand.consumerGroupTypesFromString(input));
+    }
 
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("streams"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("bad, wrong"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("  bad, generic"));
-
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("   ,   ,"));
+    @ParameterizedTest
+    @ValueSource(strings = {"Share", "streams", "bad, wrong", "  bad, generic", "   ,   ,"})
+    public void testConsumerGroupTypesFromInvalidString(String input) {
+        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString(input));
     }
 }
