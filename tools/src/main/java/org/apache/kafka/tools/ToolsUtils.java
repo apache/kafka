@@ -24,6 +24,7 @@ import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -46,7 +47,7 @@ public class ToolsUtils {
             }
             String doubleOutputFormat = "%-" + maxLengthOfDisplayName + "s : %.3f";
             String defaultOutputFormat = "%-" + maxLengthOfDisplayName + "s : %s";
-            System.out.println(String.format("\n%-" + maxLengthOfDisplayName + "s   %s", "Metric Name", "Value"));
+            System.out.println(String.format(Locale.ROOT, "\n%-" + maxLengthOfDisplayName + "s   %s", "Metric Name", "Value"));
 
             for (Map.Entry<String, Object> entry : sortedMetrics.entrySet()) {
                 String outputFormat;
@@ -54,7 +55,7 @@ public class ToolsUtils {
                     outputFormat = doubleOutputFormat;
                 else
                     outputFormat = defaultOutputFormat;
-                System.out.println(String.format(outputFormat, entry.getKey(), entry.getValue()));
+                System.out.println(String.format(Locale.ROOT, outputFormat, entry.getKey(), entry.getValue()));
             }
         }
     }
