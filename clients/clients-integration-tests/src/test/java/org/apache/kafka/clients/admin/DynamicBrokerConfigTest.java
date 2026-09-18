@@ -21,7 +21,6 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.config.ServerConfigs;
-import org.apache.kafka.test.TestUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -40,11 +39,7 @@ public class DynamicBrokerConfigTest {
 
             // KAFKA-16649 introduced this coverage as a safeguard against future deadlocks.
             // Verify that the broker continues serving requests after resizing the I/O thread pool.
-            admin.createTopics(List.of(new NewTopic("test-topic", 1, (short) 1))).all().get();
-            TestUtils.waitForCondition(
-                () -> admin.listTopics().names().get().contains("test-topic"),
-                "Failed to find test-topic"
-            );
+            cluster.createTopic("test-topic", 1, (short) 1);
         }
     }
 }
