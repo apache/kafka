@@ -43,7 +43,7 @@ public final class GlobComponent {
      */
     private static boolean isGlobSpecialCharacter(char ch) {
         return switch (ch) {
-            case '*', '?', '\\', '{', '}' -> true;
+            case '*', '?', '\\', '{', '}', '[', ']' -> true;
             default -> false;
         };
     }
@@ -107,7 +107,11 @@ public final class GlobComponent {
                         output.append(c);
                     }
                     break;
-                // TODO: handle character ranges
+                case '[':
+                    literal = false;
+                    i = handleCharacterClass(glob, i, output);
+                    break;
+
                 default:
                     if (isRegularExpressionSpecialCharacter(c)) {
                         output.append('\\');
@@ -123,6 +127,83 @@ public final class GlobComponent {
         }
         output.append('$');
         return output.toString();
+    }
+
+    /**
+     * Parses a glob character class starting at the given index and appends the
+     * equivalent regular expression representation to the provided {@code output}.
+     *
+     * <p>The {@code startIdx} must point to the first character inside the
+     * character class (i.e., immediately after the opening '[').</p>
+     *
+     * <p>This method supports:
+     * <ul>
+     *   <li>Leading ']' as a literal</li>
+     *   <li>Negation using '!' or '^'</li>
+     *   <li>Escaped characters using backslash</li>
+     * </ul>
+     *
+     * @param glob the full glob pattern
+     * @param startIdx index of the first character inside the character class
+     * @param output the {@link StringBuilder} to append the regex representation to
+     * @return the index immediately after the closing ']'
+     * @throws RuntimeException if the character class is empty or doesn't close properly
+     */
+    private static int handleCharacterClass(String glob, int startIdx, StringBuilder output) {
+        int idx = startIdx;
+
+        if (idx >= glob.length()) {
+            throw new RuntimeException("Glob has '[' but no ']'.");
+        }
+        output.append("[");
+
+        boolean hasContent = false;
+        char first = glob.charAt(idx);
+        if (first == ']') {
+            output.append(']');
+            hasContent = true;
+            idx++;
+        } else if (first == '!' || first == '^') {
+            output.append('^');
+            idx++;
+        }
+
+        while (idx < glob.length() && glob.charAt(idx) != ']') {
+            char ch = glob.charAt(idx);
+            if (ch == '\\') {
+                idx++;
+                if (idx >= glob.length()) {
+                    throw new RuntimeException("Trailing backslash in character class.");
+                }
+                char escaped = glob.charAt(idx);
+
+                // Escape for regex safety only if needed
+                if (escaped == '\\' || escaped == '[' || escaped == ']') {
+                    output.append('\\');
+                }
+                output.append(escaped);
+                hasContent = true;
+            } else {
+                // Converting [[] to [\[] for regex safety
+                if (ch == '[') {
+                    output.append('\\');
+                }
+                output.append(ch);
+                hasContent = true;
+            }
+
+            idx++;
+        }
+        if (idx >= glob.length()) {
+            throw new RuntimeException("Unterminated character class opened '[' but never closed.");
+        }
+
+        if (!hasContent) {
+            throw new RuntimeException("Empty glob character class.");
+        }
+
+        output.append(']');
+        return idx + 1;
     }
 
     private final String component;
