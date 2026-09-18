@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -85,6 +86,8 @@ public class SubscriptionStateTest {
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
         assertEquals(1L, state.position(tp0).offset);
+        assertEquals(Optional.of(new OffsetAndMetadata(1L, Optional.empty(), "")),
+                Optional.ofNullable(state.allConsumed().get(tp0)));
         state.assignFromUser(Set.of());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -273,6 +276,12 @@ public class SubscriptionStateTest {
     @Test
     public void partitionReset() {
         state.assignFromUser(Set.of(tp0));
+        assertFalse(state.isFetchable(tp0), "Should not be fetchable without a valid position");
+
+        state.resetInitializingPositions();
+        assertEquals(Set.of(tp0), state.partitionsNeedingReset(0L));
+        assertFalse(state.isFetchable(tp0));
+
         state.seek(tp0, 5);
         assertEquals(5L, state.position(tp0).offset);
         state.requestOffsetReset(tp0);
@@ -933,6 +942,8 @@ public class SubscriptionStateTest {
         assertEquals(Optional.of(new OffsetAndMetadata(divergentOffset, Optional.of(divergentOffsetEpoch), "")),
                 truncation.divergentOffsetOpt);
         assertEquals(initialPosition, truncation.fetchPosition);
+        assertEquals("(partition=test-0, fetchOffset=10, fetchEpoch=Optional[5], divergentOffset=5, divergentEpoch=Optional[7])",
+                truncation.toString());
         assertTrue(state.awaitingValidation(tp0));
     }
 
@@ -985,6 +996,8 @@ public class SubscriptionStateTest {
 
         assertEquals(Optional.empty(), truncation.divergentOffsetOpt);
         assertEquals(initialPosition, truncation.fetchPosition);
+        assertEquals("(partition=test-0, fetchOffset=10, fetchEpoch=Optional[5], divergentOffset=unknown, divergentEpoch=unknown)",
+                truncation.toString());
         assertTrue(state.awaitingValidation(tp0));
     }
 
@@ -1369,4 +1382,55 @@ public class SubscriptionStateTest {
         assertTrue(predicateEvaluated.get());
         assertEquals(tp0, fetchablePartitions.get(0));
     }
+
+    @Test
+    public void testMaybeSeekUnvalidatedOnlyUpdatesPartitionsAwaitingReset() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(10L, Optional.of(5),
+            new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10)));
+        TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+        state.assignFromUser(Set.of(tp0));
+
+        state.maybeSeekUnvalidated(unassignedPartition, position, AutoOffsetResetStrategy.EARLIEST);
+        state.maybeSeekUnvalidated(tp0, position, AutoOffsetResetStrategy.EARLIEST);
+        assertNull(state.position(tp0));
+
+        state.requestOffsetReset(tp0, AutoOffsetResetStrategy.EARLIEST);
+        state.maybeSeekUnvalidated(tp0, position, AutoOffsetResetStrategy.LATEST);
+        assertTrue(state.isOffsetResetNeeded(tp0));
+        assertNull(state.position(tp0));
+
+        state.maybeSeekUnvalidated(tp0, position, AutoOffsetResetStrategy.EARLIEST);
+        assertEquals(position, state.position(tp0));
+        assertTrue(state.awaitingValidation(tp0));
+    }
+
+    @Test
+    public void testPartitionsNeedingValidationRespectsRetryBackoff() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        SubscriptionState.FetchPosition position0 = new SubscriptionState.FetchPosition(10L, Optional.of(5),
+            new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10)));
+        SubscriptionState.FetchPosition position1 = new SubscriptionState.FetchPosition(20L, Optional.of(6),
+            new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10)));
+        TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+        state.assignFromUser(Set.of(tp0, tp1));
+
+        state.seekUnvalidated(tp0, position0);
+        state.seekUnvalidated(tp1, position1);
+        assertEquals(Map.of(tp0, position0, tp1, position1), state.partitionsNeedingValidation(0L));
+        assertTrue(state.hasPartitionsNeedingValidation(0L));
+
+        state.requestFailed(Set.of(tp0, unassignedPartition), 10L);
+        assertEquals(Map.of(tp1, position1), state.partitionsNeedingValidation(9L));
+        assertTrue(state.hasPartitionsNeedingValidation(9L));
+
+        state.setNextAllowedRetry(Set.of(tp1), 20L);
+        assertTrue(state.partitionsNeedingValidation(9L).isEmpty());
+        assertFalse(state.hasPartitionsNeedingValidation(9L));
+        assertEquals(Map.of(tp0, position0), state.partitionsNeedingValidation(19L));
+        assertTrue(state.hasPartitionsNeedingValidation(19L));
+        assertEquals(Map.of(tp0, position0, tp1, position1), state.partitionsNeedingValidation(20L));
+        assertTrue(state.hasPartitionsNeedingValidation(20L));
+    }
+
 }
