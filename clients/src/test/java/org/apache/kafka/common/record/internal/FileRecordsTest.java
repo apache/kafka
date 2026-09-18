@@ -23,6 +23,8 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -413,7 +415,9 @@ public class FileRecordsTest {
     @Test
     public void testSearchForTimestamp() throws IOException {
         for (RecordVersion version : RecordVersion.values()) {
-            testSearchForTimestamp(version);
+            for (Compression compression : List.of(Compression.NONE, Compression.gzip().build())) {
+                testSearchForTimestamp(version, compression);
+            }
         }
     }
 
@@ -448,11 +452,11 @@ public class FileRecordsTest {
         }
     }
 
-    private void testSearchForTimestamp(RecordVersion version) throws IOException {
+    private void testSearchForTimestamp(RecordVersion version, Compression compression) throws IOException {
         File temp = tempFile();
         FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
-        appendWithOffsetAndTimestamp(fileRecords, version, 10L, 5, 0);
-        appendWithOffsetAndTimestamp(fileRecords, version, 11L, 6, 1);
+        appendWithOffsetAndTimestamp(fileRecords, version, compression, 10L, 5, 0);
+        appendWithOffsetAndTimestamp(fileRecords, version, compression, 11L, 6, 1);
 
         assertFoundTimestamp(new FileRecords.TimestampAndOffset(10L, 5, Optional.of(0)),
                 fileRecords.searchForTimestamp(9L, 0, 0L, Records.SOFT_MAX_ARRAY_LENGTH), version);
@@ -480,12 +484,13 @@ public class FileRecordsTest {
 
     private void appendWithOffsetAndTimestamp(FileRecords fileRecords,
                                               RecordVersion recordVersion,
+                                              Compression compression,
                                               long timestamp,
                                               long offset,
                                               int leaderEpoch) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, recordVersion.value,
-                Compression.NONE, TimestampType.CREATE_TIME, offset, timestamp, leaderEpoch);
+                compression, TimestampType.CREATE_TIME, offset, timestamp, leaderEpoch);
         builder.append(new SimpleRecord(timestamp, new byte[0], new byte[0]));
         fileRecords.append(builder.build());
     }
@@ -805,5 +810,26 @@ public class FileRecordsTest {
         InvalidRecordException e = assertThrows(InvalidRecordException.class,
                 () -> fileRecords.searchForTimestamp(timestamp, 0, 0L, 100));
         assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
+    }
+
+    // the lookup must not decode record bodies it never reads
+    @Test
+    public void testSearchForTimestampSkipsKeyAndValue() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch.maxTimestamp()).thenReturn(10L);
+        when(batch.partitionLeaderEpoch()).thenReturn(3);
+        Record record = new PartialDefaultRecord(0, (byte) 0, 5L, 10L, RecordBatch.NO_SEQUENCE, -1, -1);
+        when(batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 100))
+                .thenReturn(CloseableIterator.wrap(List.of(record).iterator()));
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
+        mockFileRecordBatches(fileRecords, batch);
+
+        assertEquals(new FileRecords.TimestampAndOffset(10L, 5L, Optional.of(3)),
+                fileRecords.searchForTimestamp(10L, 0, 0L, 100));
+        verify(batch, never()).streamingIterator(any());
+        verify(batch, never()).streamingIterator(any(), anyInt());
     }
 }
