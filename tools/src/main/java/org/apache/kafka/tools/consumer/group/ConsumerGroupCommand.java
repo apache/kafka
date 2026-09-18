@@ -269,8 +269,16 @@ public class ConsumerGroupCommand {
         }
 
         List<String> listConsumerGroups() {
+            return listGroups(ListGroupsOptions.forConsumerGroups());
+        }
+
+        List<String> listStreamGroups() {
+            return listGroups(ListGroupsOptions.forStreamsGroups());
+        }
+
+        List<String> listGroups(ListGroupsOptions options) {
             try {
-                ListGroupsResult result = adminClient.listGroups(withTimeoutMs(ListGroupsOptions.forConsumerGroups()));
+                ListGroupsResult result = adminClient.listGroups(withTimeoutMs(options));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException | ExecutionException e) {
@@ -638,9 +646,16 @@ public class ConsumerGroupCommand {
                 withTimeoutMs(new DescribeConsumerGroupsOptions())
             ).describedGroups();
 
+            Set<String> streamGroups = new HashSet<>(this.listStreamGroups());
             Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
 
             consumerGroups.forEach((groupId, groupDescription) -> {
+                if (streamGroups.contains(groupId)) {
+                    printError("Group '" + groupId + "' is a streams group. Use kafka-streams-groups.sh to reset its offsets.", Optional.empty());
+                    result.put(groupId, Map.of());
+                    return;
+                }
+
                 try {
                     String state = groupDescription.get().groupState().toString();
                     switch (state) {
