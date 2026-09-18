@@ -521,7 +521,7 @@ public class ConfigDef {
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
             String joined = undefinedConfigKeys.stream().map(String::toString).collect(Collectors.joining(","));
-            throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
+            throw new ConfigException("Some configurations are referred in the dependents but not defined: " + joined);
         }
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
