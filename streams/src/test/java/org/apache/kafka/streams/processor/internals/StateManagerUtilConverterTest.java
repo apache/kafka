@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.HeadersBytesStore;
+import org.apache.kafka.streams.state.internals.ChangeLoggingListValueBytesStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionStore;
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreWit
 import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+import org.apache.kafka.streams.state.internals.RocksDBListValueStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapter;
@@ -43,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawListValueToHeadersListValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToSessionHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
@@ -189,6 +192,38 @@ public class StateManagerUtilConverterTest {
         final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
 
         assertEquals(rawValueToTimestampedValue(), converter);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldReturnListConverterForHeadersListValueStore() {
+        // Metered -> ChangeLogging -> RocksDBListValueStoreWithHeaders, which carries the
+        // HeadersAwareListValueStore marker. It is also a HeadersBytesStore, so this pins the branch
+        // order in converterForStore: the list converter must win over the whole-value one.
+        final StateStore mockInner = mock(RocksDBListValueStoreWithHeaders.class);
+        final WrappedStateStore<?, ?, ?> mockChangeLogging = mock(WrappedStateStore.class);
+        final WrappedStateStore<?, ?, ?> mockMetered = mock(WrappedStateStore.class);
+
+        doReturn(mockInner).when(mockChangeLogging).wrapped();
+        doReturn(mockChangeLogging).when(mockMetered).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockMetered);
+
+        assertEquals(rawListValueToHeadersListValue(), converter);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldReturnIdentityConverterForPlainListValueStore() {
+        // Metered -> ChangeLoggingListValueBytesStore (no headers marker)
+        final StateStore mockInner = mock(ChangeLoggingListValueBytesStore.class);
+        final WrappedStateStore<?, ?, ?> mockMetered = mock(WrappedStateStore.class);
+
+        doReturn(mockInner).when(mockMetered).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockMetered);
+
+        assertEquals(identity(), converter);
     }
 
     @Test
