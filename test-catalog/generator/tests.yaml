@@ -55,6 +55,8 @@ org.apache.kafka.message.IsNullConditionalTest:
 - testNotNullCheck
 - testNullCheck
 org.apache.kafka.message.MessageDataGeneratorTest:
+- testArrayLengthIsCapped
+- testArrayPreallocationIsCapped
 - testDuplicateTags
 - testInvalidFieldName
 - testInvalidFlexibleVersionsRange
@@ -70,6 +72,7 @@ org.apache.kafka.message.MessageDataGeneratorTest:
 - testInvalidTaggedVersionsWithoutTag
 - testNullDefaults
 - testNullDefaultsWithDeprecatedVersions
+- testTaggedFieldCountIsBounded
 org.apache.kafka.message.MessageGeneratorTest:
 - stripSuffixTest
 - testCapitalizeFirst
