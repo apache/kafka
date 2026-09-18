@@ -73,6 +73,10 @@ public final class LeaderState<T> implements EpochState {
     private final OptionalLong offsetOfVotersAtEpochStart;
     private final KRaftVersion kraftVersionAtEpochStart;
     private final ChangeVoterHandlerState changeVoterState;
+    /**
+     * The vote recorded in this epoch, retained after a candidate becomes leader.
+     */
+    private final Optional<ReplicaKey> votedKey;
 
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
@@ -115,6 +119,7 @@ public final class LeaderState<T> implements EpochState {
         VoterSet voterSetAtEpochStart,
         OptionalLong offsetOfVotersAtEpochStart,
         KRaftVersion kraftVersionAtEpochStart,
+        Optional<ReplicaKey> votedKey,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
         int fetchTimeoutMs,
@@ -158,6 +163,7 @@ public final class LeaderState<T> implements EpochState {
         this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
         this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
         this.changeVoterState = new ChangeVoterHandlerState(kafkaRaftMetrics);
+        this.votedKey = Objects.requireNonNull(votedKey, "votedKey must be non-null");
 
         kafkaRaftMetrics.addLeaderMetrics();
         this.kafkaRaftMetrics = kafkaRaftMetrics;
@@ -615,7 +621,7 @@ public final class LeaderState<T> implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, localVoterNode.voterKey().id(), Optional.empty(), voterStates.keySet());
+        return ElectionState.withElectedLeader(epoch, localVoterNode.voterKey().id(), votedKey, voterStates.keySet());
     }
 
     @Override
@@ -1061,10 +1067,11 @@ public final class LeaderState<T> implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "Leader(localVoterNode=%s, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
+            "Leader(localVoterNode=%s, epoch=%d, epochStartOffset=%d, votedKey=%s, highWatermark=%s, voterStates=%s)",
             localVoterNode,
             epoch,
             epochStartOffset,
+            votedKey,
             highWatermark,
             voterStates
         );
