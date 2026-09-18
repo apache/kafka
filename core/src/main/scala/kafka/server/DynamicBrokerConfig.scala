@@ -43,7 +43,7 @@ import org.apache.kafka.server.config.{BrokerReconfigurable => JBrokerReconfigur
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
 import org.apache.kafka.server.quota.QuotaFactory
-import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
+import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryReceiver}
 import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
 import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.apache.kafka.storage.internals.log.{LogConfig, LogManager}
@@ -754,6 +754,8 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
     KRaftConfigs.NODE_ID_CONFIG -> brokerId.toString
   )
   private[server] val currentReporters = mutable.Map[String, MetricsReporter]()
+  private val currentTelemetryExporters = mutable.Map[String, ClientTelemetryExporter]()
+  private val currentTelemetryReceivers = mutable.Map[String, ClientTelemetryReceiver]()
   createReporters(config, clusterId, metricsReporterClasses(dynamicConfig.currentKafkaConfig.values()).asJava,
     Collections.emptyMap[String, Object])
 
@@ -786,9 +788,13 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
           reporter match {
             case exporterProvider: ClientTelemetryExporterProvider =>
               // Use new interface (i.e., takes precedence even if class also implements deprecated interface)
-              telemetryExporterPlugin.add(exporterProvider.clientTelemetryExporter())
+              val exporter = exporterProvider.clientTelemetryExporter()
+              telemetryExporterPlugin.add(exporter)
+               currentTelemetryExporters += reporter.getClass.getName -> exporter
             case telemetry: ClientTelemetry =>
-              telemetryExporterPlugin.add(telemetry.clientReceiver())
+              val receiver = telemetry.clientReceiver()
+              telemetryExporterPlugin.add(receiver)
+              currentTelemetryReceivers += reporter.getClass.getName -> receiver
             case _ =>
               // Reporter doesn't support client telemetry
           }
@@ -800,7 +806,13 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
   }
 
   private[server] def removeReporter(className: String): Unit = {
-    currentReporters.remove(className).foreach(metrics.removeReporter)
+    currentReporters.remove(className).foreach { reporter =>
+      dynamicConfig.clientTelemetryExporterPlugin.foreach { telemetryExporterPlugin =>
+        currentTelemetryExporters.remove(className).foreach(exporter => telemetryExporterPlugin.remove(exporter))
+        currentTelemetryReceivers.remove(className).foreach(receiver => telemetryExporterPlugin.remove(receiver))
+      }
+      metrics.removeReporter(reporter)
+    }
   }
 
   private[server] def metricsReporterClasses(configs: util.Map[String, _]): mutable.Buffer[String] = {

@@ -53,6 +53,14 @@ public class ClientTelemetryExporterPlugin {
         exporters.add(exporter);
     }
 
+    public void remove(ClientTelemetryReceiver receiver) {
+        receivers.remove(receiver);
+    }
+
+    public void remove(ClientTelemetryExporter exporter) {
+        exporters.remove(exporter);
+    }
+
     public DefaultClientTelemetryPayload getPayLoad(PushTelemetryRequest request, int maxDecompressedBytes) {
         return new DefaultClientTelemetryPayload(request, maxDecompressedBytes);
     }
