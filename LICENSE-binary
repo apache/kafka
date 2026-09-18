@@ -240,7 +240,7 @@ License Version 2.0:
 - jspecify-1.0.0
 - log4j-api-2.25.5
 - log4j-core-2.25.5
-- log4j-slf4j-impl-2.25.5
+- log4j-slf4j2-impl-2.25.5
 - log4j-1.2-api-2.25.5
 - lz4-java-1.11.2
 - maven-artifact-3.9.16
@@ -295,7 +295,7 @@ MIT License
 - argparse4j-0.7.0, see: licenses/argparse-MIT
 - classgraph-4.8.179, see: licenses/classgraph-MIT
 - jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
-- slf4j-api-1.7.36, see: licenses/slf4j-MIT
+- slf4j-api-2.0.19, see: licenses/slf4j-MIT
 - pcollections-4.0.2, see: licenses/pcollections-MIT
 
 ---------------------------------------
