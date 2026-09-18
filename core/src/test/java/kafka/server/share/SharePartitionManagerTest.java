@@ -120,6 +120,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 import scala.Tuple2;
 import scala.collection.Seq;
@@ -410,6 +411,10 @@ public class SharePartitionManagerTest {
         assertEquals(0, cache.size());
         assertEquals(0, cache.totalPartitions());
         assertEquals(0, partitionCache.size());
+        IntStream.range(0, iterations).forEach(i -> {
+            Integer numMembers = cache.numMembers("grp-" + i);
+            assertEquals(0, numMembers == null ? 0 : numMembers);
+        });
     }
 
     @Test
