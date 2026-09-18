@@ -246,6 +246,38 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
     }
 
     @Test
+    public void shouldAdvanceStandbySourceChangelogOffsetWhenPositionReachesRestoreEndOffset() throws IOException {
+        final File stateDir = TestUtils.tempDirectory();
+        final ProcessorStateManager stateManager = newRealStateManager(STANDBY, stateDir, true);
+        final MockKeyValueStore kvStore = new MockKeyValueStore(storeName, true);
+        try {
+            stateManager.registerStore(kvStore, kvStore.stateRestoreCallback, null);
+            stateManager.initializeStoreOffsets(true);
+
+            // Compacted log start is past the committed restore limit; live LEO is higher still.
+            consumer.updateBeginningOffsets(Collections.singletonMap(tp, 15_000L));
+            consumer.updateEndOffsets(Collections.singletonMap(tp, 20_000L));
+            adminClient.updateEndOffsets(Collections.singletonMap(tp, 20_000L));
+            adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10_000L));
+
+            final StoreChangelogReader reader =
+                new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+            reader.transitToUpdateStandby();
+            reader.register(tp, stateManager);
+            reader.restore(Collections.singletonMap(new TaskId(0, 0), mock(Task.class)));
+
+            assertEquals(StoreChangelogReader.ChangelogState.RESTORING, reader.changelogMetadata(tp).state());
+            assertTrue(reader.changelogMetadata(tp).bufferedRecords().isEmpty());
+            assertTrue(consumer.position(tp) >= 10_000L);
+            assertEquals(9_999L, stateManager.storeMetadata(tp).offset());
+            assertEquals(Collections.singletonMap(tp, 10_000L), stateManager.changelogOffsets());
+        } finally {
+            stateManager.close();
+            Utils.delete(stateDir);
+        }
+    }
+
+    @Test
     public void shouldNotAdvanceStandbyOffsetWhenPositionTimesOut() throws IOException {
         final File stateDir = TestUtils.tempDirectory();
         final ProcessorStateManager stateManager = newRealStateManager(STANDBY, stateDir, false);
