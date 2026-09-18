@@ -99,6 +99,11 @@ public class SimpleHeaderConverterTest {
     }
 
     @Test
+    public void shouldConvertStringBeginningWithDigitFollowedByDelimiters() {
+        assertRoundTrip(Schema.STRING_SCHEMA, "1::2");
+    }
+
+    @Test
     public void shouldConvertMapWithStringKeys() {
         assertRoundTrip(STRING_MAP_SCHEMA, STRING_MAP);
     }

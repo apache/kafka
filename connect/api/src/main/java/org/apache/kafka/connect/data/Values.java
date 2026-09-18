@@ -868,11 +868,15 @@ public class Values {
                     return temporal;
                 }
             }
-            if (firstCharIsDigit || firstChar == '+' || firstChar == '-') {
-                try {
-                    return parseAsNumber(token);
-                } catch (NumberFormatException e) {
-                    // can't parse as a number
+            if (embedded || !parser.hasNext()) {
+                // Only accept the token as a number if it's embedded, or nothing is left over.
+                // For example, the value "1::2" should not be misread as the number 1.
+                if (firstCharIsDigit || firstChar == '+' || firstChar == '-') {
+                    try {
+                        return parseAsNumber(token);
+                    } catch (NumberFormatException e) {
+                        // can't parse as a number
+                    }
                 }
             }
             if (embedded) {
