@@ -1225,6 +1225,8 @@ org.apache.kafka.coordinator.group.modern.TopicIdsTest:
 - testIterator
 - testIteratorOneTopicConversionFails
 - testSize
+- testToArray
+- testToArrayOneTopicConversionFails
 - testTopicNamesCannotBeNull
 - testTopicResolverCannotBeNull
 - testTopicsImageCannotBeNull

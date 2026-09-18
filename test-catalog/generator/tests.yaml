@@ -25,12 +25,14 @@ org.apache.kafka.message.HeaderVersionsTest:
 - testHeaderVersionThreeAcceptedWhenHeaderSchemaAllowsIt
 - testHighestExistingHeaderVersionsAccepted
 - testLastRangeNotOpenEnded
+- testMatchingFlexibilityMappingAccepted
 - testMissingHeaderSchemaRejected
 - testNegativeValue
 - testNegativeVersionRangeKey
 - testNoHeaderVersionsIsNoOpWithoutHeaderSchemas
-- testNonFlexibleHeaderSchemaWithFlexibleBodyRejected
-- testNonFlexibleVersionsAreNotChecked
+- testNonFlexibleHeaderSchemaWithFlexibleVersionRejected
+- testNonFlexibleRequestVersionNeedsNonFlexibleHeader
+- testNonFlexibleResponseVersionNeedsNonFlexibleHeader
 - testNoneKey
 - testNullValue
 - testOpenEndedRangeNotLast
@@ -38,6 +40,7 @@ org.apache.kafka.message.HeaderVersionsTest:
 - testPropertyIgnoredWithNoValidVersions
 - testPropertyOnDataType
 - testRangeBeyondValidVersions
+- testRequestHeaderVersionBelowLowestRejected
 - testRequestHeaderVersionMustExist
 - testResponseHeaderVersionMustExist
 - testReversedRangeKey
