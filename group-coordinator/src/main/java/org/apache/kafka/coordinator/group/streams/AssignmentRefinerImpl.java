@@ -31,6 +31,7 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 
 /**
@@ -588,8 +589,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * Builds the {@link StandbyConflicts} lookups, ie, where each staged migration keeps its task running, and which
-     * placement pays for each borrowed copy.
+     * Builds the {@link StandbyConflicts} lookups, ie, each standby task which cannot be relocated yet, because
+     * (1) its target process owns the corresponding active task from a staged migration, or (2) the standby must stay
+     * on its current owner to fulfill its role of being borrowed.
      */
     private static StandbyConflicts indexStandbyConflicts(
         final Map<String, TasksTuple> targetAssignment,
@@ -599,21 +601,38 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, StreamsGroupMember> members,
         final SortedMap<String, ConfiguredSubtopology> subtopologies
     ) {
-        final Map<TaskId, String> activeStagedOn = new HashMap<>();
+        // Conflicts from staged migrations
+        final Map<TaskId, String> activeStagedOnProcess = new HashMap<>();
         for (final StagedMigration migration : decisions.stagedMigrations()) {
-            activeStagedOn.put(migration.task(), members.get(migration.currentOwner()).processId());
+            activeStagedOnProcess.put(migration.task(), members.get(migration.currentOwner()).processId());
         }
 
-        final Map<TaskId, String> borrowPaidBy = new HashMap<>();
-        targetAssignment.forEach((memberId, tasks) ->
+        // Conflicts from borrows
+        //
+        // If we have more than one standby (ie, `num.standby.replicas >= 2`), we need to ensure to only hold back
+        // one standby task migration (for the single borrow of the active task migration)
+        // If there is a parallel sibling-move for the same standby task on a different process we leave it alone;
+        // we are looking for a process with a new standby being assigned to (there might be multiple, so we pick one
+        // deterministically based on memberId order)
+        final BinaryOperator<String> firstInMemberOrder = (left, right) -> left.compareTo(right) <= 0 ? left : right;
+        final Map<TaskId, String> standbyKeptOnMember = new HashMap<>();
+        final Set<TaskId> alreadyUndelivered = new HashSet<>();
+        targetAssignment.forEach((targetMemberId, tasks) ->
             forEachStatefulTask(tasks.standbyTasks(), subtopologies, task -> {
-                if (warmupPlan.borrowedMigrations().contains(task)
-                    && !holdsCopyOf(currentAssignment, memberId, task)) {
-                    borrowPaidBy.merge(task, memberId, (left, right) -> left.compareTo(right) <= 0 ? left : right);
+                if (warmupPlan.borrowedMigrations().contains(task)) {
+                    final StreamsGroupMember targetMember = members.get(targetMemberId);
+                    final String currentOwnerProcessId = activeStagedOnProcess.get(task);
+                    if (targetMember == null // dropped out of the group
+                        || targetMember.processId().equals(currentOwnerProcessId)) { // stage migration; tracked above
+                        alreadyUndelivered.add(task);
+                    } else if (findCopyOnProcess(currentAssignment, task, targetMember.processId()).isEmpty()) { // only withhold if not a sibling move
+                        standbyKeptOnMember.merge(task, targetMemberId, firstInMemberOrder);
+                    }
                 }
             }));
+        alreadyUndelivered.forEach(standbyKeptOnMember::remove);
 
-        return new StandbyConflicts(activeStagedOn, borrowPaidBy);
+        return new StandbyConflicts(activeStagedOnProcess, standbyKeptOnMember);
     }
 
     /**
@@ -627,22 +646,13 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     ) {
         // Rule 1: a process cannot hold `task` twice, so a standby on the process a staged migration keeps the
         // active running on waits for that migration to complete.
-        if (processId.equals(conflicts.activeStagedOn().get(task))) {
+        if (processId.equals(conflicts.activeStagedOnProcess().get(task))) {
             return true;
         }
 
-        // Rule 2: a borrowed migration keeps its existing copy as one of the group's entitled replicas, so the one
-        // relocated placement that pays for it waits.
-        return memberId.equals(conflicts.borrowPaidBy().get(task));
-    }
-
-    private static boolean holdsCopyOf(
-        final CurrentAssignmentIndex currentAssignment,
-        final String memberId,
-        final TaskId task
-    ) {
-        return currentAssignment.taskCopies().getOrDefault(task, List.of()).stream()
-            .anyMatch(copy -> copy.memberId().equals(memberId));
+        // Rule 2: a borrowed migration keeps its existing copy as one of the group's entitled replicas, so one
+        // relocated placement of that standby waits, which keeps the group at `num.standby.replicas`.
+        return memberId.equals(conflicts.standbyKeptOnMember().get(task));
     }
 
     /**
@@ -1076,16 +1086,16 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * The per-task lookups {@link #filterStandbys} consults, each built once so that a rule is a map lookup rather
      * than a fresh scan of the group.
      *
-     * @param activeStagedOn
+     * @param activeStagedOnProcess
      *        The process each staged migration keeps its task running on.
-     * @param borrowPaidBy
+     * @param standbyKeptOnMember
      *        For each migration warmed by a standby that stays where it is, the one member whose relocated placement
-     *        of that task waits in the borrowed copy's stead. Tasks warmed some other way are absent, as is a
-     *        borrowed migration whose every placement sits on a member that already holds a copy.
+     *        of that task waits in the borrowed copy's stead. Tasks warmed some other way are absent, as are those
+     *        with no placement left to hold back.
      */
     private record StandbyConflicts(
-        Map<TaskId, String> activeStagedOn,
-        Map<TaskId, String> borrowPaidBy
+        Map<TaskId, String> activeStagedOnProcess,
+        Map<TaskId, String> standbyKeptOnMember
     ) {
     }
 

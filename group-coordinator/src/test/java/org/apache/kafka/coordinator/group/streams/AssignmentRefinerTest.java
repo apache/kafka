@@ -1435,8 +1435,8 @@ public class AssignmentRefinerTest {
     @Test
     public void shouldWithholdAStandbyOnTheProcessAMigrationIsStagedOn() {
         // The placement rule 1 protects is the one the staged migration makes: the task runs on memberB for this
-        // step, so the target assignment's standby of it cannot land on memberB's process as well. Nothing holds it
-        // task here, so the current assignment says nothing about where it runs.
+        // step, so the target assignment's standby of it cannot land on memberB's process as well. Nothing holds
+        // the task as an active task here, so the current assignment says nothing about where it runs.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", TasksTuple.EMPTY),
             "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
@@ -1505,9 +1505,9 @@ public class AssignmentRefinerTest {
 
     @Test
     public void shouldWithholdOnlyOneRelocatedStandbyOfABorrowedMigration() {
-        // The borrowed copy is one replica, so it is worth one placement -- not every placement the target
-        // assignment relocated. With two standby replicas configured, memberB's borrowed copy pays for memberC's
-        // placement and memberE's is emitted, which leaves the group on the two replicas it is entitled to.
+        // The borrowed copy stands in for one placement, not for every placement the target assignment relocated.
+        // With two standby replicas configured, memberC's placement waits and memberE's is emitted, which leaves
+        // the group on the two replicas it is entitled to.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
             "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
@@ -1526,6 +1526,75 @@ public class AssignmentRefinerTest {
         );
 
         assertEquals(Map.of("memberC", Set.of(STATEFUL_0)), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldNotWithholdARelocatedStandbyTheProcessAlreadyHolds() {
+        // The placement that waits for a borrowed copy is one whose process holds nothing of the task. processC
+        // does hold the task, on memberC1, and the target assignment moves that standby onto its sibling memberC2,
+        // which reopens the state the process already has on disk. So memberE's placement is the one that waits,
+        // and processC holds a copy throughout the migration.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC1", member("memberC1", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC2", member("memberC2", "processC", TasksTuple.EMPTY),
+            "memberE", member("memberE", "processE", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC1", TasksTuple.EMPTY,
+            "memberC2", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberE", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Map.of("memberE", Set.of(STATEFUL_0)), filter(members, targetAssignment, Map.of(), 1));
+    }
+
+    @Test
+    public void shouldNotWithholdARelocationWhenRuleOneAlreadyHoldsOneBack() {
+        // memberZ's placement is held back anyway, because the staged migration keeps the task running as an active
+        // task on processZ -- and that active task is the replica the placement would have been. One placement is
+        // all the borrowed copy stands in for, so memberA's cold placement is emitted rather than held back too.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberZ", member("memberZ", "processZ", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC1", member("memberC1", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberZ", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC1", TasksTuple.EMPTY,
+            "memberA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Map.of("memberZ", Set.of(STATEFUL_0)), filter(members, targetAssignment, Map.of(), 1));
+        assertEquals(
+            countCopies(targetAssignment, STATEFUL_0),
+            countCopies(assemble(members, targetAssignment, Map.of(), 1), STATEFUL_0)
+        );
+    }
+
+    @Test
+    public void shouldNotWithholdARelocationAssignedToAMemberThatIsGone() {
+        // The target assignment still names memberD, which the group has since removed, so that placement reaches
+        // nobody and the borrowed copy already stands in for it. memberC's placement is emitted -- it sorts ahead
+        // of memberD, so picking by member order alone would have held it back.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberD", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Map.of(), filter(members, targetAssignment, Map.of(), 1));
     }
 
     @Test
