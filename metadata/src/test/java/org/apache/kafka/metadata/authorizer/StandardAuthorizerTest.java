@@ -379,6 +379,40 @@ public class StandardAuthorizerTest {
     }
 
     @Test
+    public void testCheckSectionNoCommonPrefix() throws Exception {
+        Map<String, Object> configs = Map.of(SUPER_USERS_CONFIG, "User:alice");
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer(configs);
+        List<StandardAcl> acls = List.of(
+            new StandardAcl(TOPIC, "bar", PREFIXED, "User:bob", "*", READ, ALLOW),
+            new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", "*", READ, ALLOW)
+        );
+        acls.forEach(acl -> {
+            StandardAclWithId aclWithId = withId(acl);
+            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+        });
+        assertEquals(List.of(ALLOWED), authorizer.authorize(
+            newRequestContext("bob"),
+            List.of(newAction(READ, TOPIC, "foo_"))));
+    }
+
+    @Test
+    public void testCheckSectionNarrowing() throws Exception {
+        Map<String, Object> configs = Map.of(SUPER_USERS_CONFIG, "User:alice");
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer(configs);
+        List<StandardAcl> acls = List.of(
+            new StandardAcl(TOPIC, "caa", PREFIXED, "User:bob", "*", READ, ALLOW),
+            new StandardAcl(TOPIC, "ca", PREFIXED, "User:bob", "*", READ, ALLOW)
+        );
+        acls.forEach(acl -> {
+            StandardAclWithId aclWithId = withId(acl);
+            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+        });
+        assertEquals(List.of(ALLOWED), authorizer.authorize(
+            newRequestContext("bob"),
+            List.of(newAction(READ, TOPIC, "cat"))));
+    }
+
+    @Test
     public void testTopicAclWithOperationAll() throws Exception {
         StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
         List<StandardAcl> acls = List.of(
