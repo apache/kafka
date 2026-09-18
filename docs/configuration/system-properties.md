@@ -62,6 +62,8 @@ Default Value:
 
 This system property is used to set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. This property accepts comma-separated list of URLs. By default the value is an empty list. 
 
+The special value `*` allows any URL. Because this disables URL allow-listing, it should only be used when the endpoint configuration is trusted.
+
 If users want to enable some URLs, users need to explicitly set the system property like below. 
 
 ```bash
@@ -197,5 +199,4 @@ Default Value:
 
 All built-in ConfigProviders are enabled
 </td></tr> </table>
-
 
