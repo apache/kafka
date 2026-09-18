@@ -136,7 +136,8 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
 
         MemoryRecords memoryRecords = readFileRecords(fileRecords, buffer);
 
-        // firstBatchSize() is always non-null because the minimum buffer is HEADER_SIZE_UP_TO_MAGIC.
+        // firstBatchSize() is always non-null because the records end on a batch boundary, so the
+        // read returns either at least a batch header or nothing at all once they are exhausted.
         int firstBatchSize = memoryRecords.firstBatchSize();
         if (firstBatchSize <= buffer.remaining()) {
             return memoryRecords;
