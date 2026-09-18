@@ -21,6 +21,7 @@ import org.apache.kafka.server.quota.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.ReplicaAlterLogDirsThread.ReassignmentState
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
@@ -658,159 +659,55 @@ class ReplicaAlterLogDirsThreadTest {
   }
 
   @Test
-  def shouldTruncateToReplicaOffset(): Unit = {
+  def shouldTruncateToDivergingEpochOffsetFromFetchResponse(): Unit = {
 
     //Create a capture to track what partitions/offsets are truncated
-    val truncateCaptureT1p0: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
-    val truncateCaptureT1p1: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
+    val truncateCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = mock(classOf[LogManager])
-    val logT1p0: UnifiedLog = mock(classOf[UnifiedLog])
-    val logT1p1: UnifiedLog = mock(classOf[UnifiedLog])
-    // one future replica mock because our mocking methods return same values for both future replicas
-    val futureLogT1p0: UnifiedLog = mock(classOf[UnifiedLog])
-    val futureLogT1p1: UnifiedLog = mock(classOf[UnifiedLog])
-    val partitionT1p0: Partition = mock(classOf[Partition])
-    val partitionT1p1: Partition = mock(classOf[Partition])
-    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val responseCallback: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit] = ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
-
-    val partitionT1p0Id = 0
-    val partitionT1p1Id = 1
-    val leaderEpoch = 2
-    val futureReplicaLEO = 191
-    val replicaT1p0LEO = 190
-    val replicaT1p1LEO = 192
-
-    //Stubs
-    when(partitionT1p0.partitionId).thenReturn(partitionT1p0Id)
-    when(partitionT1p1.partitionId).thenReturn(partitionT1p1Id)
-
-    when(replicaManager.metadataCache).thenReturn(metadataCache)
-    when(replicaManager.getPartitionOrException(t1p0))
-      .thenReturn(partitionT1p0)
-    when(replicaManager.getPartitionOrException(t1p1))
-      .thenReturn(partitionT1p1)
-    when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLogT1p0)
-    when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
-    when(replicaManager.futureLocalLogOrException(t1p1)).thenReturn(futureLogT1p1)
-    when(replicaManager.futureLogExists(t1p1)).thenReturn(true)
-
-    when(futureLogT1p0.logEndOffset).thenReturn(futureReplicaLEO)
-    when(futureLogT1p1.logEndOffset).thenReturn(futureReplicaLEO)
-
-    when(futureLogT1p0.latestEpoch).thenReturn(Optional.of(leaderEpoch))
-    when(futureLogT1p0.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
-    when(partitionT1p0.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
-      .thenReturn(new EpochEndOffset()
-        .setPartition(partitionT1p0Id)
-        .setErrorCode(Errors.NONE.code)
-        .setLeaderEpoch(leaderEpoch)
-        .setEndOffset(replicaT1p0LEO))
-
-    when(futureLogT1p1.latestEpoch).thenReturn(Optional.of(leaderEpoch))
-    when(futureLogT1p1.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
-    when(partitionT1p1.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
-      .thenReturn(new EpochEndOffset()
-        .setPartition(partitionT1p1Id)
-        .setErrorCode(Errors.NONE.code)
-        .setLeaderEpoch(leaderEpoch)
-        .setEndOffset(replicaT1p1LEO))
-    when(partitionT1p0.logDirectoryId()).thenReturn(Some(Uuid.fromString("Jsg8ufNCQYONNquPt7VYpA")))
-    when(partitionT1p1.logDirectoryId()).thenReturn(Some(Uuid.fromString("D2Yf6FtNROGVKoIZadSFIg")))
-
-    when(replicaManager.logManager).thenReturn(logManager)
-    stubWithFetchMessages(logT1p0, logT1p1, futureLogT1p0, partitionT1p0, replicaManager, responseCallback)
-
-    //Create the thread
-    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
-    val thread = new ReplicaAlterLogDirsThread(
-      "alter-logs-dirs-thread-test1",
-      leader,
-      failedPartitions,
-      replicaManager,
-      quotaManager,
-      null,
-      config.replicaFetchBackoffMs)
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t1p1 -> initialFetchState(0L)))
-
-    //Run it
-    thread.doWork()
-
-    //We should have truncated to the offsets in the response
-    verify(partitionT1p0).truncateTo(truncateCaptureT1p0.capture(), anyBoolean())
-    verify(partitionT1p1).truncateTo(truncateCaptureT1p1.capture(), anyBoolean())
-    assertEquals(replicaT1p0LEO, truncateCaptureT1p0.getValue)
-    assertEquals(futureReplicaLEO, truncateCaptureT1p1.getValue)
-  }
-
-  @Test
-  def shouldTruncateToEndOffsetOfLargestCommonEpoch(): Unit = {
-
-    //Create a capture to track what partitions/offsets are truncated
-    val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
-
-    // Setup all the dependencies
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
-    val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = mock(classOf[LogManager])
-    val log: UnifiedLog = mock(classOf[UnifiedLog])
-    // one future replica mock because our mocking methods return same values for both future replicas
     val futureLog: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val responseCallback: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit] = ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
 
-    val partitionId = 0
-    val leaderEpoch = 5
-    val futureReplicaLEO = 195
-    val replicaLEO = 200
-    val replicaEpochEndOffset = 190
-    val futureReplicaEpochEndOffset = 191
+    val leaderEpoch = 2
+    val futureReplicaLEO = 191
+    val replicaLEO = 190
 
     //Stubs
-    when(partition.partitionId).thenReturn(partitionId)
+    when(partition.partitionId).thenReturn(0)
+    when(partition.logDirectoryId()).thenReturn(Some(Uuid.fromString("Jsg8ufNCQYONNquPt7VYpA")))
 
     when(replicaManager.metadataCache).thenReturn(metadataCache)
-    when(replicaManager.getPartitionOrException(t1p0))
-      .thenReturn(partition)
+    when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
-
-    when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
-    when(futureLog.latestEpoch)
-      .thenReturn(Optional.of(leaderEpoch))
-      .thenReturn(Optional.of(leaderEpoch - 2))
-
-    // leader replica truncated and fetched new offsets with new leader epoch
-    when(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
-      .thenReturn(new EpochEndOffset()
-        .setPartition(partitionId)
-        .setErrorCode(Errors.NONE.code)
-        .setLeaderEpoch(leaderEpoch - 1)
-        .setEndOffset(replicaLEO))
-    // but future replica does not know about this leader epoch, so returns a smaller leader epoch
-    when(futureLog.endOffsetForEpoch(leaderEpoch - 1)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch - 2)))
-    // finally, the leader replica knows about the leader epoch and returns end offset
-    when(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch - 2, fetchOnlyFromLeader = false))
-      .thenReturn(new EpochEndOffset()
-        .setPartition(partitionId)
-        .setErrorCode(Errors.NONE.code)
-        .setLeaderEpoch(leaderEpoch - 2)
-        .setEndOffset(replicaEpochEndOffset))
-    when(futureLog.endOffsetForEpoch(leaderEpoch - 2)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaEpochEndOffset, leaderEpoch - 2)))
-    when(partition.logDirectoryId()).thenReturn(Some(Uuid.fromString("n6WOe2zPScqZLIreCWN6Ug")))
-
+    when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
     when(replicaManager.logManager).thenReturn(logManager)
-    stubWithFetchMessages(log, null, futureLog, partition, replicaManager, responseCallback)
+
+    when(futureLog.logStartOffset).thenReturn(0L)
+    when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
+    when(futureLog.latestEpoch).thenReturn(Optional.of(leaderEpoch))
+    when(futureLog.endOffsetForEpoch(leaderEpoch)).thenReturn(
+      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+
+    // The fetch request must carry the future log's latest epoch as the last fetched epoch,
+    // and the current replica replies with a diverging epoch instead of the partition data.
+    val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
+      config.replicaFetchMaxBytes, Optional.of(1), Optional.of(leaderEpoch))
+    val responseData = new FetchPartitionData(
+      Errors.NONE,
+      0L,
+      0L,
+      MemoryRecords.EMPTY,
+      Optional.of(new FetchResponseData.EpochEndOffset().setEpoch(leaderEpoch).setEndOffset(replicaLEO)),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
+    mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
@@ -825,19 +722,119 @@ class ReplicaAlterLogDirsThreadTest {
       config.replicaFetchBackoffMs)
     thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
 
-    // First run will result in another offset for leader epoch request
-    thread.doWork()
-    // Second run should actually truncate
+    //Run it
     thread.doWork()
 
-    //We should have truncated to the offsets in the response
-    verify(partition, times(2)).truncateTo(truncateToCapture.capture(), ArgumentMatchers.eq(true))
-    assertTrue(truncateToCapture.getAllValues.asScala.contains(replicaEpochEndOffset),
-               "Expected offset " + replicaEpochEndOffset + " in captured truncation offsets " + truncateToCapture.getAllValues)
+    //We should have truncated to the diverging epoch end offset from the fetch response
+    verify(partition).truncateTo(truncateCapture.capture(), ArgumentMatchers.eq(true))
+    verify(partition, never()).lastOffsetForLeaderEpoch(any(), ArgumentMatchers.anyInt(), anyBoolean())
+    assertEquals(replicaLEO, truncateCapture.getValue)
   }
 
   @Test
-  def shouldTruncateToInitialFetchOffsetIfReplicaReturnsUndefinedOffset(): Unit = {
+  def shouldTruncateToEndOffsetOfLargestCommonEpoch(): Unit = {
+
+    //Create a capture to track what partitions/offsets are truncated
+    val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
+
+    // Setup all the dependencies
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
+    val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val futureLog: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+
+    val partitionId = 0
+    val leaderEpoch = 5
+    val futureReplicaLEO = 195
+    val replicaLEO = 200
+    val replicaEpochEndOffset = 190
+    val futureReplicaEpochEndOffset = 191
+
+    //Stubs
+    when(partition.partitionId).thenReturn(partitionId)
+    when(partition.logDirectoryId()).thenReturn(Some(Uuid.fromString("n6WOe2zPScqZLIreCWN6Ug")))
+
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
+    when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
+    when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
+    when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
+    when(replicaManager.logManager).thenReturn(logManager)
+
+    when(futureLog.logStartOffset).thenReturn(0L)
+    when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
+    when(futureLog.latestEpoch)
+      .thenReturn(Optional.of(leaderEpoch))
+      .thenReturn(Optional.of(leaderEpoch - 2))
+
+    // the current replica truncated to an epoch unknown to the future replica, so the future
+    // replica's end offset for that epoch corresponds to a smaller leader epoch
+    when(futureLog.endOffsetForEpoch(leaderEpoch - 1)).thenReturn(
+      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch - 2)))
+    when(futureLog.endOffsetForEpoch(leaderEpoch - 2)).thenReturn(
+      Optional.of(new OffsetAndEpoch(futureReplicaEpochEndOffset, leaderEpoch - 2)))
+
+    // First fetch carries the future log's latest epoch; the current replica replies with a
+    // diverging epoch unknown to the future replica
+    val firstRequestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
+      config.replicaFetchMaxBytes, Optional.of(1), Optional.of(leaderEpoch))
+    val firstResponseData = new FetchPartitionData(
+      Errors.NONE,
+      0L,
+      0L,
+      MemoryRecords.EMPTY,
+      Optional.of(new FetchResponseData.EpochEndOffset().setEpoch(leaderEpoch - 1).setEndOffset(replicaLEO)),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
+    mockFetchFromCurrentLog(tid1p0, firstRequestData, config, replicaManager, firstResponseData)
+
+    // After the intermediate truncation, the second fetch carries the older epoch and the current
+    // replica replies with the end offset of the largest common epoch
+    val secondRequestData = new FetchRequest.PartitionData(topicId, futureReplicaLEO, 0L,
+      config.replicaFetchMaxBytes, Optional.of(1), Optional.of(leaderEpoch - 2))
+    val secondResponseData = new FetchPartitionData(
+      Errors.NONE,
+      0L,
+      0L,
+      MemoryRecords.EMPTY,
+      Optional.of(new FetchResponseData.EpochEndOffset().setEpoch(leaderEpoch - 2).setEndOffset(replicaEpochEndOffset)),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
+    mockFetchFromCurrentLog(tid1p0, secondRequestData, config, replicaManager, secondResponseData)
+
+    //Create the thread
+    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
+    val thread = new ReplicaAlterLogDirsThread(
+      "alter-logs-dirs-thread-test1",
+      leader,
+      failedPartitions,
+      replicaManager,
+      quotaManager,
+      null,
+      config.replicaFetchBackoffMs)
+    thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
+
+    // First run results in an intermediate truncation and a fetch with the older epoch
+    thread.doWork()
+    // Second run truncates to the end offset of the largest common epoch
+    thread.doWork()
+
+    //We should have truncated to the offsets in the diverging epoch responses
+    verify(partition, times(2)).truncateTo(truncateToCapture.capture(), ArgumentMatchers.eq(true))
+    assertTrue(truncateToCapture.getAllValues.asScala.contains(replicaEpochEndOffset),
+               "Expected offset " + replicaEpochEndOffset + " in captured truncation offsets " + truncateToCapture.getAllValues)
+    verify(partition, never()).lastOffsetForLeaderEpoch(any(), ArgumentMatchers.anyInt(), anyBoolean())
+  }
+
+  @Test
+  def shouldTruncateToInitialFetchOffsetIfFutureLogHasNoEpochs(): Unit = {
 
     //Create a capture to track what partitions/offsets are truncated
     val truncated: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
@@ -888,103 +885,11 @@ class ReplicaAlterLogDirsThreadTest {
     //We should have truncated to initial fetch offset
     verify(partition).truncateTo(truncated.capture(), isFuture = ArgumentMatchers.eq(true))
     assertEquals(initialFetchOffset,
-                 truncated.getValue, "Expected future replica to truncate to initial fetch offset if replica returns UNDEFINED_EPOCH_OFFSET")
+                 truncated.getValue, "Expected future replica to truncate to initial fetch offset if the future log has no epochs")
   }
 
   @Test
-  def shouldPollIndefinitelyIfReplicaNotAvailable(): Unit = {
-
-    //Create a capture to track what partitions/offsets are truncated
-    val truncated: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
-
-    // Setup all the dependencies
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
-    val quotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
-    val logManager: LogManager = mock(classOf[LogManager])
-    val log: UnifiedLog = mock(classOf[UnifiedLog])
-    val futureLog: UnifiedLog = mock(classOf[UnifiedLog])
-    val partition: Partition = mock(classOf[Partition])
-    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    val responseCallback: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit] = ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
-
-    val partitionId = 0
-    val futureReplicaLeaderEpoch = 1
-    val futureReplicaLEO = 290
-    val replicaLEO = 300
-
-    //Stubs
-    when(partition.partitionId).thenReturn(partitionId)
-    when(partition.logDirectoryId()).thenReturn(Some(Uuid.fromString("wO7bUpvcSZC0QKEK6P6AiA")))
-
-    when(replicaManager.metadataCache).thenReturn(metadataCache)
-    when(replicaManager.getPartitionOrException(t1p0))
-      .thenReturn(partition)
-
-    when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
-    when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
-    when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
-    when(futureLog.latestEpoch).thenReturn(Optional.of(futureReplicaLeaderEpoch))
-    when(futureLog.endOffsetForEpoch(futureReplicaLeaderEpoch)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, futureReplicaLeaderEpoch)))
-    when(replicaManager.localLog(t1p0)).thenReturn(Some(log))
-
-    // this will cause fetchEpochsFromLeader return an error with undefined offset
-    when(partition.lastOffsetForLeaderEpoch(Optional.of(1), futureReplicaLeaderEpoch, fetchOnlyFromLeader = false))
-      .thenReturn(new EpochEndOffset()
-        .setPartition(partitionId)
-        .setErrorCode(Errors.REPLICA_NOT_AVAILABLE.code))
-      .thenReturn(new EpochEndOffset()
-        .setPartition(partitionId)
-        .setErrorCode(Errors.REPLICA_NOT_AVAILABLE.code))
-      .thenReturn(new EpochEndOffset()
-        .setPartition(partitionId)
-        .setErrorCode(Errors.REPLICA_NOT_AVAILABLE.code))
-      .thenReturn(new EpochEndOffset()
-        .setPartition(partitionId)
-        .setErrorCode(Errors.NONE.code)
-        .setLeaderEpoch(futureReplicaLeaderEpoch)
-        .setEndOffset(replicaLEO))
-
-    when(replicaManager.logManager).thenReturn(logManager)
-    when(replicaManager.fetchMessages(
-      any[FetchParams],
-      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
-      any[ReplicaQuota],
-      responseCallback.capture(),
-    )).thenAnswer(_ => responseCallback.getValue.apply(Seq.empty[(TopicIdPartition, FetchPartitionData)]))
-
-    //Create the thread
-    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
-    val thread = new ReplicaAlterLogDirsThread(
-      "alter-logs-dirs-thread-test1",
-      leader,
-      failedPartitions,
-      replicaManager,
-      quotaManager,
-      null,
-      config.replicaFetchBackoffMs)
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
-
-    // Run thread 3 times (exactly number of times we mock exception for getReplicaOrException)
-    (0 to 2).foreach { _ =>
-      thread.doWork()
-    }
-
-    // Nothing happened since the replica was not available
-    verify(partition, never()).truncateTo(truncated.capture(), isFuture = ArgumentMatchers.eq(true))
-    assertEquals(0, truncated.getAllValues.size())
-
-    // Next time we loop, getReplicaOrException will return replica
-    thread.doWork()
-
-    // Now the final call should have actually done a truncation (to offset futureReplicaLEO)
-    verify(partition).truncateTo(truncated.capture(), isFuture = ArgumentMatchers.eq(true))
-    assertEquals(futureReplicaLEO, truncated.getValue)
-  }
-
-  @Test
-  def shouldFetchLeaderEpochOnFirstFetchOnly(): Unit = {
+  def shouldNotIssueLeaderEpochRequests(): Unit = {
 
     //Setup all dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
@@ -996,30 +901,20 @@ class ReplicaAlterLogDirsThreadTest {
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     val responseCallback: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit] = ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
 
-    val partitionId = 0
     val leaderEpoch = 5
     val futureReplicaLEO = 190
-    val replicaLEO = 213
 
-    when(partition.partitionId).thenReturn(partitionId)
+    when(partition.partitionId).thenReturn(0)
     when(partition.logDirectoryId()).thenReturn(Some(Uuid.fromString("dybMM9CpRP2s6HSslW4NHg")))
 
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.getPartitionOrException(t1p0))
         .thenReturn(partition)
-    when(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
-        .thenReturn(new EpochEndOffset()
-          .setPartition(partitionId)
-          .setErrorCode(Errors.NONE.code)
-          .setLeaderEpoch(leaderEpoch)
-          .setEndOffset(replicaLEO))
 
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
     when(futureLog.latestEpoch).thenReturn(Optional.of(leaderEpoch))
     when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
-    when(futureLog.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(replicaManager.logManager).thenReturn(logManager)
     stubWithFetchMessages(log, null, futureLog, partition, replicaManager, responseCallback)
 
@@ -1041,9 +936,8 @@ class ReplicaAlterLogDirsThreadTest {
       thread.doWork()
     }
 
-    //Assert that truncate to is called exactly once (despite more loops)
-    verify(partition).lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false)
-    verify(partition).truncateTo(futureReplicaLEO, isFuture = true)
+    verify(partition, never()).lastOffsetForLeaderEpoch(any(), ArgumentMatchers.anyInt(), anyBoolean())
+    verify(partition, never()).truncateTo(ArgumentMatchers.anyLong(), anyBoolean())
   }
 
   @Test
