@@ -127,6 +127,25 @@ public interface Herder {
                             Callback<Created<ConnectorInfo>> callback);
 
     /**
+     * Set the configuration for a connector, along with a target state and initial offsets optionally. This supports
+     * creation and updating.
+     * @param connName name of the connector
+     * @param config the connector's configuration
+     * @param targetState the desired target state for the connector; may be {@code null} if no target state change is desired. Note that the default
+     *                    target state is {@link TargetState#STARTED} if no target state exists previously
+     * @param initialOffsets the offsets the connector should start from; may be {@code null}, in which case the connector's
+     *                       existing offsets (if any) are left untouched. When non-null, every offset the connector currently
+     *                       has is wiped before these are written, so the connector ends up with exactly these offsets rather
+     *                       than a merge of old and new. Only meaningful when creating a connector.
+     * @param allowReplace if true, allow overwriting previous configs; if false, throw {@link AlreadyExistsException}
+     *                     if a connector with the same name already exists
+     * @param callback callback to invoke when the configuration has been written
+     */
+    void putConnectorConfig(String connName, Map<String, String> config, TargetState targetState,
+                            Map<Map<String, ?>, Map<String, ?>> initialOffsets, boolean allowReplace,
+                            Callback<Created<ConnectorInfo>> callback);
+
+    /**
      * Patch the configuration for a connector.
      * @param connName name of the connector
      * @param configPatch the connector's configuration patch.
