@@ -141,9 +141,7 @@ public class LoggingResourceTest {
             Response response = loggingResource.setLevel(logger, Map.of("level", level), scope);
             assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
             actualLoggers = (List<String>) response.getEntity();
-            long warningMessages = logCaptureAppender.getEvents().stream()
-                    .filter(e -> "WARN".equals(e.getLevel()))
-                    .count();
+            long warningMessages = logCaptureAppender.getMessages(org.apache.logging.log4j.Level.WARN).size();
             if (expectWarning) {
                 assertEquals(1, warningMessages);
             } else {
