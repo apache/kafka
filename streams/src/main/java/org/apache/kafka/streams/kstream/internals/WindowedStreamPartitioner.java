@@ -21,7 +21,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 
@@ -58,6 +57,6 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
 
         // stick with the same built-in partitioner util functions that producer used
         // to make sure its behavior is consistent with the producer
-        return Optional.of(Collections.singleton(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
+        return Optional.of(Set.of(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
     }
 }

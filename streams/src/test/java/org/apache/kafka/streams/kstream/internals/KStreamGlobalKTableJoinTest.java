@@ -53,10 +53,8 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamGlobalKTableJoinTest {
     private static final KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
@@ -308,7 +306,8 @@ public class KStreamGlobalKTableJoinTest {
         pushToStream(4, "XXX", false, false);
         processor.checkAndClearProcessResult(EMPTY);
 
-        assertThat(
+        assertEquals(
+            4.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -319,8 +318,7 @@ public class KStreamGlobalKTableJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(4.0)
+                .metricValue()
         );
     }
 
@@ -337,7 +335,8 @@ public class KStreamGlobalKTableJoinTest {
         pushToStream(4, "XXX", false, true);
         processor.checkAndClearProcessResult(EMPTY);
 
-        assertThat(
+        assertEquals(
+            4.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -348,8 +347,7 @@ public class KStreamGlobalKTableJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(4.0)
+                .metricValue()
         );
     }
 
@@ -368,7 +366,8 @@ public class KStreamGlobalKTableJoinTest {
             new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1)
         );
 
-        assertThat(
+        assertEquals(
+            0.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -379,8 +378,7 @@ public class KStreamGlobalKTableJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(0.0)
+                .metricValue()
         );
     }
 
@@ -412,7 +410,8 @@ public class KStreamGlobalKTableJoinTest {
             new KeyValueTimestamp<>(1, "FKey1|1|X1,FKey1|Y1", 1)
         );
 
-        assertThat(
+        assertEquals(
+            1.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -423,8 +422,7 @@ public class KStreamGlobalKTableJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(1.0)
+                .metricValue()
         );
     }
 
@@ -440,7 +438,7 @@ public class KStreamGlobalKTableJoinTest {
             (ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String>)
                 (streamKey, mappedKey, v1, v2) -> v1 + v2,
             Named.as("join-table"));
-        assertThat(builder.build().describe().toString(), containsString("Processor: join-table"));
+        assertTrue(builder.build().describe().toString().contains("Processor: join-table"));
     }
 
     /**

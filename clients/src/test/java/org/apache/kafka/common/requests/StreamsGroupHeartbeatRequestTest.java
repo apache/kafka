@@ -24,6 +24,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsGroupHeartbeatRequestTest {
 
@@ -39,6 +40,17 @@ public class StreamsGroupHeartbeatRequestTest {
                 .setSubtopologyId("sub")
                 .setPartition(0)
                 .setOffset(100L)));
+    }
+
+    private static StreamsGroupHeartbeatRequestData dataWithOwnedWarmupTask() {
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId("group")
+            .setMemberId("member")
+            .setActiveTasks(List.of())
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                .setSubtopologyId("sub")
+                .setPartitions(List.of(0))));
     }
 
     @Test
@@ -61,5 +73,42 @@ public class StreamsGroupHeartbeatRequestTest {
         assertEquals(42L, request.data().taskOffsets().get(0).offset());
         assertEquals(1, request.data().taskEndOffsets().size());
         assertEquals(100L, request.data().taskEndOffsets().get(0).offset());
+    }
+
+    @Test
+    public void testBuildClearsOwnedWarmupTasksForVersion0() {
+        StreamsGroupHeartbeatRequest request = new StreamsGroupHeartbeatRequest.Builder(dataWithOwnedWarmupTask())
+            .build((short) 0);
+
+        // Empty, not null: a v0 coordinator separately requires the three owned-task lists to be either all
+        // null or all non-null, and this fixture reports active/standby tasks alongside the warm-up task.
+        assertTrue(request.data().warmupTasks().isEmpty());
+    }
+
+    @Test
+    public void testBuildKeepsOwnedWarmupTasksForVersion1() {
+        StreamsGroupHeartbeatRequest request = new StreamsGroupHeartbeatRequest.Builder(dataWithOwnedWarmupTask())
+            .build((short) 1);
+
+        assertEquals(1, request.data().warmupTasks().size());
+        assertEquals("sub", request.data().warmupTasks().get(0).subtopologyId());
+    }
+
+    @Test
+    public void testBuildDoesNotReportOwnedWarmupTasksWhenAssignmentIsNotBeingReported() {
+        // On the common steady-state heartbeat, active/standby/warmup tasks are all left null to mean
+        // "unchanged since the last heartbeat" -- including when a warm-up task is running, since nothing
+        // about it changed either. Forcing warmupTasks non-null here, while active/standby stay null, is
+        // exactly what a v0 coordinator rejects ("if one task-type is non-null, all must be non-null"), so
+        // it must be left alone rather than cleared to an empty list.
+        StreamsGroupHeartbeatRequest request = new StreamsGroupHeartbeatRequest.Builder(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId("group")
+                .setMemberId("member")
+        ).build((short) 0);
+
+        assertNull(request.data().activeTasks());
+        assertNull(request.data().standbyTasks());
+        assertNull(request.data().warmupTasks());
     }
 }

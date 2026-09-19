@@ -137,7 +137,6 @@ import static org.apache.kafka.common.protocol.Errors.TOPIC_AUTHORIZATION_FAILED
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.PartitionReassignmentReplicas.isReassignmentInProgress;
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -149,7 +148,6 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
  */
 public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
-    static final int MAX_PARTITIONS_PER_BATCH = 10_000;
 
     static class Builder {
         private SnapshotRegistry snapshotRegistry = null;
@@ -158,6 +156,7 @@ public class ReplicationControlManager {
         private int defaultNumPartitions = 1;
 
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
+        private int maxRecordsPerBatch;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
@@ -188,6 +187,11 @@ public class ReplicationControlManager {
             return this;
         }
 
+        Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         Builder setConfigurationControl(ConfigurationControlManager configurationControl) {
             this.configurationControl = configurationControl;
             return this;
@@ -213,6 +217,8 @@ public class ReplicationControlManager {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
                 throw new IllegalStateException("Cluster control must be set before building");
+            } else if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
@@ -224,6 +230,7 @@ public class ReplicationControlManager {
                 defaultReplicationFactor,
                 defaultNumPartitions,
                 maxElectionsPerImbalance,
+                maxRecordsPerBatch,
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
@@ -299,6 +306,12 @@ public class ReplicationControlManager {
      * Maximum number of leader elections to perform during one partition leader balancing operation.
      */
     private final int maxElectionsPerImbalance;
+
+    /**
+     * Maximum number of metadata records that a single user-initiated operation (for example
+     * CreateTopics, DeleteTopics, or AlterConfigs) is allowed to generate.
+     */
+    private final int maxRecordsPerBatch;
 
     /**
      * A reference to the controller's configuration control manager.
@@ -384,6 +397,7 @@ public class ReplicationControlManager {
         short defaultReplicationFactor,
         int defaultNumPartitions,
         int maxElectionsPerImbalance,
+        int maxRecordsPerBatch,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
@@ -394,6 +408,7 @@ public class ReplicationControlManager {
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
         this.configurationControl = configurationControl;
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;
@@ -631,9 +646,9 @@ public class ReplicationControlManager {
         boolean forwarded
     ) {
         Map<String, ApiError> topicErrors = new HashMap<>();
-        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(maxRecordsPerBatch);
 
-        validateTotalNumberOfPartitions(request, defaultNumPartitions);
+        validateTotalNumberOfPartitions(request, defaultNumPartitions, maxRecordsPerBatch);
 
         // Check the topic names.
         validateNewTopicNames(topicErrors, request.topics(), topicsWithCollisionChars);
@@ -985,7 +1000,7 @@ public class ReplicationControlManager {
     ControllerResult<Map<Uuid, ApiError>> deleteTopics(ControllerRequestContext context, Collection<Uuid> ids) {
         Map<Uuid, ApiError> results = new HashMap<>(ids.size());
         List<ApiMessageAndVersion> records =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP, ids.size());
+                BoundedList.newArrayBacked(maxRecordsPerBatch, ids.size());
         StringBuilder resultsBuilder = new StringBuilder();
         String resultsPrefix = "";
 
@@ -1211,15 +1226,21 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Validates that a batch of topics will create at most {@value MAX_PARTITIONS_PER_BATCH}. Exceeding this number of topics per batch
-     * has led to out-of-memory exceptions. We use this validation to fail earlier to avoid allocating the memory.
-     * Validates an upper bound number of partitions. The actual number may be smaller if some topics are misconfigured.
+     * Validates that a batch of topics will create at most maxRecordsPerBatch partitions, using partitions as a
+     * proxy for the number of metadata records the request will generate. Exceeding this number has led to
+     * out-of-memory exceptions. We use this validation to fail earlier to avoid allocating the memory. Validates an
+     * upper bound number of partitions. The actual number may be smaller if some topics are misconfigured.
      *
      * @param request a batch of topics to create.
      * @param defaultNumPartitions default number of partitions to assign if unspecified.
-     * @throws PolicyViolationException if total number of partitions exceeds {@value MAX_PARTITIONS_PER_BATCH}.
+     * @param maxRecordsPerBatch maximum number of records a single user-initiated operation may generate.
+     * @throws PolicyViolationException if total number of partitions exceeds maxRecordsPerBatch.
      */
-    static void validateTotalNumberOfPartitions(CreateTopicsRequestData request, int defaultNumPartitions) {
+    static void validateTotalNumberOfPartitions(
+        CreateTopicsRequestData request,
+        int defaultNumPartitions,
+        int maxRecordsPerBatch
+    ) {
         long totalPartitions = 0;
         for (CreatableTopic topic: request.topics()) {
             if (topic.assignments().isEmpty()) {
@@ -1231,8 +1252,8 @@ public class ReplicationControlManager {
             } else {
                 totalPartitions += topic.assignments().size();
             }
-            if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
-                throw new PolicyViolationException("Excessively large number of partitions per request.");
+            if (totalPartitions > maxRecordsPerBatch) {
+                throw new PolicyViolationException("Too many partitions in request.");
             }
         }
     }
@@ -1562,7 +1583,7 @@ public class ReplicationControlManager {
 
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
         ElectionType electionType = electionType(request.electionType());
-        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(maxRecordsPerBatch);
         ElectLeadersResponseData response = new ElectLeadersResponseData();
         if (request.topicPartitions() == null) {
             // If topicPartitions is null, we try to elect a new leader for every partition.  There
@@ -1730,7 +1751,7 @@ public class ReplicationControlManager {
             throw new BrokerIdNotRegisteredException("Broker ID " + brokerId +
                 " is not currently registered");
         }
-        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(maxRecordsPerBatch);
         handleBrokerUnregistered(brokerId, registration.epoch(), records);
         return ControllerResult.of(records, null);
     }
@@ -1882,8 +1903,8 @@ public class ReplicationControlManager {
         ControllerRequestContext context,
         List<CreatePartitionsTopic> topics
     ) {
-        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
-        List<CreatePartitionsTopicResult> results = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(maxRecordsPerBatch);
+        List<CreatePartitionsTopicResult> results = BoundedList.newArrayBacked(maxRecordsPerBatch);
         for (CreatePartitionsTopic topic : topics) {
             ApiError apiError = ApiError.NONE;
             try {
@@ -2136,7 +2157,7 @@ public class ReplicationControlManager {
 
     ControllerResult<AlterPartitionReassignmentsResponseData>
             alterPartitionReassignments(AlterPartitionReassignmentsRequestData request) {
-        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(maxRecordsPerBatch);
         boolean allowRFChange = request.allowReplicationFactorChange();
         AlterPartitionReassignmentsResponseData result =
                 new AlterPartitionReassignmentsResponseData().setErrorMessage(null)

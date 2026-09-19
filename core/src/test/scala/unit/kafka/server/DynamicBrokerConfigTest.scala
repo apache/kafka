@@ -102,6 +102,21 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testAssignmentIntervalClampAppliesToEffectiveConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    val config = KafkaConfig(props)
+    val dynamicConfig = config.dynamicConfig
+    dynamicConfig.initialize(None)
+
+    val props1 = new Properties
+    props1.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "999999")
+    dynamicConfig.updateBrokerConfig(0, props1)
+
+    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT,
+      config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
+  }
+
+  @Test
   def testUpdateDynamicThreadPool(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, port = 8181)
     origProps.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "4")

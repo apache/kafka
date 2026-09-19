@@ -172,7 +172,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
         @Override
         public Map<String, String> logConfig() {
-            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Collections.emptyMap();
+            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Map.of();
         }
 
         @Override
@@ -421,6 +421,10 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                         : null;
                     deserializationResult = deserializeV1(record, key, previousBufferedValue);
                 } else {
+                    // NOTE: the streams_application_upgrade_test.py system test greps the logs for
+                    // this message to assert that no suppress-changelog record is rejected while
+                    // restoring across the HEADERS format boundary (KAFKA-20850). Do not change this
+                    // string without updating that test.
                     throw new IllegalArgumentException("Restoring apparently invalid changelog record: " + record);
                 }
                 cleanPut(

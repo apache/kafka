@@ -23,6 +23,9 @@
   // case the server will derive these values from its in-memory state.
   "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The cluster id." },

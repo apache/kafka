@@ -39,8 +39,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Properties;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -95,6 +93,6 @@ public class KStreamFlatMapTest {
         final KStreamFlatMap<String, Integer, String, Integer> supplier = new KStreamFlatMap<>((key, value) -> null);
         final Throwable throwable = assertThrows(NullPointerException.class,
                 () -> supplier.get().process(new Record<>("K", 0, 0L)));
-        assertThat(throwable.getMessage(), is("The provided KeyValueMapper returned null which is not allowed."));
+        assertEquals("The provided KeyValueMapper returned null which is not allowed.", throwable.getMessage());
     }
 }
