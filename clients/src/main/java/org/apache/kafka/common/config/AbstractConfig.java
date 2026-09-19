@@ -554,16 +554,16 @@ public class AbstractConfig {
         }
         Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties, classNameFilter);
 
-        try {
-            if (!providers.isEmpty()) {
+        if (!providers.isEmpty()) {
+            try {
                 ConfigTransformer configTransformer = new ConfigTransformer(providers);
                 ConfigTransformerResult result = configTransformer.transform(indirectVariables);
                 if (!result.data().isEmpty()) {
                     resolvedOriginals.putAll(result.data());
                 }
+            } finally {
+                providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
             }
-        } finally {
-            providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
         }
 
         return new ResolvingMap<>(resolvedOriginals, originals);

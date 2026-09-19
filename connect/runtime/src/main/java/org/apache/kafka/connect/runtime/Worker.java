@@ -705,37 +705,47 @@ public final class Worker {
                     // search for converters within the connector dependencies.
                     // If any of these aren't found, that means the connector didn't configure specific converters,
                     // so we should instantiate based upon the worker configuration
-                    Converter keyConverter = plugins.newConverter(connConfig, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG);
-                    Converter valueConverter = plugins.newConverter(connConfig, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG);
-                    HeaderConverter headerConverter = plugins.newHeaderConverter(connConfig, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG);
+                    Converter keyConverter = null;
+                    Converter valueConverter = null;
+                    HeaderConverter headerConverter = null;
+                    try {
+                        keyConverter = plugins.newConverter(connConfig, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG);
+                        valueConverter = plugins.newConverter(connConfig, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG);
+                        headerConverter = plugins.newHeaderConverter(connConfig, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG);
 
-                    if (keyConverter == null) {
-                        keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, WorkerConfig.KEY_CONVERTER_VERSION);
-                        log.info("Set up the key converter {} for task {} using the worker config", keyConverter.getClass(), id);
-                    } else {
-                        log.info("Set up the key converter {} for task {} using the connector config", keyConverter.getClass(), id);
-                    }
-                    if (valueConverter == null) {
-                        valueConverter = plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, WorkerConfig.VALUE_CONVERTER_VERSION);
-                        log.info("Set up the value converter {} for task {} using the worker config", valueConverter.getClass(), id);
-                    } else {
-                        log.info("Set up the value converter {} for task {} using the connector config", valueConverter.getClass(), id);
-                    }
-                    if (headerConverter == null) {
-                        headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION);
-                        log.info("Set up the header converter {} for task {} using the worker config", headerConverter.getClass(), id);
-                    } else {
-                        log.info("Set up the header converter {} for task {} using the connector config", headerConverter.getClass(), id);
-                    }
+                        if (keyConverter == null) {
+                            keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, WorkerConfig.KEY_CONVERTER_VERSION);
+                            log.info("Set up the key converter {} for task {} using the worker config", keyConverter.getClass(), id);
+                        } else {
+                            log.info("Set up the key converter {} for task {} using the connector config", keyConverter.getClass(), id);
+                        }
+                        if (valueConverter == null) {
+                            valueConverter = plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, WorkerConfig.VALUE_CONVERTER_VERSION);
+                            log.info("Set up the value converter {} for task {} using the worker config", valueConverter.getClass(), id);
+                        } else {
+                            log.info("Set up the value converter {} for task {} using the connector config", valueConverter.getClass(), id);
+                        }
+                        if (headerConverter == null) {
+                            headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION);
+                            log.info("Set up the header converter {} for task {} using the worker config", headerConverter.getClass(), id);
+                        } else {
+                            log.info("Set up the header converter {} for task {} using the connector config", headerConverter.getClass(), id);
+                        }
 
-                    workerTask = taskBuilder
-                        .withTask(task)
-                        .withConnectorConfig(connConfig)
-                        .withKeyConverterPlugin(metrics.wrap(keyConverter, id, true))
-                        .withValueConverterPlugin(metrics.wrap(valueConverter, id, false))
-                        .withHeaderConverterPlugin(metrics.wrap(headerConverter, id))
-                        .withClassLoader(connectorLoader)
-                        .build();
+                        workerTask = taskBuilder
+                            .withTask(task)
+                            .withConnectorConfig(connConfig)
+                            .withKeyConverterPlugin(metrics.wrap(keyConverter, id, true))
+                            .withValueConverterPlugin(metrics.wrap(valueConverter, id, false))
+                            .withHeaderConverterPlugin(metrics.wrap(headerConverter, id))
+                            .withClassLoader(connectorLoader)
+                            .build();
+                    } catch (RuntimeException e) {
+                        Utils.closeQuietly(keyConverter, "key converter");
+                        Utils.closeQuietly(valueConverter, "value converter");
+                        Utils.closeQuietly(headerConverter, "header converter");
+                        throw e;
+                    }
 
                     workerTask.initialize(taskConfig);
                 }
