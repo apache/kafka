@@ -135,10 +135,14 @@ public enum MetadataVersion {
 
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
+    //
+    // Keep at least one unstable MetadataVersion after LATEST_PRODUCTION.
+    // The latest unstable version serves as the development and testing version,
+    // and tests require latestTesting() > LATEST_PRODUCTION.
+    //
     // If users attempt to use an unstable MetadataVersion, they will get an error unless
     // they have set the configuration unstable.feature.versions.enable=true.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
-    //
 
     // New version for the Kafka 4.5.0 release.
     IBP_4_5_IV0(34, "4.5", "IV0", false);
