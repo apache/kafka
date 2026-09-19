@@ -137,7 +137,6 @@ import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
@@ -462,13 +461,13 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
-    public AddRaftVoterResult addRaftVoter(final int voterId, final Uuid voterDirectoryId, final Set<RaftVoterEndpoint> endpoints, final AddRaftVoterOptions options) {
-        return adminDelegate.addRaftVoter(voterId, voterDirectoryId, endpoints, options);
+    public AddRaftVoterResult addRaftVoter(final int voterId, final AddRaftVoterOptions options) {
+        return adminDelegate.addRaftVoter(voterId, options);
     }
 
     @Override
-    public RemoveRaftVoterResult removeRaftVoter(final int voterId, final Uuid voterDirectoryId, final RemoveRaftVoterOptions options) {
-        return adminDelegate.removeRaftVoter(voterId, voterDirectoryId, options);
+    public RemoveRaftVoterResult removeRaftVoter(final int voterId, final RemoveRaftVoterOptions options) {
+        return adminDelegate.removeRaftVoter(voterId, options);
     }
 
     @Override

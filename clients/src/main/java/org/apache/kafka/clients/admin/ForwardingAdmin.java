@@ -330,7 +330,7 @@ public class ForwardingAdmin implements Admin {
 
     @Override
     @SuppressWarnings("removal")
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     public AddRaftVoterResult addRaftVoter(int voterId, Uuid voterDirectoryId, Set<RaftVoterEndpoint> endpoints, AddRaftVoterOptions options) {
         return delegate.addRaftVoter(voterId, voterDirectoryId, endpoints, options);
     }
@@ -342,7 +342,7 @@ public class ForwardingAdmin implements Admin {
 
     @Override
     @SuppressWarnings("removal")
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     public RemoveRaftVoterResult removeRaftVoter(int voterId, Uuid voterDirectoryId, RemoveRaftVoterOptions options) {
         return delegate.removeRaftVoter(voterId, voterDirectoryId, options);
     }

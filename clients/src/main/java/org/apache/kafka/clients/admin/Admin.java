@@ -1966,10 +1966,10 @@ public interface Admin extends AutoCloseable {
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      * @param endpoints         The endpoints that the new voter has.
-     * @deprecated Since 4.4. Use {@link #addRaftVoter(int, AddRaftVoterOptions)} instead.
+     * @deprecated Since 4.5. Use {@link #addRaftVoter(int, AddRaftVoterOptions)} instead.
      * This method will be removed in Apache Kafka 5.0.
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     default AddRaftVoterResult addRaftVoter(
         int voterId,
         Uuid voterDirectoryId,
@@ -1994,10 +1994,10 @@ public interface Admin extends AutoCloseable {
      * @param voterDirectoryId  The directory ID of the voter.
      * @param endpoints         The endpoints that the new voter has.
      * @param options           Additional options for the operation, including optional cluster ID.
-     * @deprecated Since 4.4. Use {@link #addRaftVoter(int, AddRaftVoterOptions)} instead.
+     * @deprecated Since 4.5. Use {@link #addRaftVoter(int, AddRaftVoterOptions)} instead.
      * This method will be removed in Apache Kafka 5.0.
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     default AddRaftVoterResult addRaftVoter(
         int voterId,
         Uuid voterDirectoryId,
@@ -2060,10 +2060,10 @@ public interface Admin extends AutoCloseable {
      *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
-     * @deprecated Since 4.4. Use {@link #removeRaftVoter(int, RemoveRaftVoterOptions)} instead.
+     * @deprecated Since 4.5. Use {@link #removeRaftVoter(int, RemoveRaftVoterOptions)} instead.
      * This method will be removed in Apache Kafka 5.0.
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     default RemoveRaftVoterResult removeRaftVoter(
         int voterId,
         Uuid voterDirectoryId
@@ -2088,10 +2088,10 @@ public interface Admin extends AutoCloseable {
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      * @param options           Additional options for the operation, including optional cluster ID.
-     * @deprecated Since 4.4. Use {@link #removeRaftVoter(int, RemoveRaftVoterOptions)} instead.
+     * @deprecated Since 4.5. Use {@link #removeRaftVoter(int, RemoveRaftVoterOptions)} instead.
      * This method will be removed in Apache Kafka 5.0.
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     default RemoveRaftVoterResult removeRaftVoter(
         int voterId,
         Uuid voterDirectoryId,

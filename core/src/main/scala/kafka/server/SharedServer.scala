@@ -131,7 +131,7 @@ class SharedServer(
     }.getOrElse(Endpoints.empty())
     case None => NodeEndpointProvider.NOOP
   }
-  
+
   // Factory for creating request handler pools with shared aggregate thread counter
   val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()
 
@@ -416,6 +416,9 @@ class SharedServer(
       metadataLoaderMetrics = null
       Utils.closeQuietly(snapshotGenerator, "snapshot generator")
       snapshotGenerator = null
+      controllerRegistrationsPublisher.foreach { publisher =>
+        Utils.closeQuietly(publisher, "controller registrations publisher")
+      }
       if (raftManager != null) {
         Utils.swallow(this.logger.underlying, () => raftManager.shutdown())
         raftManager = null

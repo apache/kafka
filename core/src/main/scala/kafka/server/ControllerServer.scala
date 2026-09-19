@@ -471,8 +471,6 @@ class ControllerServer(
       metadataCachePublisher = null
       Utils.closeQuietly(featuresPublisher, "features publisher")
       featuresPublisher = null
-      Utils.closeQuietly(registrationsPublisher, "registrations publisher")
-      registrationsPublisher = null
       if (socketServer != null)
         Utils.swallow(this.logger.underlying, () => socketServer.stopProcessingRequests())
       if (controller != null)

@@ -395,7 +395,6 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        // Catch up the observer, then omit each supported combination of directory ID and endpoints.
         prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
 
         context.deliverRequest(
@@ -507,7 +506,9 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilResponse();
         String errorMsg = context.assertSentAddVoterResponse(Errors.INVALID_REQUEST).errorMessage();
         assertTrue(errorMsg.startsWith(String.format("Multiple observers with node ID %d were found:", newVoter.id())));
-        assertTrue(errorMsg.endsWith("Remove all but one of these observers and try again."));
+        assertTrue(errorMsg.endsWith(
+            "Remove stale or inactive observer entries so that only one observer remains for this node ID, then try again."
+        ));
     }
 
     @Test

@@ -2316,7 +2316,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             if (matchingObservers.size() > 1) {
                 throw new IllegalArgumentException(String.format(
                     "Multiple observers with node ID %d were found: %s. " +
-                        "Remove all but one of these observers and try again.",
+                        "This can happen if the node restarted with a new log directory while a previous " +
+                        "observer remained inactive. Remove stale or inactive observer entries so that " +
+                        "only one observer remains for this node ID, then try again.",
                     data.voterId(),
                     matchingObservers
                 ));
@@ -2487,11 +2489,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         try {
             oldVoter = resolveRemoveVoterKey(data, requestMetadata.apiVersion());
         } catch (IllegalArgumentException e) {
-            return completedFuture(
-                new RemoveRaftVoterResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage(e.getMessage())
-            );
+            return completedFuture(RaftUtil.removeVoterResponse(Errors.INVALID_REQUEST, e.getMessage()));
         }
 
         return removeVoterHandler.handleRemoveVoterRequest(
