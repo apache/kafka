@@ -405,7 +405,7 @@ public class KafkaRaftClientReconfigTest {
             )
         );
 
-        completeApiVersionsForAddVoter(context, newVoter, newAddress);
+        completeApiVersions(context, newVoter, newAddress);
 
         // Handle the API_VERSIONS response
         context.client.poll();

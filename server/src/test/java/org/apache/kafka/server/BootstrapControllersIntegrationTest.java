@@ -213,10 +213,13 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest(controllers = 3, standalone = true)
+    public void testAddRemoveRaftVoterByControllers(ClusterInstance clusterInstance) throws Exception {
+        testAddRemoveRaftVoter(clusterInstance, false);
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
     public void testAddRemoveRaftVoter(ClusterInstance clusterInstance) throws Exception {
-        for (boolean usingBootstrapControllers : List.of(false, true)) {
-            testAddRemoveRaftVoter(clusterInstance, usingBootstrapControllers);
-        }
+        testAddRemoveRaftVoter(clusterInstance, true);
     }
 
     private void testAddRemoveRaftVoter(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
@@ -255,10 +258,13 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest(controllers = 3, standalone = true)
-    public void testAddRaftVoterIncorrectEndpointByController(ClusterInstance clusterInstance) throws Exception {
-        for (boolean usingBootstrapControllers : List.of(false, true)) {
-            testAddRaftVoterWithIncorrectEndpoint(clusterInstance, usingBootstrapControllers);
-        }
+    public void testAddRaftVoterIncorrectEndpointByControllers(ClusterInstance clusterInstance) throws Exception {
+        testAddRaftVoterWithIncorrectEndpoint(clusterInstance, true);
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
+    public void testAddRaftVoterIncorrectEndpoint(ClusterInstance clusterInstance) throws Exception {
+        testAddRaftVoterWithIncorrectEndpoint(clusterInstance, false);
     }
 
     private void testAddRaftVoterWithIncorrectEndpoint(
@@ -278,16 +284,19 @@ public class BootstrapControllersIntegrationTest {
                     observer.replicaId(),
                     new AddRaftVoterOptions().setEndpoints(Set.of(wrongEndpoint))
                 ).all(),
-                "Aborted add voter operation for since API_VERSIONS returned an error BROKER_NOT_AVAILABLE"
+                "API_VERSIONS returned an error BROKER_NOT_AVAILABLE"
             );
         }
     }
 
     @ClusterTest(controllers = 3, standalone = true)
-    public void testAddRaftVoterWithIncorrectDirectoryIdByController(ClusterInstance clusterInstance) throws Exception {
-        for (boolean usingBootstrapControllers : List.of(false, true)) {
-            testAddRaftVoterWithIncorrectDirectoryId(clusterInstance, usingBootstrapControllers);
-        }
+    public void testAddRaftVoterWithIncorrectDirectoryIdByControllers(ClusterInstance clusterInstance) throws Exception {
+        testAddRaftVoterWithIncorrectDirectoryId(clusterInstance, true);
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
+    public void testAddRaftVoterWithIncorrectDirectoryId(ClusterInstance clusterInstance) throws Exception {
+        testAddRaftVoterWithIncorrectDirectoryId(clusterInstance, false);
     }
 
     private void testAddRaftVoterWithIncorrectDirectoryId(
