@@ -2378,6 +2378,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testCorruptMessageError
 - testDoesNotCloseSessionWhileAcknowledgementsPending
 - testDoesNotCloseSessionWhileRecordsBuffered
+- testEmptyResponseThenDataResponseBeforeCollectClearsInflightRecords
 - testFatalErrorsAcknowledgementResponse
 - testFetchDisconnected
 - testFetchError
@@ -2412,6 +2413,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testRetryAcknowledgementsMultipleCommitAsync
 - testRetryAcknowledgementsMultipleCommitSync
 - testRetryAcknowledgementsWithLeaderChange
+- testSecondFetchBeforeCollectClearsInflightRecords
 - testServerDisconnectedOnShareAcknowledge
 - testSessionHandlerRemovedAndPiggybackAcksFailedWhenNodeDisappears
 - testShareAcknowledgeInvalidResponse
@@ -2480,13 +2482,17 @@ org.apache.kafka.clients.consumer.internals.ShareFetchBufferTest:
 - testRetainsEvictedFetchWithPendingRenewAcknowledgements
 - testWakeup
 org.apache.kafka.clients.consumer.internals.ShareFetchCollectorTest:
+- testEmptyFetchFollowedByDataFetchForSamePartitionDoesNotLeak
 - testErrorInInitialize
+- testErrorInInitializeDoesNotLoseRecordsFromEarlierPartitions
 - testFetchNormal
 - testFetchWithCorruptMessage
 - testFetchWithOtherErrors
 - testFetchWithTopicAuthorizationFailed
 - testFetchWithUnknownLeaderEpoch
 - testFetchWithUnknownServerError
+- testRepeatedFetchesForSamePartitionDoNoAccumulateRetainedFetches
+- testSecondFetchForSamePartitionMergesWithoutLeaking
 - testWithRenew
 org.apache.kafka.clients.consumer.internals.ShareFetchMetricsManagerTest:
 - testAcknowledgements
