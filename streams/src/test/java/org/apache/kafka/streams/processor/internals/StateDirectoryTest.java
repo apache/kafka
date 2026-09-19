@@ -67,24 +67,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyList;
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.PROCESS_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.toTaskDirString;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.endsWith;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -183,27 +174,27 @@ public class StateDirectoryTest {
             }
             try {
                 final Set<PosixFilePermission> filePermissions = Files.getPosixFilePermissions(path);
-                assertThat(filePermissions, equalTo(expectedPermissions));
+                assertEquals(expectedPermissions, filePermissions);
             } catch (final IOException e) {
                 fail("Should create correct files and set correct permissions");
             }
         } else {
-            assertThat(file.canRead(), is(true));
-            assertThat(file.canWrite(), is(true));
-            assertThat(file.canExecute(), is(true));
+            assertTrue(file.canRead());
+            assertTrue(file.canWrite());
+            assertTrue(file.canExecute());
         }
     }
 
     @Test
     public void shouldParseUnnamedTaskId() {
         final TaskId task = new TaskId(1, 0);
-        assertThat(TaskId.parse(task.toString()), equalTo(task));
+        assertEquals(task, TaskId.parse(task.toString()));
     }
 
     @Test
     public void shouldParseNamedTaskId() {
         final TaskId task = new TaskId(1, 0, "namedTopology");
-        assertThat(TaskId.parse(task.toString()), equalTo(task));
+        assertEquals(task, TaskId.parse(task.toString()));
     }
 
     @Test
@@ -312,8 +303,8 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
         final TaskId taskId2 = new TaskId(1, 0);
 
-        assertThat(directory.lock(taskId), is(true));
-        assertThat(directory.lock(taskId2), is(true));
+        assertTrue(directory.lock(taskId));
+        assertTrue(directory.lock(taskId2));
         directory.unlock(taskId);
         directory.unlock(taskId2);
     }
@@ -386,10 +377,7 @@ public class StateDirectoryTest {
             assertFalse(dir.exists());
             assertEquals(0, directory.listAllTaskDirectories().size());
             assertEquals(0, directory.listNonEmptyTaskDirectories().size());
-            assertThat(
-                appender.getMessages(),
-                hasItem(containsString("Deleting obsolete state directory"))
-            );
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("Deleting obsolete state directory")));
         }
     }
 
@@ -446,13 +434,13 @@ public class StateDirectoryTest {
         final File storeDir = new File(taskDir1.file(), "store");
         assertTrue(storeDir.mkdir());
 
-        assertThat(Set.of(taskDir1, taskDir2), equalTo(new HashSet<>(directory.listAllTaskDirectories())));
-        assertThat(singletonList(taskDir1), equalTo(directory.listNonEmptyTaskDirectories()));
+        assertEquals(Set.of(taskDir1, taskDir2), new HashSet<>(directory.listAllTaskDirectories()));
+        assertEquals(List.of(taskDir1), directory.listNonEmptyTaskDirectories());
 
         Utils.delete(taskDir1.file());
 
-        assertThat(singleton(taskDir2), equalTo(new HashSet<>(directory.listAllTaskDirectories())));
-        assertThat(emptyList(), equalTo(directory.listNonEmptyTaskDirectories()));
+        assertEquals(Set.of(taskDir2), new HashSet<>(directory.listAllTaskDirectories()));
+        assertTrue(directory.listNonEmptyTaskDirectories().isEmpty());
     }
 
     @Test
@@ -535,10 +523,10 @@ public class StateDirectoryTest {
     public void shouldNotCreateBaseDirectory() throws IOException {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             initializeStateDirectory(false, false);
-            assertThat(stateDir.exists(), is(false));
-            assertThat(appDir.exists(), is(false));
-            assertThat(appender.getMessages(),
-                not(hasItem(containsString("Error changing permissions for the state or base directory"))));
+            assertFalse(stateDir.exists());
+            assertFalse(appDir.exists());
+            assertFalse(appender.getMessages().stream().anyMatch(message ->
+                message.contains("Error changing permissions for the state or base directory")));
         }
     }
 
@@ -591,8 +579,8 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
         final File testFile = new File(taskDirectory, "testFile");
-        assertThat(testFile.mkdir(), is(true));
-        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+        assertTrue(testFile.mkdir());
+        assertFalse(directory.directoryForTaskIsEmpty(taskId));
 
         // call StateDirectory#clean
         directory.clean();
@@ -606,8 +594,8 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
         final File testFile = new File(taskDirectory, "testFile");
-        assertThat(testFile.mkdir(), is(true));
-        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+        assertTrue(testFile.mkdir());
+        assertFalse(directory.directoryForTaskIsEmpty(taskId));
 
         // Create a dummy file in appDir; for this, appDir will not be empty after cleanup.
         final File dummyFile = new File(appDir, "dummy");
@@ -617,10 +605,7 @@ public class StateDirectoryTest {
             // call StateDirectory#clean
             directory.clean();
             assertTrue(appDir.exists());
-            assertThat(
-                appender.getMessages(),
-                hasItem(containsString("unexpected files remain"))
-            );
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("unexpected files remain")));
         }
     }
 
@@ -629,15 +614,12 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
         final File testFile = new File(taskDirectory, "testFile");
-        assertThat(testFile.mkdir(), is(true));
-        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+        assertTrue(testFile.mkdir());
+        assertFalse(directory.directoryForTaskIsEmpty(taskId));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             directory.clean();
-            assertThat(
-                appender.getMessages(),
-                hasItem(endsWith("as user calling cleanup."))
-            );
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.endsWith("as user calling cleanup.")));
         }
     }
 
@@ -646,14 +628,15 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
         final File testFile = new File(taskDirectory, "testFile");
-        assertThat(testFile.mkdir(), is(true));
-        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+        assertTrue(testFile.mkdir());
+        assertFalse(directory.directoryForTaskIsEmpty(taskId));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             final long cleanupDelayMs = 0;
             time.sleep(5000);
             directory.cleanRemovedTasks(cleanupDelayMs);
-            assertThat(appender.getMessages(), hasItem(endsWith("ms has elapsed (cleanup delay is " + cleanupDelayMs + "ms).")));
+            assertTrue(appender.getMessages().stream().anyMatch(message ->
+                message.endsWith("ms has elapsed (cleanup delay is " + cleanupDelayMs + "ms).")));
         }
     }
 
@@ -671,12 +654,10 @@ public class StateDirectoryTest {
                 true,
                 false
             );
-            assertThat(
-                appender.getMessages(),
-                hasItem("Using an OS temp directory in the state.dir property can cause failures with writing the" +
-                            " checkpoint file due to the fact that this directory can be cleared by the OS." +
-                            " Resolved state.dir: [" + System.getProperty("java.io.tmpdir") + "/kafka-streams]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Using an OS temp directory in the state.dir property can cause failures with writing the" +
+                    " checkpoint file due to the fact that this directory can be cleared by the OS." +
+                    " Resolved state.dir: [" + System.getProperty("java.io.tmpdir") + "/kafka-streams]"));
         }
     }
 
@@ -690,17 +671,17 @@ public class StateDirectoryTest {
         directory.getOrCreateDirectoryForTask(new TaskId(0, 1, "topology1"));
         directory.getOrCreateDirectoryForTask(new TaskId(0, 0, "topology2"));
 
-        assertThat(new File(appDir, "__topology1__").exists(), is(true));
-        assertThat(new File(appDir, "__topology1__").isDirectory(), is(true));
-        assertThat(new File(appDir, "__topology2__").exists(), is(true));
-        assertThat(new File(appDir, "__topology2__").isDirectory(), is(true));
+        assertTrue(new File(appDir, "__topology1__").exists());
+        assertTrue(new File(appDir, "__topology1__").isDirectory());
+        assertTrue(new File(appDir, "__topology2__").exists());
+        assertTrue(new File(appDir, "__topology2__").isDirectory());
 
-        assertThat(new File(new File(appDir, "__topology1__"), "0_0").exists(), is(true));
-        assertThat(new File(new File(appDir, "__topology1__"), "0_0").isDirectory(), is(true));
-        assertThat(new File(new File(appDir, "__topology1__"), "0_1").exists(), is(true));
-        assertThat(new File(new File(appDir, "__topology1__"), "0_1").isDirectory(), is(true));
-        assertThat(new File(new File(appDir, "__topology2__"), "0_0").exists(), is(true));
-        assertThat(new File(new File(appDir, "__topology2__"), "0_0").isDirectory(), is(true));
+        assertTrue(new File(new File(appDir, "__topology1__"), "0_0").exists());
+        assertTrue(new File(new File(appDir, "__topology1__"), "0_0").isDirectory());
+        assertTrue(new File(new File(appDir, "__topology1__"), "0_1").exists());
+        assertTrue(new File(new File(appDir, "__topology1__"), "0_1").isDirectory());
+        assertTrue(new File(new File(appDir, "__topology2__"), "0_0").exists());
+        assertTrue(new File(new File(appDir, "__topology2__"), "0_0").isDirectory());
     }
 
     @Test
@@ -715,13 +696,13 @@ public class StateDirectoryTest {
         final File storeDir = new File(taskDir1.file(), "store");
         assertTrue(storeDir.mkdir());
 
-        assertThat(new HashSet<>(directory.listAllTaskDirectories()), equalTo(Set.of(taskDir1, taskDir2, taskDir3)));
-        assertThat(directory.listNonEmptyTaskDirectories(), equalTo(singletonList(taskDir1)));
+        assertEquals(Set.of(taskDir1, taskDir2, taskDir3), new HashSet<>(directory.listAllTaskDirectories()));
+        assertEquals(List.of(taskDir1), directory.listNonEmptyTaskDirectories());
 
         Utils.delete(taskDir1.file());
 
-        assertThat(new HashSet<>(directory.listAllTaskDirectories()), equalTo(Set.of(taskDir2, taskDir3)));
-        assertThat(directory.listNonEmptyTaskDirectories(), equalTo(emptyList()));
+        assertEquals(Set.of(taskDir2, taskDir3), new HashSet<>(directory.listAllTaskDirectories()));
+        assertTrue(directory.listNonEmptyTaskDirectories().isEmpty());
     }
 
     @Test
@@ -730,21 +711,21 @@ public class StateDirectoryTest {
         final File taskDir = directory.getOrCreateDirectoryForTask(new TaskId(2, 0, "topology1"));
         final File namedTopologyDir = new File(appDir, "__topology1__");
 
-        assertThat(taskDir.exists(), is(true));
-        assertThat(namedTopologyDir.exists(), is(true));
+        assertTrue(taskDir.exists());
+        assertTrue(namedTopologyDir.exists());
         directory.clean();
-        assertThat(taskDir.exists(), is(false));
-        assertThat(namedTopologyDir.exists(), is(false));
+        assertFalse(taskDir.exists());
+        assertFalse(namedTopologyDir.exists());
     }
 
     @Test
     public void shouldRemoveEmptyNamedTopologyDirsWhenCallingClean() throws IOException {
         initializeStateDirectory(true, true);
         final File namedTopologyDir = new File(appDir, "__topology1__");
-        assertThat(namedTopologyDir.mkdir(), is(true));
-        assertThat(namedTopologyDir.exists(), is(true));
+        assertTrue(namedTopologyDir.mkdir());
+        assertTrue(namedTopologyDir.exists());
         directory.clean();
-        assertThat(namedTopologyDir.exists(), is(false));
+        assertFalse(namedTopologyDir.exists());
     }
 
     @Test
@@ -754,11 +735,11 @@ public class StateDirectoryTest {
         final File taskDir = directory.getOrCreateDirectoryForTask(new TaskId(2, 0, topologyName));
         final File namedTopologyDir = new File(appDir, "__" + topologyName + "__");
 
-        assertThat(taskDir.exists(), is(true));
-        assertThat(namedTopologyDir.exists(), is(true));
+        assertTrue(taskDir.exists());
+        assertTrue(namedTopologyDir.exists());
         directory.clearLocalStateForNamedTopology(topologyName);
-        assertThat(taskDir.exists(), is(false));
-        assertThat(namedTopologyDir.exists(), is(false));
+        assertFalse(taskDir.exists());
+        assertFalse(namedTopologyDir.exists());
     }
 
     @Test
@@ -766,20 +747,20 @@ public class StateDirectoryTest {
         initializeStateDirectory(true, true);
         final String topologyName = "topology1";
         final File namedTopologyDir = new File(appDir, "__" + topologyName + "__");
-        assertThat(namedTopologyDir.mkdir(), is(true));
-        assertThat(namedTopologyDir.exists(), is(true));
+        assertTrue(namedTopologyDir.mkdir());
+        assertTrue(namedTopologyDir.exists());
         directory.clearLocalStateForNamedTopology(topologyName);
-        assertThat(namedTopologyDir.exists(), is(false));
+        assertFalse(namedTopologyDir.exists());
     }
 
     @Test
     public void shouldNotRemoveDirsThatDoNotMatchNamedTopologyDirsWhenCallingClean() throws IOException {
         initializeStateDirectory(true, true);
         final File someDir = new File(appDir, "_not-a-valid-named-topology_dir_name_");
-        assertThat(someDir.mkdir(), is(true));
-        assertThat(someDir.exists(), is(true));
+        assertTrue(someDir.mkdir());
+        assertTrue(someDir.exists());
         directory.clean();
-        assertThat(someDir.exists(), is(true));
+        assertTrue(someDir.exists());
     }
 
     @Test
@@ -788,23 +769,20 @@ public class StateDirectoryTest {
 
         final File taskDir = directory.getOrCreateDirectoryForTask(new TaskId(2, 0, "topology1"));
         final File namedTopologyDir = new File(appDir, "__topology1__");
-        assertThat(namedTopologyDir.exists(), is(true));
-        assertThat(taskDir.exists(), is(true));
+        assertTrue(namedTopologyDir.exists());
+        assertTrue(taskDir.exists());
         assertTrue(new File(taskDir, "store").mkdir());
-        assertThat(directory.listAllTaskDirectories().size(), is(1));
-        assertThat(directory.listNonEmptyTaskDirectories().size(), is(1));
+        assertEquals(1, directory.listAllTaskDirectories().size());
+        assertEquals(1, directory.listNonEmptyTaskDirectories().size());
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
-            assertThat(taskDir.exists(), is(false));
-            assertThat(namedTopologyDir.exists(), is(false));
-            assertThat(directory.listAllTaskDirectories().size(), is(0));
-            assertThat(directory.listNonEmptyTaskDirectories().size(), is(0));
-            assertThat(
-                appender.getMessages(),
-                hasItem(containsString("Deleting obsolete state directory"))
-            );
+            assertFalse(taskDir.exists());
+            assertFalse(namedTopologyDir.exists());
+            assertEquals(0, directory.listAllTaskDirectories().size());
+            assertEquals(0, directory.listNonEmptyTaskDirectories().size());
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("Deleting obsolete state directory")));
         }
     }
 
@@ -812,7 +790,7 @@ public class StateDirectoryTest {
     public void shouldPersistProcessIdAcrossRestart() {
         final UUID processId = directory.initializeProcessId();
         directory.close();
-        assertThat(directory.initializeProcessId(), equalTo(processId));
+        assertEquals(processId, directory.initializeProcessId());
     }
 
     @Test
@@ -821,10 +799,10 @@ public class StateDirectoryTest {
         directory.close();
 
         final File processFile = new File(appDir, PROCESS_FILE_NAME);
-        assertThat(processFile.exists(), is(true));
-        assertThat(processFile.delete(), is(true));
+        assertTrue(processFile.exists());
+        assertTrue(processFile.delete());
 
-        assertThat(directory.initializeProcessId(), not(processId));
+        assertNotEquals(processId, directory.initializeProcessId());
     }
 
     @Test
@@ -841,7 +819,7 @@ public class StateDirectoryTest {
             fileOutputStream.getFD().sync();
         }
 
-        assertThat(directory.initializeProcessId(), not(processId));
+        assertNotEquals(processId, directory.initializeProcessId());
     }
 
     @Test
@@ -851,7 +829,7 @@ public class StateDirectoryTest {
         final UUID processId = UUID.randomUUID();
         mapper.writeValue(processFile, new FutureStateDirectoryProcessFile(processId, "some random junk"));
 
-        assertThat(directory.initializeProcessId(), equalTo(processId));
+        assertEquals(processId, directory.initializeProcessId());
     }
 
     @Test

@@ -79,7 +79,6 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
 import org.apache.logging.log4j.Level;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -125,16 +124,6 @@ import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.closeTo;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.isA;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -143,7 +132,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -478,8 +466,8 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(resetter);
 
-        assertThat(consumer.position(partition1), equalTo(5L));
-        assertThat(consumer.position(partition2), equalTo(15L));
+        assertEquals(5L, consumer.position(partition1));
+        assertEquals(15L, consumer.position(partition2));
         verify(resetter).accept(Collections.emptySet());
     }
 
@@ -519,9 +507,9 @@ public class StreamTaskTest {
             task.completeRestoration(partitionsAtCall::addAll);
 
             // because we mocked the `resetter` positions don't change
-            assertThat(consumer.position(partition1), equalTo(5L));
-            assertThat(consumer.position(partition2), equalTo(15L));
-            assertThat(partitionsAtCall, equalTo(Collections.singleton(partition1)));
+            assertEquals(5L, consumer.position(partition1));
+            assertEquals(15L, consumer.position(partition2));
+            assertEquals(Set.of(partition1), partitionsAtCall);
         }
     }
 
@@ -766,7 +754,7 @@ public class StreamTaskTest {
 
         final KafkaMetric metric = getMetric("active-buffer", "%s-count", task.id().toString());
 
-        assertThat(metric.metricValue(), equalTo(0.0));
+        assertEquals(0.0, metric.metricValue());
 
         task.addRecords(partition1, asList(
             getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
@@ -774,12 +762,12 @@ public class StreamTaskTest {
         ));
         task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
-        assertThat(metric.metricValue(), equalTo(2.0));
+        assertEquals(2.0, metric.metricValue());
 
         assertTrue(task.process(0L));
         task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
-        assertThat(metric.metricValue(), equalTo(1.0));
+        assertEquals(1.0, metric.metricValue());
     }
 
     @Test
@@ -790,22 +778,22 @@ public class StreamTaskTest {
 
         final KafkaMetric metric = getMetric("active-process", "%s-ratio", task.id().toString());
 
-        assertThat(metric.metricValue(), equalTo(0.0));
+        assertEquals(0.0, metric.metricValue());
 
         task.recordProcessBatchTime(10L);
         task.recordProcessBatchTime(15L);
         task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
-        assertThat(metric.metricValue(), equalTo(0.25));
+        assertEquals(0.25, metric.metricValue());
 
         task.recordProcessBatchTime(10L);
 
-        assertThat(metric.metricValue(), equalTo(0.25));
+        assertEquals(0.25, metric.metricValue());
 
         task.recordProcessBatchTime(10L);
         task.recordProcessTimeRatioAndBufferSize(20L, time.milliseconds());
 
-        assertThat(metric.metricValue(), equalTo(1.0));
+        assertEquals(1.0, metric.metricValue());
     }
 
     @Test
@@ -854,14 +842,14 @@ public class StreamTaskTest {
         // flush terminal e2e for the batch, as TaskExecutor.processTask does
         task.maybeFlushTerminalE2ELatency(10L);
 
-        assertThat(sourceAvg.metricValue(), equalTo(10.0));
-        assertThat(sourceMin.metricValue(), equalTo(10.0));
-        assertThat(sourceMax.metricValue(), equalTo(10.0));
+        assertEquals(10.0, sourceAvg.metricValue());
+        assertEquals(10.0, sourceMin.metricValue());
+        assertEquals(10.0, sourceMax.metricValue());
 
         // key 0: reaches terminal node
-        assertThat(terminalAvg.metricValue(), equalTo(10.0));
-        assertThat(terminalMin.metricValue(), equalTo(10.0));
-        assertThat(terminalMax.metricValue(), equalTo(10.0));
+        assertEquals(10.0, terminalAvg.metricValue());
+        assertEquals(10.0, terminalMin.metricValue());
+        assertEquals(10.0, terminalMax.metricValue());
 
 
         // e2e latency = 15
@@ -869,14 +857,14 @@ public class StreamTaskTest {
         task.process(15L);
         task.maybeFlushTerminalE2ELatency(15L);
 
-        assertThat(sourceAvg.metricValue(), equalTo(12.5));
-        assertThat(sourceMin.metricValue(), equalTo(10.0));
-        assertThat(sourceMax.metricValue(), equalTo(15.0));
+        assertEquals(12.5, sourceAvg.metricValue());
+        assertEquals(10.0, sourceMin.metricValue());
+        assertEquals(15.0, sourceMax.metricValue());
 
         // key 1: stops at source, doesn't affect terminal node metrics
-        assertThat(terminalAvg.metricValue(), equalTo(10.0));
-        assertThat(terminalMin.metricValue(), equalTo(10.0));
-        assertThat(terminalMax.metricValue(), equalTo(10.0));
+        assertEquals(10.0, terminalAvg.metricValue());
+        assertEquals(10.0, terminalMin.metricValue());
+        assertEquals(10.0, terminalMax.metricValue());
 
 
         // e2e latency = 23
@@ -884,14 +872,14 @@ public class StreamTaskTest {
         task.process(23L);
         task.maybeFlushTerminalE2ELatency(23L);
 
-        assertThat(sourceAvg.metricValue(), equalTo(16.0));
-        assertThat(sourceMin.metricValue(), equalTo(10.0));
-        assertThat(sourceMax.metricValue(), equalTo(23.0));
+        assertEquals(16.0, sourceAvg.metricValue());
+        assertEquals(10.0, sourceMin.metricValue());
+        assertEquals(23.0, sourceMax.metricValue());
 
         // key 2: reaches terminal node
-        assertThat(terminalAvg.metricValue(), equalTo(16.5));
-        assertThat(terminalMin.metricValue(), equalTo(10.0));
-        assertThat(terminalMax.metricValue(), equalTo(23.0));
+        assertEquals(16.5, terminalAvg.metricValue());
+        assertEquals(10.0, terminalMin.metricValue());
+        assertEquals(23.0, terminalMax.metricValue());
 
 
         // e2e latency = 5
@@ -899,14 +887,14 @@ public class StreamTaskTest {
         task.process(5L);
         task.maybeFlushTerminalE2ELatency(5L);
 
-        assertThat(sourceAvg.metricValue(), equalTo(13.25));
-        assertThat(sourceMin.metricValue(), equalTo(5.0));
-        assertThat(sourceMax.metricValue(), equalTo(23.0));
+        assertEquals(13.25, sourceAvg.metricValue());
+        assertEquals(5.0, sourceMin.metricValue());
+        assertEquals(23.0, sourceMax.metricValue());
 
         // key 3: stops at source, doesn't affect terminal node metrics
-        assertThat(terminalAvg.metricValue(), equalTo(16.5));
-        assertThat(terminalMin.metricValue(), equalTo(10.0));
-        assertThat(terminalMax.metricValue(), equalTo(23.0));
+        assertEquals(16.5, terminalAvg.metricValue());
+        assertEquals(10.0, terminalMin.metricValue());
+        assertEquals(23.0, terminalMax.metricValue());
     }
 
     @Test
@@ -953,9 +941,9 @@ public class StreamTaskTest {
         task.maybeFlushTerminalE2ELatency(time.milliseconds());
 
         // source node measures only consumption latency (record timestamp -> source observed it)
-        assertThat(sourceMax.metricValue(), equalTo(10.0));
+        assertEquals(10.0, sourceMax.metricValue());
         // terminal node measures full end-to-end latency, including the processing delay
-        assertThat(terminalMax.metricValue(), equalTo(10.0 + processingDelay));
+        assertEquals(10.0 + processingDelay, terminalMax.metricValue());
     }
 
     @Test
@@ -1000,9 +988,9 @@ public class StreamTaskTest {
         // batch completes at 1000; true latencies [900,550,520,510,500] -> max 900, min 500, avg 596
         task.maybeFlushTerminalE2ELatency(1000L);
 
-        assertThat(terminalMax.metricValue(), equalTo(900.0));
-        assertThat(terminalMin.metricValue(), equalTo(500.0));
-        assertThat((double) terminalAvg.metricValue(), closeTo(596.0, 1e-9));
+        assertEquals(900.0, terminalMax.metricValue());
+        assertEquals(500.0, terminalMin.metricValue());
+        assertEquals(596.0, (double) terminalAvg.metricValue(), 1e-9);
     }
 
     @Test
@@ -1047,9 +1035,9 @@ public class StreamTaskTest {
         // batch completes at 1000; true latencies [900,600] -> max 900, min 600, avg 750
         task.maybeFlushTerminalE2ELatency(1000L);
 
-        assertThat(terminalMax.metricValue(), equalTo(900.0));
-        assertThat(terminalMin.metricValue(), equalTo(600.0));
-        assertThat((double) terminalAvg.metricValue(), closeTo(750.0, 1e-9));
+        assertEquals(900.0, terminalMax.metricValue());
+        assertEquals(600.0, terminalMin.metricValue());
+        assertEquals(750.0, (double) terminalAvg.metricValue(), 1e-9);
     }
 
     @Test
@@ -1085,7 +1073,7 @@ public class StreamTaskTest {
         });
 
         // the latency must include the time the punctuator itself spent before forwarding
-        assertThat(terminalMax.metricValue(), equalTo(20.0 + punctuatorDelay));
+        assertEquals(20.0 + punctuatorDelay, terminalMax.metricValue());
     }
 
     @Test
@@ -1125,7 +1113,7 @@ public class StreamTaskTest {
         time.sleep(5L);
         task.flush();
 
-        assertThat(terminalMax.metricValue(), equalTo(15.0));
+        assertEquals(15.0, terminalMax.metricValue());
     }
 
     @Test
@@ -1138,19 +1126,19 @@ public class StreamTaskTest {
         final KafkaMetric rateMetric = getMetric("restore", "%s-rate", task.id().toString());
         final KafkaMetric remainMetric = getMetric("restore", "%s-remaining-records-total", task.id().toString());
 
-        assertThat(totalMetric.metricValue(), equalTo(0.0));
-        assertThat(rateMetric.metricValue(), equalTo(0.0));
-        assertThat(remainMetric.metricValue(), equalTo(0.0));
+        assertEquals(0.0, totalMetric.metricValue());
+        assertEquals(0.0, rateMetric.metricValue());
+        assertEquals(0.0, remainMetric.metricValue());
 
         // remaining-records is initialized from the offset range
         task.recordRestoration(time, 0L, 100L, true);
 
-        assertThat(remainMetric.metricValue(), equalTo(100.0));
+        assertEquals(100.0, remainMetric.metricValue());
 
         // restore-total counts records; remaining-records is decremented by offset slots (which may differ)
         task.recordRestoration(time, 25L, 30L, false);
 
-        assertThat(totalMetric.metricValue(), equalTo(25.0));
+        assertEquals(25.0, totalMetric.metricValue());
         // the rate measures restored records per second, not restore batches per second; with no time
         // elapsed the rate window is (metrics.num.samples - 1) * metrics.sample.window.ms == 30s
         assertEquals(
@@ -1160,11 +1148,11 @@ public class StreamTaskTest {
             "restore-rate must measure restored records per second, not restore batches per second; "
                 + "counting batches would give 1/30 == 0.03333 (KAFKA-20877)"
         );
-        assertThat(remainMetric.metricValue(), equalTo(70.0));
+        assertEquals(70.0, remainMetric.metricValue());
 
         task.recordRestoration(time, 50L, 55L, false);
 
-        assertThat(totalMetric.metricValue(), equalTo(75.0));
+        assertEquals(75.0, totalMetric.metricValue());
         assertEquals(
             75.0 / 30.0,
             ((Number) rateMetric.metricValue()).doubleValue(),
@@ -1172,7 +1160,7 @@ public class StreamTaskTest {
             "restore-rate must measure restored records per second, not restore batches per second; "
                 + "counting batches would give 2/30 == 0.06666 (KAFKA-20877)"
         );
-        assertThat(remainMetric.metricValue(), equalTo(15.0));
+        assertEquals(15.0, remainMetric.metricValue());
     }
 
     @Test
@@ -1187,19 +1175,19 @@ public class StreamTaskTest {
             TimeoutException.class,
             () -> task.process(0)
         );
-        assertThat(exception.getMessage(), equalTo("Kaboom!"));
+        assertEquals("Kaboom!", exception.getMessage());
 
         // we have only a single record that was not successfully processed
         // however, the record should not be in the record buffer any longer, but should be cached within the task itself
-        assertThat(task.commitNeeded(), equalTo(false));
-        assertThat(task.hasRecordsQueued(), equalTo(false));
+        assertFalse(task.commitNeeded());
+        assertFalse(task.hasRecordsQueued());
 
         // -> thus the task should try process the cached record now (that thus throw again)
         final TimeoutException nextException = assertThrows(
             TimeoutException.class,
             () -> task.process(0)
         );
-        assertThat(nextException.getMessage(), equalTo("Kaboom!"));
+        assertEquals("Kaboom!", nextException.getMessage());
     }
 
     @Test
@@ -1754,7 +1742,7 @@ public class StreamTaskTest {
             )
         );
 
-        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, Optional.of(2), expected.encode())))));
+        assertEquals(Map.of(partition1, new OffsetAndMetadata(5L, Optional.of(2), expected.encode())), offsetsAndMetadata);
     }
 
     @Test
@@ -1783,11 +1771,7 @@ public class StreamTaskTest {
         final TopicPartitionMetadata metadata = new TopicPartitionMetadata(0, new ProcessorMetadata());
 
         assertTrue(task.commitNeeded());
-        assertThat(task.prepareCommit(true), equalTo(
-                mkMap(
-                        mkEntry(partition1, new OffsetAndMetadata(3L, Optional.of(2), metadata.encode()))
-                )
-        ));
+        assertEquals(Map.of(partition1, new OffsetAndMetadata(3L, Optional.of(2), metadata.encode())), task.prepareCommit(true));
 
         task.postCommit(false);
 
@@ -1800,12 +1784,13 @@ public class StreamTaskTest {
         task.process(0L);
 
         assertTrue(task.commitNeeded());
-        assertThat(task.prepareCommit(true), equalTo(
-            mkMap(
-                mkEntry(partition1, new OffsetAndMetadata(3L, Optional.of(2), metadata.encode())),
-                mkEntry(partition2, new OffsetAndMetadata(1L, Optional.of(0), metadata.encode()))
-            )
-        ));
+        assertEquals(
+            Map.of(
+                partition1, new OffsetAndMetadata(3L, Optional.of(2), metadata.encode()),
+                partition2, new OffsetAndMetadata(1L, Optional.of(0), metadata.encode())
+            ),
+            task.prepareCommit(true)
+        );
         task.postCommit(false);
 
         assertFalse(task.commitNeeded());
@@ -1856,11 +1841,13 @@ public class StreamTaskTest {
 
         assertTrue(task.commitNeeded());
 
-        assertThat(task.prepareCommit(true), equalTo(
-            mkMap(
-                mkEntry(partition1, new OffsetAndMetadata(1L,  Optional.of(1), expectedMetadata1.encode())),
-                mkEntry(partition2, new OffsetAndMetadata(2L, Optional.of(1), expectedMetadata2.encode()))
-            )));
+        assertEquals(
+            Map.of(
+                partition1, new OffsetAndMetadata(1L, Optional.of(1), expectedMetadata1.encode()),
+                partition2, new OffsetAndMetadata(2L, Optional.of(1), expectedMetadata2.encode())
+            ),
+            task.prepareCommit(true)
+        );
         task.postCommit(false);
 
         // the task should still be committed since the processed records have not reached the consumer position
@@ -1879,9 +1866,7 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
 
         // Processor metadata not updated, we just need to commit to partition1 again with new offset
-        assertThat(task.prepareCommit(true), equalTo(
-                mkMap(mkEntry(partition1, new OffsetAndMetadata(2L, Optional.of(1), expectedMetadata3.encode())))
-        ));
+        assertEquals(Map.of(partition1, new OffsetAndMetadata(2L, Optional.of(1), expectedMetadata3.encode())), task.prepareCommit(true));
         task.postCommit(false);
 
         assertFalse(task.commitNeeded());
@@ -1899,7 +1884,7 @@ public class StreamTaskTest {
             () -> task.prepareCommit(true)
         );
 
-        assertThat(thrown.getMessage(), is("Illegal state CLOSED while preparing active task 0_0 for committing"));
+        assertEquals("Illegal state CLOSED while preparing active task 0_0 for committing", thrown.getMessage());
     }
 
     @Test
@@ -1922,19 +1907,19 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
-        assertThat("task is not idling", task.timeCurrentIdlingStarted().isEmpty());
+        assertTrue(task.timeCurrentIdlingStarted().isEmpty(), "task is not idling");
 
         assertFalse(task.process(0L));
 
         task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)));
 
         assertFalse(task.process(0L));
-        assertThat("task is idling", task.timeCurrentIdlingStarted().isPresent());
+        assertTrue(task.timeCurrentIdlingStarted().isPresent(), "task is idling");
 
         task.addRecords(partition2, singleton(getConsumerRecordWithOffsetAsTimestamp(partition2, 0)));
 
         assertTrue(task.process(0L));
-        assertThat("task is not idling", task.timeCurrentIdlingStarted().isEmpty());
+        assertTrue(task.timeCurrentIdlingStarted().isEmpty(), "task is not idling");
     }
 
     @Test
@@ -1946,11 +1931,11 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
         task.suspend();
 
-        assertThat("task is idling", task.timeCurrentIdlingStarted().isPresent());
+        assertTrue(task.timeCurrentIdlingStarted().isPresent(), "task is idling");
 
         task.resume();
 
-        assertThat("task is not idling", task.timeCurrentIdlingStarted().isEmpty());
+        assertTrue(task.timeCurrentIdlingStarted().isEmpty(), "task is not idling");
     }
 
     @Test
@@ -1992,24 +1977,12 @@ public class StreamTaskTest {
             messages = streamTaskAppender.getMessages();
             final String expectedNotReadyMessage = "stream-thread [Test worker] task [0_0] Partition topic2-0 has fetched lag of -1\n\tWaiting to fetch data for topic2-0";
             final String expectedReadyMessage = "Partition topic1-0 has buffered data, ready for processing";
-            assertThat("Should have logged not ready message", messages.size(), is(1));
-            assertThat(
-                streamTaskAppender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("INFO")),
-                    Matchers.hasProperty("message", equalTo(expectedNotReadyMessage))
-                ))
-            );
-            assertThat(messages.get(0), equalTo(expectedNotReadyMessage));
+            assertEquals(1, messages.size(), "Should have logged not ready message");
+            assertTrue(streamTaskAppender.getMessages("INFO").contains(expectedNotReadyMessage));
+            assertEquals(expectedNotReadyMessage, messages.get(0));
             
             // Validate TRACE log from PartitionGroup about partition1 being ready
-            assertThat(
-                partitionGroupAppender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", containsString(expectedReadyMessage))
-                ))
-            );
+            assertTrue(partitionGroupAppender.getMessages("TRACE").stream().anyMatch(message -> message.contains(expectedReadyMessage)));
         }
     }
 
@@ -2132,16 +2105,16 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
-        try {
-            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+        final StreamsException exception = assertThrows(
+            StreamsException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
                 throw new KafkaException("KABOOM!");
-            });
-            fail("Should've thrown StreamsException");
-        } catch (final StreamsException e) {
-            final String message = e.getMessage();
-            assertTrue(message.contains("processor '" + processorStreamTime.name() + "'"), "message=" + message + " should contain processor");
-            assertThat(task.processorContext().currentNode(), nullValue());
-        }
+            }),
+            "Should've thrown StreamsException"
+        );
+        final String message = exception.getMessage();
+        assertTrue(message.contains("processor '" + processorStreamTime.name() + "'"), "message=" + message + " should contain processor");
+        assertNull(task.processorContext().currentNode());
     }
 
     @Test
@@ -2152,16 +2125,16 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
-        try {
-            task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+        final StreamsException exception = assertThrows(
+            StreamsException.class,
+            () -> task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
                 throw new KafkaException("KABOOM!");
-            });
-            fail("Should've thrown StreamsException");
-        } catch (final StreamsException e) {
-            final String message = e.getMessage();
-            assertTrue(message.contains("processor '" + processorSystemTime.name() + "'"), "message=" + message + " should contain processor");
-            assertThat(task.processorContext().currentNode(), nullValue());
-        }
+            }),
+            "Should've thrown StreamsException"
+        );
+        final String message = exception.getMessage();
+        assertTrue(message.contains("processor '" + processorSystemTime.name() + "'"), "message=" + message + " should contain processor");
+        assertNull(task.processorContext().currentNode());
     }
 
     @Test
@@ -2206,8 +2179,8 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 45)
         ));
 
-        assertThat("Map did not contain the partitions", task.highWaterMark().containsKey(partition1)
-                && task.highWaterMark().containsKey(partition2));
+        assertTrue(task.highWaterMark().containsKey(partition1) && task.highWaterMark().containsKey(partition2),
+            "Map did not contain the partitions");
         assertThrows(StreamsException.class, () -> task.process(0L));
     }
 
@@ -2258,7 +2231,7 @@ public class StreamTaskTest {
         assertTrue(source1.initialized);
         assertTrue(source2.initialized);
 
-        assertThat("Map did not contain the partition", task.highWaterMark().containsKey(partition1));
+        assertTrue(task.highWaterMark().containsKey(partition1), "Map did not contain the partition");
 
         verify(recordCollector).offsets();
     }
@@ -2272,12 +2245,9 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         task.processorContext().setCurrentNode(processorStreamTime);
-        try {
-            task.punctuate(processorStreamTime, 10, PunctuationType.STREAM_TIME, punctuator);
-            fail("Should throw illegal state exception as current node is not null");
-        } catch (final IllegalStateException e) {
-            // pass
-        }
+        assertThrows(IllegalStateException.class,
+            () -> task.punctuate(processorStreamTime, 10, PunctuationType.STREAM_TIME, punctuator),
+            "Should throw illegal state exception as current node is not null");
     }
 
     @Test
@@ -2288,9 +2258,9 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
-        assertThat(punctuatedAt, equalTo(5L));
+        assertEquals(5L, punctuatedAt);
         task.punctuate(processorStreamTime, 10, PunctuationType.STREAM_TIME, punctuator);
-        assertThat(punctuatedAt, equalTo(10L));
+        assertEquals(10L, punctuatedAt);
     }
 
     @Test
@@ -2301,7 +2271,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
-        assertThat(task.processorContext().currentNode(), nullValue());
+        assertNull(task.processorContext().currentNode());
     }
 
     @Test
@@ -2415,9 +2385,9 @@ public class StreamTaskTest {
         final Map<TopicPartition, Long> map = task.purgeableOffsets();
 
         if (doCommit) {
-            assertThat(map, equalTo(singletonMap(repartition, 10L)));
+            assertEquals(Map.of(repartition, 10L), map);
         } else {
-            assertThat(map, equalTo(Collections.emptyMap()));
+            assertTrue(map.isEmpty());
         }
     }
 
@@ -2723,9 +2693,9 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.suspend();
-        assertThat(getTaskMetrics(), not(empty()));
+        assertFalse(getTaskMetrics().isEmpty());
         task.closeClean();
-        assertThat(getTaskMetrics(), empty());
+        assertTrue(getTaskMetrics().isEmpty());
     }
 
     @Test
@@ -2735,9 +2705,9 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.suspend();
-        assertThat(getTaskMetrics(), not(empty()));
+        assertFalse(getTaskMetrics().isEmpty());
         task.closeDirty();
-        assertThat(getTaskMetrics(), empty());
+        assertTrue(getTaskMetrics().isEmpty());
     }
 
     @Test
@@ -2746,10 +2716,10 @@ public class StreamTaskTest {
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.suspend();
-        assertThat(getTaskMetrics(), not(empty()));
+        assertFalse(getTaskMetrics().isEmpty());
         task.prepareRecycle();
-        assertThat(getTaskMetrics(), empty());
-        assertThat(task.state(), is(Task.State.CLOSED));
+        assertTrue(getTaskMetrics().isEmpty());
+        assertEquals(Task.State.CLOSED, task.state());
 
         verify(stateManager).recycle();
     }
@@ -2779,11 +2749,11 @@ public class StreamTaskTest {
         task.requestCommit();
 
         task.suspend();
-        assertThat(task.commitNeeded(), is(true));
-        assertThat(task.commitRequested(), is(true));
+        assertTrue(task.commitNeeded());
+        assertTrue(task.commitRequested());
         task.closeDirty();
-        assertThat(task.commitNeeded(), is(false));
-        assertThat(task.commitRequested(), is(false));
+        assertFalse(task.commitNeeded());
+        assertFalse(task.commitRequested());
     }
 
     @Test
@@ -2813,7 +2783,7 @@ public class StreamTaskTest {
             mkEntry(source2.name(), singletonList(topic2)))
         );
 
-        assertThat(task.inputPartitions(), equalTo(newPartitions));
+        assertEquals(newPartitions, task.inputPartitions());
     }
 
     @Test
@@ -2862,7 +2832,7 @@ public class StreamTaskTest {
 
         task.suspend();
         task.prepareRecycle(); // SUSPENDED
-        assertThat(task.state(), is(Task.State.CLOSED));
+        assertEquals(Task.State.CLOSED, task.state());
 
         verify(stateManager).recycle();
         verify(recordCollector).closeClean();
@@ -2873,9 +2843,9 @@ public class StreamTaskTest {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatefulTask(createConfig("100"), true);
-        assertThat(task.state(), equalTo(CREATED));
+        assertEquals(CREATED, task.state());
         task.suspend();
-        assertThat(task.state(), equalTo(SUSPENDED));
+        assertEquals(SUSPENDED, task.state());
     }
 
     @Test
@@ -2884,9 +2854,9 @@ public class StreamTaskTest {
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
-        assertThat(task.state(), equalTo(RESTORING));
+        assertEquals(RESTORING, task.state());
         task.suspend();
-        assertThat(task.state(), equalTo(SUSPENDED));
+        assertEquals(SUSPENDED, task.state());
     }
 
     @Test
@@ -2896,9 +2866,9 @@ public class StreamTaskTest {
         task = createFaultyStatefulTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
-        assertThat(task.state(), equalTo(RUNNING));
+        assertEquals(RUNNING, task.state());
         assertThrows(RuntimeException.class, () -> task.suspend());
-        assertThat(task.state(), equalTo(SUSPENDED));
+        assertEquals(SUSPENDED, task.state());
     }
 
     @Test
@@ -2936,10 +2906,11 @@ public class StreamTaskTest {
             )
         );
 
-        assertThat(exception.getMessage(), equalTo("Invalid topology: " +
+        assertEquals("Invalid topology: " +
                 "Topic " + topic1 + " is unknown to the topology. This may happen if different KafkaStreams instances of the same " +
                 "application execute different Topologies. Note that Topologies are only identical if all operators " +
-                "are added in the same order."));
+                "are added in the same order.",
+            exception.getMessage());
     }
 
     @Test
@@ -2956,7 +2927,7 @@ public class StreamTaskTest {
             () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null)
         );
 
-        assertThat(thrown.getCause(), isA(TimeoutException.class));
+        assertInstanceOf(TimeoutException.class, thrown.getCause());
     }
 
     @Test
@@ -2994,11 +2965,11 @@ public class StreamTaskTest {
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(
-            task.prepareCommit(true),
-            equalTo(mkMap(mkEntry(partition1,
+        assertEquals(
+            Map.of(partition1,
                 new OffsetAndMetadata(offset + 1,
-                    new TopicPartitionMetadata(RecordQueue.UNKNOWN, new ProcessorMetadata()).encode()))))
+                    new TopicPartitionMetadata(RecordQueue.UNKNOWN, new ProcessorMetadata()).encode())),
+            task.prepareCommit(true)
         );
     }
 
@@ -3026,9 +2997,9 @@ public class StreamTaskTest {
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(
-            task.prepareCommit(true),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, new TopicPartitionMetadata(offset, new ProcessorMetadata()).encode()))))
+        assertEquals(
+            Map.of(partition1, new OffsetAndMetadata(offset + 1, new TopicPartitionMetadata(offset, new ProcessorMetadata()).encode())),
+            task.prepareCommit(true)
         );
     }
 
@@ -3056,16 +3027,16 @@ public class StreamTaskTest {
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(
-            task.prepareCommit(true),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(1, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
+        assertEquals(
+            Map.of(partition1, new OffsetAndMetadata(1, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode())),
+            task.prepareCommit(true)
         );
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(
-            task.prepareCommit(true),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(2, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
+        assertEquals(
+            Map.of(partition1, new OffsetAndMetadata(2, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode())),
+            task.prepareCommit(true)
         );
     }
 
@@ -3093,11 +3064,11 @@ public class StreamTaskTest {
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(
-            task.prepareCommit(true),
-            equalTo(mkMap(mkEntry(partition1,
+        assertEquals(
+            Map.of(partition1,
                 new OffsetAndMetadata(offset + 1,
-                    new TopicPartitionMetadata(RecordQueue.UNKNOWN, new ProcessorMetadata()).encode()))))
+                    new TopicPartitionMetadata(RecordQueue.UNKNOWN, new ProcessorMetadata()).encode())),
+            task.prepareCommit(true)
         );
     }
 
@@ -3125,9 +3096,9 @@ public class StreamTaskTest {
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(
-            task.prepareCommit(true),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, new TopicPartitionMetadata(offset, new ProcessorMetadata()).encode()))))
+        assertEquals(
+            Map.of(partition1, new OffsetAndMetadata(offset + 1, new TopicPartitionMetadata(offset, new ProcessorMetadata()).encode())),
+            task.prepareCommit(true)
         );
     }
 
@@ -3156,16 +3127,16 @@ public class StreamTaskTest {
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(
-            task.prepareCommit(true),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(1, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
+        assertEquals(
+            Map.of(partition1, new OffsetAndMetadata(1, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode())),
+            task.prepareCommit(true)
         );
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(
-            task.prepareCommit(true),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(2, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
+        assertEquals(
+            Map.of(partition1, new OffsetAndMetadata(2, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode())),
+            task.prepareCommit(true)
         );
     }
 
@@ -3884,6 +3855,6 @@ public class StreamTaskTest {
     private void verifyCloseTaskMetric(final double expected, final StreamsMetricsImpl streamsMetrics, final MetricName metricName) {
         final KafkaMetric metric = (KafkaMetric) streamsMetrics.metrics().get(metricName);
         final double totalCloses = metric.measurable().measure(metric.config(), System.currentTimeMillis());
-        assertThat(totalCloses, equalTo(expected));
+        assertEquals(expected, totalCloses);
     }
 }

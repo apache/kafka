@@ -278,11 +278,15 @@ public final class MessageGenerator {
             }
         }
 
-        // Validate + generate pass.
+        // Validation pass: every schema (including the header schemas) is parsed now, so validate the
+        // header-version mappings before generating anything, so a bad schema fails the build without
+        // leaving partially generated output behind.
+        checkHeaderVersions(parsedSpecs, requestHeader, responseHeader);
+
+        // Generate pass.
         for (ParsedSpec parsedSpec : parsedSpecs) {
             MessageSpec spec = parsedSpec.spec;
             try {
-                spec.checkHeaderVersions(requestHeader, responseHeader);
                 outputFileNames.addAll(
                     generateAndWriteMessageClasses(spec, packageName, outputDir, messageClassGeneratorTypes));
                 numProcessed++;
@@ -307,6 +311,18 @@ public final class MessageGenerator {
             }
         }
         System.out.printf("MessageGenerator: processed %d Kafka message JSON file(s).%n", numProcessed);
+    }
+
+    private static void checkHeaderVersions(List<ParsedSpec> parsedSpecs,
+                                            MessageSpec requestHeader,
+                                            MessageSpec responseHeader) {
+        for (ParsedSpec parsedSpec : parsedSpecs) {
+            try {
+                parsedSpec.spec.checkHeaderVersions(requestHeader, responseHeader);
+            } catch (Exception e) {
+                throw new RuntimeException("Exception while processing " + parsedSpec.path.toString(), e);
+            }
+        }
     }
 
     private static final class ParsedSpec {
