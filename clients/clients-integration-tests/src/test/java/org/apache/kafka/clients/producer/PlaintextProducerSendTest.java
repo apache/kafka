@@ -91,20 +91,32 @@ public class PlaintextProducerSendTest {
             List<Integer> expectedKeyLength = List.of(keyLength, keyLength, -1, keyLength);
             List<Integer> expectedValueLength = List.of(valueLength, -1, valueLength, valueLength);
 
+            // The callback only advances the counter when it observes the expected metadata, so a failed
+            // check (which the producer would swallow) shows up as a wrong count at the end.
+            var callbackOffset = new AtomicLong(0L);
+            Callback callback = (metadata, exception) -> {
+                if (exception == null
+                    && metadata.offset() == callbackOffset.get()
+                    && topic.equals(metadata.topic())
+                    && metadata.partition() == partition) {
+                    callbackOffset.incrementAndGet();
+                }
+            };
+
             for (int i = 0; i < records.size(); i++) {
-                RecordMetadata metadata = producer.send(records.get(i)).get();
-                assertEquals(i, metadata.offset());
+                RecordMetadata metadata = producer.send(records.get(i), callback).get();
+                assertEquals(i, metadata.offset(), "Should have offset " + i);
                 assertEquals(topic, metadata.topic());
                 assertEquals(partition, metadata.partition());
-                assertEquals(metadata.serializedKeySize(), expectedKeyLength.get(i));
-                assertEquals(metadata.serializedValueSize(), expectedValueLength.get(i));
-                assertEquals(i, metadata.offset(), "Should have offset " + i);
+                assertEquals(expectedKeyLength.get(i), metadata.serializedKeySize());
+                assertEquals(expectedValueLength.get(i), metadata.serializedValueSize());
             }
 
             for (int i = 0; i < numRecords; i++) {
-                producer.send(records.get(0));
+                producer.send(records.get(0), callback);
             }
-            assertEquals(numRecords + 4, producer.send(records.get(0)).get().offset(), "Should have offset " + (numRecords + 4));
+            assertEquals(numRecords + 4, producer.send(records.get(0), callback).get().offset(), "Should have offset " + (numRecords + 4));
+            assertEquals(numRecords + 5, callbackOffset.get(), "Every send should have completed its callback successfully");
         }
     }
 
@@ -138,6 +150,7 @@ public class PlaintextProducerSendTest {
                 assertEquals(records.get(i).timestamp(), metadata.timestamp());
             }
         }
+        assertEquals(numRecords, callbackOffset.get(), "Should have offset " + numRecords + " but only successfully sent " + callbackOffset.get());
     }
 
     @ClusterTest
@@ -335,7 +348,6 @@ public class PlaintextProducerSendTest {
         consumer.assign(List.of(new TopicPartition(topic, partition)));
         ProducerRecord<Object, Object> record = new ProducerRecord<>(topic, partition, null, "value".getBytes(StandardCharsets.UTF_8));
         for (int i = 0; i < 50; i++) {
-            final boolean sendRecords = i == 0;
             try (var producer = clusterInstance.producer(Map.of(
                 ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE
             ))) {
@@ -344,6 +356,7 @@ public class PlaintextProducerSendTest {
                 // can be sent afterwards.
                 List<Future<RecordMetadata>> futures = new ArrayList<>();
                 for (int j = 0; j < numRecords; j++) {
+                    final boolean sendRecords = j == 0;
                     futures.add(producer.send(record, ((metadata, exception) -> {
                         // Trigger another batch in accumulator before close the producer. These messages should
                         // not be sent.
@@ -377,7 +390,7 @@ public class PlaintextProducerSendTest {
         }
     }
 
-    private void sendAndVerifyWithBatchSizeZero(boolean nullKey) throws ExecutionException, InterruptedException {
+    private void sendAndVerifyWithBatchSizeZero(boolean noPartitionNoKey) throws ExecutionException, InterruptedException {
         Map<String, Object> props = Map.of(
             ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE,
             ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE,
@@ -388,8 +401,8 @@ public class PlaintextProducerSendTest {
         try (var producer = clusterInstance.producer(props)) {
             List<Future<RecordMetadata>> futures = new ArrayList<>();
             for (int i = 0; i < numRecords; i++) {
-                if (nullKey) {
-                    futures.add(producer.send(new ProducerRecord<>(topic, partition,
+                if (noPartitionNoKey) {
+                    futures.add(producer.send(new ProducerRecord<>(topic, null,
                         null, String.format("value%d", i).getBytes(StandardCharsets.UTF_8))));
                 } else {
                     futures.add(producer.send(new ProducerRecord<>(topic, partition,
