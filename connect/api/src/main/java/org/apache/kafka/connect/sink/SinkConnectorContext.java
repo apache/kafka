@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.connect.sink;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.connector.ConnectorContext;
 
 /**
  * A context to allow a {@link SinkConnector} to interact with the Kafka Connect runtime.
  */
+@InterfaceAudience.Public
 public interface SinkConnectorContext extends ConnectorContext {
 }

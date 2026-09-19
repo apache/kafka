@@ -29,8 +29,7 @@ import java.math.BigInteger;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -543,6 +542,6 @@ public class RocksDBMetricsTest {
         final Sensor sensor = sensorCreator.sensor(streamsMetrics, ROCKSDB_METRIC_CONTEXT);
 
 
-        assertThat(sensor, is(this.sensor));
+        assertEquals(this.sensor, sensor);
     }
 }

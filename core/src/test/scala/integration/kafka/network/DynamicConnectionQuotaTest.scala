@@ -29,7 +29,6 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{KafkaException, Uuid, requests}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.QuotaConfig
@@ -81,10 +80,11 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Flaky("KAFKA-17999")
   @Test
   def testDynamicConnectionQuota(): Unit = {
     val maxConnectionsPerIP = 5
+    val localhostAddr = InetAddress.getByName("localhost")
+    val quotas = brokers.head.socketServer.connectionQuotas
 
     def connectAndVerify(): Unit = {
       val socket = connect()
@@ -99,12 +99,23 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     props.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, maxConnectionsPerIP.toString)
     reconfigureServers(props, perBrokerConfig = false, (SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, maxConnectionsPerIP.toString))
 
+    TestUtils.waitUntilTrue(
+      () => quotas.maxConnectionsPerIpForIp(localhostAddr) == maxConnectionsPerIP,
+      s"maxConnectionsPerIp not applied yet for ip=localhost (expected=$maxConnectionsPerIP, current=${quotas.maxConnectionsPerIpForIp(localhostAddr)})"
+    )
+    
     verifyMaxConnections(maxConnectionsPerIP, connectAndVerify)
 
     // Increase MaxConnectionsPerIpOverrides for localhost to 7
     val maxConnectionsPerIPOverride = 7
     props.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$maxConnectionsPerIPOverride")
     reconfigureServers(props, perBrokerConfig = false, (SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$maxConnectionsPerIPOverride"))
+    
+    TestUtils.waitUntilTrue(
+      () => quotas.maxConnectionsPerIpOverrideForIp(localhostAddr).contains(maxConnectionsPerIPOverride),
+      s"maxConnectionsPerIpOverrides not applied yet for ip=localhost (expected=$maxConnectionsPerIPOverride, " +
+        s"current=${quotas.maxConnectionsPerIpOverrideForIp(localhostAddr)})"
+    )
 
     verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }

@@ -18,8 +18,10 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -29,6 +31,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -48,6 +51,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -57,8 +62,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.isEmptyConsumerGroup;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.isEmptyStreamGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyStreamGroup;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @Tag("integration")
 @Timeout(600)
@@ -67,6 +76,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
     protected static final String INPUT_TOPIC = "inputTopic";
     protected static final String OUTPUT_TOPIC = "outputTopic";
+    protected static final String GROUP_INSTANCE_ID = "someGroupInstance";
 
     protected Properties streamsConfig;
     protected static KafkaStreams streams;
@@ -106,7 +116,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
         streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
-        streamsConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "someGroupInstance");
+        streamsConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, GROUP_INSTANCE_ID);
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath());
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -115,7 +125,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         // In this test, we set the SESSION_TIMEOUT_MS_CONFIG high in order to show that the call to
-        // `close(CloseOptions)` can remove the application from the Consumder Groups successfully.
+        // `close(CloseOptions)` can remove the application from the Consumer Groups successfully.
         streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         streamsConfig.putAll(commonClientConfig);
 
@@ -163,6 +173,122 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         waitForEmptyConsumerGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
     }
 
+    @Test
+    public void testCloseOptionsRemainInGroupClassicProtocol() throws Exception {
+        // Classic + REMAIN_IN_GROUP: member must stay in group (no leave heartbeat).
+        // The group should still have a member immediately after close because
+        // the session timeout is set to Integer.MAX_VALUE.
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        assertFalse(isEmptyConsumerGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)),
+            "Group should still have a member after REMAIN_IN_GROUP close (session timeout is MAX)");
+    }
+
+    @Test
+    public void testCloseOptionsDefaultClassicProtocol() throws Exception {
+        // Classic + DEFAULT: must behave like REMAIN_IN_GROUP (member stays in group).
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.DEFAULT)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        assertFalse(isEmptyConsumerGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)),
+            "Group should still have a member after DEFAULT close under Classic protocol");
+    }
+
+    @Test
+    public void testCloseOptionsLeaveGroupStreamsProtocol() throws Exception {
+        // Streams + LEAVE_GROUP: member must leave the group immediately.
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), TestUtils.DEFAULT_MAX_WAIT_MS);
+    }
+
+    @Test
+    public void testCloseOptionsDefaultStreamsProtocol() throws Exception {
+        // Streams + DEFAULT: dynamic member must leave the group (consistent with Streams protocol design).
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.DEFAULT)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), TestUtils.DEFAULT_MAX_WAIT_MS);
+    }
+
+    @Test
+    public void testCloseOptionsRemainInGroupStreamsProtocol() throws Exception {
+        // Streams + REMAIN_IN_GROUP: member must stay in group (no leave heartbeat sent).
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        assertFalse(isEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)),
+            "Group should still have a member after REMAIN_IN_GROUP close under Streams protocol");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CloseOptions.GroupMembershipOperation.class, names = {"DEFAULT", "REMAIN_IN_GROUP"})
+    public void testStaticMemberCloseUsesStaticLeaveEpochStreamsProtocol(
+        final CloseOptions.GroupMembershipOperation operation
+    ) throws Exception {
+        final int numStreamThreads = 2;
+        streamsConfig.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numStreamThreads);
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(operation)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        waitForStaticStreamsGroupMembersEpoch(
+            streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
+            GROUP_INSTANCE_ID,
+            StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH,
+            numStreamThreads
+        );
+    }
+
+    @Test
+    public void testStaticMemberLeaveGroupStreamsProtocol() throws Exception {
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), TestUtils.DEFAULT_MAX_WAIT_MS);
+    }
+
     protected Topology setupTopologyWithoutIntermediateUserTopic() {
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -188,5 +314,27 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
             mockTime.sleep(10);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), producerConfig, mockTime.milliseconds());
         }
+    }
+
+    private void waitForStaticStreamsGroupMembersEpoch(
+        final String applicationId,
+        final String baseInstanceId,
+        final int expectedEpoch,
+        final int expectedMemberCount
+    ) throws Exception {
+        TestUtils.waitForCondition(() -> {
+            final StreamsGroupDescription groupDescription =
+                adminClient.describeStreamsGroups(Collections.singletonList(applicationId))
+                    .describedGroups()
+                    .get(applicationId)
+                    .get();
+
+            return groupDescription.members().size() == expectedMemberCount &&
+                groupDescription.members().stream().allMatch(member ->
+                    member.instanceId()
+                        .filter(instanceId -> instanceId.startsWith(baseInstanceId + "-"))
+                        .isPresent() &&
+                        member.memberEpoch() == expectedEpoch);
+        }, "Static streams group members did not reach expected member epoch " + expectedEpoch);
     }
 }

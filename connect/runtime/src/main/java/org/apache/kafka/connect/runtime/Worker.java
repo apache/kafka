@@ -45,10 +45,10 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Plugin;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
@@ -870,6 +870,8 @@ public final class Worker {
                                            connectorClientConfigOverridePolicy);
         producerProps.putAll(producerOverrides);
 
+        ConnectUtils.enforceSynchronousBootstrapResolution(producerProps);
+
         return producerProps;
     }
 
@@ -938,6 +940,8 @@ public final class Worker {
                                            connectorClientConfigOverridePolicy);
         consumerProps.putAll(consumerOverrides);
 
+        ConnectUtils.enforceSynchronousBootstrapResolution(consumerProps);
+
         return consumerProps;
     }
 
@@ -976,6 +980,8 @@ public final class Worker {
 
         //add client metrics.context properties
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
+
+        ConnectUtils.enforceSynchronousBootstrapResolution(adminProps);
 
         return adminProps;
     }

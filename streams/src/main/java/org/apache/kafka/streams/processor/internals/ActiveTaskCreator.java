@@ -23,8 +23,8 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -38,7 +38,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -149,8 +148,10 @@ class ActiveTaskCreator {
                 taskId,
                 Task.TaskType.ACTIVE,
                 eosEnabled(applicationConfig),
+                applicationConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                 logContext,
                 stateDirectory,
+                time,
                 topology.storeToChangelogTopic(),
                 partitions,
                 upgradeFrom);
@@ -270,7 +271,7 @@ class ActiveTaskCreator {
     }
 
     Map<MetricName, Metric> producerMetrics() {
-        return ClientUtils.producerMetrics(Collections.singleton(streamsProducer));
+        return ClientUtils.producerMetrics(Set.of(streamsProducer));
     }
 
     String producerClientIds() {

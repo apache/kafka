@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -44,6 +46,7 @@ import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
@@ -76,6 +79,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 public class MeteredKeyValueStore<K, V>
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
     implements KeyValueStore<K, V>, MeteredStateStore {
+
+    private static final Serializer<byte[]> BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
 
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
@@ -182,8 +187,16 @@ public class MeteredKeyValueStore<K, V>
         );
         if (!persistent()) {
             StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                    (config, now) -> wrapped().approximateNumEntries());
+                    (config, now) -> {
+                        final InMemoryKeyValueStore inMemoryStore = findInner(InMemoryKeyValueStore.class);
+                        return inMemoryStore != null ? inMemoryStore.approximateNumEntries() : -1L;
+                    }
+            );
         }
+        StateStoreMetrics.addUncommittedBytesGauge(
+            taskId.toString(), metricsScope, name(), streamsMetrics,
+            (config, now) -> wrapped().approximateNumUncommittedBytes()
+        );
     }
 
     @Override
@@ -333,8 +346,12 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V get(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
+        return getInternal(wrapped(), key);
+    }
+
+    private V getInternal(final ReadOnlyKeyValueStore<Bytes, byte[]> store, final K key) {
         try {
-            return maybeMeasureLatency(() -> deserializeValue(wrapped().get(serializeKey(key))), time, getSensor);
+            return maybeMeasureLatency(() -> deserializeValue(store.get(serializeKey(key))), time, getSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -388,35 +405,58 @@ public class MeteredKeyValueStore<K, V>
     public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
-        return new MeteredKeyValueStoreIterator(wrapped().prefixScan(prefix, prefixKeySerializer), prefixScanSensor);
+        return prefixScanInternal(wrapped(), prefix, prefixKeySerializer);
+    }
+
+    private <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScanInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store, final P prefix, final PS prefixKeySerializer
+    ) {
+        final byte[] keyBytes = prefixKeySerializer.serialize(null, internalContext.headers(), prefix);
+        return meteredKeyValueIterator(store.prefixScan(keyBytes, BYTE_ARRAY_SERIALIZER), prefixScanSensor);
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from,
-                                        final K to) {
-        return new MeteredKeyValueStoreIterator(
-            wrapped().range(serializeKey(from), serializeKey(to)),
-            rangeSensor
-        );
+    public KeyValueIterator<K, V> range(final K from, final K to) {
+        return rangeInternal(wrapped(), from, to);
+    }
+
+    private KeyValueIterator<K, V> rangeInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store, final K from, final K to
+    ) {
+        return meteredKeyValueIterator(store.range(serializeKey(from), serializeKey(to)), rangeSensor);
     }
 
     @Override
-    public KeyValueIterator<K, V> reverseRange(final K from,
-                                               final K to) {
-        return new MeteredKeyValueStoreIterator(
-            wrapped().reverseRange(serializeKey(from), serializeKey(to)),
-            rangeSensor
-        );
+    public KeyValueIterator<K, V> reverseRange(final K from, final K to) {
+        return reverseRangeInternal(wrapped(), from, to);
+    }
+
+    private KeyValueIterator<K, V> reverseRangeInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store, final K from, final K to
+    ) {
+        return meteredKeyValueIterator(store.reverseRange(serializeKey(from), serializeKey(to)), rangeSensor);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueStoreIterator(wrapped().all(), allSensor);
+        return allInternal(wrapped());
+    }
+
+    private KeyValueIterator<K, V> allInternal(final ReadOnlyKeyValueStore<Bytes, byte[]> store) {
+        return meteredKeyValueIterator(store.all(), allSensor);
     }
 
     @Override
     public KeyValueIterator<K, V> reverseAll() {
-        return new MeteredKeyValueStoreIterator(wrapped().reverseAll(), allSensor);
+        return reverseAllInternal(wrapped());
+    }
+
+    private KeyValueIterator<K, V> reverseAllInternal(final ReadOnlyKeyValueStore<Bytes, byte[]> store) {
+        return meteredKeyValueIterator(store.reverseAll(), allSensor);
+    }
+
+    private KeyValueIterator<K, V> meteredKeyValueIterator(final KeyValueIterator<Bytes, byte[]> iter, final Sensor sensor) {
+        return new MeteredKeyValueStoreIterator(iter, sensor);
     }
 
     @Override
@@ -427,6 +467,59 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public long approximateNumEntries() {
         return wrapped().approximateNumEntries();
+    }
+
+    @Override
+    public ReadOnlyKeyValueStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new ReadOnlyView(wrapped().readOnly(isolationLevel));
+    }
+
+    private final class ReadOnlyView implements ReadOnlyKeyValueStore<K, V> {
+
+        private final ReadOnlyKeyValueStore<Bytes, byte[]> underlying;
+
+        ReadOnlyView(final ReadOnlyKeyValueStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public V get(final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return getInternal(underlying, key);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> range(final K from, final K to) {
+            return rangeInternal(underlying, from, to);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> reverseRange(final K from, final K to) {
+            return reverseRangeInternal(underlying, from, to);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> all() {
+            return allInternal(underlying);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> reverseAll() {
+            return reverseAllInternal(underlying);
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
+            Objects.requireNonNull(prefix, "prefix cannot be null");
+            Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+            return prefixScanInternal(underlying, prefix, prefixKeySerializer);
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return underlying.approximateNumEntries();
+        }
     }
 
     @Override

@@ -20,12 +20,14 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
@@ -43,14 +45,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static kafka.utils.TestUtils.consumeRecords;
+import static org.apache.kafka.clients.ClientsTestUtils.consumeRecords;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 
-@ClusterTestDefaults(types = {Type.KRAFT})
-class ProducerCompressionTest {
+@ClusterTestDefaults(
+    types = {Type.KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    }
+)
+public class ProducerCompressionTest {
 
     private final String topicName = "topic";
     private final int numRecords = 2000;
@@ -61,7 +69,7 @@ class ProducerCompressionTest {
      * Compressed messages should be able to sent and consumed correctly
      */
     @ClusterTest
-    void testCompression(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+    public void testCompression(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         for (CompressionType compression : CompressionType.values()) {
             processCompressionTest(cluster, compression);
         }
@@ -114,13 +122,20 @@ class ProducerCompressionTest {
     }
 
     private void verifyConsumerRecords(Consumer<byte[], byte[]> consumer, List<String> messages, long now,
-                                       Header[] headerArr, int partition, String topic, String compression) {
+                                       Header[] headerArr, int partition, String topic, String compression) throws InterruptedException {
         TopicPartition tp = new TopicPartition(topic, partition);
         consumer.assign(List.of(tp));
         consumer.seek(tp, 0);
         AtomicInteger num = new AtomicInteger(0);
         AtomicInteger flag = new AtomicInteger(0);
-        consumeRecords(consumer, numRecords * 3, TestUtils.DEFAULT_MAX_WAIT_MS).foreach(record -> {
+        List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(
+            consumer,
+            numRecords * 3,
+            Integer.MAX_VALUE,
+            TestUtils.DEFAULT_MAX_WAIT_MS
+        );
+        assertEquals(numRecords * 3, records.size(), "Consumed more records than expected");
+        records.forEach(record -> {
             String messageValue = messages.get(num.get());
             long offset = num.get() * 3L + flag.get();
             if (flag.get() == 0) {
@@ -149,7 +164,6 @@ class ProducerCompressionTest {
                 fail();
             }
             flagLoop(num, flag);
-            return null;
         });
     }
 

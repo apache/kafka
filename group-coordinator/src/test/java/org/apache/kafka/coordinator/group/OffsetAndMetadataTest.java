@@ -161,8 +161,9 @@ public class OffsetAndMetadataTest {
         );
     }
 
-    @Test
-    public void testFromTransactionalRequest() {
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testFromTransactionalRequest(Uuid uuid) {
         MockTime time = new MockTime();
 
         TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition partition =
@@ -179,8 +180,9 @@ public class OffsetAndMetadataTest {
                 "",
                 time.milliseconds(),
                 OptionalLong.empty(),
-                Uuid.ZERO_UUID
+                uuid
             ), OffsetAndMetadata.fromRequest(
+                uuid,
                 partition,
                 time.milliseconds()
             )
@@ -197,8 +199,9 @@ public class OffsetAndMetadataTest {
                 "hello",
                 time.milliseconds(),
                 OptionalLong.empty(),
-                Uuid.ZERO_UUID
+                uuid
             ), OffsetAndMetadata.fromRequest(
+                uuid,
                 partition,
                 time.milliseconds()
             )

@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 
 /**
  * Options for {@link Admin#describeTopics(Collection)}.
  */
+@InterfaceAudience.Public
 public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions> {
 
     private boolean includeAuthorizedOperations;

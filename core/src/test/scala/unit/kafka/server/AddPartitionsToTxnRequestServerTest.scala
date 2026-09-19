@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.utils.TestUtils
 
+import java.util
 import java.util.{Collections, Properties}
 import java.util.stream.{Stream => JStream}
 import org.apache.kafka.common.TopicPartition
@@ -50,7 +51,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    createTopic(topic1, numPartitions, brokers.size, new Properties())
+    createTopic(topic1, numPartitions, brokers.size, util.Map.of())
   }
 
   @ParameterizedTest

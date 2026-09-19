@@ -22,14 +22,15 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,7 +41,6 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
-import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 
 /**
  * This is the heartbeat request manager for consumer groups.
@@ -100,12 +100,14 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         String errorMessage = exception.getMessage();
         if (exception instanceof UnsupportedVersionException) {
             String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
-            if (errorMessage.equals(REGEX_RESOLUTION_NOT_SUPPORTED_MSG)) {
-                message = REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
-                logger.error("{} regex resolution not supported: {}", heartbeatRequestName(), message);
+            if (exception instanceof UnsupportedProtocolFieldException) {
+                message = errorMessage;
+                logger.error("{} failed due to unsupported protocol field while sending request: {}", heartbeatRequestName(), errorMessage);
             } else {
                 logger.error("{} failed due to unsupported version while sending request: {}", heartbeatRequestName(), errorMessage);
             }
+            // Surface the parent type here: handleFatalFailure propagates this via BackgroundEvent
+            // to the user-facing API. Propagating the subclass would be a user-visible behavior change.
             handleFatalFailure(new UnsupportedVersionException(message, exception));
             errorHandled = true;
         }
@@ -216,8 +218,12 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
     protected boolean shouldSendLeaveHeartbeatNow() {
         // If the consumer has dynamic membership,
         // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
-        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation())
+        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation()) {
+            logger.debug("Dynamic member {} closed with REMAIN_IN_GROUP. No leave heartbeat will be sent, " +
+                "the member will be removed by the coordinator after session timeout.",
+                membershipManager.memberId());
             return false;
+        }
         return membershipManager().state() == MemberState.LEAVING;
     }
 

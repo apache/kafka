@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -34,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -74,10 +76,13 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
     public abstract class IndexToBaseStoreIterator implements KeyValueIterator<Bytes, byte[]> {
         private final KeyValueIterator<Bytes, byte[]> indexIterator;
         private byte[] cachedValue;
+        // Null for the owner path (live base reads plus stale-index repair); non-null for isolation-bound
+        // interactive queries, which read the base store through its isolation view and never mutate the index.
+        private final IsolationLevel isolationLevel;
 
-
-        IndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
+        IndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator, final IsolationLevel isolationLevel) {
             this.indexIterator = indexIterator;
+            this.isolationLevel = isolationLevel;
         }
 
         @Override
@@ -99,11 +104,14 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
                 final Bytes key = indexIterator.peekNextKey();
                 final Bytes baseKey = getBaseKey(key);
 
-                cachedValue = get(baseKey);
+                cachedValue = get(baseKey, isolationLevel);
                 if (cachedValue == null) {
                     // Key not in base store or key is expired, inconsistency happened and remove from index.
+                    // Interactive queries read through an isolation view and must not mutate, so skip the repair.
                     indexIterator.next();
-                    AbstractRocksDBTimeOrderedSegmentedBytesStore.this.removeIndex(key);
+                    if (isolationLevel == null) {
+                        AbstractRocksDBTimeOrderedSegmentedBytesStore.this.removeIndex(key);
+                    }
                 } else {
                     return true;
                 }
@@ -199,7 +207,8 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
         return fetch(key, from, to, false);
     }
 
-    protected abstract IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<S> segmentIterator);
+    protected abstract IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<S> segmentIterator,
+                                                                            final IsolationLevel isolationLevel);
 
     public void put(final Bytes key, final long timestamp, final int seqnum, final byte[] value) {
         throw new UnsupportedOperationException("This store does not support put with timestamp and seqnum");
@@ -229,6 +238,14 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
                                           final long from,
                                           final long to,
                                           final boolean forward) {
+        return fetch(key, from, to, forward, null);
+    }
+
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
+                                          final long from,
+                                          final long to,
+                                          final boolean forward,
+                                          final IsolationLevel isolationLevel) {
 
         final long actualFrom = getActualFrom(from, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
@@ -248,7 +265,8 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
                 indexKeySchema.get().hasNextCondition(key, key, actualFrom, to, forward),
                 binaryFrom,
                 binaryTo,
-                forward));
+                forward,
+                isolationLevel), isolationLevel);
         }
 
 
@@ -263,7 +281,8 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
             baseKeySchema.hasNextCondition(key, key, actualFrom, to, forward),
             binaryFrom,
             binaryTo,
-            forward);
+            forward,
+            isolationLevel);
     }
 
     @Override
@@ -287,6 +306,15 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
                                           final long from,
                                           final long to,
                                           final boolean forward) {
+        return fetch(keyFrom, keyTo, from, to, forward, null);
+    }
+
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom,
+                                          final Bytes keyTo,
+                                          final long from,
+                                          final long to,
+                                          final boolean forward,
+                                          final IsolationLevel isolationLevel) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                     "This may be due to range arguments set in the wrong order, " +
@@ -313,7 +341,8 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
                 indexKeySchema.get().hasNextCondition(keyFrom, keyTo, actualFrom, to, forward),
                 binaryFrom,
                 binaryTo,
-                forward));
+                forward,
+                isolationLevel), isolationLevel);
         }
 
         final List<S> searchSpace = baseKeySchema.segmentsToSearch(segments, actualFrom, to,
@@ -327,34 +356,26 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
             baseKeySchema.hasNextCondition(keyFrom, keyTo, actualFrom, to, forward),
             binaryFrom,
             binaryTo,
-            forward);
+            forward,
+            isolationLevel);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
                                                     final long timeTo) {
-
-        final long actualFrom = getActualFrom(timeFrom, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
-
-        if (baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema && timeTo < actualFrom) {
-            return KeyValueIterators.emptyIterator();
-        }
-
-        final List<S> searchSpace = segments.segments(actualFrom, timeTo, true);
-        final Bytes binaryFrom = baseKeySchema.lowerRange(null, actualFrom);
-        final Bytes binaryTo = baseKeySchema.upperRange(null, timeTo);
-
-        return new SegmentIterator<>(
-                searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, actualFrom, timeTo, true),
-                binaryFrom,
-                binaryTo,
-                true);
+        return fetchAll(timeFrom, timeTo, true, null);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long timeFrom,
                                                             final long timeTo) {
+        return fetchAll(timeFrom, timeTo, false, null);
+    }
+
+    KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
+                                             final long timeTo,
+                                             final boolean forward,
+                                             final IsolationLevel isolationLevel) {
 
         final long actualFrom = getActualFrom(timeFrom, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
@@ -362,15 +383,98 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<S> searchSpace = segments.segments(actualFrom, timeTo, false);
+        final List<S> searchSpace = segments.segments(actualFrom, timeTo, forward);
         final Bytes binaryFrom = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes binaryTo = baseKeySchema.upperRange(null, timeTo);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, actualFrom, timeTo, false),
+                baseKeySchema.hasNextCondition(null, null, actualFrom, timeTo, forward),
                 binaryFrom,
                 binaryTo,
-                false);
+                forward,
+                isolationLevel);
+    }
+
+    /**
+     * As {@link #fetchSession(Bytes, long, long)}, but reading through the segment isolation view for the
+     * given level. Only the session store supports this; other stores throw.
+     */
+    byte[] fetchSession(final Bytes key,
+                        final long sessionStartTime,
+                        final long sessionEndTime,
+                        final IsolationLevel isolationLevel) {
+        throw new UnsupportedOperationException("This store does not support fetchSession");
+    }
+
+    /**
+     * As {@link #fetchSessions(long, long)}, but reading through the segment isolation view for the given
+     * level. Only the session store supports this; other stores throw.
+     */
+    KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime,
+                                                  final long latestSessionEndTime,
+                                                  final IsolationLevel isolationLevel) {
+        throw new UnsupportedOperationException("This store does not support fetchSessions");
+    }
+
+    /** An isolation-bound read view over this store, delegating to the store's isolation-aware read utilities. */
+    ReadOnlyView readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new ReadOnlyView(this, isolationLevel);
+    }
+
+    /** Read view bound to an {@link IsolationLevel}; used by the wrapping window and session stores for IQ reads. */
+    static final class ReadOnlyView {
+        private final AbstractRocksDBTimeOrderedSegmentedBytesStore<?> store;
+        private final IsolationLevel isolationLevel;
+
+        private ReadOnlyView(final AbstractRocksDBTimeOrderedSegmentedBytesStore<?> store, final IsolationLevel isolationLevel) {
+            this.store = store;
+            this.isolationLevel = isolationLevel;
+        }
+
+        byte[] get(final Bytes rawKey) {
+            return store.get(rawKey, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
+            return store.fetch(key, from, to, true, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes key, final long from, final long to) {
+            return store.fetch(key, from, to, false, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+            return store.fetch(keyFrom, keyTo, from, to, true, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+            return store.fetch(keyFrom, keyTo, from, to, false, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> fetchAll(final long from, final long to) {
+            return store.fetchAll(from, to, true, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long from, final long to) {
+            return store.fetchAll(from, to, false, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> all() {
+            return store.all(true, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> backwardAll() {
+            return store.all(false, isolationLevel);
+        }
+
+        byte[] fetchSession(final Bytes key, final long sessionStartTime, final long sessionEndTime) {
+            return store.fetchSession(key, sessionStartTime, sessionEndTime, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime, final long latestSessionEndTime) {
+            return store.fetchSessions(earliestSessionEndTime, latestSessionEndTime, isolationLevel);
+        }
     }
 }

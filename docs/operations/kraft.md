@@ -1,6 +1,6 @@
 ---
 title: KRaft
-description: KRaft
+description: Kafka KRaft configuration, upgrades, provisioning, and quorum management.
 weight: 8
 tags: ['kafka', 'docs']
 aliases: 
@@ -142,9 +142,17 @@ bin/kafka-storage.sh format --cluster-id ${CLUSTER_ID} \
 
 This command is similar to the standalone version but the snapshot at 00000000000000000000-0000000000.checkpoint will instead contain a VotersRecord that includes information for all of the controllers specified in --initial-controllers. It is important that the value of this flag is the same in all of the controllers with the same cluster id. In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the replica id, 3Db5QLSqSZieL3rJBUUegA is the replica directory id, controller-0 is the replica's host and 1234 is the replica's port. 
 
-### Formatting Brokers and New Controllers
+### Formatting New Brokers
 
-When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the `kafka-storage.sh format` command with the --no-initial-controllers flag. 
+When provisioning new broker nodes that we want to add to an existing Kafka cluster, use the `kafka-storage.sh format` command with no additional flags.
+
+```bash
+$ bin/kafka-storage.sh format --cluster-id <CLUSTER_ID> --config config/server.properties
+```
+
+### Formatting New Controllers
+
+When provisioning new controller nodes that we want to add to an existing Kafka cluster, use the `kafka-storage.sh format` command with the --no-initial-controllers flag. 
 
 ```bash
 $ bin/kafka-storage.sh format --cluster-id <CLUSTER_ID> --config config/server.properties --no-initial-controllers
@@ -206,6 +214,10 @@ $ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --b
 
 Note that if there are any configs needed to be passed to the Admin Client, like the authentication configuration, please also include in the "controller.properties".
 
+The `--command-config` needs to point to the to-be-added controller's configuration file.
+
+Be sure that the `controller.quorum.bootstrap.servers` property in the specified `--command-config` file contains at least one controller currently in the quorum.
+
 ### Remove Controller
 
 If the dynamic controller cluster already exists, it can be shrunk using the `bin/kafka-metadata-quorum.sh remove-controller` command. Use the remove-controller command before shutting down the controller to have it removed from the quorum first. When using broker endpoints use the --bootstrap-server flag: 
@@ -218,6 +230,26 @@ When using controller endpoints use the --bootstrap-controller flag:
 
 ```bash
 $ bin/kafka-metadata-quorum.sh --bootstrap-controller localhost:9093 remove-controller --controller-id <id> --controller-directory-id <directory-id>
+```
+
+To remove a KRaft voter and then unregister that controller from the cluster, pass the `--unregister` flag: 
+
+```bash
+$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 remove-controller --controller-id <id> --controller-directory-id <directory-id> --unregister
+```
+
+### Unregister Controller
+
+A controller that has already been removed from the voter set can be unregistered from the cluster metadata using the `bin/kafka-cluster.sh unregister-controller` command. The controller must be removed from the voter set (and should be shut down) first — a running controller will re-register itself. When using broker endpoints use the --bootstrap-server flag: 
+
+```bash
+$ bin/kafka-cluster.sh unregister-controller --bootstrap-server localhost:9092 --id <id>
+```
+
+When using controller endpoints use the --bootstrap-controller flag: 
+
+```bash
+$ bin/kafka-cluster.sh unregister-controller --bootstrap-controller localhost:9093 --id <id>
 ```
 
 ## Debugging

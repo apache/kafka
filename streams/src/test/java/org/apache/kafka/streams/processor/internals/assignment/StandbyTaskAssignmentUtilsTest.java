@@ -34,8 +34,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
 import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -101,17 +100,13 @@ public class StandbyTaskAssignmentUtilsTest {
 
     @Test
     public void shouldComputeTasksToRemainingStandbys() {
-        assertThat(
-            computeTasksToRemainingStandbys(0, ACTIVE_TASKS),
-            equalTo(
-                ACTIVE_TASKS.stream().collect(Collectors.toMap(Function.identity(), it -> 0))
-            )
+        assertEquals(
+            ACTIVE_TASKS.stream().collect(Collectors.toMap(Function.identity(), it -> 0)),
+            computeTasksToRemainingStandbys(0, ACTIVE_TASKS)
         );
-        assertThat(
-            computeTasksToRemainingStandbys(5, ACTIVE_TASKS),
-            equalTo(
-                ACTIVE_TASKS.stream().collect(Collectors.toMap(Function.identity(), it -> 5))
-            )
+        assertEquals(
+            ACTIVE_TASKS.stream().collect(Collectors.toMap(Function.identity(), it -> 5)),
+            computeTasksToRemainingStandbys(5, ACTIVE_TASKS)
         );
     }
 

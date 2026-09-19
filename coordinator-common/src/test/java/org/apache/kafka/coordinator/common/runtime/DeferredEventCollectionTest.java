@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.deferred.DeferredEvent;
 
 import org.junit.jupiter.api.Test;

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Locale;
@@ -25,12 +26,13 @@ import java.util.Objects;
  * An endpoint for a raft quorum voter.
  */
 @InterfaceStability.Stable
+@InterfaceAudience.Public
 public class RaftVoterEndpoint {
     private final String listener;
     private final String host;
     private final int port;
 
-    static String requireNonNullAllCapsNonEmpty(String input) {
+    private static String requireNonNullAllCapsNonEmpty(String input) {
         if (input == null) {
             throw new IllegalArgumentException("Null argument not allowed.");
         }

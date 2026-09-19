@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.MetricConfig;
 
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.List;
 /**
  * A {@link SampledStat} that gives the max over its samples.
  */
+@InterfaceAudience.Public
 public final class Max extends SampledStat {
 
     public Max() {

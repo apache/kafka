@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -48,12 +49,15 @@ import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -65,12 +69,11 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.isA;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doNothing;
@@ -157,7 +160,7 @@ public class KTableTransformValuesTest {
 
         processor.init(context);
 
-        assertThat(transformer.context, isA((Class) ForwardingDisabledProcessorContext.class));
+        assertInstanceOf(ForwardingDisabledProcessorContext.class, transformer.context);
     }
 
     @Test
@@ -233,7 +236,7 @@ public class KTableTransformValuesTest {
 
         final String result = getter.get("Key").value();
 
-        assertThat(result, is("Key->Value!"));
+        assertEquals("Key->Value!", result);
     }
 
     @Test
@@ -269,8 +272,8 @@ public class KTableTransformValuesTest {
 
         final ValueTimestampHeaders<String> result = getter.get("Key");
 
-        assertThat(result.value(), is("Key->null!"));
-        assertThat(result.headers(), is(contextHeaders));
+        assertEquals("Key->null!", result.value());
+        assertEquals(contextHeaders, result.headers());
     }
 
     @Test
@@ -286,7 +289,7 @@ public class KTableTransformValuesTest {
 
         final String result = getter.get("Key").value();
 
-        assertThat(result, is("something"));
+        assertEquals("something", result);
     }
 
     @Test
@@ -299,7 +302,7 @@ public class KTableTransformValuesTest {
 
         final String[] storeNames = transformValues.view().storeNames();
 
-        assertThat(storeNames, is(new String[]{"store1", "store2"}));
+        assertArrayEquals(new String[]{"store1", "store2"}, storeNames);
     }
 
     @Test
@@ -309,7 +312,7 @@ public class KTableTransformValuesTest {
 
         final String[] storeNames = transformValues.view().storeNames();
 
-        assertThat(storeNames, is(new String[]{QUERYABLE_NAME}));
+        assertArrayEquals(new String[]{QUERYABLE_NAME}, storeNames);
     }
 
     @Test
@@ -353,8 +356,9 @@ public class KTableTransformValuesTest {
         getter.close();
     }
 
-    @Test
-    public void shouldTransformValuesWithKey() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldTransformValuesWithKey(final boolean withHeaders) {
         builder
             .addStateStore(storeBuilder(STORE_NAME))
             .addStateStore(storeBuilder(OTHER_STORE_NAME))
@@ -365,7 +369,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -374,15 +378,17 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("D", null, 15L);
 
 
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
-                new KeyValueTimestamp<>("B", "B->b!", 10),
-                new KeyValueTimestamp<>("D", "D->null!", 15)
-        ));
+        assertTrue(output().containsAll(List.of(
+            new KeyValueTimestamp<>("A", "A->a!", 5),
+            new KeyValueTimestamp<>("B", "B->b!", 10),
+            new KeyValueTimestamp<>("D", "D->null!", 15)
+        )));
         assertNull(driver.getKeyValueStore(QUERYABLE_NAME), "Store should not be materialized");
     }
 
-    @Test
-    public void shouldTransformValuesWithKeyAndMaterialize() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldTransformValuesWithKeyAndMaterialize(final boolean withHeaders) {
         builder
             .addStateStore(storeBuilder(STORE_NAME))
             .table(INPUT_TOPIC, CONSUMED)
@@ -395,33 +401,36 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("A", "a", 5L);
         inputTopic.pipeInput("B", "b", 10L);
         inputTopic.pipeInput("C", null, 15L);
 
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
-                new KeyValueTimestamp<>("B", "B->b!", 10),
-                new KeyValueTimestamp<>("C", "C->null!", 15)));
+        assertTrue(output().containsAll(List.of(
+            new KeyValueTimestamp<>("A", "A->a!", 5),
+            new KeyValueTimestamp<>("B", "B->b!", 10),
+            new KeyValueTimestamp<>("C", "C->null!", 15)
+        )));
 
         {
             final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
-            assertThat(keyValueStore.get("A"), is("A->a!"));
-            assertThat(keyValueStore.get("B"), is("B->b!"));
-            assertThat(keyValueStore.get("C"), is("C->null!"));
+            assertEquals("A->a!", keyValueStore.get("A"));
+            assertEquals("B->b!", keyValueStore.get("B"));
+            assertEquals("C->null!", keyValueStore.get("C"));
         }
         {
             final KeyValueStore<String, ValueAndTimestamp<String>> keyValueStore = driver.getTimestampedKeyValueStore(QUERYABLE_NAME);
-            assertThat(keyValueStore.get("A"), is(ValueAndTimestamp.make("A->a!", 5L)));
-            assertThat(keyValueStore.get("B"), is(ValueAndTimestamp.make("B->b!", 10L)));
-            assertThat(keyValueStore.get("C"), is(ValueAndTimestamp.make("C->null!", 15L)));
+            assertEquals(ValueAndTimestamp.make("A->a!", 5L), keyValueStore.get("A"));
+            assertEquals(ValueAndTimestamp.make("B->b!", 10L), keyValueStore.get("B"));
+            assertEquals(ValueAndTimestamp.make("C->null!", 15L), keyValueStore.get("C"));
         }
     }
 
-    @Test
-    public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful(final boolean withHeaders) {
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(
@@ -435,7 +444,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -443,18 +452,23 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "ignored1", 15L);
         inputTopic.pipeInput("A", "ignored2", 10L);
 
-        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
-                new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "3", 15))));
+        assertEquals(List.of(
+            new KeyValueTimestamp<>("A", "1", 5),
+            new KeyValueTimestamp<>("A", "2", 15),
+            new KeyValueTimestamp<>("A", "3", 15)
+        ), output());
 
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
-        assertThat(keyValueStore.get("A"), is(3));
-        assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of(QUERYABLE_NAME, "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
+        assertEquals(3, keyValueStore.get("A"));
+        assertEquals(
+            Set.of(QUERYABLE_NAME, "KTABLE-AGGREGATE-STATE-STORE-0000000005"),
+            driver.getAllStateStores().keySet()
+        );
     }
 
-    @Test
-    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized(final boolean withHeaders) {
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(new StatelessTransformerSupplier())
@@ -464,7 +478,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -472,15 +486,20 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "aa", 15L);
         inputTopic.pipeInput("A", "aaa", 10);
 
-        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
-                new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "3", 15))));
-        assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
+        assertEquals(List.of(
+            new KeyValueTimestamp<>("A", "1", 5),
+            new KeyValueTimestamp<>("A", "2", 15),
+            new KeyValueTimestamp<>("A", "3", 15)
+        ), output());
+        assertEquals(
+            Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005"),
+            driver.getAllStateStores().keySet()
+        );
     }
 
-    @Test
-    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenNotMaterializedNoQueryableName() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenNotMaterializedNoQueryableName(final boolean withHeaders) {
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(new StatelessTransformerSupplier(),
@@ -492,7 +511,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
             driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -500,11 +519,15 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "aa", 15L);
         inputTopic.pipeInput("A", "aaa", 10);
 
-        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
+        assertEquals(List.of(
+            new KeyValueTimestamp<>("A", "1", 5),
             new KeyValueTimestamp<>("A", "2", 15),
-            new KeyValueTimestamp<>("A", "3", 15))));
-        assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
+            new KeyValueTimestamp<>("A", "3", 15)
+        ), output());
+        assertEquals(
+            Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005"),
+            driver.getAllStateStores().keySet()
+        );
     }
 
     private ArrayList<KeyValueTimestamp<String, String>> output() {
@@ -523,11 +546,12 @@ public class KTableTransformValuesTest {
         return Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.Long(), Serdes.Long());
     }
 
-    public static Properties props() {
+    public static Properties props(final boolean withHeaders) {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         return props;
     }
 

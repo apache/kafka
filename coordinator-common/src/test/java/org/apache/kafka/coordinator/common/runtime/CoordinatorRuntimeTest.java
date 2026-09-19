@@ -30,8 +30,8 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -5336,6 +5336,74 @@ public class CoordinatorRuntimeTest {
         assertEquals(3L, ctx.coordinator.lastCommittedOffset());
         assertEquals("response1", write1.get(5, TimeUnit.SECONDS));
         assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testLargeCompressibleRecordDoesNotFlushEmptyBatch() throws Exception {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        Compression compression = Compression.gzip().build();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(Duration.ofMillis(30))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withCompression(compression)
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(10))
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertNull(ctx.currentBatch);
+        assertEquals(0, ctx.batchEpoch);
+
+        // Get the max batch size.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+
+        // Create a large record of highly compressible data.
+        List<String> largeRecord = List.of("a".repeat(3 * maxBatchSize));
+
+        // Write the large record. The record does not fit in an empty batch uncompressed,
+        // but it fits once compressed, so it goes into a batch on its own. The batch is
+        // flushed immediately because it has no room left.
+        long batchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP,
+            state -> new CoordinatorResult<>(largeRecord, "response1")
+        );
+
+        // Verify the state.
+        assertEquals(1L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, largeRecord.get(0))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            records(batchTimestamp, compression, largeRecord)
+        ), writer.entries(TP));
+
+        // KAFKA-20845: Only a single batch must have been created and flushed. When the write is
+        //              non-replaying and has made in-memory changes, both the in-memory changes and
+        //              the records must be attached to the same batch.
+        assertEquals(1, ctx.batchEpoch);
+
+        // Commit and verify that the write is completed.
+        writer.commit(TP);
+        assertTrue(write.isDone());
+        assertEquals(1L, ctx.coordinator.lastCommittedOffset());
+        assertEquals("response1", write.get(5, TimeUnit.SECONDS));
     }
 
     @Test

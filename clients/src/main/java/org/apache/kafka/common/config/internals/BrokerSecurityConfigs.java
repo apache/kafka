@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
 
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
@@ -55,7 +56,7 @@ public class BrokerSecurityConfigs {
             " from the client certificate to short name. The rules are evaluated in order and the first rule that matches" +
             " a principal name is used to map it to a short name. Any later rules in the list are ignored. By default," +
             " distinguished name of the X.500 certificate will be the principal. For more details on the format please" +
-            " see <a href=\"#security_authz\"> security authorization and acls</a>. Note that this configuration is ignored" +
+            " see <a href=\"https://kafka.apache.org/documentation/#security_authz\"> security authorization and acls</a>. Note that this configuration is ignored" +
             " if an extension of KafkaPrincipalBuilder is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code>" +
             " configuration.";
 
@@ -65,7 +66,7 @@ public class BrokerSecurityConfigs {
             "names to short names (typically operating system usernames). The rules are evaluated in order and the " +
             "first rule that matches a principal name is used to map it to a short name. Any later rules in the list are " +
             "ignored. By default, principal names of the form <code>{username}/{hostname}@{REALM}</code> are mapped " +
-            "to <code>{username}</code>. For more details on the format please see <a href=\"#security_authz\"> " +
+            "to <code>{username}</code>. For more details on the format please see <a href=\"https://kafka.apache.org/documentation/#security_authz\"> " +
             "security authorization and acls</a>. Note that this configuration is ignored if an extension of " +
             "<code>KafkaPrincipalBuilder</code> is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
 
@@ -217,6 +218,8 @@ public class BrokerSecurityConfigs {
             .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LONG, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LOW, SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LONG, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LOW, SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, INT, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, LOW, SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
-            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
-            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, STRING, null, LOW, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC);
+            .define(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE, BOOLEAN, false, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), HIGH, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER, BOOLEAN, false, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, STRING, null, HIGH, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC);
 }

@@ -36,6 +36,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public boolean initialized;
     public boolean closed;
     public boolean committed;
+    public long approximateNumUncommittedBytes;
 
     public GlobalStateManagerStub(final Set<String> storeNames,
                                   final Map<TopicPartition, Long> offsets,
@@ -67,6 +68,11 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     @Override
     public void commit() {
         committed = true;
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return approximateNumUncommittedBytes;
     }
 
     @Override

@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util.{Collections, Properties}
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.common.metrics.Quota._

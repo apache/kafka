@@ -2203,8 +2203,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Send the second share fetch request to fetch the records produced above
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(MEMBER_ID, shareSessionEpoch)
-    val acknowledgementsMap = util.Map.of[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]]
-    var shareFetchRequest = createShareFetchRequest(GROUP_ID, metadata, send, util.List.of, acknowledgementsMap)
+    val acknowledgementsMapEmpty = util.Map.of[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]]
+    var shareFetchRequest = createShareFetchRequest(GROUP_ID, metadata, send, util.List.of, acknowledgementsMapEmpty)
 
     // For the multi partition fetch request, the response may not be available in the first attempt
     // as the share partitions might not be initialized yet. So, we retry until we get the response.
@@ -2231,14 +2231,14 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     produceData(topicIdPartition1, 10)
     produceData(topicIdPartition2, 10)
 
-    // Send another share fetch request with forget list populated with topicIdPartition2
+    // Send another share fetch request with forget list populated with topicIdPartition1
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(MEMBER_ID, shareSessionEpoch)
     val forget = util.List.of(topicIdPartition1)
-    shareFetchRequest = createShareFetchRequest(GROUP_ID, metadata, util.List.of, forget, acknowledgementsMap)
-    val shareFetchResponse = IntegrationTestUtils.sendAndReceive[ShareFetchResponse](shareFetchRequest, socket)
+    shareFetchRequest = createShareFetchRequest(GROUP_ID, metadata, util.List.of, forget, acknowledgementsMapEmpty)
+    var shareFetchResponse = IntegrationTestUtils.sendAndReceive[ShareFetchResponse](shareFetchRequest, socket)
 
-    val shareFetchResponseData = shareFetchResponse.data()
+    var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
@@ -2253,6 +2253,70 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val partitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
+
+    // Forgetting topicIdPartition1 is idempotent and there are no more records to fetch from topicIdPartition2
+    shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
+    metadata = new ShareRequestMetadata(MEMBER_ID, shareSessionEpoch)
+    shareFetchRequest = createShareFetchRequest(GROUP_ID, metadata, util.List.of, forget, acknowledgementsMapEmpty, maxWaitMs = 500)
+    shareFetchResponse = IntegrationTestUtils.sendAndReceive[ShareFetchResponse](shareFetchRequest, socket)
+
+    shareFetchResponseData = shareFetchResponse.data()
+    assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
+    assertEquals(0, shareFetchResponseData.responses().size())
+
+    // Now acknowledge some of the records received on topicIdPartition1 even though the share session does not contain the partition
+    // because forgetting a partition just stops fetching records and does not affect records which are already acquired
+    shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
+    metadata = new ShareRequestMetadata(MEMBER_ID, shareSessionEpoch)
+    val acknowledgementsMapForAcknowledge: util.Map[TopicIdPartition, util.List[ShareAcknowledgeRequestData.AcknowledgementBatch]] =
+      util.Map.of(topicIdPartition1, util.List.of(new ShareAcknowledgeRequestData.AcknowledgementBatch()
+          .setFirstOffset(5)
+          .setLastOffset(9)
+          .setAcknowledgeTypes(util.List.of(1.toByte)))) // Accept the records
+
+    var shareAcknowledgeRequest = createShareAcknowledgeRequest(GROUP_ID, metadata, acknowledgementsMapForAcknowledge)
+    var shareAcknowledgeResponse = IntegrationTestUtils.sendAndReceive[ShareAcknowledgeResponse](shareAcknowledgeRequest, socket)
+
+    var shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
+    assertEquals(Errors.NONE.code, shareAcknowledgeResponseData.errorCode)
+    assertEquals(30000, shareAcknowledgeResponseData.acquisitionLockTimeoutMs)
+    assertEquals(1, shareAcknowledgeResponseData.responses().size())
+    assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
+
+    var expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
+      .setPartitionIndex(partition1)
+      .setErrorCode(Errors.NONE.code())
+
+    var acknowledgePartitionData = shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().get(0)
+    compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
+
+    // Finally acknowledge the rest of the records, including one which has already been acknowledged
+    shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
+    metadata = new ShareRequestMetadata(MEMBER_ID, shareSessionEpoch)
+    val acknowledgementsMapForAcknowledgeInvalid: util.Map[TopicIdPartition, util.List[ShareAcknowledgeRequestData.AcknowledgementBatch]] =
+      util.Map.of(topicIdPartition1, util.List.of(new ShareAcknowledgeRequestData.AcknowledgementBatch()
+        .setFirstOffset(0)
+        .setLastOffset(5)
+        .setAcknowledgeTypes(util.List.of(1.toByte)))) // Accept the records
+
+    shareAcknowledgeRequest = createShareAcknowledgeRequest(GROUP_ID, metadata, acknowledgementsMapForAcknowledgeInvalid)
+    shareAcknowledgeResponse = IntegrationTestUtils.sendAndReceive[ShareAcknowledgeResponse](shareAcknowledgeRequest, socket)
+
+    shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
+    assertEquals(Errors.NONE.code, shareAcknowledgeResponseData.errorCode)
+    assertEquals(30000, shareAcknowledgeResponseData.acquisitionLockTimeoutMs)
+    assertEquals(1, shareAcknowledgeResponseData.responses().size())
+    assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
+
+    expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
+      .setPartitionIndex(partition1)
+      .setErrorCode(Errors.INVALID_RECORD_STATE.code())
+
+    acknowledgePartitionData = shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().get(0)
+    compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
   }
 
   @ClusterTests(

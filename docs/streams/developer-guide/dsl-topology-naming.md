@@ -1,6 +1,6 @@
 ---
 title: Naming Operators in a Streams DSL application
-description: 
+description: Kafka Streams DSL operator naming for stable topology upgrades.
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 

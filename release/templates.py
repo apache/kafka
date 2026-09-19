@@ -154,8 +154,9 @@ Go to https://repository.apache.org/#stagingRepositories and hit 'Close' for the
 There will be more than one repository entries created, please close all of them.
 In some cases, you may get errors on some repositories while closing them, see KAFKA-15033.
 If this is not the first RC, you need to 'Drop' the previous artifacts.
-Confirm the correct artifacts are visible at https://repository.apache.org/content/groups/staging/org/apache/kafka/ and build the
-jvm and native Docker images following these instructions: https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=34840886#ReleaseProcess-CreateJVMApacheKafkaDockerArtifacts(Forversions>=3.7.0)
+Confirm the correct artifacts are visible at https://repository.apache.org/content/groups/staging/org/apache/kafka/
+Docker image builds will be triggered automatically by this script after the RC tag is pushed.
+If the automation fails, fall back to the manual procedure: https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=34840886#ReleaseProcess-CreateJVMApacheKafkaDockerArtifacts(Forversions>=3.7.0)
 """
 
 def sanity_check_instructions(release_version, rc_tag):
@@ -264,6 +265,17 @@ IMPORTANT: Note that there are still some substitutions that need to be made in 
   - Fill in your name in the signature
   - Finally, validate all the links before shipping!
 Note that all substitutions are annotated with <> around them.
+"""
+
+
+def github_token_instructions():
+    return """
+A GitHub Personal Access Token with `repo` scope is required to trigger the
+Docker image workflows. See the "GitHub Personal Access Token" section of
+release/README.md for step-by-step generation instructions.
+
+The token will be cached in .release-settings.json so it only needs to be
+entered once per release cycle.
 """
 
 

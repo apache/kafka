@@ -437,7 +437,7 @@ public class Graph<V extends Comparable<V>> {
     }
 
     private void cancelNegativeCycle(final V nodeInCycle, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
-        // Start from parentNode since nodeInCyle is used as exit condition in below loops
+        // Start from parentNode since nodeInCycle is used as exit condition in below loops
         final V parentNode = parentNodes.get(nodeInCycle);
         Edge parentEdge = parentEdges.get(nodeInCycle);
 

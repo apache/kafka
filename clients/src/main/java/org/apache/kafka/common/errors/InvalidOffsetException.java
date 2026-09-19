@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Thrown when the offset for a set of partitions is invalid (either undefined or out of range),
  * and no reset policy has been configured.
  * @see OffsetOutOfRangeException
  */
+@InterfaceAudience.Public
 public class InvalidOffsetException extends ApiException {
 
     private static final long serialVersionUID = 1L;

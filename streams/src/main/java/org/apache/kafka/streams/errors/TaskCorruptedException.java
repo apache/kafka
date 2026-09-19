@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Set;
@@ -29,6 +30,7 @@ import java.util.Set;
  *   <li>Out-of-range exception thrown during restoration, meaning that the changelog has been modified and we re-bootstrap the store.</li>
  * </ul>
  */
+@InterfaceAudience.Public
 public class TaskCorruptedException extends StreamsException {
 
     private final Set<TaskId> corruptedTasks;

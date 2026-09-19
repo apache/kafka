@@ -40,6 +40,7 @@
             <allow pkg="org.apache.kafka.test" />
             <allow pkg="org.slf4j" />
             <allow pkg="kafka.coordinator.transaction" />
+            <allow class="org.apache.kafka.server.config.ServerConfigs" />
             <subpackage name="generated">
                 <allow pkg="com.fasterxml.jackson" />
             </subpackage>

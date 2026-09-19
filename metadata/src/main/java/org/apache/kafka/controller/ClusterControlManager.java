@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidRegistrationException;
@@ -35,9 +36,10 @@ import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerFeatureCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
@@ -432,9 +434,6 @@ public class ClusterControlManager {
         if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             record.setLogDirs(request.logDirs());
         }
-        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
-            record.setCordonedLogDirs(request.cordonedLogDirs());
-        }
         if (!request.incarnationId().equals(prevIncarnationId)) {
             int prevNumRecords = records.size();
             boolean isCleanShutdown = cleanShutdownDetectionEnabled ?
@@ -501,6 +500,22 @@ public class ClusterControlManager {
         return ControllerResult.atomicOf(records, null);
     }
 
+    ControllerResult<Void> unregisterController(int controllerId) {
+        if (!featureControl.metadataVersionOrThrow().isControllerUnregistrationSupported()) {
+            throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
+                    "support controller unregistration.");
+        }
+        if (controllerRegistrations.get(controllerId) == null) {
+            throw new ControllerIdNotRegisteredException("Controller ID " + controllerId +
+                " is not currently registered.");
+        }
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        records.add(new ApiMessageAndVersion(new UnregisterControllerRecord().
+            setControllerId(controllerId),
+                (short) 0));
+        return ControllerResult.atomicOf(records, null);
+    }
+
     BrokerFeature processRegistrationFeature(
         int brokerId,
         FinalizedControllerFeatures finalizedFeatures,
@@ -553,22 +568,6 @@ public class ClusterControlManager {
             return OptionalLong.of(registrationOffset);
         }
         return OptionalLong.empty();
-    }
-
-    public void updateCordonedLogDirs(int brokerId, List<Uuid> cordonedLogDirs) {
-        brokerRegistrations.compute(brokerId,
-                (k, brokerRegistration) -> new BrokerRegistration.Builder().
-                        setId(brokerId).
-                        setEpoch(brokerRegistration.epoch()).
-                        setIncarnationId(brokerRegistration.incarnationId()).
-                        setListeners(brokerRegistration.listeners()).
-                        setSupportedFeatures(brokerRegistration.supportedFeatures()).
-                        setRack(brokerRegistration.rack()).
-                        setFenced(brokerRegistration.fenced()).
-                        setInControlledShutdown(brokerRegistration.inControlledShutdown()).
-                        setDirectories(brokerRegistration.directories()).
-                        setCordonedDirectories(cordonedLogDirs).
-                        build());
     }
 
     public void replay(RegisterBrokerRecord record, long offset) {
@@ -629,6 +628,17 @@ public class ClusterControlManager {
         }
     }
 
+    public void replay(UnregisterControllerRecord record) {
+        int controllerId = record.controllerId();
+        ControllerRegistration registration = controllerRegistrations.remove(controllerId);
+        if (registration == null) {
+            throw new RuntimeException(String.format("Unable to replay %s: no controller " +
+                "registration found for that id", record));
+        } else {
+            log.info("Replayed {}", record);
+        }
+    }
+
     public void replay(FenceBrokerRecord record) {
         replayRegistrationChange(
             record,
@@ -663,7 +673,7 @@ public class ClusterControlManager {
                 () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
                     "value for inControlledShutdown field: %x", record, record.inControlledShutdown())));
         Optional<List<Uuid>> directoriesChange = Optional.ofNullable(record.logDirs()).filter(list -> !list.isEmpty());
-        Optional<List<Uuid>> cordonedDirectoriesChange = Optional.ofNullable(record.cordonedLogDirs()).filter(list -> !list.isEmpty());
+        Optional<List<Uuid>> cordonedDirectoriesChange = Optional.ofNullable(record.cordonedLogDirs());
         replayRegistrationChange(
             record,
             record.brokerId(),

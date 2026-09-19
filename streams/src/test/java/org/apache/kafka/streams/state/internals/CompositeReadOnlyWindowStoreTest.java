@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -33,7 +34,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -42,10 +42,10 @@ import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -349,9 +349,11 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("a", "b", ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
@@ -363,9 +365,11 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("b", null, ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"),
-            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"),
+                KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c")),
+            results);
     }
 
     @Test
@@ -377,9 +381,11 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.fetch(null, "b", ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
@@ -391,10 +397,12 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.fetch(null, null, ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"),
-            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"),
+                KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c")),
+            results);
     }
 
     @Test
@@ -406,9 +414,11 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.backwardFetch("b", null, ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
@@ -420,10 +430,11 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.backwardFetch(null, "b", ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")
-            )));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
@@ -435,10 +446,12 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.backwardFetch(null, null, ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
@@ -449,9 +462,11 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.backwardFetch("a", "b", ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
@@ -460,10 +475,10 @@ public class CompositeReadOnlyWindowStoreTest {
         stubProviderTwo.addStore(storeName, secondUnderlyingWindowStore);
         underlyingWindowStore.put("a", "a", 0L);
         secondUnderlyingWindowStore.put("b", "b", 10L);
-        assertThat(windowStore.fetch("a", 0L), equalTo("a"));
-        assertThat(windowStore.fetch("b", 10L), equalTo("b"));
-        assertThat(windowStore.fetch("c", 10L), equalTo(null));
-        assertThat(windowStore.fetch("a", 10L), equalTo(null));
+        assertEquals("a", windowStore.fetch("a", 0L));
+        assertEquals("b", windowStore.fetch("b", 10L));
+        assertNull(windowStore.fetch("c", 10L));
+        assertNull(windowStore.fetch("a", 10L));
     }
 
     @Test
@@ -474,9 +489,11 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.put("a", "a", 0L);
         secondUnderlying.put("b", "b", 10L);
         final List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toListAndCloseIterator(windowStore.all());
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
@@ -487,9 +504,11 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.put("a", "a", 0L);
         secondUnderlying.put("b", "b", 10L);
         final List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toListAndCloseIterator(windowStore.backwardAll());
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
@@ -501,9 +520,11 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.fetchAll(ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
@@ -515,13 +536,63 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
             StreamsTestUtils.toListAndCloseIterator(windowStore.backwardFetchAll(ofEpochMilli(0), ofEpochMilli(10)));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")),
+            results);
     }
 
     @Test
     public void shouldThrowNPEIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> windowStore.fetch(null, ofEpochMilli(0), ofEpochMilli(0)));
+    }
+
+    @Test
+    public void readOnlyShouldReturnNewInstanceWithOverride() {
+        final CompositeReadOnlyWindowStore<String, String> override =
+            (CompositeReadOnlyWindowStore<String, String>) windowStore.readOnly(IsolationLevel.READ_COMMITTED);
+        assertNotSame(windowStore, override);
+    }
+
+    @Test
+    public void readOnlyShouldPropagateLevelToUnderlyingStore() {
+        final StateStoreProviderStub stub = new StateStoreProviderStub(false);
+        final ReadOnlyWindowStoreStub<String, String> recorder = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stub.addStore(storeName, recorder);
+        final CompositeReadOnlyWindowStore<String, String> store = new CompositeReadOnlyWindowStore<>(
+            new WrappingStoreProvider(asList(stub), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.windowStore())),
+            QueryableStoreTypes.windowStore(),
+            storeName
+        );
+
+        StreamsTestUtils.toListAndCloseIterator(
+            store.readOnly(IsolationLevel.READ_COMMITTED).fetch("k", ofEpochMilli(0), ofEpochMilli(0)));
+
+        assertEquals(IsolationLevel.READ_COMMITTED, recorder.isolationLevel);
+    }
+
+    @Test
+    public void readOnlyOverrideShouldBeatProviderDefault() {
+        final StateStoreProviderStub stub = new StateStoreProviderStub(false);
+        final ReadOnlyWindowStoreStub<String, String> recorder = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stub.addStore(storeName, recorder);
+        final CompositeReadOnlyWindowStore<String, String> store = new CompositeReadOnlyWindowStore<>(
+            new WrappingStoreProvider(asList(stub),
+                StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.windowStore()),
+                IsolationLevel.READ_UNCOMMITTED),
+            QueryableStoreTypes.windowStore(),
+            storeName
+        );
+
+        StreamsTestUtils.toListAndCloseIterator(
+            store.readOnly(IsolationLevel.READ_COMMITTED).fetch("k", ofEpochMilli(0), ofEpochMilli(0)));
+
+        assertEquals(IsolationLevel.READ_COMMITTED, recorder.isolationLevel);
+    }
+
+    @Test
+    public void readOnlyShouldRejectNullLevel() {
+        assertThrows(NullPointerException.class, () -> windowStore.readOnly(null));
     }
 }

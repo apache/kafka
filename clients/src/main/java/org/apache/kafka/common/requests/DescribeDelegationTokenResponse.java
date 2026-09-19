@@ -123,11 +123,6 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
         return error() != Errors.NONE;
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
-
     // Do not print tokenId and Hmac, overwrite a temp copy of the data with empty content
     @Override
     public String toString() {

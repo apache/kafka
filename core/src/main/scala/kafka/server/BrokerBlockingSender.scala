@@ -22,7 +22,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
@@ -78,6 +79,7 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       channelBuilder,
       logContext
     )
+
     val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
@@ -94,7 +96,9 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       false,
       new ApiVersions,
       logContext,
-      MetadataRecoveryStrategy.NONE
+      MetadataRecoveryStrategy.NONE,
+      BootstrapConfiguration.DISABLED,
+      false
     )
     (networkClient, reconfigurableChannelBuilder)
   }

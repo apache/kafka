@@ -48,7 +48,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -109,7 +108,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return new KStreamImpl<>(name,
                                  consumed.keySerde(),
                                  consumed.valueSerde(),
-                                 Collections.singleton(name),
+                                 Set.of(name),
                                  false,
                                  streamSourceNode,
                                  this);
@@ -125,7 +124,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return new KStreamImpl<>(name,
                                  consumed.keySerde(),
                                  consumed.valueSerde(),
-                                 Collections.singleton(name),
+                                 Set.of(name),
                                  false,
                                  streamPatternSourceNode,
                                  this);
@@ -160,7 +159,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return new KTableImpl<>(tableSourceName,
                                 consumed.keySerde(),
                                 consumed.valueSerde(),
-                                Collections.singleton(sourceName),
+                                Set.of(sourceName),
                                 materialized.queryableStoreName(),
                                 tableSource,
                                 tableSourceNode,
@@ -343,7 +342,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private void optimizeTopology(final Properties props) {
         final Set<String> optimizationConfigs;
         if (props == null || !props.containsKey(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)) {
-            optimizationConfigs = Collections.emptySet();
+            optimizationConfigs = Set.of();
         } else {
             optimizationConfigs = StreamsConfig.verifyTopologyOptimizationConfigs(
                 (String) props.get(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));

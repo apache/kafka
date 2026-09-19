@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.processor.api.Record;
  * <p> {@code ErrorHandlerContext} instances are passed into {@link DeserializationExceptionHandler},
  * {@link ProcessingExceptionHandler}, or {@link ProductionExceptionHandler} dependent on what error occurred.
  */
+@InterfaceAudience.Public
 public interface ErrorHandlerContext {
     /**
      * Return the topic name of the current input record; could be {@code null} if it is not

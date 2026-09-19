@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -41,6 +43,7 @@ import java.util.stream.Collectors;
  * new AlterConfigOp(new ConfigEntry(loggerName, "DEBUG"), OpType.SET)
  * </pre>
  */
+@InterfaceAudience.Public
 public class AlterConfigOp {
 
     public enum OpType {

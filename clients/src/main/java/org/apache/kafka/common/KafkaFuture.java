@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Arrays;
@@ -38,6 +39,7 @@ import java.util.concurrent.TimeoutException;
  * {@code KafkaFuture} will fail with an {@code ExecutionException}, whereas a {@code CompletionStage} fails
  * with a {@code CompletionException}.
  */
+@InterfaceAudience.Public
 public abstract class KafkaFuture<T> implements Future<T> {
     /**
      * A function which takes objects of type A and returns objects of type B.

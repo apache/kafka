@@ -18,8 +18,8 @@ package org.apache.kafka.streams.processor.internals.tasks;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
@@ -146,10 +146,9 @@ public final class DefaultTaskManager implements TaskManager {
                 } else {
                     log.debug("Not awaiting since shutdown was requested");
                 }
-            } catch (final InterruptedException ignored) {
-                // we interrupt the thread for shut down and pause.
-                // we can ignore this exception.
-                log.debug("Await unblocked: Interrupted while waiting for processable tasks");
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Await unblocked: Interrupted while waiting for processable tasks", e);
                 return true;
             }
             log.debug("Await unblocked: Woken up to check for processable tasks");

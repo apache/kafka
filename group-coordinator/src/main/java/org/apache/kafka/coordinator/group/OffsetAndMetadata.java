@@ -190,6 +190,7 @@ public class OffsetAndMetadata {
      * @return An OffsetAndMetadata created from an OffsetCommitRequestPartition request.
      */
     public static OffsetAndMetadata fromRequest(
+        Uuid topicId,
         TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition partition,
         long currentTimeMs
     ) {
@@ -200,7 +201,7 @@ public class OffsetAndMetadata {
                 OffsetAndMetadata.NO_METADATA : partition.committedMetadata(),
             currentTimeMs,
             OptionalLong.empty(),
-            Uuid.ZERO_UUID
+            topicId
         );
     }
 }

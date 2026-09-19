@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.state.ReadOnlySessionStore;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Wrapper over the underlying {@link ReadOnlySessionStore}s found in a {@link
@@ -33,13 +35,36 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     private final StateStoreProvider storeProvider;
     private final QueryableStoreType<ReadOnlySessionStore<K, V>> queryableStoreType;
     private final String storeName;
+    private final IsolationLevel isolationOverride;
 
     public CompositeReadOnlySessionStore(final StateStoreProvider storeProvider,
                                          final QueryableStoreType<ReadOnlySessionStore<K, V>> queryableStoreType,
                                          final String storeName) {
+        this(storeProvider, queryableStoreType, storeName, null);
+    }
+
+    private CompositeReadOnlySessionStore(final StateStoreProvider storeProvider,
+                                          final QueryableStoreType<ReadOnlySessionStore<K, V>> queryableStoreType,
+                                          final String storeName,
+                                          final IsolationLevel isolationOverride) {
         this.storeProvider = storeProvider;
         this.queryableStoreType = queryableStoreType;
         this.storeName = storeName;
+        this.isolationOverride = isolationOverride;
+    }
+
+    @Override
+    public ReadOnlySessionStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel");
+        return new CompositeReadOnlySessionStore<>(storeProvider, queryableStoreType, storeName, isolationLevel);
+    }
+
+    private List<ReadOnlySessionStore<K, V>> readOnlyStores() {
+        final IsolationLevel level =
+            isolationOverride != null ? isolationOverride : storeProvider.defaultIsolationLevel();
+        return storeProvider.stores(storeName, queryableStoreType).stream()
+            .map(s -> s.readOnly(level))
+            .collect(Collectors.toList());
     }
 
     @Override
@@ -47,7 +72,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                                                          final long earliestSessionEndTime,
                                                          final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key can't be null");
-        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        final List<ReadOnlySessionStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
                 final KeyValueIterator<Windowed<K>, V> result =
@@ -75,7 +100,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                                                                  final long earliestSessionEndTime,
                                                                  final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key can't be null");
-        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        final List<ReadOnlySessionStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
                 final KeyValueIterator<Windowed<K>, V> result = store.backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
@@ -101,7 +126,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                                                          final K keyTo,
                                                          final long earliestSessionEndTime,
                                                          final long latestSessionStartTime) {
-        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        final List<ReadOnlySessionStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
                 final KeyValueIterator<Windowed<K>, V> result =
@@ -128,7 +153,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                                                                  final K keyTo,
                                                                  final long earliestSessionEndTime,
                                                                  final long latestSessionStartTime) {
-        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        final List<ReadOnlySessionStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
                 final KeyValueIterator<Windowed<K>, V> result =
@@ -153,7 +178,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     @Override
     public V fetchSession(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key can't be null");
-        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        final List<ReadOnlySessionStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
                 return store.fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
@@ -172,7 +197,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         Objects.requireNonNull(key, "key can't be null");
-        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        final List<ReadOnlySessionStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
                 final KeyValueIterator<Windowed<K>, V> result = store.fetch(key);
@@ -194,7 +219,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetch(final K key) {
         Objects.requireNonNull(key, "key can't be null");
-        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        final List<ReadOnlySessionStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
                 final KeyValueIterator<Windowed<K>, V> result = store.backwardFetch(key);
@@ -221,7 +246,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
             store -> store.fetch(keyFrom, keyTo);
         return new DelegatingPeekingKeyValueIterator<>(storeName,
                                                        new CompositeKeyValueIterator<>(
-                                                               storeProvider.stores(storeName, queryableStoreType).iterator(),
+                                                               readOnlyStores().iterator(),
                                                                nextIteratorFunction));
     }
 
@@ -232,7 +257,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
-                storeProvider.stores(storeName, queryableStoreType).iterator(),
+                readOnlyStores().iterator(),
                 nextIteratorFunction
             )
         );

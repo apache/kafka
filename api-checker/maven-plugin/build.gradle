@@ -1,0 +1,65 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Maven mojo for the KIP-1265 internal-api-checker. Lives in its own subproject so the
+// Maven runtime dependencies (maven-plugin-api, maven-core, …) stay off the Gradle plugin's
+// classpath, and so the published Gradle jar no longer carries Maven mojo classes.
+
+// The Maven dependency versions come from the shared ext.apiCheckerVersions block in
+// ../build.gradle. The plugin.xml descriptor templating below reads the same values, so the
+// runtime dep declarations and the descriptor can never drift.
+dependencies {
+    api project(':core')
+
+    implementation "org.apache.maven:maven-plugin-api:${apiCheckerVersions.mavenApi}"
+    implementation "org.apache.maven:maven-core:${apiCheckerVersions.mavenApi}"
+    implementation "org.apache.maven:maven-artifact:${apiCheckerVersions.mavenApi}"
+    implementation "org.apache.maven.plugin-tools:maven-plugin-annotations:${apiCheckerVersions.mavenPluginAnnotations}"
+
+    testImplementation "org.junit.jupiter:junit-jupiter:${apiCheckerVersions.junit}"
+    testImplementation "org.junit.jupiter:junit-jupiter-engine:${apiCheckerVersions.junit}"
+    testImplementation "org.junit.platform:junit-platform-launcher:${apiCheckerVersions.junitPlatform}"
+}
+
+// Template plugin.xml at packaging time so its <version> and the Maven dep versions resolve
+// from the same source as the published artifact / dependency block above. Ant's @token@
+// delimiter is intentional — Maven's runtime substitutions inside plugin.xml use ${...},
+// so the @ delimiter can never collide.
+processResources {
+    filesMatching('META-INF/maven/plugin.xml') {
+        filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: [
+            version: project.version.toString(),
+            mavenApiVersion: apiCheckerVersions.mavenApi,
+            mavenPluginAnnotationsVersion: apiCheckerVersions.mavenPluginAnnotations,
+        ])
+    }
+}
+
+publishing {
+    publications {
+        mavenPlugin(MavenPublication) {
+            artifactId = 'kafka-internal-api-checker-maven-plugin'
+            from components.java
+            // url, license, developers, scm come from the shared block in ../build.gradle.
+            pom {
+                name = 'Apache Kafka Internal API Checker Maven Plugin'
+                description = 'Maven plugin that flags references to non-@Public Kafka classes in a downstream project'
+                packaging = 'maven-plugin'
+            }
+        }
+    }
+}

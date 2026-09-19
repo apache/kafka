@@ -18,8 +18,8 @@ package org.apache.kafka.common.security.oauthbearer.internals.expiring;
 
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.KafkaThread;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

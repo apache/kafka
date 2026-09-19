@@ -30,9 +30,9 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
@@ -1228,9 +1228,7 @@ public class ClassicGroup implements Group {
         ClassicGroupMember member,
         JoinGroupResponseData response
     ) {
-        if (member.isAwaitingJoin()) {
-            member.awaitingJoinFuture().complete(response);
-            member.setAwaitingJoinFuture(null);
+        if (member.completeJoinFuture(response)) {
             numMembersAwaitingJoinResponse--;
             return true;
         }
@@ -1264,12 +1262,7 @@ public class ClassicGroup implements Group {
         ClassicGroupMember member,
         SyncGroupResponseData response
     ) {
-        if (member.isAwaitingSync()) {
-            member.awaitingSyncFuture().complete(response);
-            member.setAwaitingSyncFuture(null);
-            return true;
-        }
-        return false;
+        return member.completeSyncFuture(response);
     }
 
     /**

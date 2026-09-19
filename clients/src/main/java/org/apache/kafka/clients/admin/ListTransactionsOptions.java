@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -26,6 +28,7 @@ import java.util.Set;
 /**
  * Options for {@link Admin#listTransactions()}.
  */
+@InterfaceAudience.Public
 public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOptions> {
     private Set<TransactionState> filteredStates = Collections.emptySet();
     private Set<Long> filteredProducerIds = Collections.emptySet();

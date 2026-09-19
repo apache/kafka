@@ -26,6 +26,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -38,8 +39,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedList;
 import java.util.List;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ReadOnlyStoreTest {
 
@@ -96,7 +96,7 @@ public class ReadOnlyStoreTest {
         topology.connectProcessorAndStateStores("processor", "readOnlyStore");
         topology.addSink("sink", "outputTopic", new IntegerSerializer(), new StringSerializer(), "processor");
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).build()) {
             final TestInputTopic<Integer, String> readOnlyStoreTopic =
                 driver.createInputTopic("storeTopic", new IntegerSerializer(), new StringSerializer());
             final TestInputTopic<Integer, String> input =
@@ -120,14 +120,14 @@ public class ReadOnlyStoreTest {
                 expectedResult.add(KeyValue.pair(1, "foo"));
                 expectedResult.add(KeyValue.pair(2, "bar"));
 
-                assertThat(storeContent, equalTo(expectedResult));
+                assertEquals(expectedResult, storeContent);
             }
 
             final List<KeyValue<Integer, String>> expectedResult = new LinkedList<>();
             expectedResult.add(KeyValue.pair(1, "bar -- foo"));
             expectedResult.add(KeyValue.pair(2, "foo -- bar"));
 
-            assertThat(output.readKeyValuesToList(), equalTo(expectedResult));
+            assertEquals(expectedResult, output.readKeyValuesToList());
         }
     }
 }

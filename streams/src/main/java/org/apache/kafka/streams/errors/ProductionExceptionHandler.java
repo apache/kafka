@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.List;
@@ -26,6 +28,7 @@ import java.util.List;
  * Interface that specifies how an exception when attempting to produce a result to
  * Kafka should be handled.
  */
+@InterfaceAudience.Public
 public interface ProductionExceptionHandler extends Configurable {
     /**
      * Inspect a record that we attempted to produce, and the exception that resulted
@@ -83,7 +86,7 @@ public interface ProductionExceptionHandler extends Configurable {
     default Response handleError(final ErrorHandlerContext context,
                                  final ProducerRecord<byte[], byte[]> record,
                                  final Exception exception) {
-        return new Response(Result.from(handle(context, record, exception)), Collections.emptyList());
+        return new Response(Result.from(handle(context, record, exception)), List.of());
     }
 
     /**
@@ -152,7 +155,7 @@ public interface ProductionExceptionHandler extends Configurable {
                                               final ProducerRecord record,
                                               final Exception exception,
                                               final SerializationExceptionOrigin origin) {
-        return new Response(Result.from(handleSerializationException(context, record, exception, origin)), Collections.emptyList());
+        return new Response(Result.from(handleSerializationException(context, record, exception, origin)), List.of());
     }
 
     @Deprecated
@@ -312,7 +315,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link ProductionExceptionHandler.Result#FAIL} status.
          */
         public static Response fail() {
-            return fail(Collections.emptyList());
+            return fail(List.of());
         }
 
         /**
@@ -331,7 +334,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link ProductionExceptionHandler.Result#RESUME} status.
          */
         public static Response resume() {
-            return resume(Collections.emptyList());
+            return resume(List.of());
         }
 
         /**
@@ -340,7 +343,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link ProductionExceptionHandler.Result#RETRY} status.
          */
         public static Response retry() {
-            return new Response(Result.RETRY, Collections.emptyList());
+            return new Response(Result.RETRY, List.of());
         }
 
         /**
@@ -363,7 +366,7 @@ public interface ProductionExceptionHandler extends Configurable {
          */
         public List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords() {
             if (deadLetterQueueRecords == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             return Collections.unmodifiableList(deadLetterQueueRecords);
         }

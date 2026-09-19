@@ -1,6 +1,6 @@
 ---
 title: Messages
-description: Messages
+description: Kafka message structure, including headers and opaque key/value payloads.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 

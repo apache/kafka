@@ -65,7 +65,7 @@ public final class TieredStorageTestReport {
         String lts = "";
         if (!context.remoteStorageManagers().isEmpty()) {
             LocalTieredStorage tieredStorage = context.remoteStorageManagers().get(0);
-            lts = DumpLocalTieredStorage.dump(tieredStorage, context.de(), context.de());
+            lts = DumpLocalTieredStorage.dump(tieredStorage, context.deserializer(), context.deserializer());
         }
         output.printf("Content of local tiered storage:%n%n%s%n", lts);
     }

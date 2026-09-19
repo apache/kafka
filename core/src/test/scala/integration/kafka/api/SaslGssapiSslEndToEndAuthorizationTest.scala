@@ -16,10 +16,10 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.Assertions.assertNull
 
 class SaslGssapiSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {

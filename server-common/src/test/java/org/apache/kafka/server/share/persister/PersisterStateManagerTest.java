@@ -4827,7 +4827,8 @@ class PersisterStateManagerTest {
             psm.stop();
 
             verify(client, times(1)).close();
-            verify(timer, times(1)).close();
+            // Timer lifecycle is the caller's responsibility, not PersisterStateManager's.
+            verify(timer, times(0)).close();
         } catch (Exception e) {
             fail("unexpected exception", e);
         }

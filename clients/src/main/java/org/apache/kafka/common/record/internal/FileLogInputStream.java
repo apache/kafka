@@ -21,9 +21,9 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractLegacyRecordBatch.LegacyFileChannelRecordBatch;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch.DefaultFileChannelRecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -157,6 +157,11 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         @Override
         public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
             return loadFullBatch().streamingIterator(bufferSupplier);
+        }
+
+        @Override
+        public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
+            return loadFullBatch().streamingIterator(bufferSupplier, maxRecordBodySize);
         }
 
         @Override

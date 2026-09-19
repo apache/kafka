@@ -42,14 +42,15 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -76,10 +77,8 @@ import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 @Timeout(600)
@@ -113,8 +112,9 @@ public class SuppressionIntegrationTest {
             .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
     }
 
-    @Test
-    public void shouldUseDefaultSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldUseDefaultSerdes(final boolean withHeaders) {
         final String testId = "-shouldInheritSerdes";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -140,7 +140,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -157,16 +157,17 @@ public class SuppressionIntegrationTest {
             );
             final boolean rawRecords = waitForAnyRecord(outputRaw);
             final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
-    @Test
-    public void shouldInheritSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldInheritSerdes(final boolean withHeaders) {
         final String testId = "-shouldInheritSerdes";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -193,7 +194,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -210,8 +211,8 @@ public class SuppressionIntegrationTest {
             );
             final boolean rawRecords = waitForAnyRecord(outputRaw);
             final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);
@@ -246,8 +247,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldShutdownWhenRecordConstraintIsViolated() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutdownWhenRecordConstraintIsViolated(final boolean withHeaders) throws InterruptedException {
         final String testId = "-shouldShutdownWhenRecordConstraintIsViolated";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -268,7 +270,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
+
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
@@ -287,8 +290,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldShutdownWhenBytesConstraintIsViolated() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutdownWhenBytesConstraintIsViolated(final boolean withHeaders) throws InterruptedException {
         final String testId = "-shouldShutdownWhenBytesConstraintIsViolated";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -310,7 +314,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
+
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
@@ -329,8 +334,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldAllowOverridingChangelogConfig() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAllowOverridingChangelogConfig(final boolean withHeaders) {
         final String testId = "-shouldAllowOverridingChangelogConfig";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -360,7 +366,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -379,18 +385,19 @@ public class SuppressionIntegrationTest {
             final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
             final Properties config = CLUSTER.getLogConfig(changeLog);
 
-            assertThat(config.getProperty("retention.ms"), is(logConfig.get("retention.ms")));
-            assertThat(CLUSTER.getAllTopicsInCluster(), hasItem(changeLog));
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertEquals(logConfig.get("retention.ms"), config.getProperty("retention.ms"));
+            assertTrue(CLUSTER.getAllTopicsInCluster().contains(changeLog));
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
-    @Test
-    public void shouldCreateChangelogByDefault() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCreateChangelogByDefault(final boolean withHeaders) {
         final String testId = "-shouldCreateChangelogByDefault";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -418,7 +425,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -436,17 +443,18 @@ public class SuppressionIntegrationTest {
             final boolean rawRecords = waitForAnyRecord(outputRaw);
             final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
 
-            assertThat(CLUSTER.getAllTopicsInCluster(), hasItem(changeLog));
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertTrue(CLUSTER.getAllTopicsInCluster().contains(changeLog));
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
-    @Test
-    public void shouldAllowDisablingChangelog() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAllowDisablingChangelog(final boolean withHeaders) {
         final String testId = "-shouldAllowDisablingChangelog";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -474,7 +482,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -497,17 +505,17 @@ public class SuppressionIntegrationTest {
                 .filter(s -> s.contains("KTABLE-SUPPRESS"))
                 .collect(Collectors.toSet());
 
-            assertThat(suppressChangeLog, is(empty()));
-            assertThat(rawRecords, Matchers.is(true));
-            assertThat(suppressedRecords, is(true));
+            assertTrue(suppressChangeLog.isEmpty());
+            assertTrue(rawRecords);
+            assertTrue(suppressedRecords);
         } finally {
             driver.close();
             quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
-    private static Properties getStreamsConfig(final String appId) {
-        return mkProperties(mkMap(
+    private static Properties getStreamsConfig(final String appId, final boolean withHeaders) {
+        final Properties props = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
             mkEntry(StreamsConfig.POLL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
@@ -515,6 +523,8 @@ public class SuppressionIntegrationTest {
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, AT_LEAST_ONCE),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        return props;
     }
 
     /**

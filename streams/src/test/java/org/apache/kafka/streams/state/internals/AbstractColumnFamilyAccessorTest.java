@@ -14,8 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
 
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -43,7 +43,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 abstract class AbstractColumnFamilyAccessorTest {
@@ -57,6 +61,8 @@ abstract class AbstractColumnFamilyAccessorTest {
     protected AbstractColumnFamilyAccessor accessor;
 
     abstract AbstractColumnFamilyAccessor createColumnFamilyAccessor();
+
+    abstract AbstractColumnFamilyAccessor createTransactionalColumnFamilyAccessor();
     private final LongSerializer offsetSerializer = new LongSerializer();
     private final StringSerializer keySerializer = new StringSerializer();
     private final byte[] openValue = toBytes(1L);
@@ -113,7 +119,7 @@ abstract class AbstractColumnFamilyAccessorTest {
         final TopicPartition tp0 = new TopicPartition("testTopic", 0);
         final TopicPartition tp1 = new TopicPartition("testTopic", 1);
         final Map<TopicPartition, Long> changelogOffsets = Map.of(tp0, 10L, tp1, 20L);
-        accessor.commit(dbAccessor, changelogOffsets);
+        accessor.commit(dbAccessor, Position.emptyPosition(), changelogOffsets);
         assertEquals(10L, accessor.getCommittedOffset(dbAccessor, tp0));
         assertEquals(20L, accessor.getCommittedOffset(dbAccessor, tp1));
     }
@@ -125,8 +131,15 @@ abstract class AbstractColumnFamilyAccessorTest {
         final TopicPartition tp0 = new TopicPartition(topic, 0);
         final TopicPartition tp1 = new TopicPartition(topic, 1);
         final Position positionToStore = Position.fromMap(mkMap(mkEntry(topic, mkMap(mkEntry(tp0.partition(), 10L), mkEntry(tp1.partition(), 20L)))));
-        accessor.commit(dbAccessor, positionToStore);
+        accessor.commit(dbAccessor, positionToStore, Map.of(tp0, 0L));
         assertEquals(positionToStore, PositionSerde.deserialize(ByteBuffer.wrap(dbAccessor.get(offsetsCF, toBytes("position")))));
+    }
+
+    @Test
+    public void shouldCommitStagedWritesWhenCommittingOffsets() throws RocksDBException {
+        final TopicPartition tp0 = new TopicPartition("testTopic", 0);
+        accessor.commit(dbAccessor, Position.emptyPosition(), Map.of(tp0, 10L));
+        verify(dbAccessor).commitStagedWrites();
     }
 
     @Test
@@ -134,18 +147,66 @@ abstract class AbstractColumnFamilyAccessorTest {
         dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         final TopicPartition tp0 = new TopicPartition("testTopic", 0);
         final TopicPartition tp1 = new TopicPartition("testTopic", 1);
-        accessor.commit(dbAccessor, Map.of(tp0, 10L, tp1, 20L));
+        accessor.commit(dbAccessor, Position.emptyPosition(), Map.of(tp0, 10L, tp1, 20L));
         assertEquals(10L, accessor.getCommittedOffset(dbAccessor, tp0));
         assertEquals(20L, accessor.getCommittedOffset(dbAccessor, tp1));
-        accessor.commit(dbAccessor, Map.of());
+        accessor.commit(dbAccessor, Position.emptyPosition(), Map.of());
         assertNull(accessor.getCommittedOffset(dbAccessor, tp0));
         assertNull(accessor.getCommittedOffset(dbAccessor, tp1));
+    }
+
+    @Test
+    public void shouldSkipPersistingStateOnCloseWhenStoreIsAlreadyClosed() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        // Open and close cleanly
+        accessor.open(dbAccessor, false);
+        accessor.close(dbAccessor);
+        assertArrayEquals(closedValue, dbAccessor.get(offsetsCF, toBytes("status")));
+
+        // Simulate unclean shutdown: overwrite status to open without going through accessor.open()
+        dbAccessor.put(offsetsCF, toBytes("status"), openValue);
+        assertThrowsExactly(ProcessorStateException.class, () -> accessor.open(dbAccessor, false));
+
+        dbAccessor = spy(dbAccessor);
+        accessor.close(dbAccessor);
+        verify(dbAccessor, never()).put(any(), any(), any());
+    }
+
+    @Test
+    public void shouldNotWriteOpenMarkerForTransactionalStore() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        final AbstractColumnFamilyAccessor txnAccessor = createTransactionalColumnFamilyAccessor();
+        txnAccessor.open(dbAccessor, false);
+        assertNull(dbAccessor.get(offsetsCF, toBytes("status")));
+    }
+
+    @Test
+    public void shouldNotWriteClosedMarkerForTransactionalStore() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        final AbstractColumnFamilyAccessor txnAccessor = createTransactionalColumnFamilyAccessor();
+        txnAccessor.open(dbAccessor, false);
+        txnAccessor.close(dbAccessor);
+        assertNull(dbAccessor.get(offsetsCF, toBytes("status")));
+    }
+
+    @Test
+    public void shouldDetectStaleOpenMarkerFromPriorNonTransactionalCrash() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        // Simulate a prior non-transactional crash: OPEN marker left on disk
+        dbAccessor.put(offsetsCF, toBytes("status"), openValue);
+
+        final AbstractColumnFamilyAccessor txnAccessor = createTransactionalColumnFamilyAccessor();
+        final ProcessorStateException thrown = assertThrowsExactly(
+                ProcessorStateException.class, () -> txnAccessor.open(dbAccessor, false));
+        assertEquals("Invalid state during store open. Expected state to be either empty or closed", thrown.getMessage());
+        // Marker is unchanged — transactional accessor never writes status
+        assertArrayEquals(openValue, dbAccessor.get(offsetsCF, toBytes("status")));
     }
 
     private byte[] toBytes(final String s) {
         return keySerializer.serialize("", s);
     }
-    
+
     private byte[] toBytes(final long l) {
         return offsetSerializer.serialize("", l);
     }

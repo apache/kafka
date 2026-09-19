@@ -25,7 +25,8 @@ import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
-import org.apache.kafka.common.utils.{Exit, Utils}
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Exit
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.raft.KRaftConfigs
 import org.apache.kafka.server.config.ServerLogConfigs

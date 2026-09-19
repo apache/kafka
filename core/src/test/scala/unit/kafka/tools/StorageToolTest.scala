@@ -27,12 +27,12 @@ import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.{Feature, MetadataVersion}
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
+import org.apache.kafka.metadata.bootstrap.BootstrapTestUtils
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.util.TerseFailure
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
@@ -390,15 +390,15 @@ Found problem:
   def testFormatWithReleaseVersionAndFeatureOverride(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
+    properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
-      "--release-version", "3.7-IV0",
+      "--release-version", "3.7-IV0", "--standalone",
       "--feature", "share.version=1")))
 
     // Verify that the feature override is applied by checking the bootstrap metadata
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+    val bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(availableDirs.head.toString)
 
     // Verify that the share.version feature is set to 1 as specified
     assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
@@ -409,7 +409,7 @@ Found problem:
       "Failed to find release version in output: " + stream.toString())
 
     // Verify that the format command completed successfully with features
-    assertTrue(stream.toString().contains("Formatting metadata directory"),
+    assertTrue(stream.toString().contains("Formatting dynamic metadata voter directory"),
       "Failed to find formatting message in output: " + stream.toString())
   }
 
@@ -417,17 +417,17 @@ Found problem:
   def testFormatWithMultipleFeatures(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
+    properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
-      "--release-version", "3.8-IV0",
+      "--release-version", "3.8-IV0", "--standalone",
       "--feature", "share.version=1",
       "--feature", "transaction.version=2",
       "--feature", "group.version=1")))
 
     // Verify that all features are properly bootstrapped by checking the bootstrap metadata
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+    val bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(availableDirs.head.toString)
 
     // Verify that all specified features are set correctly
     assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
@@ -442,7 +442,7 @@ Found problem:
       "Failed to find release version in output: " + stream.toString())
 
     // Verify that the format command completed successfully with multiple features
-    assertTrue(stream.toString().contains("Formatting metadata directory"),
+    assertTrue(stream.toString().contains("Formatting dynamic metadata voter directory"),
       "Failed to find formatting message in output: " + stream.toString())
   }
   
@@ -852,11 +852,11 @@ Found problem:
   def testBootstrapScramRecords(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
+    properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String](
-      "--release-version", "3.9-IV0",
+      "--release-version", "3.9-IV0", "--standalone",
       "--add-scram", "SCRAM-SHA-512=[name=alice,password=changeit]",
       "--add-scram", "SCRAM-SHA-512=[name=bob,password=changeit]"
     )
@@ -865,7 +865,7 @@ Found problem:
 
     // Not doing full SCRAM record validation since that's covered elsewhere.
     // Just checking that we generate the correct number of records
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+    val bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(availableDirs.head.toString)
     val scramRecords = bootstrapMetadata.records().asScala
       .filter(apiMessageAndVersion => apiMessageAndVersion.message().isInstanceOf[UserScramCredentialRecord])
       .map(apiMessageAndVersion => apiMessageAndVersion.message().asInstanceOf[UserScramCredentialRecord])

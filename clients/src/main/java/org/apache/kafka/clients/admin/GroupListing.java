@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -25,6 +27,7 @@ import java.util.Optional;
 /**
  * A listing of a group in the cluster.
  */
+@InterfaceAudience.Public
 public class GroupListing {
     private final String groupId;
     private final Optional<GroupType> type;
@@ -42,8 +45,8 @@ public class GroupListing {
     public GroupListing(String groupId, Optional<GroupType> type, String protocol, Optional<GroupState> groupState) {
         this.groupId = groupId;
         this.type = Objects.requireNonNull(type);
-        this.protocol = protocol;
-        this.groupState = groupState;
+        this.protocol = Objects.requireNonNull(protocol);
+        this.groupState = Objects.requireNonNull(groupState);
     }
 
     /**

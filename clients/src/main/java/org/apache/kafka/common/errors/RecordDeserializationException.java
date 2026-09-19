@@ -18,6 +18,7 @@ package org.apache.kafka.common.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.TimestampType;
 
@@ -27,6 +28,7 @@ import java.nio.ByteBuffer;
  *  This exception is raised for any error that occurs while deserializing records received by the consumer using 
  *  the configured {@link org.apache.kafka.common.serialization.Deserializer}.
  */
+@InterfaceAudience.Public
 public class RecordDeserializationException extends SerializationException {
 
     private static final long serialVersionUID = 2L;

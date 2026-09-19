@@ -24,8 +24,8 @@ import java.util.concurrent.TimeUnit;
  * This example can be decomposed into the following stages:
  * <p>
  * 1. Clean any topics left from previous runs.
- * 2. Create a producer thread to send a set of records to topic1.
- * 3. Create a consumer thread to fetch all previously sent records from topic1.
+ * 2. Create a producer thread to send a set of records to my-topic.
+ * 3. Create a consumer thread to fetch all previously sent records from my-topic.
  * <p>
  * If you are using IntelliJ IDEA, the above arguments should be put in `Modify Run Configuration - Program Arguments`.
  * You can also set an output log file in `Modify Run Configuration - Modify options - Save console output to file` to
@@ -51,12 +51,12 @@ public class KafkaConsumerProducerDemo {
             Utils.recreateTopics(KafkaProperties.BOOTSTRAP_SERVERS, -1, TOPIC_NAME);
             CountDownLatch latch = new CountDownLatch(2);
 
-            // stage 2: produce records to topic1
+            // stage 2: produce records to my-topic
             Producer producerThread = new Producer(
                 "producer", KafkaProperties.BOOTSTRAP_SERVERS, TOPIC_NAME, isAsync, null, false, numRecords, -1, latch);
             producerThread.start();
 
-            // stage 3: consume records from topic1
+            // stage 3: consume records from my-topic
             Consumer consumerThread = new Consumer(
                 "consumer", KafkaProperties.BOOTSTRAP_SERVERS, TOPIC_NAME, GROUP_NAME, Optional.empty(), false, numRecords, latch);
             consumerThread.start();

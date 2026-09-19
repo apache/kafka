@@ -25,11 +25,12 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -139,8 +140,8 @@ public class RelaxedNullKeyRequirementJoinTest {
 
     private void initTopology() {
         final Properties props = props();
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
-        testDriver = new TopologyTestDriver(builder.build(), props);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        testDriver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
 
         left = testDriver.createInputTopic(
             LEFT,

@@ -25,9 +25,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -103,7 +103,7 @@ public class Fetcher<K, V> extends AbstractFetch {
      * @return number of fetches sent
      */
     public synchronized int sendFetches() {
-        final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests();
+        final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests().requests();
         sendFetchesInternal(
                 fetchRequests,
                 (fetchTarget, data, clientResponse) -> {
@@ -121,7 +121,7 @@ public class Fetcher<K, V> extends AbstractFetch {
 
     protected void maybeCloseFetchSessions(final Timer timer) {
         final List<RequestFuture<ClientResponse>> requestFutures = sendFetchesInternal(
-                prepareCloseFetchSessionRequests(),
+                prepareCloseFetchSessionRequests().requests(),
                 this::handleCloseFetchSessionSuccess,
                 this::handleCloseFetchSessionFailure
         );

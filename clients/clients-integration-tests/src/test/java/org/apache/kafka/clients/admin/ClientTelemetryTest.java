@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import kafka.admin.ConfigCommand;
-
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -31,7 +29,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -46,7 +43,6 @@ import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -56,12 +52,10 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientTelemetryTest {
@@ -123,18 +117,6 @@ public class ClientTelemetryTest {
         }
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
-    public void testIntervalMsParser(ClusterInstance clusterInstance) {
-        List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
-                "--alter", "--entity-type", "client-metrics", "--entity-name", "test", "--add-config", "interval.ms=bbb");
-        try (Admin client = clusterInstance.admin()) {
-            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(Set.of(alterOpts)));
-
-            Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts));
-            assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
-        }
-    }
-
     @ClusterTest(types = Type.KRAFT)
     public void testMetrics(ClusterInstance clusterInstance) {
         Map<String, Object> configs = new HashMap<>();
@@ -150,10 +132,6 @@ public class ClientTelemetryTest {
                             expectedName)));
             assertTrue(actualMetricsName.containsAll(expectedMetricsName));
         }
-    }
-
-    private static String[] toArray(Collection<List<String>> lists) {
-        return lists.stream().flatMap(List::stream).toArray(String[]::new);
     }
 
     @SuppressWarnings("unused")

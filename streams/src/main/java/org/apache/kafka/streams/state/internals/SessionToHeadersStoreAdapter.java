@@ -53,8 +53,15 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
  * @see SessionToHeadersIteratorAdapter
  */
 @SuppressWarnings("unchecked")
-public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]> {
+public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>, WithRetentionPeriod {
     final SessionStore<Bytes, byte[]> store;
+
+    // the delegate is held in a field rather than as a WrappedStateStore, so an unwrap walk
+    // terminates here; without this the windowed restore optimisation resolves -1 and is skipped
+    @Override
+    public long retentionPeriod() {
+        return WithRetentionPeriod.resolveRetentionPeriod(store);
+    }
 
     SessionToHeadersStoreAdapter(final SessionStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
@@ -165,6 +172,11 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
     @Override
     public Long committedOffset(final TopicPartition partition) {
         return store.committedOffset(partition);
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
     }
 
     @Override
