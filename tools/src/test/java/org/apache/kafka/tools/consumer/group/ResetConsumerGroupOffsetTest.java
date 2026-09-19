@@ -160,10 +160,9 @@ public class ResetConsumerGroupOffsetTest {
         String group = "new.group";
         String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":0");
 
-        try (Admin admin = cluster.admin(); ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0), 1, List.of(1)))));
-            cluster.waitTopicCreation(topic, 2);
+        cluster.createTopicWithAssignment(topic, Map.of(0, List.of(0), 1, List.of(1)));
 
+        try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
             cluster.shutdownBroker(1);
 
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
