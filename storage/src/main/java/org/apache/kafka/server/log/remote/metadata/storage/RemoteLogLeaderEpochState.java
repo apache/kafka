@@ -118,10 +118,16 @@ class RemoteLogLeaderEpochState {
         }
 
         // Add the segment epochs mapping as the segment is copied successfully.
-        offsetToId.put(startOffset, remoteLogSegmentId);
+        RemoteLogSegmentId replacedSegmentId = offsetToId.put(startOffset, remoteLogSegmentId);
 
         // Remove the metadata from unreferenced entries as it is successfully copied and added to the offset mapping.
         unreferencedSegmentIds.remove(remoteLogSegmentId);
+
+        // The highest offset check above may retain later mappings that are not covered by this segment. In that case,
+        // put can still replace a different segment with the same start offset, so keep it available for cleanup.
+        if (replacedSegmentId != null && !replacedSegmentId.equals(remoteLogSegmentId)) {
+            unreferencedSegmentIds.add(replacedSegmentId);
+        }
 
         // Update the highest offset entry for this leader epoch as we added a new mapping.
         if (highestLogOffset == null || leaderEpochEndOffset > highestLogOffset) {
