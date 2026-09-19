@@ -255,6 +255,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public void restart(Map<Integer, Map<String, Object>> perServerConfigOverrides) throws Exception {
+            clusterTestKit.restart(perServerConfigOverrides);
+        }
+
+        @Override
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
                 Utils.closeQuietly(clusterTestKit, "cluster");

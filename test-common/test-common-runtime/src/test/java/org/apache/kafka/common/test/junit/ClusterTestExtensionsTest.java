@@ -61,6 +61,7 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.ServerConfigs;
 
 import org.junit.jupiter.api.Assertions;
 
@@ -413,6 +414,82 @@ public class ClusterTestExtensionsTest {
 
             assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
         }
+    }
+
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
+    public void testRestartWithConfigOverride(ClusterInstance cluster) throws Exception {
+        String topic = "topic";
+        cluster.createTopic(topic, 1, (short) 1);
+        String bootstrapServers = cluster.bootstrapServers();
+
+        cluster.brokers().values().forEach(broker ->
+            assertEquals(ServerConfigs.NUM_IO_THREADS_DEFAULT, broker.config().getInt(ServerConfigs.NUM_IO_THREADS_CONFIG)));
+
+        // The id -1 applies the override to every server in the cluster.
+        cluster.restart(Map.of(-1, Map.of(ServerConfigs.NUM_IO_THREADS_CONFIG, "5")));
+        cluster.waitForReadyBrokers();
+
+        // The listener ports are reused on restart, so the bootstrap servers stay unchanged.
+        assertEquals(bootstrapServers, cluster.bootstrapServers());
+
+        // The data is kept on restart, so the topic created beforehand still exists.
+        try (Admin admin = cluster.admin()) {
+            assertTrue(admin.listTopics().names().get().contains(topic));
+        }
+
+        // The overridden property took effect on every broker and controller.
+        cluster.brokers().values().forEach(broker ->
+            assertEquals(5, broker.config().getInt(ServerConfigs.NUM_IO_THREADS_CONFIG)));
+        cluster.controllers().values().forEach(controller ->
+            assertEquals(5, controller.config().getInt(ServerConfigs.NUM_IO_THREADS_CONFIG)));
+    }
+
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, serverProperties = {
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testRestart(ClusterInstance cluster) throws Exception {
+        String topic = "topic";
+        byte[] key = Utils.utf8("key");
+        byte[] value = Utils.utf8("value");
+        cluster.createTopic(topic, 1, (short) 1);
+        try (Producer<byte[], byte[]> producer = cluster.producer()) {
+            producer.send(new ProducerRecord<>(topic, key, value)).get();
+            producer.flush();
+        }
+
+        // Restart the whole cluster without any override. The data is kept, so the record survives.
+        cluster.restart();
+        cluster.waitForReadyBrokers();
+
+        try (Admin admin = cluster.admin()) {
+            assertTrue(admin.listTopics().names().get().contains(topic));
+        }
+        try (Consumer<byte[], byte[]> consumer = cluster.consumer()) {
+            consumer.subscribe(List.of(topic));
+            List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+            RaftClusterInvocationContext.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(100)).forEach(records::add);
+                return records.size() == 1;
+            }, "Failed to receive the record produced before the restart");
+            assertArrayEquals(key, records.get(0).key());
+            assertArrayEquals(value, records.get(0).value());
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, serverProperties = {
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
+    })
+    public void testRestartWithPerServerConfigOverride(ClusterInstance cluster) throws Exception {
+        cluster.waitForReadyBrokers();
+
+        // Only broker 0 is overridden, broker 1 keeps its previous configuration.
+        cluster.restart(Map.of(0, Map.of(ServerConfigs.NUM_IO_THREADS_CONFIG, "5")));
+        cluster.waitForReadyBrokers();
+
+        assertEquals(5, cluster.brokers().get(0).config().getInt(ServerConfigs.NUM_IO_THREADS_CONFIG));
+        assertEquals(ServerConfigs.NUM_IO_THREADS_DEFAULT,
+            cluster.brokers().get(1).config().getInt(ServerConfigs.NUM_IO_THREADS_CONFIG));
     }
 
     @ClusterTest(
