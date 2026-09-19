@@ -17,6 +17,9 @@
 
 package org.apache.kafka.server.share.fetch;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.common.requests.TransactionResult;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +42,13 @@ public class InFlightState {
      */
     public static final String EMPTY_MEMBER_ID = "";
 
+    /**
+     * The acknowledgement type byte the client sends for an acquired offset that holds no
+     * non-control record. It has no {@link AcknowledgeType} constant because it is not a
+     * disposition the application can choose.
+     */
+    public static final byte ACKNOWLEDGE_TYPE_GAP = (byte) 0;
+
     // The state of the fetch batch records.
     private RecordState state;
     // The number of times the records has been delivered to the client.
@@ -54,16 +64,39 @@ public class InFlightState {
     // to any other state. This could happen because of LSO movement etc.
     private boolean isTerminalState = false;
 
+    // Populated only when state == TX_PENDING; identifies the transaction owner that staged this ack.
+    private long stagedTxnOwnerId = -1L;
+    private short stagedTxnOwnerEpoch = -1;
+    private byte stagedAckType = -1;
+    private byte stagedDeliveryState = -1;
+
     // Visible for testing.
     public InFlightState(RecordState state, int deliveryCount, String memberId) {
         this(state, deliveryCount, memberId, null);
     }
 
     InFlightState(RecordState state, int deliveryCount, String memberId, AcquisitionLockTimerTask acquisitionLockTimeoutTask) {
+        this(state, deliveryCount, memberId, acquisitionLockTimeoutTask, -1L, (short) -1, (byte) -1, (byte) -1);
+    }
+
+    InFlightState(
+        RecordState state,
+        int deliveryCount,
+        String memberId,
+        AcquisitionLockTimerTask acquisitionLockTimeoutTask,
+        long stagedTxnOwnerId,
+        short stagedTxnOwnerEpoch,
+        byte stagedAckType,
+        byte stagedDeliveryState
+    ) {
         this.state = state;
         this.deliveryCount = deliveryCount;
         this.memberId = memberId;
         this.acquisitionLockTimeoutTask = acquisitionLockTimeoutTask;
+        this.stagedTxnOwnerId = stagedTxnOwnerId;
+        this.stagedTxnOwnerEpoch = stagedTxnOwnerEpoch;
+        this.stagedAckType = stagedAckType;
+        this.stagedDeliveryState = stagedDeliveryState;
     }
 
     /**
@@ -243,6 +276,143 @@ public class InFlightState {
         rollbackState = null;
     }
 
+    /**
+     * @return The transaction owner id staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
+     */
+    public long stagedTxnOwnerId() {
+        return stagedTxnOwnerId;
+    }
+
+    /**
+     * @return The transaction owner epoch staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
+     */
+    public short stagedTxnOwnerEpoch() {
+        return stagedTxnOwnerEpoch;
+    }
+
+    public long stagedProducerId() {
+        return stagedTxnOwnerId;
+    }
+
+    public short stagedProducerEpoch() {
+        return stagedTxnOwnerEpoch;
+    }
+
+    /**
+     * @return The acknowledge type staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
+     */
+    public byte stagedAckType() {
+        return stagedAckType;
+    }
+
+    public byte stagedDeliveryState() {
+        return stagedDeliveryState;
+    }
+
+    public InFlightState stageTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch, AcknowledgeType ackType) {
+        return stageTxnAcknowledge(txnOwnerId, txnOwnerEpoch, ackType.id, defaultStagedDeliveryState(ackType));
+    }
+
+    /**
+     * Stage this record into an open producer transaction. Transitions state from ACQUIRED to TX_PENDING,
+     * cancels the acquisition lock timer (transaction timeout governs the hold instead), and records the
+     * transaction owner identity and ack type for later resolution by {@link #applyTxnMarker}.
+     * <p>
+     * The ack type is taken as a raw byte rather than an {@link AcknowledgeType} because the gap
+     * marker (0) has no enum constant: it is emitted by the consumer for an acquired offset holding
+     * no non-control record, and must be stageable like any other terminal disposition. ACCEPT,
+     * REJECT and gap are valid inside a transaction; RELEASE and RENEW are not, since they concern
+     * the acquisition lock, which the transaction timeout has taken over.
+     */
+    public InFlightState stageTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch, byte ackType, RecordState stagedDeliveryState) {
+        if (ackType != AcknowledgeType.ACCEPT.id
+            && ackType != AcknowledgeType.REJECT.id
+            && ackType != ACKNOWLEDGE_TYPE_GAP) {
+            throw new IllegalArgumentException("Only ACCEPT, REJECT or gap are valid inside a transaction, got: " + ackType);
+        }
+        try {
+            state = state.validateTransition(RecordState.TX_PENDING);
+            this.stagedTxnOwnerId = txnOwnerId;
+            this.stagedTxnOwnerEpoch = txnOwnerEpoch;
+            this.stagedAckType = ackType;
+            this.stagedDeliveryState = stagedDeliveryState.id;
+            cancelAndClearAcquisitionLockTimeoutTask();
+            return this;
+        } catch (IllegalStateException e) {
+            log.error("Failed to stage transactional acknowledgment", e);
+            return null;
+        }
+    }
+
+    public boolean revertStagedTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch) {
+        if (state != RecordState.TX_PENDING) {
+            return false;
+        }
+        if (this.stagedTxnOwnerId != txnOwnerId || this.stagedTxnOwnerEpoch != txnOwnerEpoch) {
+            return false;
+        }
+        state = RecordState.ACQUIRED;
+        stagedTxnOwnerId = -1L;
+        stagedTxnOwnerEpoch = -1;
+        stagedAckType = -1;
+        stagedDeliveryState = -1;
+        return true;
+    }
+
+    /**
+     * Apply a transaction commit or abort marker to a TX_PENDING record.
+     * On COMMIT: ACCEPT resolves to ACKNOWLEDGED, REJECT resolves to ARCHIVING or ARCHIVED based on DLQ configuration.
+     * On ABORT: reverts to AVAILABLE so the record can be redelivered.
+     * Returns null if the state is not TX_PENDING or the transaction owner identity does not match.
+     */
+    public InFlightState applyTxnMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result, boolean dlqSupportEnabled) {
+        if (state != RecordState.TX_PENDING) {
+            return null;
+        }
+        if (this.stagedTxnOwnerId != txnOwnerId || this.stagedTxnOwnerEpoch != txnOwnerEpoch) {
+            return null;
+        }
+        try {
+            if (result == TransactionResult.COMMIT) {
+                RecordState nextState = stagedDeliveryState == -1
+                    ? fallbackDeliveryState(dlqSupportEnabled)
+                    : RecordState.forId(stagedDeliveryState);
+                state = state.validateTransition(nextState);
+                memberId = EMPTY_MEMBER_ID;
+            } else {
+                state = state.validateTransition(RecordState.AVAILABLE);
+                memberId = EMPTY_MEMBER_ID;
+            }
+            stagedTxnOwnerId = -1L;
+            stagedTxnOwnerEpoch = -1;
+            stagedAckType = -1;
+            stagedDeliveryState = -1;
+            return this;
+        } catch (IllegalStateException e) {
+            log.error("Failed to apply transaction marker", e);
+            return null;
+        }
+    }
+
+    public InFlightState applyTxnMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result) {
+        return applyTxnMarker(txnOwnerId, txnOwnerEpoch, result, true);
+    }
+
+    private RecordState defaultStagedDeliveryState(AcknowledgeType ackType) {
+        return ackType == AcknowledgeType.ACCEPT ? RecordState.ACKNOWLEDGED : RecordState.ARCHIVING;
+    }
+
+    private RecordState fallbackDeliveryState(boolean dlqSupportEnabled) {
+        if (stagedAckType == AcknowledgeType.ACCEPT.id) {
+            return RecordState.ACKNOWLEDGED;
+        }
+        // A gap holds no record, so it is never a DLQ candidate however the group is configured.
+        if (stagedAckType == ACKNOWLEDGE_TYPE_GAP) {
+            return RecordState.ARCHIVED;
+        }
+        return dlqSupportEnabled ? RecordState.ARCHIVING : RecordState.ARCHIVED;
+    }
+
     private int updatedDeliveryCount(DeliveryCountOps ops) {
         return switch (ops) {
             case INCREASE -> deliveryCount + 1;
@@ -254,7 +424,7 @@ public class InFlightState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(state, deliveryCount, memberId);
+        return Objects.hash(state, deliveryCount, memberId, stagedTxnOwnerId, stagedTxnOwnerEpoch, stagedAckType, stagedDeliveryState);
     }
 
     @Override
@@ -266,15 +436,25 @@ public class InFlightState {
             return false;
         }
         InFlightState that = (InFlightState) o;
-        return state == that.state && deliveryCount == that.deliveryCount && memberId.equals(that.memberId);
+        return state == that.state
+            && deliveryCount == that.deliveryCount
+            && memberId.equals(that.memberId)
+            && stagedTxnOwnerId == that.stagedTxnOwnerId
+            && stagedTxnOwnerEpoch == that.stagedTxnOwnerEpoch
+            && stagedAckType == that.stagedAckType
+            && stagedDeliveryState == that.stagedDeliveryState;
     }
 
     @Override
     public String toString() {
         return "InFlightState(" +
-            "state=" + state.toString() +
+            "state=" + state +
             ", deliveryCount=" + deliveryCount +
             ", memberId=" + memberId +
+            ", stagedTxnOwnerId=" + stagedTxnOwnerId +
+            ", stagedTxnOwnerEpoch=" + stagedTxnOwnerEpoch +
+            ", stagedAckType=" + stagedAckType +
+            ", stagedDeliveryState=" + stagedDeliveryState +
             ")";
     }
 

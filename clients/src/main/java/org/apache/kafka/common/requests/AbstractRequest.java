@@ -328,6 +328,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return ShareFetchRequest.parse(readable, apiVersion);
             case SHARE_ACKNOWLEDGE:
                 return ShareAcknowledgeRequest.parse(readable, apiVersion);
+            case TXN_SHARE_ACKNOWLEDGE:
+                return TxnShareAcknowledgeRequest.parse(readable, apiVersion);
             case ADD_RAFT_VOTER:
                 return AddRaftVoterRequest.parse(readable, apiVersion);
             case REMOVE_RAFT_VOTER:

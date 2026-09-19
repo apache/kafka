@@ -27,6 +27,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
+import org.apache.kafka.clients.consumer.ShareGroupMetadata;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulator;
@@ -262,6 +264,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final String SEND_OFFSETS_TIMEOUT_MSG =
             "SendOffsetsToTransaction timed out - did not reach the coordinator or " +
                     "receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms";
+    private static final String SEND_SHARE_ACKS_TIMEOUT_MSG =
+            "SendShareAcknowledgementsToTransaction timed out - did not receive the TxnShareAcknowledge response within max.block.ms";
     private static final String COMMIT_TXN_TIMEOUT_MSG =
             "CommitTransaction timed out - did not complete EndTxn with the transaction coordinator within max.block.ms";
     private static final String ABORT_TXN_TIMEOUT_MSG =
@@ -832,6 +836,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    @Override
+    public void sendShareAcknowledgementsToTransaction(
+            ShareAcknowledgements acknowledgements,
+            ShareGroupMetadata groupMetadata) throws ProducerFencedException {
+        Objects.requireNonNull(acknowledgements, "acknowledgements cannot be null");
+        Objects.requireNonNull(groupMetadata, "groupMetadata cannot be null");
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
+        throwIfInPreparedState();
+
+        if (!acknowledgements.isEmpty()) {
+            TransactionalRequestResult result =
+                transactionManager.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+            sender.wakeup();
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_SHARE_ACKS_TIMEOUT_MSG);
+        }
+    }
+
     /**
      * Request a partial metadata refresh for the given topics and await the next
      * metadata update on a best-effort basis (up to {@code max.block.ms}). Returns
@@ -897,8 +919,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         flush();
         transactionManager.prepareTransaction();
         producerMetrics.recordPrepareTxn(time.nanoseconds() - now);
-        ProducerIdAndEpoch producerIdAndEpoch = transactionManager.preparedTransactionState();
-        return new PreparedTxnState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        ProducerIdAndEpoch transactionOwner = transactionManager.preparedTransactionState();
+        return new PreparedTxnState(transactionOwner.producerId, transactionOwner.epoch);
     }
 
     /**
@@ -981,7 +1003,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Completes a prepared transaction by comparing the provided prepared transaction state with the
      * current prepared state on the producer.
-     * If they match, the transaction is committed; otherwise, it is aborted.
+     * If they match, the transaction is committed; otherwise, completion fails without committing or aborting.
      * 
      * @param preparedTxnState              The prepared transaction state to compare against the current state
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
@@ -993,6 +1015,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException {
+        Objects.requireNonNull(preparedTxnState, "preparedTxnState cannot be null");
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         
@@ -1001,15 +1024,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 "Call prepareTransaction() first, or make sure initTransaction(true) was called.");
         }
         
-        // Get the current prepared transaction state
-        ProducerIdAndEpoch currentProducerIdAndEpoch = transactionManager.preparedTransactionState();
-        PreparedTxnState currentPreparedState = new PreparedTxnState(currentProducerIdAndEpoch.producerId, currentProducerIdAndEpoch.epoch);
+        ProducerIdAndEpoch currentTransactionOwner = transactionManager.preparedTransactionState();
+        PreparedTxnState currentPreparedState = new PreparedTxnState(currentTransactionOwner.producerId, currentTransactionOwner.epoch);
         
-        // Compare the prepared transaction state token and commit or abort accordingly
         if (currentPreparedState.equals(preparedTxnState)) {
             commitTransaction();
         } else {
-            abortTransaction();
+            throw new InvalidTxnStateException("Cannot complete transaction because the prepared transaction state " +
+                preparedTxnState + " does not match the current prepared transaction state " + currentPreparedState);
         }
     }
 
