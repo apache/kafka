@@ -409,15 +409,15 @@ public class PlaintextProducerSendTest {
                         String.format("key%d", i).getBytes(StandardCharsets.UTF_8), String.format("value%d", i).getBytes(StandardCharsets.UTF_8))));
                 }
             }
+            producer.flush();
             for (int i = 0; i < numRecords; i++) {
-                // When nullKey the last 2 send requests are blocked
-                if (i == numRecords - 2) {
-                    producer.flush();
-                }
                 RecordMetadata metadata = futures.get(i).get();
                 assertEquals(topic, metadata.topic());
-                assertEquals(partition, metadata.partition());
-                assertEquals(i, metadata.offset());
+                // Without a partition or key, records are spread across partitions, so the partition and offset are not deterministic
+                if (!noPartitionNoKey) {
+                    assertEquals(partition, metadata.partition());
+                    assertEquals(i, metadata.offset());
+                }
             }
         }
     }
