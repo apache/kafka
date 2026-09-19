@@ -261,7 +261,9 @@ public class ConsumerIntegrationTest {
         )
     })
     public void testRackAwareAssignment(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        // Create a new topic with 1 partition on broker 0.
         String topic = "test-topic";
+        clusterInstance.createTopicWithAssignment(topic, Map.of(0, List.of(0)));
         try (Admin admin = clusterInstance.admin();
              Producer<byte[], byte[]> producer = clusterInstance.producer();
              Consumer<byte[], byte[]> consumer0 = clusterInstance.consumer(Map.of(
@@ -283,10 +285,6 @@ public class ConsumerIntegrationTest {
                  ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()
              ))
         ) {
-            // Create a new topic with 1 partition on broker 0.
-            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0)))));
-            clusterInstance.waitTopicCreation(topic, 1);
-
             producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes()));
             producer.flush();
 
