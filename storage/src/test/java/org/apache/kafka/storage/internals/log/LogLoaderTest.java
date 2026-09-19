@@ -1788,7 +1788,7 @@ public class LogLoaderTest {
         log.flush(false);
         assertThrows(NoSuchFileException.class, () -> log.activeSegment().sanityCheck(true));
         long lastOffset = log.logEndOffset();
-        log.closeHandlers();
+        log.closeQuietly();
 
         UnifiedLog log2 = createLog(logDir, logConfig, lastOffset, false);
         assertEquals(lastOffset, log2.recoveryPoint(), "Unexpected recovery point");

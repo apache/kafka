@@ -361,13 +361,13 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             buffer.printf("case %d: // %s%n", apiKey, MessageGenerator.capitalizeFirst(name));
             buffer.incrementIndent();
             Optional<HeaderVersions> headerVersions = spec.headerVersions();
-            if (type.equals("response") && apiKey == 18) {
+            if (type.equals("response") && apiKey == MessageSpec.API_VERSIONS_API_KEY) {
                 buffer.printf("// ApiVersionsResponse always includes a v0 header.%n");
                 buffer.printf("// See KIP-511 for details.%n");
             }
             if (headerVersions.isPresent()) {
                 generateHeaderVersionFromMap(headerVersions.get(), spec.validVersions());
-            } else if (type.equals("response") && apiKey == 18) {
+            } else if (type.equals("response") && apiKey == MessageSpec.API_VERSIONS_API_KEY) {
                 buffer.printf("return (short) 0;%n");
             } else {
                 VersionConditional.forVersions(spec.flexibleVersions(),

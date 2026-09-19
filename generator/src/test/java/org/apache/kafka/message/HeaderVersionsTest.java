@@ -225,7 +225,7 @@ public class HeaderVersionsTest {
 
     @Test
     public void testDecreasingHeaderVersionRejected() {
-        // Header version must not go down as the body version goes up.
+        // Header version must not go down as the message version goes up.
         assertMessageContains("must not decrease",
             () -> parse(requestSpec("0-5", "none", "{'0': '2', '1+': '1'}")));
     }
@@ -316,6 +316,14 @@ public class HeaderVersionsTest {
     }
 
     @Test
+    public void testRequestHeaderVersionBelowLowestRejected() {
+        // The request header schema starts at v1, so a request version may not map to the
+        // non-existent request header v0.
+        assertMessageContains("the lowest request header version is 1",
+            () -> checkHeaderVersions(parse(requestSpec("0-5", "none", "{'0': '0', '1+': '1'}"))));
+    }
+
+    @Test
     public void testHighestExistingHeaderVersionsAccepted() throws Exception {
         MessageSpec spec = parse(requestSpec("0-5", "0+", "{'0+': '2'}"));
         checkHeaderVersions(spec);
@@ -332,10 +340,24 @@ public class HeaderVersionsTest {
     }
 
     @Test
-    public void testNonFlexibleVersionsAreNotChecked() throws Exception {
-        // The non-flexible side of the invariant is enforced against the generated code by
-        // ApiMessageTypeTest, so a non-flexible version mapped to any header version is accepted.
-        MessageSpec spec = parse(requestSpec("1-2", "1+", "{'0': '1', '1+': '2'}"));
+    public void testNonFlexibleRequestVersionNeedsNonFlexibleHeader() {
+        // A non-flexible message version must map to a non-flexible header version, mirroring the flexible
+        // rule: here the non-flexible request versions 0 and 1 are mapped to the flexible header v2.
+        assertMessageContains("which is not flexible",
+            () -> checkHeaderVersions(parse(requestSpec("0-5", "2+", "{'0+': '2'}"))));
+    }
+
+    @Test
+    public void testNonFlexibleResponseVersionNeedsNonFlexibleHeader() {
+        // The non-flexible response version 0 is mapped to the flexible response header v1.
+        assertMessageContains("which is not flexible",
+            () -> checkHeaderVersions(parse(responseSpec(0, "FooResponse", "0-5", "1+", "{'0+': '1'}"))));
+    }
+
+    @Test
+    public void testMatchingFlexibilityMappingAccepted() throws Exception {
+        // Non-flexible versions 0-1 map to non-flexible header v1, and flexible versions 2+ to flexible header v2.
+        MessageSpec spec = parse(requestSpec("0-5", "2+", "{'0-1': '1', '2+': '2'}"));
         checkHeaderVersions(spec);
         assertEquals(2, spec.headerVersions().orElseThrow().entries().size());
     }
@@ -351,14 +373,14 @@ public class HeaderVersionsTest {
     @Test
     public void testHeaderVersionThreeAcceptedWhenHeaderSchemaAllowsIt() throws Exception {
         // Once the request header schema is bumped to 1-3, a map may declare header v3.
-        MessageSpec spec = parse(requestSpec("0-5", "3+", "{'0-1': '1', '2': '2', '3+': '3'}"));
+        MessageSpec spec = parse(requestSpec("0-5", "2+", "{'0-1': '1', '2': '2', '3+': '3'}"));
         spec.checkHeaderVersions(headerSpec("RequestHeader", "1-3", "2+"), responseHeader());
         assertEquals((short) 3, spec.headerVersions().orElseThrow().entries().get(2).headerVersion());
     }
 
     @Test
     public void testFirstFlexibleHeaderFollowsHeaderSchema() {
-        // A header schema that only becomes flexible at v3 makes a flexible body mapped to header v2 fail.
+        // A header schema that only becomes flexible at v3 makes a flexible message version mapped to header v2 fail.
         assertMessageContains("which is flexible", () -> parse(requestSpec("0-5", "2+", "{'0-1': '1', '2+': '2'}"))
             .checkHeaderVersions(headerSpec("RequestHeader", "1-3", "3+"), responseHeader()));
     }
@@ -377,8 +399,8 @@ public class HeaderVersionsTest {
     }
 
     @Test
-    public void testNonFlexibleHeaderSchemaWithFlexibleBodyRejected() {
-        // A header schema with no flexible version cannot serve a flexible body version.
+    public void testNonFlexibleHeaderSchemaWithFlexibleVersionRejected() {
+        // A header schema with no flexible version cannot serve a flexible message version.
         assertMessageContains("no flexible version",
             () -> parse(requestSpec("0-5", "2+", "{'0+': '2'}"))
                 .checkHeaderVersions(headerSpec("RequestHeader", "1-2", "none"), responseHeader()));
