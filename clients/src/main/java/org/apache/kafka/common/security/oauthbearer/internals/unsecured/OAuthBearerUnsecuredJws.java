@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerScopeClaimUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -345,10 +346,9 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
         if (isClaimType(scopeClaimName, String.class)) {
             String scopeClaimValue = claim(scopeClaimName, String.class);
             if (Utils.isBlank(scopeClaimValue))
-                return Set.of();
-            else {
-                return Set.of(scopeClaimValue.trim());
-            }
+                return Collections.emptySet();
+            else
+                return Collections.unmodifiableSet(new HashSet<>(OAuthBearerScopeClaimUtils.parseSpaceDelimitedScopeClaim(scopeClaimValue)));
         }
         List<?> scopeClaimValue = claim(scopeClaimName, List.class);
         if (scopeClaimValue == null || scopeClaimValue.isEmpty())
