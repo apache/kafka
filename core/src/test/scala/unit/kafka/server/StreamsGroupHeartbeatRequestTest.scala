@@ -960,6 +960,22 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         s"Expected InvalidConfigurationException but got ${executionException.getCause}")
       assertTrue(executionException.getCause.getMessage.contains("'does-not-exist' is not a registered task assignor"),
         s"Unexpected error message: ${executionException.getCause.getMessage}")
+
+      // Every built-in assignor is registered by default, so a group can select the balanced assignor without
+      // any broker configuration. Group config propagation is asynchronous, so wait for it.
+      val balancedAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "balanced"),
+        AlterConfigOp.OpType.SET
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(balancedAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        val assignorName = describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG)
+        assignorName != null && assignorName.value() == "balanced"
+      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not updated to the expected value within the timeout period.")
     } finally {
       admin.close()
     }
