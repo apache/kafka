@@ -28,20 +28,20 @@ type: docs
 
 # Upgrade Guide and API Changes
 
-Upgrading from any older version to 4.3.0 is possible: if upgrading from 3.4 or below, you will need to do two rolling bounces, where during the first rolling bounce phase you set the config `upgrade.from="older version"` (possible values are `"2.4" - "3.4"`) and during the second you remove it. This is required to safely handle 2 changes. The first is a change in foreign-key join serialization format. The second is a change in the serialization format for an internal repartition topic. For more details, please refer to [KIP-904](https://cwiki.apache.org/confluence/x/P5VbDg): 
+Upgrading from any older version to the current release is possible: if upgrading from 3.4 or below, you will need to do two rolling bounces, where during the first rolling bounce phase you set the config `upgrade.from="older version"` (possible values are `"2.4" - "3.4"`) and during the second you remove it. This is required to safely handle 2 changes. The first is a change in foreign-key join serialization format. The second is a change in the serialization format for an internal repartition topic. For more details, please refer to [KIP-904](https://cwiki.apache.org/confluence/x/P5VbDg):
 
   * prepare your application instances for a rolling bounce and make sure that config `upgrade.from` is set to the version from which it is being upgrade.
   * bounce each instance of your application once 
-  * prepare your newly deployed 4.3.0 application instances for a second round of rolling bounces; make sure to remove the value for config `upgrade.from`
+  * prepare your newly deployed application instances for a second round of rolling bounces; make sure to remove the value for config `upgrade.from`
   * bounce each instance of your application once more to complete the upgrade 
 
 
 
-As an alternative, an offline upgrade is also possible. Upgrading from any versions as old as 0.11.0.x to 4.3.0 in offline mode require the following steps: 
+As an alternative, an offline upgrade is also possible. Upgrading from any versions as old as 0.11.0.x to the current release in offline mode require the following steps:
 
   * stop all old (e.g., 0.11.0.x) application instances 
   * update your code and swap old code and jar file with new code and new jar file 
-  * restart all new (4.3.0) application instances 
+  * restart all new application instances
 
 
 
