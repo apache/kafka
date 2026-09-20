@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 import java.util.Iterator;
-
 
 /**
  * Iterator interface of {@link VersionedRecord VersionedRecord<V>}.
@@ -29,6 +31,7 @@ import java.util.Iterator;
  *
  * @param <V> Type of values
  */
+@InterfaceAudience.Public
 public interface VersionedRecordIterator<V> extends Iterator<VersionedRecord<V>>, Closeable {
 
     @Override

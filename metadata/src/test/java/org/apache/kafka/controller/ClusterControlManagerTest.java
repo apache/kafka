@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidRegistrationException;
@@ -35,9 +36,10 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
@@ -50,6 +52,7 @@ import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -93,7 +96,8 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -142,7 +146,8 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -195,7 +200,8 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -209,11 +215,14 @@ public class ClusterControlManagerTest {
         assertFalse(clusterControl.isUnfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
 
+        Uuid dir1 = Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ");
+        Uuid dir2 = Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg");
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
             setBrokerEpoch(100).
             setBrokerId(0).
             setRack(null).
-            setFenced(false);
+            setFenced(false).
+            setLogDirs(List.of(dir1, dir2));
         brokerRecord.endPoints().add(new BrokerEndpoint().
             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
             setPort((short) 9092).
@@ -241,6 +250,37 @@ public class ClusterControlManagerTest {
 
         assertTrue(clusterControl.isUnfenced(0));
         assertTrue(clusterControl.inControlledShutdown(0));
+
+        // By default cordonedLogDirs is null and means no changes
+        assertEquals(null, clusterControl.registration(0).cordonedDirectories());
+        registrationChangeRecord = new BrokerRegistrationChangeRecord().
+            setBrokerId(0).
+            setBrokerEpoch(100);
+        clusterControl.replay(registrationChangeRecord);
+        assertEquals(null, clusterControl.registration(0).cordonedDirectories());
+
+        // Set a cordoned log dir
+        registrationChangeRecord = new BrokerRegistrationChangeRecord().
+            setBrokerId(0).
+            setBrokerEpoch(100).
+            setCordonedLogDirs(List.of(dir1));
+        clusterControl.replay(registrationChangeRecord);
+        assertEquals(List.of(dir1), clusterControl.registration(0).cordonedDirectories());
+
+        // null cordonedLogDirs so not changes
+        registrationChangeRecord = new BrokerRegistrationChangeRecord().
+            setBrokerId(0).
+            setBrokerEpoch(100);
+        clusterControl.replay(registrationChangeRecord);
+        assertEquals(List.of(dir1), clusterControl.registration(0).cordonedDirectories());
+
+        // Clears the cordoned dir
+        registrationChangeRecord = new BrokerRegistrationChangeRecord().
+            setBrokerId(0).
+            setBrokerEpoch(100).
+            setCordonedLogDirs(List.of());
+        clusterControl.replay(registrationChangeRecord);
+        assertEquals(List.of(), clusterControl.registration(0).cordonedDirectories());
     }
 
     @Test
@@ -250,7 +290,8 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -288,7 +329,8 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -359,7 +401,8 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(new MockTime(0, 0, 0)).
@@ -398,7 +441,8 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -461,7 +505,8 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -544,7 +589,8 @@ public class ClusterControlManagerTest {
             TestFeatureVersion.TEST_1.featureLevel()));
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, List.of(0))).
+            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -595,7 +641,8 @@ public class ClusterControlManagerTest {
             KRaftVersion.KRAFT_VERSION_1.featureLevel()));
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, List.of(0))).
+            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -678,7 +725,8 @@ public class ClusterControlManagerTest {
                         Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(
                                 MetadataVersion.IBP_3_5_IV0.featureLevel(),
                                 MetadataVersion.IBP_3_6_IV0.featureLevel())),
-                        List.of(0))).
+                        () -> Set.of(0))).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -732,6 +780,7 @@ public class ClusterControlManagerTest {
     @Test
     public void testRegisterControlWithUnsupportedMetadataVersion() {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -957,7 +1006,7 @@ public class ClusterControlManagerTest {
         MockTime time = new MockTime(0L, 20L, 1000L);
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-            setFeatureControlManager(new FeatureControlManager.Builder().build()).
+            setFeatureControlManager(new FeatureControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build()).
             setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
             setTime(time).
             build();
@@ -1105,8 +1154,92 @@ public class ClusterControlManagerTest {
         });
     }
 
+    @Test
+    public void testUnregisterController() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+            build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_4_4_IV2.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setTime(new MockTime(0, 0, 0)).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setFeatureControlManager(featureControl).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+
+        // Register a controller
+        ControllerResult<Void> registerResult = clusterControl.registerController(
+            new ControllerRegistrationRequestData().setControllerId(1));
+        RecordTestUtils.replayAll(clusterControl, registerResult.records());
+        assertTrue(clusterControl.controllerRegistrations().containsKey(1));
+
+        // Unregister the controller
+        ControllerResult<Void> unregisterResult = clusterControl.unregisterController(1);
+        assertEquals(1, unregisterResult.records().size());
+        RecordTestUtils.replayAll(clusterControl, unregisterResult.records());
+        assertFalse(clusterControl.controllerRegistrations().containsKey(1));
+    }
+
+    @Test
+    public void testUnregisterUnknownController() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+            build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_4_4_IV2.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setTime(new MockTime(0, 0, 0)).
+            setSnapshotRegistry(snapshotRegistry).
+            setSessionTimeoutNs(1000).
+            setFeatureControlManager(featureControl).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+
+        // Trying to unregister a non-registered controller should throw ApiException
+        assertThrows(ControllerIdNotRegisteredException.class,
+            () -> clusterControl.unregisterController(1));
+
+        // Replaying unregister record for unknown controller should throw RuntimeException
+        assertThrows(RuntimeException.class,
+            () -> clusterControl.replay(new UnregisterControllerRecord().setControllerId(1)));
+    }
+
+    @Test
+    public void testUnregisterControllerWithUnsupportedMetadataVersion() {
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+                build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+                setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+                setFeatureControlManager(featureControl).
+                setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+                build();
+        clusterControl.activate();
+        assertEquals("The current MetadataVersion is too old to support controller unregistration.",
+                assertThrows(UnsupportedVersionException.class, () -> clusterControl.unregisterController(1)).getMessage());
+    }
+
     private FeatureControlManager createFeatureControlManager() {
-        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
         featureControlManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));

@@ -30,6 +30,10 @@
   "latestVersionUnstable": false,
   "validVersions": "0-5",
   "flexibleVersions": "3+",
+  "headerVersions": {
+    "0-2": "1",
+    "3+": "2"
+  },
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
       "about": "The ID of the transaction to end." },

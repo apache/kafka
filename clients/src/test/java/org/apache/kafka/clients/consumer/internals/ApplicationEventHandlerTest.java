@@ -26,20 +26,22 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.time.Duration;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -103,6 +105,29 @@ public class ApplicationEventHandlerTest {
     public void testInterruptInInitializeResources() {
         Thread.currentThread().interrupt();
         assertInitializeResourcesError(InterruptException.class, () -> networkClientDelegate);
+    }
+
+    @Test
+    public void testAddThrowsWhenBackgroundThreadDead() {
+        try (Metrics metrics = new Metrics();
+             AsyncConsumerMetrics asyncConsumerMetrics = spy(new AsyncConsumerMetrics(metrics, "test-group"));
+             ApplicationEventHandler handler = new ApplicationEventHandler(
+                     new LogContext(),
+                     time,
+                     initializationTimeoutMs,
+                     applicationEventsQueue,
+                     applicationEventReaper,
+                     () -> applicationEventProcessor,
+                     () -> networkClientDelegate,
+                     () -> requestManagers,
+                     asyncConsumerMetrics
+             )) {
+            handler.close(Duration.ZERO);
+
+            KafkaException error = assertThrows(KafkaException.class,
+                () -> handler.add(new AsyncPollEvent(time.milliseconds() + 10, time.milliseconds())));
+            assertTrue(error.getMessage().contains("background thread is not running"));
+        }
     }
 
     private <T extends Throwable> T assertInitializeResourcesError(Class<T> exceptionClass,

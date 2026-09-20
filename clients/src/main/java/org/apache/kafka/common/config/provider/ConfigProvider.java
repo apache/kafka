@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigChangeCallback;
 import org.apache.kafka.common.config.ConfigData;
 
@@ -30,6 +31,7 @@ import java.util.Set;
  * To support this, implementations of this interface should also contain a service provider configuration file in
  * {@code META-INF/services/org.apache.kafka.common.config.provider.ConfigProvider}.
  */
+@InterfaceAudience.Public
 public interface ConfigProvider extends Configurable, Closeable {
 
     /**

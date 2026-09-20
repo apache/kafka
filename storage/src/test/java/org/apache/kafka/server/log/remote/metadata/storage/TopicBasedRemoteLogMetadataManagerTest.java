@@ -32,8 +32,8 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
@@ -360,7 +360,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
             // configure rlmm without bootstrap servers, so it will fail to initialize admin client.
             Map<String, Object> configs = Map.of(
                 TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR, TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath(),
-                TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID, 0
+                TopicBasedRemoteLogMetadataManagerConfig.NODE_ID, 0
             );
             rlmm.configure(configs);
             rlmm.onBrokerReady();

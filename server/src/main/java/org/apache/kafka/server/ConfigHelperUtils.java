@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.Errors;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
@@ -46,12 +47,26 @@ public class ConfigHelperUtils {
     }
 
     /**
-     * Creates a DescribeConfigsResult from an AbstractConfig.
-     * This method merges the config's originals (excluding nulls and keys present in nonInternalValues, which take priority).
+     * Creates a DescribeConfigsResult from an AbstractConfig, treating all of its originals as explicitly set.
      */
     public static DescribeConfigsResponseData.DescribeConfigsResult createResponseConfig(
             DescribeConfigsRequestData.DescribeConfigsResource resource,
             AbstractConfig config,
+            BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
+        return createResponseConfig(resource, config, config.originals().keySet(), createConfigEntry);
+    }
+
+    /**
+     * Creates a DescribeConfigsResult from an AbstractConfig whose originals may contain defaults merged with
+     * explicitly set configs, e.g. a topic config built from the broker's log defaults and the topic's own overrides.
+     * Non-internal configs are always included. Other originals, i.e. internal configs and any keys the
+     * ConfigDef does not define, are included only if explicitly set. This matches the CreateTopics response,
+     * which reports internal configs only when the user set them.
+     */
+    public static DescribeConfigsResponseData.DescribeConfigsResult createResponseConfig(
+            DescribeConfigsRequestData.DescribeConfigsResource resource,
+            AbstractConfig config,
+            Set<String> explicitlySetConfigs,
             BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
 
         // Cast from Map<String, ?> to Map<String, Object> to eliminate wildcard types. Cached to avoid multiple calls.
@@ -59,7 +74,9 @@ public class ConfigHelperUtils {
         Map<String, Object> nonInternalValues = (Map<String, Object>) config.nonInternalValues();
         Stream<Entry<String, Object>> allEntries = Stream.concat(
                 config.originals().entrySet().stream()
-                        .filter(entry -> entry.getValue() != null && !nonInternalValues.containsKey(entry.getKey()))
+                        .filter(entry -> entry.getValue() != null
+                                && explicitlySetConfigs.contains(entry.getKey())
+                                && !nonInternalValues.containsKey(entry.getKey()))
                         .map(entry -> Map.entry(entry.getKey(), entry.getValue())),
                 nonInternalValues.entrySet().stream()
         );

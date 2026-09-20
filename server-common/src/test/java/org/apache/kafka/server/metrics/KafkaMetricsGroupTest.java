@@ -20,18 +20,59 @@ import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class KafkaMetricsGroupTest {
+
     @Test
-    public void testConstructorWithPackageAndSimpleName() {
-        String packageName = "testPackage";
-        String simpleName = "testSimple";
-        KafkaMetricsGroup group = new KafkaMetricsGroup(packageName, simpleName);
-        MetricName metricName = group.metricName("metric-name", Map.of());
-        assertEquals(packageName, metricName.getGroup());
-        assertEquals(simpleName, metricName.getType());
+    public void testUntaggedMetricName() {
+        KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.metrics", "TestMetrics");
+        MetricName metricName = metricsGroup.metricName("TaggedMetric", Map.of());
+
+        assertEquals("kafka.metrics", metricName.getGroup());
+        assertEquals("TestMetrics", metricName.getType());
+        assertEquals("TaggedMetric", metricName.getName());
+        assertEquals("kafka.metrics:type=TestMetrics,name=TaggedMetric", metricName.getMBeanName());
+        assertNull(metricName.getScope());
+    }
+
+    @Test
+    public void testTaggedMetricName() {
+        LinkedHashMap<String, String> tags = new LinkedHashMap<>();
+        tags.put("foo", "bar");
+        tags.put("bar", "baz");
+        tags.put("baz", "raz.taz");
+
+        KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.metrics", "TestMetrics");
+        MetricName metricName = metricsGroup.metricName("TaggedMetric", tags);
+
+        assertEquals("kafka.metrics", metricName.getGroup());
+        assertEquals("TestMetrics", metricName.getType());
+        assertEquals("TaggedMetric", metricName.getName());
+        assertEquals("kafka.metrics:type=TestMetrics,name=TaggedMetric,foo=bar,bar=baz,baz=raz.taz",
+                metricName.getMBeanName());
+        assertEquals("bar.baz.baz.raz_taz.foo.bar", metricName.getScope());
+    }
+
+    @Test
+    public void testTaggedMetricNameWithEmptyValue() {
+        LinkedHashMap<String, String> tags = new LinkedHashMap<>();
+        tags.put("foo", "bar");
+        tags.put("bar", "");
+        tags.put("baz", "raz.taz");
+
+        KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.metrics", "TestMetrics");
+        MetricName metricName = metricsGroup.metricName("TaggedMetric", tags);
+
+        assertEquals("kafka.metrics", metricName.getGroup());
+        assertEquals("TestMetrics", metricName.getType());
+        assertEquals("TaggedMetric", metricName.getName());
+        assertEquals("kafka.metrics:type=TestMetrics,name=TaggedMetric,foo=bar,baz=raz.taz",
+                metricName.getMBeanName());
+        assertEquals("baz.raz_taz.foo.bar", metricName.getScope());
     }
 }

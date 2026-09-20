@@ -207,7 +207,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  dynamicRaftQuorum=False,
                  use_transactions_v2=False,
                  use_streams_groups=False,
-                 enable_assignment_batching=None
+                 enable_assignment_batching=None,
+                 share_version=None
                  ):
         """
         :param context: test context
@@ -273,6 +274,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
         :param use_streams_groups: When true, enables the use of streams groups introduced in KIP-1071
         :param enable_assignment_batching: When true, enables assignment batching introduced in KIP-1263. If not specified, defaults to True.
+        :param share_version: When set, bootstraps the cluster with --feature share.version=<value> (KIP-932/KIP-1191).
         """
 
         self.zk = zk
@@ -288,6 +290,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.use_transactions_v2 = use_transactions_v2
         self.use_streams_groups = use_streams_groups
+        self.share_version = share_version
 
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
@@ -361,7 +364,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum,
                     use_transactions_v2=self.use_transactions_v2,
                     use_streams_groups=self.use_streams_groups,
-                    enable_assignment_batching=self.enable_assignment_batching
+                    enable_assignment_batching=self.enable_assignment_batching,
+                    share_version=self.share_version
                 )
                 self.controller_quorum = self.isolated_controller_quorum
 
@@ -907,6 +911,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else:
                 if get_version(node).supports_feature_command():
                     cmd += " --feature transaction.version=0"
+            if self.share_version is not None:
+                # share.version=2 (KIP-1191 DLQ) declares a bootstrap metadata.version of 4.4-IV0,
+                # but that isn't yet a valid --release-version for kafka-storage.sh format in this
+                # build (max supported is 4.3-IV0), and Feature.validateVersion() does not enforce
+                # the dependency, so the feature can be bootstrapped on its own.
+                cmd += " --feature share.version=%s" % self.share_version
             self.logger.info("Running log directory format command...\n%s" % cmd)
             node.account.ssh(cmd)
 
@@ -1657,10 +1667,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2
             if not requested_partition_line:
                 raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
-            leader_idx = int(requested_partition_line.split()[5]) # 6th column from above
+            leader_idx_str = requested_partition_line.split()[5] # 6th column from above
+            leader_idx = int(leader_idx_str) if leader_idx_str != "none" else None
 
-        self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
-        return self.get_node(leader_idx)
+        self.logger.info("Leader for topic %s and partition %d is now: %s" % (topic, partition, leader_idx))
+        return self.get_node(leader_idx) if leader_idx is not None and leader_idx != -1 else None
 
     def cluster_id(self):
         """ Get the current cluster id
@@ -1747,6 +1758,57 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 command_config)
         return "Completed" in self.run_cli_tool(node, cmd)
 
+    def set_share_group_dlq_config(self, group, topic_name=None, copy_record_enable=None, node=None, command_config=None):
+        """ Set the DLQ configs (errors.deadletterqueue.topic.name / errors.deadletterqueue.copy.record.enable)
+        for the given share group (KIP-1191).
+        """
+        if topic_name is None and copy_record_enable is None:
+            return
+        if node is None:
+            node = self.nodes[0]
+        config_script = self.path.script("kafka-configs.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        configs = []
+        if topic_name is not None:
+            configs.append("errors.deadletterqueue.topic.name=%s" % topic_name)
+        if copy_record_enable is not None:
+            configs.append("errors.deadletterqueue.copy.record.enable=%s" % str(copy_record_enable).lower())
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"%s\" %s" % \
+               (config_script,
+                self.bootstrap_servers(self.security_protocol),
+                group,
+                ",".join(configs),
+                command_config)
+        return "Completed" in self.run_cli_tool(node, cmd)
+
+    def set_share_group_delivery_count_limit(self, group, limit, node=None, command_config=None):
+        """ Set the share.delivery.count.limit config (GroupConfig, per-group override) for the given share group.
+        """
+        if node is None:
+            node = self.nodes[0]
+        config_script = self.path.script("kafka-configs.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"share.delivery.count.limit=%s\" %s" % \
+               (config_script,
+                self.bootstrap_servers(self.security_protocol),
+                group,
+                limit,
+                command_config)
+        return "Completed" in self.run_cli_tool(node, cmd)
+
     def list_consumer_groups(self, node=None, command_config=None, state=None, type=None):
         """ Get list of consumer groups.
         """
@@ -1768,6 +1830,27 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             cmd += " --state %s" % state
         if type is not None:
             cmd += " --type %s" % type
+        return self.run_cli_tool(node, cmd)
+
+    def delete_streams_group(self, group_id, node=None, command_config=None):
+        """ Delete a streams group via kafka-streams-groups.sh --delete. The group must have
+        no active members (callers should stop/leave first) or the delete request fails.
+        """
+        if node is None:
+            node = self.nodes[0]
+        streams_group_script = self.path.script("kafka-streams-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --delete --group %s" % \
+              (streams_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config,
+               group_id)
         return self.run_cli_tool(node, cmd)
 
     def list_share_groups(self, node=None, command_config=None, state=None):
@@ -2016,6 +2099,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             output += line
         self.logger.debug(output)
         return output
+
+    def earliest_local_offset(self, topic, partition):
+        """ The earliest offset still held in local storage for the given topic-partition (KIP-405's
+        OffsetSpec.earliestLocal()) - offsets below this have been tiered to remote storage and removed
+        locally.
+        """
+        output = self.get_offset_shell(time="earliest-local", topic_partitions="%s:%d" % (topic, partition))
+        for line in output.strip().split("\n"):
+            if not line:
+                continue
+            return int(line.split(":")[-1])
+        raise Exception("No offset returned for %s:%d" % (topic, partition))
 
     def java_class_name(self):
         return "kafka\.Kafka"

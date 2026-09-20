@@ -90,17 +90,7 @@ public class AddPartitionsToTxnManagerTest {
                 KRaftConfigs.NODE_ID_CONFIG, "1",
                 KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER"),
             Map.of(),
-            false) {
-        @Override
-        public void addReconfigurable(org.apache.kafka.common.Reconfigurable reconfigurable) {
-            // No-op for test
-        }
-
-        @Override
-        public void removeReconfigurable(org.apache.kafka.common.Reconfigurable reconfigurable) {
-            // No-op for test
-        }
-    };
+            false) { };
     private final AddPartitionsToTxnManager addPartitionsToTxnManager =
             new AddPartitionsToTxnManager(config, networkClient, metadataCache, partitionFor, time);
 

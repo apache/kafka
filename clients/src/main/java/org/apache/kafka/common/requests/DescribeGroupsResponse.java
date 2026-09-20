@@ -147,8 +147,4 @@ public class DescribeGroupsResponse extends AbstractResponse {
         return new DescribeGroupsResponse(new DescribeGroupsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
 }

@@ -1,6 +1,6 @@
 ---
 title: Tiered Storage
-description: Tiered Storage
+description: Kafka tiered storage configuration, quick start, and operational limits.
 weight: 9
 tags: ['kafka', 'docs']
 aliases: 

@@ -31,8 +31,8 @@ import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.ietf.jgss.GSSContext;
@@ -58,8 +58,8 @@ import javax.security.auth.spi.LoginModule;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 
 public class SaslChannelBuilderTest {
@@ -92,13 +92,8 @@ public class SaslChannelBuilderTest {
     @Test
     public void testLoginManagerReleasedIfConfigureThrowsException() {
         SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_SSL, "PLAIN");
-        try {
-            // Use invalid config so that an exception is thrown
-            builder.configure(Collections.singletonMap(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, "1"));
-            fail("Exception should have been thrown");
-        } catch (KafkaException e) {
-            assertTrue(builder.loginManagers().isEmpty());
-        }
+        assertThrows(KafkaException.class, () -> builder.configure(Collections.singletonMap(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, "1")));
+        assertTrue(builder.loginManagers().isEmpty());
         builder.close();
         assertTrue(builder.loginManagers().isEmpty());
     }

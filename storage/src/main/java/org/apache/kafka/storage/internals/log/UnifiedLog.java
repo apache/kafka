@@ -42,10 +42,10 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -605,7 +605,7 @@ public class UnifiedLog implements AutoCloseable {
      * known, this will do a lookup in the index and cache the result.
      */
     private LogOffsetMetadata fetchHighWatermarkMetadata() throws IOException {
-        localLog.checkIfMemoryMappedBufferClosed();
+        localLog.checkIfClosed();
         LogOffsetMetadata offsetMetadata = highWatermarkMetadata;
         if (offsetMetadata.messageOffsetOnly()) {
             synchronized (lock) {
@@ -646,7 +646,7 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     private LogOffsetMetadata fetchLastStableOffsetMetadata() throws IOException {
-        localLog.checkIfMemoryMappedBufferClosed();
+        localLog.checkIfClosed();
 
         // cache the current high watermark and the first unstable offset metadata to avoid a concurrent update
         // invalidating the range check breaking the isPresent check
@@ -825,7 +825,7 @@ public class UnifiedLog implements AutoCloseable {
     // free of all side effects, i.e. it must not update any log-specific state.
     private void rebuildProducerState(long lastOffset, ProducerStateManager producerStateManager) throws IOException {
         synchronized (lock) {
-            localLog.checkIfMemoryMappedBufferClosed();
+            localLog.checkIfClosed();
             UnifiedLog.rebuildProducerState(producerStateManager, localLog.segments(), logStartOffset, lastOffset, time(), false, logIdent);
         }
     }
@@ -945,8 +945,21 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     /**
+     * Append the largest time index entry to the time index of the active segment and trim the log and indexes.
+     * This is the same operation performed when rolling a segment and should be called before flushing and
+     * closing the log during shutdown.
+     */
+    public void prepareActiveSegmentForClose() {
+        maybeHandleIOException(
+                () -> "Error while preparing active segment for close for " + topicPartition() + " in dir " + dir().getParent(),
+                () -> {
+                    localLog.segments().activeSegment().onBecomeInactiveSegment();
+                    return null;
+                });
+    }
+
+    /**
      * Close this log.
-     * The memory mapped buffer for index files of this log will be left open until the log is deleted.
      */
     @Override
     public void close() {
@@ -954,10 +967,10 @@ public class UnifiedLog implements AutoCloseable {
         synchronized (lock) {
             logOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER;
             maybeFlushMetadataFile();
-            localLog.checkIfMemoryMappedBufferClosed();
+            localLog.checkIfClosed();
             producerExpireCheck.cancel(true);
             maybeHandleIOException(
-                    () -> "Error while renaming dir for " + topicPartition() + " in dir " + dir().getParent(),
+                    () -> "Error while taking producer state snapshot for " + topicPartition() + " in dir " + dir().getParent(),
                     () -> {
                         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
                         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
@@ -1002,12 +1015,12 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     /**
-     * Close file handlers used by this log but don't write to disk. This is called if the log directory is offline
+     * Close the log, swallowing any exceptions. This is called if the log directory is offline.
      */
-    public void closeHandlers() {
-        logger.debug("Closing handlers");
+    public void closeQuietly() {
+        logger.debug("Closing quietly");
         synchronized (lock) {
-            localLog.closeHandlers();
+            localLog.closeQuietly();
         }
     }
 
@@ -1139,7 +1152,7 @@ public class UnifiedLog implements AutoCloseable {
                         () -> "Error while appending records to " + topicPartition() + " in dir " + dir().getParent(),
                         () -> {
                             MemoryRecords validRecords = trimmedRecords;
-                            localLog.checkIfMemoryMappedBufferClosed();
+                            localLog.checkIfClosed();
                             if (validateAndAssignOffsets) {
                                 // assign offsets to the message set
                                 PrimitiveRef.LongRef offset = PrimitiveRef.ofLong(localLog.logEndOffset());
@@ -1156,7 +1169,8 @@ public class UnifiedLog implements AutoCloseable {
                                         config().messageTimestampBeforeMaxMs,
                                         config().messageTimestampAfterMaxMs,
                                         leaderEpoch,
-                                        origin
+                                        origin,
+                                        config().maxDecompressedMessageBytes()
                                 );
                                 LogValidator.ValidationResult validateAndOffsetAssignResult = validator.validateMessagesAndAssignOffsets(offset,
                                         validatorMetricsRecorder,
@@ -1180,7 +1194,7 @@ public class UnifiedLog implements AutoCloseable {
                                             // to be consistent with pre-compression bytesRejectedRate recording
                                             brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
                                             brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
-                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to" +
+                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to " +
                                                     "partition " + topicPartition() + " which exceeds the maximum configured size of " + config().maxMessageSize() + ".");
                                         }
                                     });
@@ -1224,8 +1238,8 @@ public class UnifiedLog implements AutoCloseable {
                                 }
                             });
 
-                            // check messages size does not exceed config.segmentSize
-                            if (validRecords.sizeInBytes() > config().segmentSize()) {
+                            // Like KAFKA-9617 for max.message.bytes, KAFKA-17375 lets followers replicate data accepted before segment.bytes was lowered.
+                            if (origin != AppendOrigin.REPLICATION && validRecords.sizeInBytes() > config().segmentSize()) {
                                 throw new RecordBatchTooLargeException("Message batch size is " + validRecords.sizeInBytes() + " bytes in append " +
                                         "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize() + ".");
                             }
@@ -1312,7 +1326,7 @@ public class UnifiedLog implements AutoCloseable {
 
     private void maybeIncrementFirstUnstableOffset() throws IOException {
         synchronized (lock) {
-            localLog.checkIfMemoryMappedBufferClosed();
+            localLog.checkIfClosed();
 
             Optional<LogOffsetMetadata> updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset();
             if (updatedFirstUnstableOffset.isPresent() &&
@@ -1365,7 +1379,7 @@ public class UnifiedLog implements AutoCloseable {
                             localLogStartOffset = Math.max(newLogStartOffset, localLogStartOffset());
                         }
 
-                        localLog.checkIfMemoryMappedBufferClosed();
+                        localLog.checkIfClosed();
                         if (newLogStartOffset > logStartOffset) {
                             updateLogStartOffset(newLogStartOffset);
                             logger.info("Incremented log start offset to {} due to {}", newLogStartOffset, reason);
@@ -1741,7 +1755,7 @@ public class UnifiedLog implements AutoCloseable {
                         Optional<FileRecords.TimestampAndOffset> timestampAndOffsetOpt = findFirst(
                                 latestTimestampSegment.log().batchesFrom(position.position()),
                                 item -> item.maxTimestamp() == maxTimestampSoFar.timestamp())
-                                    .flatMap(batch -> batch.offsetOfMaxTimestamp()
+                                    .flatMap(batch -> batch.offsetOfMaxTimestamp(config().maxDecompressedMessageBytes())
                                         .map(offset -> new FileRecords.TimestampAndOffset(
                                             batch.maxTimestamp(),
                                             offset,
@@ -1803,7 +1817,7 @@ public class UnifiedLog implements AutoCloseable {
         List<LogSegment> segments = logSegments();
         for (LogSegment segment : segments) {
             if (segment.largestTimestamp() >= targetTimestamp) {
-                return segment.findOffsetByTimestamp(targetTimestamp, startOffset);
+                return segment.findOffsetByTimestamp(targetTimestamp, startOffset, config().maxDecompressedMessageBytes());
             }
         }
         return Optional.empty();
@@ -1940,7 +1954,7 @@ public class UnifiedLog implements AutoCloseable {
                                 segmentsToDelete = List.copyOf(deletable);
                             }
                         }
-                        localLog.checkIfMemoryMappedBufferClosed();
+                        localLog.checkIfClosed();
                         if (!segmentsToDelete.isEmpty()) {
                             // increment the local-log-start-offset or log-start-offset before removing the segment for lookups
                             long newLocalLogStartOffset = localLog.segments().higherSegment(segmentsToDelete.get(segmentsToDelete.size() - 1).baseOffset()).get().baseOffset();
@@ -2000,39 +2014,34 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     private int deleteRetentionMsBreachedSegments() throws IOException {
-        long retentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled());
+        boolean remoteLogEnabledAndRemoteCopyEnabled = remoteLogEnabledAndRemoteCopyEnabled();
+        long retentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled);
         if (retentionMs < 0) return 0;
         long startMs = time().milliseconds();
 
         DeletionCondition shouldDelete = (segment, nextSegmentOpt) -> {
-            if (startMs < segment.largestTimestamp()) {
-                futureTimestampLogger.warn("{} contains future timestamp(s), making it ineligible to be deleted", segment);
+            long anchorTimestamp = segment.largestTimestamp();
+            if (startMs < anchorTimestamp) {
+                if (remoteLogEnabledAndRemoteCopyEnabled) {
+                    anchorTimestamp = segment.lastModified();
+                    futureTimestampLogger.warn("{} contains future timestamp(s), using lastModified time {} as the retention anchor", segment, anchorTimestamp);
+                } else {
+                    futureTimestampLogger.warn("{} contains future timestamp(s), making it ineligible to be deleted", segment);
+                }
             }
-            boolean delete = startMs - segment.largestTimestamp() > retentionMs;
+            boolean delete = startMs - anchorTimestamp > retentionMs;
             logger.debug("{} retentionMs breached: {}, startMs={}, retentionMs={}",
                     segment, delete, startMs, retentionMs);
             return delete;
         };
         return deleteOldSegments(shouldDelete, toDelete -> {
-            long localRetentionMs = UnifiedLog.localRetentionMs(config(), remoteLogEnabledAndRemoteCopyEnabled());
+            String retentionScope = remoteLogEnabledAndRemoteCopyEnabled ? "local log retention" : "log retention";
             for (LogSegment segment : toDelete) {
-                if (segment.largestRecordTimestamp().isPresent()) {
-                    if (remoteLogEnabledAndRemoteCopyEnabled()) {
-                        logger.info("Deleting segment {} due to local log retention time {}ms breach based on the largest " +
-                                "record timestamp in the segment", segment, localRetentionMs);
-                    } else {
-                        logger.info("Deleting segment {} due to log retention time {}ms breach based on the largest " +
-                                "record timestamp in the segment", segment, localRetentionMs);
-                    }
-                } else {
-                    if (remoteLogEnabledAndRemoteCopyEnabled()) {
-                        logger.info("Deleting segment {} due to local log retention time {}ms breach based on the " +
-                                "last modified time of the segment", segment, localRetentionMs);
-                    } else {
-                        logger.info("Deleting segment {} due to log retention time {}ms breach based on the " +
-                                "last modified time of the segment", segment, localRetentionMs);
-                    }
-                }
+                String anchor = segment.largestRecordTimestamp().isEmpty() || (remoteLogEnabledAndRemoteCopyEnabled && startMs < segment.largestTimestamp())
+                        ? "last modified time of the segment"
+                        : "largest record timestamp in the segment";
+                logger.info("Deleting segment {} due to {} time {}ms breach based on the {}",
+                        segment, retentionScope, retentionMs, anchor);
             }
         });
     }
@@ -2104,16 +2113,27 @@ public class UnifiedLog implements AutoCloseable {
 
     /**
      * The log size in bytes for all segments that are only in local log but not yet in remote log.
+     *
+     * <p>A segment is considered "only local" (not yet in remote) when its base-offset is strictly
+     * greater than {@link #highestOffsetInRemoteStorage()}. The strict {@code >} (rather than
+     * {@code >=}) matters: {@code highestOffsetInRemoteStorage} holds the end-offset of the last
+     * segment already copied to remote, so the segment whose base-offset equals that value has
+     * itself been copied. This arises for single-record segments (base-offset == end-offset), which
+     * are common on low-throughput partitions; counting such a segment as local would double-count a
+     * segment that is already in remote storage.
      */
     public long onlyLocalLogSegmentsSize() {
-        return LogSegments.sizeInBytes(logSegments().stream().filter(s -> s.baseOffset() >= highestOffsetInRemoteStorage()).collect(Collectors.toList()));
+        return LogSegments.sizeInBytes(logSegments().stream().filter(s -> s.baseOffset() > highestOffsetInRemoteStorage()).collect(Collectors.toList()));
     }
 
     /**
      * The number of segments that are only in local log but not yet in remote log.
+     *
+     * <p>See {@link #onlyLocalLogSegmentsSize()} for why the base-offset comparison is a strict
+     * {@code >} against {@link #highestOffsetInRemoteStorage()} rather than {@code >=}.
      */
     public long onlyLocalLogSegmentsCount() {
-        return logSegments().stream().filter(s -> s.baseOffset() >= highestOffsetInRemoteStorage()).count();
+        return logSegments().stream().filter(s -> s.baseOffset() > highestOffsetInRemoteStorage()).count();
     }
 
     /**
@@ -2151,7 +2171,7 @@ public class UnifiedLog implements AutoCloseable {
             long maxOffsetInMessages = appendInfo.lastOffset();
 
             if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize(), appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
-                logger.debug("Rolling new log segment (log_size = {}/{}}, " +
+                logger.debug("Rolling new log segment (log_size = {}/{}, " +
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",
@@ -2278,7 +2298,6 @@ public class UnifiedLog implements AutoCloseable {
             () -> "Error while deleting log for " + topicPartition() + " in dir " + dir().getParent(),
             () -> {
                 synchronized (lock) {
-                    localLog.checkIfMemoryMappedBufferClosed();
                     producerExpireCheck.cancel(true);
                     leaderEpochCache.clear();
                     List<LogSegment> deletedSegments = localLog.deleteAllSegments();
@@ -2292,7 +2311,7 @@ public class UnifiedLog implements AutoCloseable {
     // visible for testing
     public void takeProducerSnapshot() throws IOException {
         synchronized (lock) {
-            localLog.checkIfMemoryMappedBufferClosed();
+            localLog.checkIfClosed();
             producerStateManager.takeSnapshot();
         }
     }
@@ -2321,7 +2340,7 @@ public class UnifiedLog implements AutoCloseable {
     // visible for testing
     public void flushProducerStateSnapshot(Path snapshot) {
         maybeHandleIOException(
-                () -> "Error while deleting producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
+                () -> "Error while flushing producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
                 () -> {
                     Utils.flushFileIfExists(snapshot);
                     return null;
@@ -2360,7 +2379,7 @@ public class UnifiedLog implements AutoCloseable {
                     } else {
                         logger.info("Truncating to offset {}", targetOffset);
                         synchronized (lock) {
-                            localLog.checkIfMemoryMappedBufferClosed();
+                            localLog.checkIfClosed();
                             if (localLog.segments().firstSegmentBaseOffset().getAsLong() > targetOffset) {
                                 truncateFullyAndStartAt(targetOffset, Optional.empty());
                             } else {
@@ -2467,7 +2486,7 @@ public class UnifiedLog implements AutoCloseable {
 
     public void replaceSegments(List<LogSegment> newSegments, List<LogSegment> oldSegments) throws IOException {
         synchronized (lock) {
-            localLog.checkIfMemoryMappedBufferClosed();
+            localLog.checkIfClosed();
             List<LogSegment> deletedSegments = LocalLog.replaceSegments(localLog.segments(), newSegments, oldSegments, dir(), topicPartition(),
                     config(), scheduler(), logDirFailureChannel(), logIdent, false);
             deleteProducerSnapshots(deletedSegments, true);

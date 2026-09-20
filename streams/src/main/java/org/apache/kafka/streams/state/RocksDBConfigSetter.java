@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import org.rocksdb.Options;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,7 @@ import java.util.Map;
  * the existing one (rather than create a new BlockBasedTableConfig object) so as to not lose the other default settings.
  * This can be done as {@code BlockBasedTableConfig tableConfig = (BlockBasedTableConfig) options.tableFormatConfig();}
  */
+@InterfaceAudience.Public
 public interface RocksDBConfigSetter {
 
     Logger LOG = LoggerFactory.getLogger(RocksDBConfigSetter.class);

@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.util
 import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
@@ -177,10 +178,9 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   }
 
   private def createTopics() =  {
-    val topicConfig = new Properties()
-    topicConfig.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
-    createTopic(inputTopic, numPartitions, 3, topicConfig)
-    createTopic(outputTopic, numPartitions, 3, topicConfig)
+    val topicConfigs = util.Map.of(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
+    createTopic(inputTopic, numPartitions, 3, topicConfigs)
+    createTopic(outputTopic, numPartitions, 3, topicConfigs)
   }
 
   private class BounceScheduler extends ShutdownableThread("daemon-broker-bouncer", false) {

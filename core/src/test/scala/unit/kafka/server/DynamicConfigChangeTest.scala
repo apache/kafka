@@ -67,9 +67,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = new TopicPartition("test", 0)
-    val logProps = new Properties()
-    logProps.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, oldVal.toString)
-    createTopic(tp.topic, 1, 1, logProps)
+    val logConfigs = util.Map.of(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, oldVal.toString)
+    createTopic(tp.topic, 1, 1, logConfigs)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
       assertTrue(logOpt.isPresent)
@@ -99,9 +98,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def testDynamicTopicConfigChange(): Unit = {
     val tp = new TopicPartition("test", 0)
     val oldSegmentSize = 2 * 1024 * 1024
-    val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
-    createTopic(tp.topic, 1, 1, logProps)
+    val logConfigs = util.Map.of(TopicConfig.SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
+    createTopic(tp.topic, 1, 1, logConfigs)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
       assertTrue(logOpt.isPresent)

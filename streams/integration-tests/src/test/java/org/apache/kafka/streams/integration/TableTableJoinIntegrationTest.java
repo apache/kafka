@@ -20,12 +20,12 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
@@ -72,7 +72,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -119,7 +119,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -166,7 +166,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -213,7 +213,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
@@ -257,7 +257,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
@@ -301,7 +301,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
@@ -345,7 +345,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -392,7 +392,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -439,7 +439,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -486,7 +486,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -533,7 +533,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -580,7 +580,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -627,7 +627,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.join(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -680,7 +680,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.join(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -730,7 +730,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.join(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -783,7 +783,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.leftJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -833,7 +833,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.leftJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -885,7 +885,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.leftJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -937,7 +937,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.outerJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -989,7 +989,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.outerJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -1043,7 +1043,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftTable.outerJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()

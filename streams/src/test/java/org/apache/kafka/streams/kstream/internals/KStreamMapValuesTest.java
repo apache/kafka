@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
@@ -49,7 +50,7 @@ public class KStreamMapValuesTest {
         final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.mapValues(CharSequence::length).process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             for (final int expectedKey : expectedKeys) {
                 final TestInputTopic<Integer, String> inputTopic =
                         driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
@@ -75,7 +76,7 @@ public class KStreamMapValuesTest {
         final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.mapValues(mapper).process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<Integer, String> inputTopic =
                     driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
             for (final int expectedKey : expectedKeys) {

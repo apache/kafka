@@ -28,7 +28,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(120)
 public class RawTaggedFieldWriterTest {
@@ -70,12 +70,8 @@ public class RawTaggedFieldWriterTest {
         );
         RawTaggedFieldWriter writer = RawTaggedFieldWriter.forFields(tags);
         assertEquals(3, writer.numFields());
-        try {
-            writer.writeRawTags(new ByteBufferAccessor(ByteBuffer.allocate(1024)), 2);
-            fail("expected to get RuntimeException");
-        } catch (RuntimeException e) {
-            assertEquals("Attempted to use tag 2 as an undefined tag.", e.getMessage());
-        }
+        RuntimeException e = assertThrows(RuntimeException.class, () -> writer.writeRawTags(new ByteBufferAccessor(ByteBuffer.allocate(1024)), 2));
+        assertEquals("Attempted to use tag 2 as an undefined tag.", e.getMessage());
     }
 
     @Test
@@ -87,12 +83,7 @@ public class RawTaggedFieldWriterTest {
         );
         RawTaggedFieldWriter writer = RawTaggedFieldWriter.forFields(tags);
         assertEquals(3, writer.numFields());
-        try {
-            writer.writeRawTags(new ByteBufferAccessor(ByteBuffer.allocate(1024)), 8);
-            fail("expected to get RuntimeException");
-        } catch (RuntimeException e) {
-            assertEquals("Invalid raw tag field list: tag 2 comes after tag 5, but is " +
-                "not higher than it.", e.getMessage());
-        }
+        RuntimeException e = assertThrows(RuntimeException.class, () -> writer.writeRawTags(new ByteBufferAccessor(ByteBuffer.allocate(1024)), 8));
+        assertEquals("Invalid raw tag field list: tag 2 comes after tag 5, but is " + "not higher than it.", e.getMessage());
     }
 }

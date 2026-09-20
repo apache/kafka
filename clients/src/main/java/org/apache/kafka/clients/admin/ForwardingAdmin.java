@@ -27,6 +27,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -46,6 +47,7 @@ import java.util.Set;
  * The class must have a constructor with signature {@code (Map<String, Object> config)} for configuring
  * a decorated {@link KafkaAdminClient} and any other clients needed for external resource management.
  */
+@InterfaceAudience.Public
 public class ForwardingAdmin implements Admin {
     private final Admin delegate;
 
@@ -268,6 +270,11 @@ public class ForwardingAdmin implements Admin {
     @Override
     public UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options) {
         return delegate.unregisterBroker(brokerId, options);
+    }
+
+    @Override
+    public UnregisterControllerResult unregisterController(int controllerId, UnregisterControllerOptions options) {
+        return delegate.unregisterController(controllerId, options);
     }
 
     @Override

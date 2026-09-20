@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 
 import java.util.Collections;
@@ -42,6 +43,7 @@ import javax.security.auth.callback.Callback;
  * It is very important that token validation is done in its own {@link OAuthBearerValidatorCallback}
  * irregardless of provided extensions, as they are inherently insecure.
  */
+@InterfaceAudience.Public
 public class OAuthBearerExtensionsValidatorCallback implements Callback {
     private final OAuthBearerToken token;
     private final SaslExtensions inputExtensions;

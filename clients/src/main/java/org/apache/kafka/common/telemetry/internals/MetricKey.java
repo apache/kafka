@@ -18,7 +18,6 @@ package org.apache.kafka.common.telemetry.internals;
 
 import org.apache.kafka.common.MetricName;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
@@ -49,7 +48,7 @@ public class MetricKey implements MetricKeyable {
      */
     public MetricKey(String name, Map<String, String> tags) {
         this.name = Objects.requireNonNull(name);
-        this.tags = tags != null ? Collections.unmodifiableMap(tags) : Collections.emptyMap();
+        this.tags = tags != null ? Map.copyOf(tags) : Map.of();
     }
 
     public MetricKey(MetricName metricName) {

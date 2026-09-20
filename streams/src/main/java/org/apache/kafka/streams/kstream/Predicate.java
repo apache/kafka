@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KeyValue;
 
 /**
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.KeyValue;
  * @see KTable#filterNot(Predicate)
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Predicate<K, V> {
 
     /**

@@ -13,9 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ghcr.io/graalvm/graalvm-community:21 AS build-native-image
+# GraalVM 25+ required: earlier versions call getpwuid (not thread-safe), causing
+# intermittent segfaults (~2%) on startup. GraalVM 25 switches to getpwuid_r.
+FROM ghcr.io/graalvm/graalvm-community:25 AS build-native-image
 
-ARG kafka_url
+ARG kafka_url=""
 
 WORKDIR /app
 
@@ -30,7 +32,8 @@ COPY native_command.sh native_command.sh
 
 COPY *kafka.tgz /app
 
-RUN if [ -n "$kafka_url" ]; then \
+RUN set -eux ; \
+    if [ -n "$kafka_url" ]; then \
         microdnf install wget; \
         wget -nv -O kafka.tgz "$kafka_url"; \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
@@ -57,6 +60,8 @@ LABEL org.label-schema.name="kafka" \
       org.opencontainers.image.authors="Apache Kafka"
 
 RUN apk update ; \
+    # Fix CVE-2026-28390 and CVE-2026-22184. Remove this if alpine:latest is updated to a version that has these CVEs fixed.
+    apk upgrade --no-cache libcrypto3 libssl3 zlib; \
     apk add --no-cache gcompat ; \
     apk add --no-cache bash ; \
     mkdir -p /etc/kafka/docker /mnt/shared/config /opt/kafka/config /etc/kafka/secrets ; \

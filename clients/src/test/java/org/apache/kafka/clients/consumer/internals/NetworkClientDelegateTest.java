@@ -26,17 +26,19 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -247,6 +249,51 @@ public class NetworkClientDelegateTest {
         assertNotNull(event);
         assertEquals(BackgroundEvent.Type.ERROR, event.type());
         assertEquals(authException, ((ErrorEvent) event).error());
+    }
+
+    @Test
+    public void testBootstrapResolutionExceptionPropagatedViaErrorEventOnce() throws Exception {
+        BootstrapResolutionException bootstrapException = new BootstrapResolutionException("DNS resolution failed");
+
+        BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
+        Metadata realMetadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
+
+        LogContext logContext = new LogContext();
+        Properties properties = new Properties();
+        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(GROUP_ID_CONFIG, GROUP_ID);
+        properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+        properties.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+
+        try (NetworkClientDelegate ncd = new NetworkClientDelegate(time,
+                new ConsumerConfig(properties),
+                logContext,
+                this.client,
+                realMetadata,
+                this.backgroundEventHandler,
+                true,
+                mock(AsyncConsumerMetrics.class))) {
+
+            // Simulate NetworkClient recording a permanent bootstrap failure on the metadata.
+            realMetadata.bootstrapFatalError(bootstrapException);
+
+            assertEquals(0, backgroundEventQueue.size());
+            ncd.poll(0, time.milliseconds());
+            assertEquals(1, backgroundEventQueue.size());
+
+            BackgroundEvent event = backgroundEventQueue.poll();
+            assertNotNull(event);
+            assertEquals(BackgroundEvent.Type.ERROR, event.type());
+            assertEquals(bootstrapException, ((ErrorEvent) event).error());
+
+            // Subsequent polls must NOT keep flooding the queue with duplicate ErrorEvents,
+            // even though metadata.maybeThrowAnyException keeps surfacing the permanent error.
+            ncd.poll(0, time.milliseconds());
+            ncd.poll(0, time.milliseconds());
+            assertEquals(0, backgroundEventQueue.size());
+        }
     }
 
     @ParameterizedTest

@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.time.Duration;
 
@@ -31,6 +34,7 @@ import java.time.Duration;
  *   by how long an iteration of the processing loop takes to complete</li>
  * </ul>
  */
+@InterfaceAudience.Public
 public enum PunctuationType {
    STREAM_TIME,
    WALL_CLOCK_TIME,

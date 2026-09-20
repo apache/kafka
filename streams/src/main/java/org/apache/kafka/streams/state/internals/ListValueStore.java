@@ -18,14 +18,13 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.AbstractIterator;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -81,7 +80,7 @@ public class ListValueStore
     // this function assumes the addedValue is not null; callers should check null themselves
     private void putInternal(final Bytes key, final byte[] addedValue, final byte[] oldValue) {
         if (oldValue == null) {
-            wrapped().put(key, LIST_SERDE.serializer().serialize(null, Collections.singletonList(addedValue)));
+            wrapped().put(key, LIST_SERDE.serializer().serialize(null, List.of(addedValue)));
         } else {
             final List<byte[]> list = LIST_SERDE.deserializer().deserialize(null, oldValue);
             list.add(addedValue);

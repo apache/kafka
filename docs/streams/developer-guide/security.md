@@ -1,6 +1,6 @@
 ---
 title: Streams Security
-description: 
+description: Security configuration and required ACLs for Kafka Streams applications.
 weight: 12
 tags: ['kafka', 'docs']
 aliases: 
@@ -48,7 +48,7 @@ For more information about the security features in Apache Kafka, see [Kafka Sec
 
 # Required ACL setting for secure Kafka clusters
 
-Kafka clusters can use ACLs to control access to resources (like the ability to create topics), and for such clusters each client, including Kafka Streams, is required to authenticate as a particular user in order to be authorized with appropriate access. In particular, when Streams applications are run against a secured Kafka cluster, the principal running the application must have the ACL set so that the application has the permissions to create, read and write [internal topics](manage-topics.html#streams-developer-guide-topics-internal).
+Kafka clusters can use ACLs to control access to resources (like the ability to create topics), and for such clusters each client, including Kafka Streams, is required to authenticate as a particular user in order to be authorized with appropriate access. In particular, when Streams applications are run against a secured Kafka cluster, the principal running the application must have the ACL set so that the application has the permissions to create, read and write [internal topics](../manage-topics#streams-developer-guide-topics-internal).
 
 If the [streams rebalance protocol](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol) is enabled by setting `group.protocol=streams`, the following ACLs are required on the topic and group resources:  
   

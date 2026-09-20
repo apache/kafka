@@ -19,8 +19,10 @@ package org.apache.kafka.common.record.internal;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AbstractIterator;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.io.Closeable;
 import java.io.File;
@@ -208,22 +210,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Close this record set
+     * Close this record set. Callers are responsible for flushing and trimming before closing.
      */
     public void close() throws IOException {
-        if (!channel.isOpen()) {
-            return;
-        }
-
-        flush();
-        trim();
-        channel.close();
-    }
-
-    /**
-     * Close file handlers used by the FileChannel but don't write to disk. This is used when the disk may have failed
-     */
-    public void closeHandlers() throws IOException {
         channel.close();
     }
 
@@ -239,7 +228,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Trim file when close or roll to next file
+     * Trim file when rolling to the next segment or preparing for shutdown
      */
     public void trim() throws IOException {
         truncateTo(sizeInBytes());
@@ -351,17 +340,25 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param targetTimestamp The timestamp to search for.
      * @param startingPosition The starting position to search.
      * @param startingOffset The starting offset to search.
+     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed
+     *                          record exceeding it is rejected with an InvalidRecordException before its body is
+     *                          allocated. Pass {@link Records#SOFT_MAX_ARRAY_LENGTH} for no limit beyond the
+     *                          array-length ceiling.
      * @return The timestamp and offset of the message found. Null if no message is found.
      */
-    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset) {
+    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset,
+                                                 int maxRecordBodySize) {
         for (RecordBatch batch : batchesFrom(startingPosition)) {
             if (batch.maxTimestamp() >= targetTimestamp) {
                 // We found a message
-                for (Record record : batch) {
-                    long timestamp = record.timestamp();
-                    if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
-                        return new TimestampAndOffset(timestamp, record.offset(),
-                                maybeLeaderEpoch(batch.partitionLeaderEpoch()));
+                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
+                    while (iterator.hasNext()) {
+                        Record record = iterator.next();
+                        long timestamp = record.timestamp();
+                        if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
+                            return new TimestampAndOffset(timestamp, record.offset(),
+                                    maybeLeaderEpoch(batch.partitionLeaderEpoch()));
+                    }
                 }
             }
         }
@@ -487,8 +484,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
                         StandardOpenOption.WRITE);
             } else {
                 RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
+                try {
+                    randomAccessFile.setLength(initFileSize);
+                    return randomAccessFile.getChannel();
+                } catch (IOException e) {
+                    randomAccessFile.close();
+                    throw e;
+                }
             }
         } else {
             return FileChannel.open(file.toPath());

@@ -30,6 +30,10 @@ SSL_TOPIC="test-topic-ssl"
 FILE_INPUT_FLOW_TESTS="File Input Flow Tests"
 FILE_INPUT_TOPIC="test-topic-file-input"
 
+SASL_FLOW_TESTS="SASL Flow Tests"
+SASL_CLIENT_CONFIG="fixtures/sasl/client-sasl.properties"
+SASL_TOPIC="test-topic-sasl"
+
 BROKER_RESTART_TESTS="Broker Restart Tests"
 BROKER_CONTAINER="broker1"
 BROKER_RESTART_TEST_TOPIC="test-topic-broker-restart"
@@ -40,6 +44,7 @@ JMX_TOOL="org.apache.kafka.tools.JmxTool"
 BROKER_METRICS_HEADING='"time","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:Count","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:EventType","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:MeanRate","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:OneMinuteRate","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:RateUnit"'
 
 SSL_ERROR_PREFIX="SSL_ERR"
+SASL_ERROR_PREFIX="SASL_ERR"
 BROKER_RESTART_ERROR_PREFIX="BROKER_RESTART_ERR"
 FILE_INPUT_ERROR_PREFIX="FILE_INPUT_ERR"
 BROKER_METRICS_ERROR_PREFIX="BROKER_METRICS_ERR"

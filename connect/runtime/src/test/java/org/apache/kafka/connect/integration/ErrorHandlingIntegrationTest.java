@@ -19,6 +19,7 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -41,6 +42,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
@@ -144,9 +146,9 @@ public class ErrorHandlingIntegrationTest {
                 "Connector task was not assigned a partition.");
 
         // produce some strings into test topic
-        for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-            connect.kafka().produce("test-topic", "key-" + i, "value-" + i);
-        }
+        connect.kafka().produce(IntStream.range(0, NUM_RECORDS_PRODUCED)
+                .mapToObj(i -> new ProducerRecord<>("test-topic", ("key-" + i).getBytes(), ("value-" + i).getBytes()))
+                .toList());
 
         // consume all records from test topic
         log.info("Consuming records from test topic");
@@ -223,9 +225,9 @@ public class ErrorHandlingIntegrationTest {
             "Connector task was not assigned a partition.");
 
         // produce some strings into test topic
-        for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-            connect.kafka().produce("test-topic", "key-" + i, "value-" + i);
-        }
+        connect.kafka().produce(IntStream.range(0, NUM_RECORDS_PRODUCED)
+                .mapToObj(i -> new ProducerRecord<>("test-topic", ("key-" + i).getBytes(), ("value-" + i).getBytes()))
+                .toList());
 
         // consume all records from test topic
         log.info("Consuming records from test topic");

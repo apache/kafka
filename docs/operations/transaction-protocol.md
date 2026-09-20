@@ -1,6 +1,6 @@
 ---
 title: Transaction Protocol
-description: Transaction Protocol
+description: Kafka transaction protocol overview, version upgrades and downgrades, and performance characteristics.
 weight: 11
 tags: ['kafka', 'docs']
 aliases: 

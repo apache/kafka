@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 
 import org.junit.jupiter.api.AfterEach;
@@ -39,6 +41,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,6 +54,8 @@ public class ChangeLoggingSessionBytesStoreTest {
     private SessionStore<Bytes, byte[]> inner;
     @Mock
     private ProcessorContextImpl context;
+    @Mock
+    private ReadOnlySessionStore<Bytes, byte[]> view;
 
     private ChangeLoggingSessionBytesStore store;
     private final byte[] value1 = {0};
@@ -188,5 +193,17 @@ public class ChangeLoggingSessionBytesStoreTest {
         store.close();
 
         verify(inner).close();
+    }
+
+    @Test
+    public void shouldDelegateReadOnlyUncommittedToInner() {
+        when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(view);
+        assertSame(view, store.readOnly(IsolationLevel.READ_UNCOMMITTED));
+    }
+
+    @Test
+    public void shouldDelegateReadOnlyCommittedToInner() {
+        when(inner.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(view);
+        assertSame(view, store.readOnly(IsolationLevel.READ_COMMITTED));
     }
 }

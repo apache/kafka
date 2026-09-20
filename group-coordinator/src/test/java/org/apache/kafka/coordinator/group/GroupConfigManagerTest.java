@@ -130,6 +130,56 @@ public class GroupConfigManagerTest {
         assertTrue(configManager.groupIds().contains(groupId2));
     }
 
+    // Tests for isDlqAutoTopicCreateEnabled
+
+    @Test
+    public void testIsDlqAutoTopicCreateEnabledDefault() {
+        assertFalse(configManager.isDlqAutoTopicCreateEnabled());
+    }
+
+    @Test
+    public void testIsDlqAutoTopicCreateEnabledTrue() {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        configManager = createConfigManager(overrides);
+
+        assertTrue(configManager.isDlqAutoTopicCreateEnabled());
+    }
+
+    @Test
+    public void testIsDlqAutoTopicCreateEnabledFalse() {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, false);
+        configManager = createConfigManager(overrides);
+
+        assertFalse(configManager.isDlqAutoTopicCreateEnabled());
+    }
+
+    // Tests for shareGroupDlqTopicPrefix
+
+    @Test
+    public void testShareGroupDlqTopicPrefixDefault() {
+        assertEquals(Optional.of("dlq."), configManager.shareGroupDlqTopicPrefix());
+    }
+
+    @Test
+    public void testShareGroupDlqTopicPrefixCustom() {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "custom-dlq-");
+        configManager = createConfigManager(overrides);
+
+        assertEquals(Optional.of("custom-dlq-"), configManager.shareGroupDlqTopicPrefix());
+    }
+
+    @Test
+    public void testShareGroupDlqTopicPrefixEmpty() {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "");
+        configManager = createConfigManager(overrides);
+
+        assertEquals(Optional.of(""), configManager.shareGroupDlqTopicPrefix());
+    }
+
     public static GroupConfigManager createConfigManager() {
         return createConfigManager(new HashMap<>());
     }
