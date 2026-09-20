@@ -242,7 +242,7 @@ public abstract class OAuthBearerTest {
     }
 
     protected File generatePrivateKey(PrivateKey privateKey) throws IOException {
-        File file = Files.createFile(tempDir.resolve("private-" + System.nanoTime() + ".key")).toFile();
+        File file = Files.createTempFile(tempDir, "private-", ".key").toFile();
         byte[] bytes = Base64.getEncoder().encode(privateKey.getEncoded());
 
         try (FileChannel channel = FileChannel.open(file.toPath(), EnumSet.of(StandardOpenOption.WRITE))) {
