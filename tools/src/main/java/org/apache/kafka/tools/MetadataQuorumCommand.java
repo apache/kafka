@@ -530,16 +530,7 @@ public class MetadataQuorumCommand {
         if (controllerId < 0) {
             throw new TerseException("Invalid negative --controller-id: " + controllerId);
         }
-        Uuid directoryId = null;
-        try {
-            // if controllerDirectoryIdString is empty, which means no directory ID provided:
-            // let the server derive it from its in-memory state.
-            if (!controllerDirectoryIdString.isEmpty()) {
-                directoryId = Uuid.fromString(controllerDirectoryIdString);
-            }
-        } catch (IllegalArgumentException e) {
-            throw new TerseException("Failed to parse --controller-directory-id: " + e.getMessage());
-        }
+        Uuid directoryId = parseControllerDirectoryId(controllerDirectoryIdString);
         if (!dryRun) {
             removeRaftVoter(admin, controllerId, directoryId, unregister);
         }
@@ -554,6 +545,20 @@ public class MetadataQuorumCommand {
             System.out.printf("%sKRaft controller %d%n",
                 dryRun ? "DRY RUN of unregistering " : "Unregistered ",
                 controllerId);
+        }
+    }
+
+    private static Uuid parseControllerDirectoryId(String controllerDirectoryIdString) throws TerseException {
+        // if controllerDirectoryIdString is null or empty, which means no directory ID provided:
+        // let the server derive it from its in-memory state.
+        if (controllerDirectoryIdString == null || controllerDirectoryIdString.isEmpty()) {
+            return null;
+        }
+
+        try {
+            return Uuid.fromString(controllerDirectoryIdString);
+        } catch (IllegalArgumentException e) {
+            throw new TerseException("Failed to parse --controller-directory-id: " + e.getMessage());
         }
     }
 

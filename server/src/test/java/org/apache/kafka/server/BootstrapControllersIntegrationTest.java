@@ -257,12 +257,12 @@ public class BootstrapControllersIntegrationTest {
             .collect(Collectors.toSet());
     }
 
-    @ClusterTest(controllers = 3, standalone = true)
+    @ClusterTest(controllers = 2, standalone = true)
     public void testAddRaftVoterIncorrectEndpointByControllers(ClusterInstance clusterInstance) throws Exception {
         testAddRaftVoterWithIncorrectEndpoint(clusterInstance, true);
     }
 
-    @ClusterTest(controllers = 3, standalone = true)
+    @ClusterTest(controllers = 2, standalone = true)
     public void testAddRaftVoterIncorrectEndpoint(ClusterInstance clusterInstance) throws Exception {
         testAddRaftVoterWithIncorrectEndpoint(clusterInstance, false);
     }
@@ -289,12 +289,12 @@ public class BootstrapControllersIntegrationTest {
         }
     }
 
-    @ClusterTest(controllers = 3, standalone = true)
+    @ClusterTest(controllers = 2, standalone = true)
     public void testAddRaftVoterWithIncorrectDirectoryIdByControllers(ClusterInstance clusterInstance) throws Exception {
         testAddRaftVoterWithIncorrectDirectoryId(clusterInstance, true);
     }
 
-    @ClusterTest(controllers = 3, standalone = true)
+    @ClusterTest(controllers = 2, standalone = true)
     public void testAddRaftVoterWithIncorrectDirectoryId(ClusterInstance clusterInstance) throws Exception {
         testAddRaftVoterWithIncorrectDirectoryId(clusterInstance, false);
     }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -56,5 +57,29 @@ public class RemoveRaftVoterOptions extends AbstractOptions<RemoveRaftVoterOptio
 
     public Optional<Uuid> voterDirectoryId() {
         return voterDirectoryId;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RemoveRaftVoterOptions that = (RemoveRaftVoterOptions) o;
+        return Objects.equals(clusterId, that.clusterId) &&
+            Objects.equals(voterDirectoryId, that.voterDirectoryId) &&
+            Objects.equals(timeoutMs, that.timeoutMs);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(clusterId, voterDirectoryId, timeoutMs);
+    }
+
+    @Override
+    public String toString() {
+        return "RemoveRaftVoterOptions(" +
+            "clusterId=" + clusterId +
+            ", voterDirectoryId=" + voterDirectoryId +
+            ", timeoutMs=" + timeoutMs +
+            ')';
     }
 }
