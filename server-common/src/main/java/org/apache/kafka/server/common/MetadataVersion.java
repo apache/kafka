@@ -137,8 +137,9 @@ public enum MetadataVersion {
     // NOTE: MetadataVersions after this point are unstable and may be changed.
     //
     // Keep at least one unstable MetadataVersion after LATEST_PRODUCTION.
-    // The latest unstable version serves as the development and testing version,
-    // and tests require latestTesting() > LATEST_PRODUCTION.
+    // The latest unstable version serves as the development and testing version.
+    // If LATEST_PRODUCTION becomes the last version, add a new unstable
+    // MetadataVersion for the next release.
     //
     // If users attempt to use an unstable MetadataVersion, they will get an error unless
     // they have set the configuration unstable.feature.versions.enable=true.
