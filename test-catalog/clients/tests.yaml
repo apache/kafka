@@ -6035,3 +6035,6 @@ org.apache.kafka.server.authorizer.internals.CidrUtilsTest:
 - testValidateValidIpv6Cidr
 org.apache.kafka.server.policy.AlterConfigPolicyTest:
 - testRequestMetadataEquals
+org.apache.kafka.test.faultproxy.KafkaProtocolFaultProxyTest:
+- shouldAcceptSingleBrokerBootstrap
+- shouldRejectMultiBrokerBootstrap
