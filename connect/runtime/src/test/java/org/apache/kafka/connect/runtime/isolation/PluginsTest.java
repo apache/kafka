@@ -527,8 +527,7 @@ public class PluginsTest {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, nonEmpty, nonEmpty);
             assertTrue(logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
-                    !m.contains(missingPluginClass)
-                            && m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+                    !m.contains(missingPluginClass) && m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
             ));
         }
     }
@@ -538,8 +537,7 @@ public class PluginsTest {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, empty, nonEmpty);
             assertTrue(logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
-                    m.contains(missingPluginClass)
-                            && m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+                    m.contains(missingPluginClass) && m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
             ));
         }
     }
@@ -559,8 +557,7 @@ public class PluginsTest {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_FAIL, nonEmpty, nonEmpty);
             assertTrue(logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
-                    !m.contains(missingPluginClass)
-                            && m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+                    !m.contains(missingPluginClass) && m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
             ));
         }
     }
