@@ -2768,6 +2768,7 @@ public class WorkerTest {
             List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
             assertEquals(0, taskConfigs.size());
             assertTrue(logCaptureAppender.getMessages(Level.WARN).isEmpty());
+            assertTrue(logCaptureAppender.getMessages(Level.ERROR).isEmpty());
         }
 
         // No warnings or exceptions when a connector generates the maximum permitted number of task configs
