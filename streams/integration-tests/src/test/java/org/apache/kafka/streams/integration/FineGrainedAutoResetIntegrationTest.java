@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.AutoOffsetReset;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -232,7 +233,8 @@ public class FineGrainedAutoResetIntegrationTest {
 
         final List<String> actualValues = new ArrayList<>(expectedReceivedValues.size());
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration)) {
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
+        try {
             streams.start();
 
             final List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedReceivedValues.size());
@@ -240,6 +242,8 @@ public class FineGrainedAutoResetIntegrationTest {
             for (final KeyValue<String, String> receivedKeyValue : receivedKeyValues) {
                 actualValues.add(receivedKeyValue.value);
             }
+        } finally {
+            streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         }
 
         Collections.sort(actualValues);
