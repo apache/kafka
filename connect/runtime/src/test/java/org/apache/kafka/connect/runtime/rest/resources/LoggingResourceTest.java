@@ -22,6 +22,7 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +30,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.slf4j.event.Level;
 
 import java.util.Arrays;
 import java.util.List;
@@ -141,7 +141,7 @@ public class LoggingResourceTest {
             Response response = loggingResource.setLevel(logger, Map.of("level", level), scope);
             assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
             actualLoggers = (List<String>) response.getEntity();
-            long warningMessages = logCaptureAppender.getMessages(org.apache.logging.log4j.Level.WARN).size();
+            int warningMessages = logCaptureAppender.getMessages(Level.WARN).size();
             if (expectWarning) {
                 assertEquals(1, warningMessages);
             } else {
