@@ -1559,13 +1559,16 @@ public class RecordAccumulatorTest {
 
     @Test
     public void testBatchSizeZero() throws InterruptedException {
-        RecordAccumulator accum = createTestRecordAccumulator(1, 10 * 1024, Compression.NONE, Integer.MAX_VALUE);
+        RecordAccumulator accum = createTestRecordAccumulator(0, 10 * 1024, Compression.NONE, Integer.MAX_VALUE);
         RecordAppendResult result = accum.append(tp1.topic(), tp1.partition(), 0L, null, value, Record.EMPTY_HEADERS, null, 0, time.milliseconds(), cluster);
-        assertFalse(result.batchIsFull);
-        result = accum.append(tp1.topic(), tp1.partition(), 0L, null, value, Record.EMPTY_HEADERS, null, 0, time.milliseconds(), cluster);
-        assertFalse(result.batchIsFull);
+        assertTrue(result.batchIsFull);
+        assertTrue(result.newBatchCreated);
         result = accum.append(tp1.topic(), tp1.partition(), 0L, null, value, Record.EMPTY_HEADERS, null, 0, time.milliseconds(), cluster);
         assertTrue(result.batchIsFull);
+        assertTrue(result.newBatchCreated);
+        result = accum.append(tp1.topic(), tp1.partition(), 0L, null, value, Record.EMPTY_HEADERS, null, 0, time.milliseconds(), cluster);
+        assertTrue(result.batchIsFull);
+        assertTrue(result.newBatchCreated);
     }
 
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)

@@ -113,7 +113,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
-import org.opentest4j.AssertionFailedError;
 
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
@@ -3272,23 +3271,18 @@ public class KafkaProducerTest {
         var topicIdPartition = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition(topic, 0));
         mockClient.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         mockClient.prepareResponse(produceResponse(topicIdPartition, 0L, Errors.NONE, 0, 0));
-        mockClient.prepareResponse(produceResponse(topicIdPartition, 0L, Errors.NONE, 0, 0));
+        mockClient.prepareResponse(produceResponse(topicIdPartition, 1L, Errors.NONE, 0, 0));
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
             new StringSerializer(), metadata, mockClient, null, time)) {
-            ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
-            var future1 = producer.send(record);
-            // The batch isn't full now
-            assertThrows(AssertionFailedError.class,
-                () -> TestUtils.waitForCondition(mockClient::hasInFlightRequests, ""));
-            assertFalse(future1.isDone());
-            // Appending the third record will create a new batch
-            // Only the first two records are sent
-            var future2 = producer.send(new ProducerRecord<>(topic, "value"));
-            var future3 = producer.send(new ProducerRecord<>(topic, "value"));
+            // With batch.size=0, batching is disabled: the first record alone must trigger a send
+            // despite the effectively-infinite linger.ms.
+            var future1 = producer.send(new ProducerRecord<>(topic, "value"));
             TestUtils.waitForCondition(future1::isDone, "The first record should have been sent");
-            TestUtils.waitForCondition(future2::isDone, "The second record should have been sent");
-            assertThrows(AssertionFailedError.class,
-                () -> TestUtils.waitForCondition(future3::isDone, ""));
+
+            // A second record must independently and immediately form its own batch and be sent,
+            // without needing a third record to arrive first.
+            var future2 = producer.send(new ProducerRecord<>(topic, "value"));
+            TestUtils.waitForCondition(future2::isDone, "The second record should have been sent independently");
         }
     }
 

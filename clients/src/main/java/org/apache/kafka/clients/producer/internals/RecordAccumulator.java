@@ -282,7 +282,7 @@ public class RecordAccumulator {
                                      long maxTimeToBlock,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, Math.max(1, batchSize))));
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
@@ -394,6 +394,11 @@ public class RecordAccumulator {
         ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
+        if (batchSize <= 0) {
+            // batch.size<=0 disables batching: close for appends right after the first record so
+            // isFull()/hasRoomFor() correctly reject any further appends to this batch.
+            batch.closeForRecordAppends();
+        }
 
         dq.addLast(batch);
         incomplete.add(batch);
@@ -1018,7 +1023,7 @@ public class RecordAccumulator {
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
         TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(),
-                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
+                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, Math.max(1, batchSize))));
         return topicInfo.batches.computeIfAbsent(tp.partition(), k -> new ArrayDeque<>());
     }
 
