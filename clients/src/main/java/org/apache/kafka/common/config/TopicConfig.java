@@ -222,7 +222,7 @@ public class TopicConfig {
         "<code>replication.factor</code> of 3 and the ISR set includes all three replicas, then all three replicas must acknowledge an " +
         "<code>acks=all</code> write for it to succeed, even if <code>min.insync.replicas</code> happens to be less than 3. " +
         "The effective minimum ISR size Kafka actually enforces is <code>min(min.insync.replicas, replica count)</code>, not the raw configured value: if " +
-        "<code>min.insync.replicas</code> is set higher than the topic's current replica count, the broker uses the " +
+        "<code>min.insync.replicas</code> is set higher than the partition's current replica count, the broker uses the " +
         "replica count instead, since the ISR can never exceed it. " +
         "If <code>acks=all</code> and the current ISR set is smaller than this effective minimum, then the producer " +
         "will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
