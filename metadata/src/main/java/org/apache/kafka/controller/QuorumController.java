@@ -915,22 +915,18 @@ public final class QuorumController implements Controller {
                 // The appender callback will create an in-memory snapshot for each batch,
                 // since we might need to revert to any of them. We will only return the final
                 // offset of the last batch, however.
-                int startIndex = 0, numBatches = 0;
-                while (true) {
+                int numBatches = 0;
+                long lastOffset = -1;
+                for (int startIndex = 0; startIndex < records.size(); startIndex += maxRecordsPerBatch) {
                     numBatches++;
-                    int endIndex = startIndex + maxRecordsPerBatch;
-                    if (endIndex > records.size()) {
-                        long offset = appender.apply(records.subList(startIndex, records.size()));
-                        if (log.isTraceEnabled()) {
-                            log.trace("Appended {} record(s) in {} batch(es), ending with offset {}.",
-                                    records.size(), numBatches, offset);
-                        }
-                        return offset;
-                    } else {
-                        appender.apply(records.subList(startIndex, endIndex));
-                    }
-                    startIndex += maxRecordsPerBatch;
+                    int endIndex = Math.min(startIndex + maxRecordsPerBatch, records.size());
+                    lastOffset = appender.apply(records.subList(startIndex, endIndex));
                 }
+                if (log.isTraceEnabled()) {
+                    log.trace("Appended {} record(s) in {} batch(es), ending with offset {}.",
+                            records.size(), numBatches, lastOffset);
+                }
+                return lastOffset;
             }
         } catch (ApiException e) {
             // If the Raft client throws a subclass of ApiException, we need to convert it into a
