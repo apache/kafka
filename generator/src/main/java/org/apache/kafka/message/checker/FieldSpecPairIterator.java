@@ -72,8 +72,8 @@ class FieldSpecPairIterator implements Iterator<FieldSpecPair> {
                                     "message2, but should not be, based on its versions.");
                         }
                     }
-                    field1 = iterator1.hasNext() ? iterator1.next() : null;
-                    break;
+                    throw new UnificationException("field1 " + field1.name() + " is present in " +
+                        "message1, but should not be, based on its versions.");
                 }
                 case MESSAGE2_ONLY:
                 case NEITHER:
