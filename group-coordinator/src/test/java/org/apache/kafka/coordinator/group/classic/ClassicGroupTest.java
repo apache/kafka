@@ -1062,7 +1062,7 @@ public class ClassicGroupTest {
                 .count());
         }
 
-        // Same fencing check for a transactional offset commit. The log should name txn-offset-commit.
+        // Same fencing check for a transactional offset commit. The operation should be logged.
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ClassicGroup.class)) {
             assertThrows(FencedInstanceIdException.class,
                 () -> group.validateOffsetCommit("member-id", "instance-id", 1, true, version));
