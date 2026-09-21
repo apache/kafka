@@ -469,7 +469,7 @@ public class ConsumerHeartbeatRequestManagerTest
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
         if (heartbeatIntervalMs > 0) {
-            // A non-zero interval is only known after a heartbeat response, which also arms the backoff.
+            // A known interval means a successful heartbeat response was already received.
             heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
         }
 
