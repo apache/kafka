@@ -149,10 +149,45 @@ public class HeaderVersionsTest {
     }
 
     @Test
-    public void testAbsentProperty() throws Exception {
-        MessageSpec spec = parse(requestSpec("0-5", "2+", null));
+    public void testAbsentPropertyRejectedForRequest() {
+        assertMessageContains("You must specify a value for headerVersions",
+            () -> parse(requestSpec("0-5", "2+", null)));
+    }
+
+    @Test
+    public void testAbsentPropertyRejectedForResponse() {
+        assertMessageContains("You must specify a value for headerVersions",
+            () -> parse(responseSpec(0, "FooResponse", "0-5", "2+", null)));
+    }
+
+    @Test
+    public void testAbsentPropertyAllowedWithNoValidVersions() throws Exception {
+        // Like flexibleVersions, nothing is required of a message with no valid versions.
+        MessageSpec spec = parse("{'apiKey': 0, 'type': 'request', 'name': 'FooRequest', 'validVersions': 'none'}");
         assertTrue(spec.headerVersions().isEmpty());
         assertTrue(spec.headerVersionsStrings() == null);
+    }
+
+    @Test
+    public void testAbsentPropertyAllowedOnHeaderType() throws Exception {
+        assertTrue(requestHeader().headerVersions().isEmpty());
+    }
+
+    @Test
+    public void testAbsentPropertyRejectedByDirectConstructor() {
+        // The non-Jackson path (used by the checker tests) runs the same constructor.
+        assertMessageContains("You must specify a value for headerVersions",
+            () -> new MessageSpec("FooRequest", "0-2", null, null, (short) 1, MessageSpecType.REQUEST,
+                List.of(), "0+", null, List.of(), false));
+    }
+
+    @Test
+    public void testJacksonRoundTripPreservesMap() throws Exception {
+        // MetadataSchemaCheckerTool tests write a parsed spec back out with JSON_SERDE and re-read it.
+        MessageSpec spec = parse(requestSpec("0-5", "2+", "{'0-1': '1', '2+': '2'}"));
+        String json = MessageGenerator.JSON_SERDE.writeValueAsString(spec);
+        MessageSpec reparsed = MessageGenerator.JSON_SERDE.readValue(json, MessageSpec.class);
+        assertEquals(map("0-1", "1", "2+", "2"), reparsed.headerVersionsStrings());
     }
 
     @Test
@@ -394,8 +429,10 @@ public class HeaderVersionsTest {
 
     @Test
     public void testNoHeaderVersionsIsNoOpWithoutHeaderSchemas() throws Exception {
-        // With no headerVersions map, the header schemas are never consulted, so null is fine.
-        parse(requestSpec("0-5", "0+", null)).checkHeaderVersions(null, null);
+        // A message with no valid versions has no headerVersions map, so the header schemas are never
+        // consulted and null is fine.
+        parse("{'apiKey': 0, 'type': 'request', 'name': 'FooRequest', 'validVersions': 'none'}")
+            .checkHeaderVersions(null, null);
     }
 
     @Test
