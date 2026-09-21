@@ -1052,13 +1052,13 @@ public class ClassicGroupTest {
         // Replace static member.
         group.replaceStaticMember("instance-id", "member-id", "new-member-id");
 
-        // The old instance id should be fenced. The log should name the correct operation.
+        // The old instance id should be fenced and the operation logged.
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ClassicGroup.class)) {
             assertThrows(FencedInstanceIdException.class,
                 () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version));
 
             assertEquals(1, appender.getMessages(Level.INFO).stream()
-                .filter(msg -> msg.contains("during operation offset-commit"))
+                .filter(msg -> msg.contains("Request memberId=member-id for static member with groupInstanceId=instance-id is fenced by existing memberId=new-member-id during operation offset-commit"))
                 .count());
         }
 
@@ -1068,7 +1068,7 @@ public class ClassicGroupTest {
                 () -> group.validateOffsetCommit("member-id", "instance-id", 1, true, version));
 
             assertEquals(1, appender.getMessages(Level.INFO).stream()
-                .filter(msg -> msg.contains("during operation txn-offset-commit"))
+                .filter(msg -> msg.contains("Request memberId=member-id for static member with groupInstanceId=instance-id is fenced by existing memberId=new-member-id during operation txn-offset-commit"))
                 .count());
         }
 
