@@ -972,6 +972,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
+            kafka_mode = self.context.globals.get("kafka_mode", "")
+            if kafka_mode == "native":
+                return [int(pid) for pid in node.account.ssh_capture(f"pgrep {self.java_class_name()}", allow_fail=True)]
             return node.account.java_pids(self.java_class_name())
         except (RemoteCommandError, ValueError) as e:
             return []
