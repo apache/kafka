@@ -166,17 +166,20 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
                 List<ByteBuffer> chunk = pool.allocateChunks(chunkSize, 0);
                 next = chunk.get(0);
             } catch (BufferExhaustedException e) {
-                // pool out of memory — fall through to heap
+                // No chunks remaining in pool — leave next null so we take the heap fallback
             } catch (InterruptedException e) {
+                // The acquire is non-blocking (0 ms), so this only fires when the calling thread
+                // was already interrupted. Preserve the interrupt flag and, as with an exhausted
+                // pool, leave next null so we take the heap fallback below
                 Thread.currentThread().interrupt();
-                // fall through to heap
             }
             if (next != null) {
                 chunks.add(next);
                 poolAllocatedChunks.add(next);
             } else {
-                // Heap fallback — intentionally NOT added to poolAllocatedChunks so it doesn't
-                // get returned to the pool on deallocate (it was never tracked there).
+                // Heap fallback: the pool could not satisfy the allocation without blocking, but the
+                // in-flight record can neither be rolled back nor blocked on, so allocate on the heap
+                // to guarantee forward progress
                 chunks.add(ByteBuffer.allocate(chunkSize));
                 fallbackAllocations++;
             }
