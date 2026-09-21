@@ -103,6 +103,7 @@ org.apache.kafka.controller.ConfigurationControlManagerTest:
 - testIncrementalAlterConfigsWithPolicy
 - testIncrementalAlterConfigsWithoutExistence
 - testIncrementalAlterMultipleConfigValues
+- testIncrementalDeletePolicyIncludesUnsetConfigs
 - testIsCordonedLogDirsDisabled
 - testIsCordonedLogDirsInvalid
 - testLegacyAlterConfigs
@@ -859,6 +860,7 @@ org.apache.kafka.metadata.authorizer.StandardAuthorizerPropertyTest:
 org.apache.kafka.metadata.authorizer.StandardAuthorizerTest:
 - testAclWithCidrHost
 - testAclWithIpv6CidrHost
+- testAclsTotalCountMetric
 - testAllowAuditLogging
 - testAllowEveryoneIfNoAclFoundConfigDisabled
 - testAllowEveryoneIfNoAclFoundConfigEnabled
