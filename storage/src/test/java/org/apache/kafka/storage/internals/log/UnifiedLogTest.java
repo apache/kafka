@@ -3543,6 +3543,29 @@ public class UnifiedLogTest {
     }
 
     @Test
+    public void testFetchOffsetByTimestampContinuesAfterEmptyEligibleSegment() throws IOException {
+        long targetTimestamp = mockTime.milliseconds();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .indexIntervalBytes(1)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        // The expired record makes the first segment eligible, but its only retained record has a lower timestamp.
+        log.appendAsLeader(singletonRecords("expired-max".getBytes(), targetTimestamp), 0);
+        log.appendAsLeader(singletonRecords("retained-low-timestamp".getBytes(), targetTimestamp - 1), 0);
+        log.roll();
+        log.appendAsLeader(singletonRecords("valid-later-record".getBytes(), targetTimestamp), 0);
+
+        log.updateHighWatermark(log.logEndOffset());
+        log.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+
+        assertEquals(2, log.numberOfSegments());
+        assertEquals(1L, log.logStartOffset());
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(targetTimestamp, 2L, Optional.of(0))),
+                log.fetchOffsetByTimestamp(targetTimestamp, Optional.empty()));
+    }
+
+    @Test
     public void testFetchOffsetByTimestampWithMaxTimestampIncludesTimestamp() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(200)
