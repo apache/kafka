@@ -173,13 +173,6 @@ echo "plugin.path=libs/connect-file-4.3.0.jar" >> config/connect-standalone.prop
 Then, start by creating some seed data to test with: 
 
 ```bash
-echo -e "foo
-bar" > test.txt
-```
-
-Or on Windows: 
-
-```bash
 echo foo > test.txt
 echo bar >> test.txt
 ```
