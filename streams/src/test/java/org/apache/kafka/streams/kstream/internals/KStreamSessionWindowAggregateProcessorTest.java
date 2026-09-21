@@ -50,6 +50,7 @@ import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -484,7 +485,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
             processor.process(new Record<>(null, "1", 0L));
 
-            assertTrue(appender.getMessages("WARN").contains(
+            assertTrue(appender.getMessages(Level.WARN).contains(
                 "Skipping record due to null key. topic=[topic] partition=[-3] offset=[-2]"));
         }
 
