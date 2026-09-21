@@ -86,12 +86,14 @@ public class StickyTaskAssignor implements TaskAssignor {
         final GroupSpec groupSpec
     ) {
         // Stateful and stateless active tasks are balanced independently: the stateful ones are placed first, then
-        // the stateless ones fill up the remaining active capacity.
+        // the stateless ones fill up the remaining active capacity. The stateful pass must run before anything else
+        // is assigned, because the stateful quota check reads a member's task count as its stateful active task count.
+        // assignActive consumes its list, so the stateful tasks are copied for it and the original goes to assignStandby.
         assignActive(localState, new LinkedList<>(localState.statefulActiveTaskIds), true);
-        assignActive(localState, new LinkedList<>(localState.statelessActiveTaskIds), false);
+        assignActive(localState, localState.statelessActiveTaskIds, false);
 
         if (localState.numStandbyReplicas > 0) {
-            assignStandby(localState, new LinkedList<>(localState.statefulActiveTaskIds));
+            assignStandby(localState, localState.statefulActiveTaskIds);
         }
 
         return buildGroupAssignment(localState, groupSpec.memberIds());
