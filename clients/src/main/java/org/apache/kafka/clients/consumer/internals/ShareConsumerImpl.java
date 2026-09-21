@@ -259,7 +259,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = time;
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
             this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
@@ -284,7 +285,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new ShareFetchBuffer(logContext);
-            Uuid clientInstanceId = Uuid.randomUuid();
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
                     time,
                     logContext,

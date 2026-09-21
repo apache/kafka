@@ -98,6 +98,7 @@ public class ClientTelemetryUtilsTest {
     public void testValidateClientInstanceId() {
         assertThrows(IllegalArgumentException.class, () -> ClientTelemetryUtils.validateClientInstanceId(null));
         assertThrows(IllegalArgumentException.class, () -> ClientTelemetryUtils.validateClientInstanceId(Uuid.ZERO_UUID));
+        assertThrows(IllegalArgumentException.class, () -> ClientTelemetryUtils.validateClientInstanceId(Uuid.ONE_UUID));
 
         Uuid uuid = Uuid.randomUuid();
         assertEquals(uuid, ClientTelemetryUtils.validateClientInstanceId(uuid));

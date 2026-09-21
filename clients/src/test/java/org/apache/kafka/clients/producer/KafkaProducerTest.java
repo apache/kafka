@@ -2414,7 +2414,7 @@ public class KafkaProducerTest {
         clientTelemetryReporter.configure(any());
 
         try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
-            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
             Uuid expectedUuid = Uuid.randomUuid();
@@ -3225,7 +3225,7 @@ public class KafkaProducerTest {
         try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
             ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
             clientTelemetryReporter.configure(any());
-            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             Map<String, Object> props = new HashMap<>();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -3244,7 +3244,7 @@ public class KafkaProducerTest {
         try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
             ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
             clientTelemetryReporter.configure(any());
-            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             Map<String, Object> props = new HashMap<>();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
