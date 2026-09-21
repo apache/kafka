@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Map;
@@ -39,7 +38,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyMap;
 import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Comparator.comparing;
@@ -82,7 +80,7 @@ public class ClientState {
     }
 
     ClientState(final ProcessId processId, final int capacity) {
-        this(processId, capacity, Collections.emptyMap());
+        this(processId, capacity, Map.of());
     }
 
     ClientState(final ProcessId processId, final int capacity, final Map<String, String> clientTags) {
@@ -93,43 +91,6 @@ public class ClientState {
         this.capacity = capacity;
         this.processId = processId;
         this.clientTags = unmodifiableMap(clientTags);
-    }
-
-    // For testing only
-    public ClientState(final Set<TaskId> previousActiveTasks,
-                       final Set<TaskId> previousStandbyTasks,
-                       final Map<TaskId, Long> taskLagTotals,
-                       final Map<String, String> clientTags,
-                       final int capacity) {
-        this(previousActiveTasks, previousStandbyTasks, taskLagTotals, clientTags, capacity, null);
-    }
-
-    // For testing only
-    public ClientState(final Set<TaskId> previousActiveTasks,
-                       final Set<TaskId> previousStandbyTasks,
-                       final Map<TaskId, Long> taskLagTotals,
-                       final Map<String, String> clientTags,
-                       final int capacity,
-                       final ProcessId processId) {
-        this.previousStandbyTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
-        this.previousActiveTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
-        taskOffsetSums = emptyMap();
-        this.taskLagTotals = unmodifiableMap(taskLagTotals);
-        this.capacity = capacity;
-        this.clientTags = unmodifiableMap(clientTags);
-        this.processId = processId;
-    }
-
-    // For testing only
-    public ClientState(final ClientState clientState) {
-        this(
-            new HashSet<>(clientState.previousActiveTasks.taskIds()),
-            new HashSet<>(clientState.previousStandbyTasks.taskIds()),
-            clientState.taskLagTotals,
-            clientState.clientTags,
-            clientState.capacity,
-            clientState.processId
-        );
     }
 
     public int capacity() {
@@ -475,6 +436,10 @@ public class ClientState {
 
     public Map<TaskId, Long> taskLagTotals() {
         return taskLagTotals;
+    }
+
+    void addTaskLagTotals(final Map<TaskId, Long> taskLagTotals) {
+        this.taskLagTotals.putAll(taskLagTotals);
     }
 
     public SortedSet<TaskId> previousActiveTasks() {

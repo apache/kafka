@@ -55,10 +55,9 @@ import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -184,9 +183,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyKeyValueStore<String, String> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlyKeyValueStore.class, store);
+            assertFalse(store instanceof TimestampedKeyValueStore);
+            assertFalse(store instanceof TimestampedKeyValueStoreWithHeaders);
         }
     }
 
@@ -197,9 +196,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-kv-store", QueryableStoreTypes.timestampedKeyValueStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
-            assertThat(store, instanceOf(TimestampedKeyValueStore.class));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlyKeyValueStore.class, store);
+            assertInstanceOf(TimestampedKeyValueStore.class, store);
+            assertFalse(store instanceof TimestampedKeyValueStoreWithHeaders);
         }
     }
 
@@ -218,9 +217,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-kv-store", QueryableStoreTypes.keyValueStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyKeyValueStore<String, String> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlyKeyValueStore.class, store);
+            assertFalse(store instanceof TimestampedKeyValueStore);
+            assertFalse(store instanceof TimestampedKeyValueStoreWithHeaders);
         }
     }
 
@@ -231,9 +230,9 @@ public class GlobalStateStoreProviderTest {
                 provider.stores("w-store", QueryableStoreTypes.windowStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyWindowStore<String, String> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
-            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
-            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlyWindowStore.class, store);
+            assertFalse(store instanceof TimestampedWindowStore);
+            assertFalse(store instanceof TimestampedWindowStoreWithHeaders);
         }
     }
 
@@ -244,9 +243,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-w-store", QueryableStoreTypes.timestampedWindowStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
-            assertThat(store, instanceOf(TimestampedWindowStore.class));
-            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlyWindowStore.class, store);
+            assertInstanceOf(TimestampedWindowStore.class, store);
+            assertFalse(store instanceof TimestampedWindowStoreWithHeaders);
         }
     }
 
@@ -265,9 +264,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-w-store", QueryableStoreTypes.windowStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyWindowStore<String, String> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
-            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
-            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlyWindowStore.class, store);
+            assertFalse(store instanceof TimestampedWindowStore);
+            assertFalse(store instanceof TimestampedWindowStoreWithHeaders);
         }
     }
 
@@ -278,8 +277,8 @@ public class GlobalStateStoreProviderTest {
                 provider.stores("s-store", QueryableStoreTypes.sessionStore());
         assertEquals(1, stores.size());
         for (final ReadOnlySessionStore<String, String> store : stores) {
-            assertThat(store, instanceOf(ReadOnlySessionStore.class));
-            assertThat(store, not(instanceOf(SessionStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlySessionStore.class, store);
+            assertFalse(store instanceof SessionStoreWithHeaders);
         }
     }
 
@@ -290,8 +289,8 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
         assertEquals(1, stores.size());
         for (final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
-            assertThat(store, instanceOf(TimestampedKeyValueStoreWithHeaders.class));
+            assertInstanceOf(ReadOnlyKeyValueStore.class, store);
+            assertInstanceOf(TimestampedKeyValueStoreWithHeaders.class, store);
         }
     }
 
@@ -302,8 +301,8 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.timestampedKeyValueStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
-            assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+            assertInstanceOf(GenericReadOnlyKeyValueStoreFacade.class, store);
+            assertFalse(store instanceof TimestampedKeyValueStoreWithHeaders);
         }
     }
 
@@ -314,9 +313,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.keyValueStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyKeyValueStore<String, String> store : stores) {
-            assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+            assertInstanceOf(GenericReadOnlyKeyValueStoreFacade.class, store);
+            assertFalse(store instanceof TimestampedKeyValueStore);
+            assertFalse(store instanceof TimestampedKeyValueStoreWithHeaders);
         }
     }
 
@@ -343,8 +342,8 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-w-store-with-headers", QueryableStoreTypes.timestampedWindowStoreWithHeaders());
         assertEquals(1, stores.size());
         for (final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
-            assertThat(store, instanceOf(TimestampedWindowStoreWithHeaders.class));
+            assertInstanceOf(ReadOnlyWindowStore.class, store);
+            assertInstanceOf(TimestampedWindowStoreWithHeaders.class, store);
         }
     }
 
@@ -355,9 +354,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-w-store-with-headers", QueryableStoreTypes.timestampedWindowStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
-            assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
-            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlyWindowStore.class, store);
+            assertInstanceOf(GenericReadOnlyWindowStoreFacade.class, store);
+            assertFalse(store instanceof TimestampedWindowStoreWithHeaders);
         }
     }
 
@@ -368,9 +367,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-w-store-with-headers", QueryableStoreTypes.windowStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyWindowStore<String, String> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
-            assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
-            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlyWindowStore.class, store);
+            assertInstanceOf(GenericReadOnlyWindowStoreFacade.class, store);
+            assertFalse(store instanceof TimestampedWindowStoreWithHeaders);
         }
     }
 
@@ -397,8 +396,8 @@ public class GlobalStateStoreProviderTest {
             provider.stores("s-store-with-headers", QueryableStoreTypes.sessionStoreWithHeaders());
         assertEquals(1, stores.size());
         for (final ReadOnlySessionStore<String, AggregationWithHeaders<String>> store : stores) {
-            assertThat(store, instanceOf(ReadOnlySessionStore.class));
-            assertThat(store, instanceOf(SessionStoreWithHeaders.class));
+            assertInstanceOf(ReadOnlySessionStore.class, store);
+            assertInstanceOf(SessionStoreWithHeaders.class, store);
         }
     }
 
@@ -409,8 +408,8 @@ public class GlobalStateStoreProviderTest {
             provider.stores("s-store-with-headers", QueryableStoreTypes.sessionStore());
         assertEquals(1, stores.size());
         for (final ReadOnlySessionStore<String, String> store : stores) {
-            assertThat(store, instanceOf(ReadOnlySessionStore.class));
-            assertThat(store, not(instanceOf(SessionStoreWithHeaders.class)));
+            assertInstanceOf(ReadOnlySessionStore.class, store);
+            assertFalse(store instanceof SessionStoreWithHeaders);
         }
     }
 

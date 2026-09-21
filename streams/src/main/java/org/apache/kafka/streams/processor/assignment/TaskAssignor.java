@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupAssignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 
@@ -31,6 +32,7 @@ import java.util.Map;
  * The implementation may also override the {@code onAssignmentComputed} callback for insight into
  * the result of the assignment result.
  */
+@InterfaceAudience.Public
 public interface TaskAssignor extends Configurable {
 
     /**

@@ -56,7 +56,7 @@ if __name__ == "__main__":
     Parse Apache Rat reports and generate GitHub annotations.
     """
     if not os.getenv("GITHUB_WORKSPACE"):
-        print("This script is intended to by run by GitHub Actions.")
+        print("This script is intended to be run by GitHub Actions.")
         exit(1)
 
     reports = glob(pathname="**/rat/*.xml", recursive=True)

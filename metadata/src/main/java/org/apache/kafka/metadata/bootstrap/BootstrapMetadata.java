@@ -19,11 +19,19 @@ package org.apache.kafka.metadata.bootstrap;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.metadata.util.BatchFileReader;
+import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,9 +43,60 @@ import java.util.Optional;
  * use the version specified here.
  */
 public class BootstrapMetadata {
+    public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
+
     private final List<ApiMessageAndVersion> records;
     private final short metadataVersionLevel;
     private final String source;
+
+    /**
+     * Reads bootstrap metadata from the given directory. Checks the legacy bootstrap.checkpoint
+     * first and falls back to defaults if it does not exist.
+     */
+    public static BootstrapMetadata fromDirectory(Path directory) {
+        if (!Files.isDirectory(directory)) {
+            if (Files.exists(directory)) {
+                throw new IllegalStateException("Path " + directory + " exists, but is not " +
+                        "a directory.");
+            } else {
+                throw new IllegalStateException("No such directory as " + directory);
+            }
+        }
+        Path binaryBootstrapPath = directory.resolve(BINARY_BOOTSTRAP_FILENAME);
+        if (Files.exists(binaryBootstrapPath)) {
+            return fromCheckpointFile(binaryBootstrapPath);
+        }
+        return fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
+    }
+
+    /**
+     * Reads bootstrap metadata from the given checkpoint file.
+     * Throws if the file does not exist.
+     */
+    public static BootstrapMetadata fromCheckpointFile(Path file) {
+        if (!Files.exists(file)) {
+            String path = file.toString();
+            throw new UncheckedIOException(path, new FileNotFoundException(path));
+        }
+        return readFromBinaryFile(file);
+    }
+
+    private static BootstrapMetadata readFromBinaryFile(Path binaryPath) {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        try (BatchFileReader reader = new BatchFileReader.Builder().
+                setPath(binaryPath.toString()).build()) {
+            while (reader.hasNext()) {
+                BatchAndType batchAndType = reader.next();
+                if (!batchAndType.isControl()) {
+                    records.addAll(batchAndType.batch().records());
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Unable to read bootstrap metadata from " + binaryPath, e);
+        }
+        return fromRecords(Collections.unmodifiableList(records),
+                "the binary bootstrap metadata file: " + binaryPath);
+    }
 
     public static BootstrapMetadata fromVersions(
         MetadataVersion metadataVersion,
@@ -92,7 +151,7 @@ public class BootstrapMetadata {
         return new BootstrapMetadata(records, metadataVersionLevel.get(), source);
     }
 
-    public static Optional<Short> recordToMetadataVersionLevel(ApiMessage record) {
+    private static Optional<Short> recordToMetadataVersionLevel(ApiMessage record) {
         if (record instanceof FeatureLevelRecord featureLevel) {
             if (featureLevel.name().equals(MetadataVersion.FEATURE_NAME)) {
                 return Optional.of(featureLevel.featureLevel());

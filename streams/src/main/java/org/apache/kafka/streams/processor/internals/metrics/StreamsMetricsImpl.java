@@ -194,7 +194,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                   final String description,
                                                   final RecordingLevel recordingLevel,
                                                   final T value) {
-        addClientLevelImmutableMetric(name, description, Collections.emptyMap(), recordingLevel, value);
+        addClientLevelImmutableMetric(name, description, Map.of(), recordingLevel, value);
     }
 
     public <T> void addClientLevelImmutableMetric(final String name,
@@ -219,7 +219,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String description,
                                                 final RecordingLevel recordingLevel,
                                                 final Gauge<T> valueProvider) {
-        addClientLevelMutableMetric(name, description, Collections.emptyMap(), recordingLevel, valueProvider);
+        addClientLevelMutableMetric(name, description, Map.of(), recordingLevel, valueProvider);
     }
 
     public <T> void addClientLevelMutableMetric(final String name,
@@ -259,7 +259,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String description,
                                                 final String threadId,
                                                 final Gauge<T> valueProvider) {
-        addThreadLevelMutableMetric(name, description, threadId, Collections.emptyMap(), valueProvider);
+        addThreadLevelMutableMetric(name, description, threadId, Map.of(), valueProvider);
     }
     public <T> void addThreadLevelMutableMetric(final String name,
                                                 final String description,
@@ -306,7 +306,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     public Map<String, String> clientLevelTagMap() {
-        return clientLevelTagMap(Collections.emptyMap());
+        return clientLevelTagMap(Map.of());
     }
 
     public Map<String, String> clientLevelTagMap(final Map<String, String> additionalTags) {
@@ -316,7 +316,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     public Map<String, String> threadLevelTagMap(final String threadId) {
-        return threadLevelTagMap(threadId, Collections.emptyMap());
+        return threadLevelTagMap(threadId, Map.of());
     }
 
     public Map<String, String> threadLevelTagMap(final String threadId, final Map<String, String> additionalTags) {

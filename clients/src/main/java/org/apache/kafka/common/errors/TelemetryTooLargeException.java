@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * This exception indicates that the size of the telemetry metrics data is too large.
  */
+@InterfaceAudience.Public
 public class TelemetryTooLargeException extends ApiException {
 
     public TelemetryTooLargeException(String message) {

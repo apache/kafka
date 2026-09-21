@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration.utils;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -93,9 +94,7 @@ import java.util.stream.Collectors;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -659,7 +658,7 @@ public class IntegrationTestUtils {
                 final List<ConsumerRecord<K, V>> readData =
                     readRecords(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertTrue(accumData.size() >= expectedNumRecords, reason);
             });
         }
         return accumData;
@@ -709,7 +708,8 @@ public class IntegrationTestUtils {
                 final List<KeyValue<K, V>> readData =
                     readKeyValues(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason + ",  currently accumulated data is " + accumData, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertTrue(accumData.size() >= expectedNumRecords,
+                    reason + ",  currently accumulated data is " + accumData);
             });
         }
         return accumData;
@@ -742,7 +742,7 @@ public class IntegrationTestUtils {
                 final List<KeyValueTimestamp<K, V>> readData =
                     readKeyValuesWithTimestamp(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertTrue(accumData.size() >= expectedNumRecords, reason);
             });
         }
         return accumData;
@@ -880,7 +880,7 @@ public class IntegrationTestUtils {
                 final List<V> readData =
                     readValues(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertTrue(accumData.size() >= expectedNumRecords, reason);
             });
         }
         return accumData;
@@ -984,6 +984,22 @@ public class IntegrationTestUtils {
         }
     }
 
+    private static class StreamGroupInactiveCondition implements TestCondition {
+        private final Admin adminClient;
+        private final String applicationId;
+
+        private StreamGroupInactiveCondition(final Admin adminClient,
+                                               final String applicationId) {
+            this.adminClient = adminClient;
+            this.applicationId = applicationId;
+        }
+
+        @Override
+        public boolean conditionMet() {
+            return isEmptyStreamGroup(adminClient, applicationId);
+        }
+    }
+
     public static void waitForEmptyConsumerGroup(final Admin adminClient,
                                                  final String applicationId,
                                                  final long timeoutMs) throws Exception {
@@ -994,11 +1010,37 @@ public class IntegrationTestUtils {
         );
     }
 
+    public static void waitForEmptyStreamGroup(final Admin adminClient,
+                                                 final String applicationId,
+                                                 final long timeoutMs) throws Exception {
+        TestUtils.waitForCondition(
+                new IntegrationTestUtils.StreamGroupInactiveCondition(adminClient, applicationId),
+                timeoutMs,
+                "Test stream group " + applicationId + " still active even after waiting " + timeoutMs + " ms."
+        );
+    }
+
     public static boolean isEmptyConsumerGroup(final Admin adminClient,
                                                final String applicationId) {
         try {
             final ConsumerGroupDescription groupDescription =
                     adminClient.describeConsumerGroups(singletonList(applicationId))
+                            .describedGroups()
+                            .get(applicationId)
+                            .get();
+            return groupDescription.members().isEmpty();
+        } catch (final ExecutionException e) {
+            return e.getCause() instanceof GroupIdNotFoundException;
+        } catch (final InterruptedException e) {
+            return false;
+        }
+    }
+
+    public static boolean isEmptyStreamGroup(final Admin adminClient,
+                                             final String applicationId) {
+        try {
+            final StreamsGroupDescription groupDescription =
+                    adminClient.describeStreamsGroups(singletonList(applicationId))
                             .describedGroups()
                             .get(applicationId)
                             .get();
@@ -1169,10 +1211,9 @@ public class IntegrationTestUtils {
         consumer.subscribe(singletonList(topic));
         final int pollIntervalMs = 100;
         consumerRecords = new ArrayList<>();
-        int totalPollTimeMs = 0;
-        while (totalPollTimeMs < waitTime &&
+        final long deadline = System.currentTimeMillis() + waitTime;
+        while (System.currentTimeMillis() < deadline &&
             continueConsuming(consumerRecords.size(), maxMessages)) {
-            totalPollTimeMs += pollIntervalMs;
             final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(pollIntervalMs));
 
             for (final ConsumerRecord<K, V> record : records) {
@@ -1321,9 +1362,13 @@ public class IntegrationTestUtils {
 
     public static void waitUntilStreamsHasPolled(final KafkaStreams kafkaStreams, final int pollNumber)
         throws InterruptedException {
-        final Double initialCount = getStreamsPollNumber(kafkaStreams);
+        final double initialCount = getStreamsPollNumber(kafkaStreams);
+        final double expectedCount = initialCount + pollNumber;
         retryOnExceptionWithTimeout(10000, () -> {
-            assertThat(getStreamsPollNumber(kafkaStreams), is(greaterThanOrEqualTo(initialCount + pollNumber)));
+            final double currentCount = getStreamsPollNumber(kafkaStreams);
+            assertTrue(currentCount >= expectedCount,
+                () -> "Expected poll-total to reach at least " + expectedCount
+                    + " (initial " + initialCount + " + " + pollNumber + "), but was " + currentCount);
         });
     }
 

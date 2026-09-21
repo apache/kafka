@@ -169,9 +169,8 @@ class OffsetSyncWriter implements AutoCloseable {
         boolean update(long upstreamOffset, long downstreamOffset) {
             // Emit an offset sync if any of the following conditions are true
             boolean noPreviousSyncThisLifetime = lastSyncDownstreamOffset == -1L;
-            // the OffsetSync::translateDownstream method will translate this offset 1 past the last sync, so add 1.
-            // TODO: share common implementation to enforce this relationship
-            boolean translatedOffsetTooStale = downstreamOffset - (lastSyncDownstreamOffset + 1) >= maxOffsetLag;
+            // OffsetSync translates offsets after the last sync to one downstream offset past the sync.
+            boolean translatedOffsetTooStale = downstreamOffset - OffsetSync.downstreamOffsetAfterSync(lastSyncDownstreamOffset) >= maxOffsetLag;
             boolean skippedUpstreamRecord = upstreamOffset - previousUpstreamOffset != 1L;
             boolean truncatedDownstreamTopic = downstreamOffset < previousDownstreamOffset;
             if (noPreviousSyncThisLifetime || translatedOffsetTooStale || skippedUpstreamRecord || truncatedDownstreamTopic) {

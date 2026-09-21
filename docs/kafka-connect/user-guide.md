@@ -1,6 +1,6 @@
 ---
 title: User Guide
-description: User Guide
+description: Guide to running, configuring, and managing Kafka Connect workers and connectors.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 
@@ -26,7 +26,7 @@ type: docs
 -->
 
 
-The [quickstart](../getting-started/quickstart) provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.
+The [quickstart](../../getting-started/quickstart) provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.
 
 ## Running Kafka Connect
 
@@ -43,7 +43,7 @@ The first parameter is the configuration for the worker. This includes settings 
   * `bootstrap.servers` \- List of Kafka servers used to bootstrap connections to Kafka
   * `key.converter` \- Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the keys in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.
   * `value.converter` \- Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.
-  * `plugin.path` (default `null`) - a list of paths that contain Connect plugins (connectors, converters, transformations). Before running quick starts, users must add the absolute path that contains the example FileStreamSourceConnector and FileStreamSinkConnector packaged in `connect-file-4.4.0.jar`, because these connectors are not included by default to the `CLASSPATH` or the `plugin.path` of the Connect worker (see plugin.path property for examples).
+  * `plugin.path` (default `null`) - a list of paths that contain Connect plugins (connectors, converters, transformations). Before running quick starts, users must add the absolute path that contains the example FileStreamSourceConnector and FileStreamSinkConnector packaged in `connect-file-4.5.0.jar`, because these connectors are not included by default to the `CLASSPATH` or the `plugin.path` of the Connect worker (see plugin.path property for examples).
 
 
 
@@ -57,7 +57,7 @@ The parameters that are configured here are intended for producers and consumers
 
 Client configuration overrides can be configured individually per connector by using the prefixes `producer.override.` and `consumer.override.` for Kafka sources or Kafka sinks respectively. These overrides are included with the rest of the connector's configuration properties.
 
-The remaining parameters are connector configuration files. Each file may either be a Java Properties file or a JSON file containing an object with the same structure as the request body of either the `POST /connectors` endpoint or the `PUT /connectors/{name}/config` endpoint (see the [OpenAPI documentation](/44/generated/connect_rest.yaml)). You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.
+The remaining parameters are connector configuration files. Each file may either be a Java Properties file or a JSON file containing an object with the same structure as the request body of either the `POST /connectors` endpoint or the `PUT /connectors/{name}/config` endpoint (see the [OpenAPI documentation](/45/generated/connect_rest.yaml)). You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.
 
 Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:
 
@@ -391,7 +391,7 @@ The following are the currently supported admin REST API endpoints:
 
 See [KIP-495](https://cwiki.apache.org/confluence/x/-4tTBw) for more details about the admin logger REST APIs.
 
-For the complete specification of the Kafka Connect REST API, see the [OpenAPI documentation](/44/generated/connect_rest.yaml)
+For the complete specification of the Kafka Connect REST API, see the [OpenAPI documentation](/45/generated/connect_rest.yaml)
 
 ## Error Reporting in Connect
 
@@ -618,7 +618,7 @@ Offsets topic used by the connector
 
 This is the value of the `offsets.storage.topic` property in the connector’s configuration if provided,
 
-or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
+or the value of the `offset.storage.topic` property in the worker’s configuration if not.
 </td>
 <td>
 
@@ -686,7 +686,7 @@ the name of the connector
 
 or the value of `consumer.group.id` if present in the Connect configuration,
 
-or the value of `consumer.overrides.group.id` if present in the Connector configuration
+or the value of `consumer.override.group.id` if present in the Connector configuration
 </td><td> </td></tr>
 <tr><td>Read</td><td>Topic</td><td>sink topic(s) that the connector will consume from</td><td>
 

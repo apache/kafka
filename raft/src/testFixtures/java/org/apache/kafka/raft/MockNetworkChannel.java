@@ -21,18 +21,19 @@ import org.apache.kafka.common.protocol.ApiKeys;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockNetworkChannel implements NetworkChannel {
     public static final ListenerName LISTENER_NAME = VoterSetTestUtil.DEFAULT_LISTENER_NAME;
 
     private final AtomicInteger correlationIdCounter;
-    private final List<RaftRequest.Outbound> sendQueue = new ArrayList<>();
-    private final Map<Integer, RaftRequest.Outbound> awaitingResponse = new HashMap<>();
+    private final List<RequestEntry> sendQueue = new ArrayList<>();
+    private final Map<Integer, CompletableFuture<RaftResponse.Inbound>> awaitingResponse = new HashMap<>();
 
     public MockNetworkChannel(AtomicInteger correlationIdCounter) {
         this.correlationIdCounter = correlationIdCounter;
@@ -48,8 +49,10 @@ public class MockNetworkChannel implements NetworkChannel {
     }
 
     @Override
-    public void send(RaftRequest.Outbound request) {
-        sendQueue.add(request);
+    public CompletionStage<RaftResponse.Inbound> send(RaftRequest.Outbound request) {
+        var future = new CompletableFuture<RaftResponse.Inbound>();
+        sendQueue.add(new RequestEntry(request, future));
+        return future;
     }
 
     @Override
@@ -57,17 +60,22 @@ public class MockNetworkChannel implements NetworkChannel {
         return LISTENER_NAME;
     }
 
+    @Override
+    public void close() { }
+
     public List<RaftRequest.Outbound> drainSendQueue() {
         return drainSentRequests(Optional.empty());
     }
 
     public List<RaftRequest.Outbound> drainSentRequests(Optional<ApiKeys> apiKeyFilter) {
-        List<RaftRequest.Outbound> requests = new ArrayList<>();
-        Iterator<RaftRequest.Outbound> iterator = sendQueue.iterator();
+        var requests = new ArrayList<RaftRequest.Outbound>();
+        var iterator = sendQueue.iterator();
         while (iterator.hasNext()) {
-            RaftRequest.Outbound request = iterator.next();
+            var requestEntry = iterator.next();
+            var request = requestEntry.request();
+            var future = requestEntry.future();
             if (apiKeyFilter.isEmpty() || request.data().apiKey() == apiKeyFilter.get().id) {
-                awaitingResponse.put(request.correlationId(), request);
+                awaitingResponse.put(request.correlationId(), future);
                 requests.add(request);
                 iterator.remove();
             }
@@ -80,10 +88,15 @@ public class MockNetworkChannel implements NetworkChannel {
     }
 
     public void mockReceive(RaftResponse.Inbound response) {
-        RaftRequest.Outbound request = awaitingResponse.get(response.correlationId());
-        if (request == null) {
+        var future = awaitingResponse.get(response.correlationId());
+        if (future == null) {
             throw new IllegalStateException("Received response for a request which is not being awaited");
         }
-        request.completion.complete(response);
+        future.complete(response);
     }
+
+    private record RequestEntry(
+        RaftRequest.Outbound request,
+        CompletableFuture<RaftResponse.Inbound> future
+    ) { }
 }

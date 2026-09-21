@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.source;
 
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.connector.Task;
 
 import java.util.List;
@@ -27,6 +28,7 @@ import java.util.Objects;
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
  */
+@InterfaceAudience.Public
 public abstract class SourceTask implements Task {
 
     /**

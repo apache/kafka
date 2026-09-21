@@ -25,6 +25,10 @@
   // Version 4 is the first flexible version.
   "validVersions": "0-4",
   "flexibleVersions": "4+",
+  "headerVersions": {
+    "0-3": "1",
+    "4+": "2"
+  },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group id." },

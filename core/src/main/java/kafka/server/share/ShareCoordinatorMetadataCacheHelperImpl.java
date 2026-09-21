@@ -18,6 +18,8 @@
 package kafka.server.share;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -29,10 +31,12 @@ import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
+import org.apache.kafka.storage.internals.log.LogConfig;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -40,24 +44,28 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.IntSupplier;
 
 public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinatorMetadataCacheHelper, ShareGroupDLQMetadataCacheHelper {
     private final MetadataCache metadataCache;
     private final Function<SharePartitionKey, Integer> keyToPartitionMapper;
     private final ListenerName interBrokerListenerName;
     private final GroupConfigManager groupConfigManager;
+    private final IntSupplier messageMaxBytesSupplier;
     private final Logger log = LoggerFactory.getLogger(ShareCoordinatorMetadataCacheHelperImpl.class);
 
     public ShareCoordinatorMetadataCacheHelperImpl(
         MetadataCache metadataCache,
         Function<SharePartitionKey, Integer> keyToPartitionMapper,
         ListenerName interBrokerListenerName,
-        GroupConfigManager groupConfigManager
+        GroupConfigManager groupConfigManager,
+        IntSupplier messageMaxBytesSupplier
     ) {
         this.metadataCache = Objects.requireNonNull(metadataCache, "metadataCache must not be null");
         this.keyToPartitionMapper = Objects.requireNonNull(keyToPartitionMapper, "keyToPartitionMapper must not be null");
         this.interBrokerListenerName = Objects.requireNonNull(interBrokerListenerName, "interBrokerListenerName must not be null");
         this.groupConfigManager = Objects.requireNonNull(groupConfigManager, "groupConfigManager must not be null");
+        this.messageMaxBytesSupplier = Objects.requireNonNull(messageMaxBytesSupplier, "messageMaxBytesSupplier must not be null");
     }
 
     @Override
@@ -89,14 +97,30 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     @Override
     public boolean isDlqEnabledOnTopic(String topic) {
         Properties props = metadataCache.topicConfig(topic);
-        if (props == null || props.isEmpty()) {
+        if (props == null) {
             return false;
         }
-        Object isEnabled = props.get(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
-        if (isEnabled instanceof Boolean) {
-            return (boolean) isEnabled;
+        try {
+            return new LogConfig(props).getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
+        } catch (ConfigException exe) {
+            return false;
         }
-        return false;
+    }
+
+    @Override
+    public int dlqTopicMaxMessageBytes(String topic) {
+        Properties props = metadataCache.topicConfig(topic);
+        // LogConfig defines its own static default for this key, so an explicit containsKey
+        // check is needed to distinguish "no topic-level override" from "override present"
+        // and fall back to the broker's configured message.max.bytes in the former case.
+        if (props == null || !props.containsKey(TopicConfig.MAX_MESSAGE_BYTES_CONFIG)) {
+            return messageMaxBytesSupplier.getAsInt();
+        }
+        try {
+            return new LogConfig(props).getInt(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
+        } catch (ConfigException exe) {
+            return messageMaxBytesSupplier.getAsInt();
+        }
     }
 
     @Override
@@ -137,7 +161,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
                 }
             }
         } catch (Exception e) {
-            log.warn("Exception while getting share coordinator", e);
+            log.warn("Exception while getting share coordinator.", e);
         }
         return Node.noNode();
     }
@@ -147,8 +171,38 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
         try {
             return metadataCache.getAliveBrokerNodes(interBrokerListenerName);
         } catch (Exception e) {
-            log.warn("Exception while getting cluster nodes", e);
+            log.warn("Exception while getting cluster nodes.", e);
         }
         return List.of();
+    }
+
+    @Override
+    public Optional<String> topicName(Uuid topicId) {
+        try {
+            return metadataCache.getTopicName(topicId);
+        } catch (Exception e) {
+            log.warn("Exception while fetching topic name.", e);
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public TopicPartitionData topicPartitionData(String topicName) {
+        Uuid topicId = metadataCache.getTopicId(topicName);
+        Optional<Integer> numPartitions = metadataCache.numPartitions(topicName);
+        List<Node> partitionLeaders = new ArrayList<>();
+
+        if (numPartitions.isPresent()) {
+            for (int i = 0; i < numPartitions.get(); i++) {
+                partitionLeaders.add(metadataCache.getPartitionLeaderEndpoint(topicName, i, interBrokerListenerName).orElse(null));
+            }
+        }
+
+        return new TopicPartitionData(
+            topicName,
+            numPartitions,
+            Optional.ofNullable(topicId == Uuid.ZERO_UUID ? null : topicId),
+            partitionLeaders
+        );
     }
 }

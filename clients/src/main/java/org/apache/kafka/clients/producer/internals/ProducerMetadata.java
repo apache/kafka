@@ -18,31 +18,33 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ProducerMetadata extends Metadata {
     // If a topic hasn't been accessed for this many milliseconds, it is removed from the cache.
     private final long metadataIdleMs;
 
     /* Topics with expiry time */
-    private final Map<String, Long> topics = new HashMap<>();
+    private final Map<String, Long> topics = new ConcurrentHashMap<>();
     private final Set<String> newTopics = new HashSet<>();
     private final Logger log;
-    private final Time time;
     private Map<String, Errors> errors = null;
 
     public ProducerMetadata(long refreshBackoffMs,
@@ -50,12 +52,10 @@ public class ProducerMetadata extends Metadata {
                             long metadataExpireMs,
                             long metadataIdleMs,
                             LogContext logContext,
-                            ClusterResourceListeners clusterResourceListeners,
-                            Time time) {
+                            ClusterResourceListeners clusterResourceListeners) {
         super(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.metadataIdleMs = metadataIdleMs;
         this.log = logContext.logger(ProducerMetadata.class);
-        this.time = time;
     }
 
     @Override
@@ -68,12 +68,41 @@ public class ProducerMetadata extends Metadata {
         return new MetadataRequest.Builder(new ArrayList<>(newTopics), true);
     }
 
-    public synchronized void add(String topic, long nowMs) {
+    public void add(String topic, long nowMs) {
         Objects.requireNonNull(topic, "topic cannot be null");
-        if (topics.put(topic, nowMs + metadataIdleMs) == null) {
-            newTopics.add(topic);
-            requestUpdateForNewTopics();
+        long expiryTime = nowMs + metadataIdleMs;
+        // replace() only writes if the topic is still present, so there's no window in which a topic
+        // concurrently evicted by retainTopic() could get silently re-inserted without newTopics bookkeeping.
+        if (topics.replace(topic, expiryTime) != null) {
+            return;
         }
+        synchronized (this) {
+            // New (or concurrently-evicted) topic: topics.put() and newTopics.add() must happen atomically
+            // with retainTopic(), hence the shared lock.
+            if (topics.put(topic, expiryTime) == null) {
+                newTopics.add(topic);
+                requestUpdateForNewTopics();
+            }
+        }
+    }
+
+    /**
+     * Atomically add a batch of topics to the working set, refreshing the
+     * expiry for those already present. If any of the topics was newly added,
+     * a partial metadata refresh is requested and the current updateVersion is
+     * returned so the caller can pass it to {@link #awaitUpdate(int, long)} to
+     * wait for the next response. Returns an empty {@code OptionalInt} when no
+     * topic was newly added (no refresh requested, nothing to wait for).
+     */
+    public synchronized OptionalInt add(Collection<String> topics, long nowMs) {
+        boolean anyNew = false;
+        for (String topic : topics) {
+            if (this.topics.put(topic, nowMs + metadataIdleMs) == null) {
+                newTopics.add(topic);
+                anyNew = true;
+            }
+        }
+        return anyNew ? OptionalInt.of(requestUpdateForNewTopics()) : OptionalInt.empty();
     }
 
     public synchronized int requestUpdateForTopic(String topic) {
@@ -103,28 +132,38 @@ public class ProducerMetadata extends Metadata {
         Long expireMs = topics.get(topic);
         if (expireMs == null) {
             return false;
-        } else if (newTopics.contains(topic)) {
-            return true;
-        } else if (expireMs <= nowMs) {
-            log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", topic, expireMs, nowMs);
-            topics.remove(topic);
-            return false;
-        } else {
+        }
+        if (newTopics.contains(topic)) {
             return true;
         }
+        if (expireMs > nowMs) {
+            return true;
+        }
+        // Only remove if the expiry we read is still current: the lock-free refresh path in add() can
+        // race with this check, and a plain remove(topic) would drop a concurrently-refreshed entry.
+        if (topics.remove(topic, expireMs)) {
+            log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", topic, expireMs, nowMs);
+            return false;
+        }
+        return true;
     }
 
     /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
-    public synchronized void awaitUpdate(final int lastVersion, final long timeoutMs) throws InterruptedException {
-        long currentTimeMs = time.milliseconds();
-        long deadlineMs = currentTimeMs + timeoutMs < 0 ? Long.MAX_VALUE : currentTimeMs + timeoutMs;
-        time.waitObject(this, () -> {
+    public synchronized void awaitUpdate(final int lastVersion, final Timer timer) throws InterruptedException {
+        while (true) {
             // Throw fatal exceptions, if there are any. Recoverable topic errors will be handled by the caller.
             maybeThrowFatalException();
-            return updateVersion() > lastVersion || isClosed();
-        }, deadlineMs);
+            if (updateVersion() > lastVersion || isClosed())
+                break;
+
+            timer.update();
+            if (timer.isExpired())
+                throw new TimeoutException("Failed to update metadata after " + timer.timeoutMs() + " ms.");
+
+            wait(timer.remainingMs());
+        }
 
         if (isClosed())
             throw new KafkaException("Requested metadata update after close");

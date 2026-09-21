@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.KTable;
 
 /**
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.kstream.KTable;
  * The extracted timestamp is defined as milliseconds.
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface TimestampExtractor {
 
     /**

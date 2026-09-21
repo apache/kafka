@@ -85,9 +85,9 @@ class BaseFetchRequestTest extends BaseRequestTest {
 
   protected def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {
     val topics = (0 until numTopics).map(t => s"topic$t")
-    val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
-    configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
+    val topicConfig = new util.HashMap[String, String]()
+    topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
+    configs.foreach { case (k, v) => topicConfig.put(k, v) }
     topics.flatMap { topic =>
       val partitionToLeader = createTopic(topic, numPartitions = numPartitions, replicationFactor = 2,
         topicConfig = topicConfig)

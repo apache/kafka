@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.test.TestRecord;
 
@@ -51,6 +52,7 @@ import java.util.StringJoiner;
  * @param <V> the type of the record value
  * @see TopologyTestDriver
  */
+@InterfaceAudience.Public
 public class TestOutputTopic<K, V> {
     private final TopologyTestDriver driver;
     private final String topic;

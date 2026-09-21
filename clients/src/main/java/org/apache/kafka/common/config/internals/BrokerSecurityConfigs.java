@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
 
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
@@ -217,6 +218,8 @@ public class BrokerSecurityConfigs {
             .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LONG, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LOW, SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LONG, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LOW, SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, INT, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, LOW, SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
-            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
-            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, STRING, null, LOW, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC);
+            .define(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE, BOOLEAN, false, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), HIGH, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER, BOOLEAN, false, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, STRING, null, HIGH, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC);
 }

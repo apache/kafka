@@ -38,7 +38,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -152,6 +151,7 @@ class ActiveTaskCreator {
                 applicationConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                 logContext,
                 stateDirectory,
+                time,
                 topology.storeToChangelogTopic(),
                 partitions,
                 upgradeFrom);
@@ -271,7 +271,7 @@ class ActiveTaskCreator {
     }
 
     Map<MetricName, Metric> producerMetrics() {
-        return ClientUtils.producerMetrics(Collections.singleton(streamsProducer));
+        return ClientUtils.producerMetrics(Set.of(streamsProducer));
     }
 
     String producerClientIds() {

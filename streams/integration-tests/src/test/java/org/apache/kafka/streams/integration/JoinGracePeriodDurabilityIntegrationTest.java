@@ -66,8 +66,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cl
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 @Timeout(600)
@@ -157,7 +156,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k2", "v2+v2", scaledTime(2L))
                 )
             );
-            assertThat(eventCount.get(), is(2));
+            assertEquals(2, eventCount.get());
 
             produceSynchronouslyToPartitionZero(
                 streamInput,
@@ -172,7 +171,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
 
             // restart the driver
             driver.close();
-            assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
+            assertEquals(KafkaStreams.State.NOT_RUNNING, driver.state());
             driver = startStream(streamsConfig, builder, false, withHeaders);
 
 
@@ -191,7 +190,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k3", "v3+v3", scaledTime(7L))
                     )
             );
-            assertThat("There should only be 5 output events.", eventCount.get(), is(5));
+            assertEquals(5, eventCount.get(), "There should only be 5 output events.");
 
         } finally {
             driver.close();

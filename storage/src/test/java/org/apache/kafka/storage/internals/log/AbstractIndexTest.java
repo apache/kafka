@@ -86,4 +86,5 @@ public class AbstractIndexTest {
         assertSame(oldMmap, idx.unmappedBuffer, "old mmap should be unmapped");
         assertNotSame(idx.unmappedBuffer, idx.mmap());
     }
+
 }

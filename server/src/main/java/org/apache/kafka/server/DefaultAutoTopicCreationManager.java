@@ -48,7 +48,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -61,18 +60,18 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
 
     private final AbstractKafkaConfig config;
     private final TopicCreator topicCreator;
-    private final Supplier<Properties> groupCoordinatorConfigsSupplier;
-    private final Supplier<Properties> shareCoordinatorConfigsSupplier;
-    private final Supplier<Properties> transactionTopicConfigsSupplier;
+    private final Supplier<Map<String, String>> groupCoordinatorConfigsSupplier;
+    private final Supplier<Map<String, String>> shareCoordinatorConfigsSupplier;
+    private final Supplier<Map<String, String>> transactionTopicConfigsSupplier;
     private final Time time;
     private final Set<String> inflightTopics = ConcurrentHashMap.newKeySet();
     private final ExpiringErrorCache topicCreationErrorCache;
 
     public DefaultAutoTopicCreationManager(
             AbstractKafkaConfig config,
-            Supplier<Properties> groupCoordinatorConfigsSupplier,
-            Supplier<Properties> transactionTopicConfigsSupplier,
-            Supplier<Properties> shareCoordinatorConfigsSupplier,
+            Supplier<Map<String, String>> groupCoordinatorConfigsSupplier,
+            Supplier<Map<String, String>> transactionTopicConfigsSupplier,
+            Supplier<Map<String, String>> shareCoordinatorConfigsSupplier,
             TopicCreator topicCreator,
             Time time
     ) {
@@ -91,9 +90,9 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     // VisibleForTesting
     DefaultAutoTopicCreationManager(
             AbstractKafkaConfig config,
-            Supplier<Properties> groupCoordinatorConfigsSupplier,
-            Supplier<Properties> transactionTopicConfigsSupplier,
-            Supplier<Properties> shareCoordinatorConfigsSupplier,
+            Supplier<Map<String, String>> groupCoordinatorConfigsSupplier,
+            Supplier<Map<String, String>> transactionTopicConfigsSupplier,
+            Supplier<Map<String, String>> shareCoordinatorConfigsSupplier,
             TopicCreator topicCreator,
             Time time,
             int topicErrorCacheCapacity
@@ -276,14 +275,13 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
         };
     }
 
-    private static CreatableTopicConfigCollection convertToTopicConfigCollections(Properties config) {
+    private static CreatableTopicConfigCollection convertToTopicConfigCollections(Map<String, String> config) {
         return new CreatableTopicConfigCollection(
                 config.entrySet().stream()
                         .map(entry -> new CreatableTopicConfig()
-                                .setName(entry.getKey().toString())
-                                .setValue(entry.getValue().toString()))
+                                .setName(entry.getKey())
+                                .setValue(entry.getValue()))
                         .toList()
-                        .iterator()
         );
     }
 

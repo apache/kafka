@@ -23,7 +23,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.Request
 import org.apache.kafka.raft.RaftManager
@@ -57,8 +57,8 @@ class TestRaftRequestHandler(
       case e: Throwable =>
         error(s"Unexpected error handling request ${request.requestDesc(true)} " +
           s"with context ${request.context}", e)
-        val errorResponse = request.body(classOf[AbstractRequest]).getErrorResponse(e)
-        requestChannel.sendResponse(request, errorResponse, None)
+        val errorResponse = request.body.getErrorResponse(e)
+        requestChannel.sendResponse(request, errorResponse)
     } finally {
       // The local completion time may be set while processing the request. Only record it if it's unset.
       if (request.apiLocalCompleteTimeNanos < 0)
@@ -67,7 +67,7 @@ class TestRaftRequestHandler(
   }
 
   private def handleApiVersions(request: Request): Unit = {
-    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(0, request.header.apiVersion() < 4), None)
+    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(0, request.header.apiVersion() < 4))
   }
 
   private def handleVote(request: Request): Unit = {
@@ -94,7 +94,7 @@ class TestRaftRequestHandler(
     request: Request,
     buildResponse: ApiMessage => AbstractResponse
   ): Unit = {
-    val requestBody = request.body(classOf[AbstractRequest])
+    val requestBody = request.body
 
     val future = raftManager.handleRequest(
       request.context,
@@ -109,7 +109,7 @@ class TestRaftRequestHandler(
       } else {
         buildResponse(response)
       }
-      requestChannel.sendResponse(request, res, None)
+      requestChannel.sendResponse(request, res)
     })
   }
 

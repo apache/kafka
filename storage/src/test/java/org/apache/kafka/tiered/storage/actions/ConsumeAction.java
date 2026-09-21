@@ -38,9 +38,8 @@ import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TIME_INDEX;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TRANSACTION_INDEX;
-import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueMatcher.correspondTo;
+import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueAssert.assertRecordsCorrespondTo;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.tieredStorageRecords;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -124,7 +123,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
                 tieredStorageRecords.subList(indexOfFetchOffsetInTieredStorage, tieredStorageRecords.size());
         List<ConsumerRecord<String, String>> readRecords = consumedRecords.subList(0, expectedFromSecondTierCount);
 
-        assertThat(storedRecords, correspondTo(readRecords, topicPartition, serde, serde));
+        assertRecordsCorrespondTo(storedRecords, readRecords, topicPartition, serde, serde);
 
         // (B) Assessment of the interactions between the source broker and the second-tier storage.
         for (LocalTieredStorageEvent.EventType eventType : List.of(FETCH_SEGMENT, FETCH_OFFSET_INDEX, FETCH_TIME_INDEX, FETCH_TRANSACTION_INDEX)) {

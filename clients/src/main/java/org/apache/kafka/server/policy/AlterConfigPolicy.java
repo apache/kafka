@@ -17,6 +17,7 @@
 package org.apache.kafka.server.policy;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.PolicyViolationException;
 
@@ -33,6 +34,7 @@ import java.util.Objects;
  * using the default constructor and will then pass the broker configs to its <code>configure()</code> method. During
  * broker shutdown, the <code>close()</code> method will be invoked so that resources can be released (if necessary).
  */
+@InterfaceAudience.Public
 public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
     /**
@@ -54,7 +56,8 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
         }
 
         /**
-         * Return the configs in the request.
+         * Return the configs in the request. For incremental alter configs requests, entries explicitly deleted by
+         * the request are mapped to {@code null}, even if the resource has no existing value for the configuration.
          */
         public Map<String, String> configs() {
             return configs;

@@ -18,26 +18,20 @@ package org.apache.kafka.streams.state.internals;
 
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 /**
- * A caching key-value store with headers is a caching key-value store that only forwards the query to the 
- * wrapped store.
+ * A caching key-value store with headers.
+ *
+ * <p>It inherits {@link CachingKeyValueStore}'s IQv2 {@code query(...)} handling: point queries
+ * ({@code KeyQuery}) consult the record cache (honoring {@code skipCache}) and fall back to the
+ * wrapped store on a miss, while other query types are forwarded to the wrapped store. The cached
+ * value bytes are the serialized {@code ValueTimestampHeaders}; the metered layer performs the
+ * header-aware deserialization, so no override is needed here.
  */
 public class CachingKeyValueStoreWithHeaders extends CachingKeyValueStore {
 
     CachingKeyValueStoreWithHeaders(final KeyValueStore<Bytes, byte[]> underlying) {
         super(underlying, CacheType.TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS);
-    }
-
-    @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
-        return wrapped().query(query, positionBound, config);
     }
 }

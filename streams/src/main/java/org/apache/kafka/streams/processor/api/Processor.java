@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -31,6 +32,7 @@ import java.time.Duration;
  * @param <VOut> the type of output values
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Processor<KIn, VIn, KOut, VOut> {
 
     /**
@@ -41,6 +43,12 @@ public interface Processor<KIn, VIn, KOut, VOut> {
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
      * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule} a method to be
      * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
+     * <p>
+     * State stores attached to this processor are fully restored from their changelog topics before {@code init()} is called.
+     * However, for stores that report approximate sizes (notably the default RocksDB-backed stores), size estimates such as
+     * {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore#approximateNumEntries()} may not yet reflect post-compaction
+     * counts at this point and can include duplicate writes and tombstones replayed during restoration; see that method's
+     * Javadoc for details.
      *
      * @param context the context; may not be null
      */

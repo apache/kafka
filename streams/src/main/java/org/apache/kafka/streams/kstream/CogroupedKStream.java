@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -41,6 +42,7 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
  * @param <K> the key type of this co-grouped stream
  * @param <VOut> the result value type of the applied aggregation
  */
+@InterfaceAudience.Public
 public interface CogroupedKStream<K, VOut> {
 
     /**

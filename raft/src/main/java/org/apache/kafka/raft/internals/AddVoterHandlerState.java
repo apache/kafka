@@ -24,7 +24,15 @@ import org.apache.kafka.raft.ReplicaKey;
 
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
+/**
+ * Tracks the state of a single pending add voter operation.
+ * <p>
+ * An instance is created by {@link AddVoterHandler#handleAddVoterRequest} once the API_VERSIONS
+ * request has been sent to the new voter, and is held by {@link ChangeVoterHandlerState} until
+ * the operation completes, is aborted, or expires.
+ */
 public final class AddVoterHandlerState {
     private final ReplicaKey voterKey;
     private final Endpoints voterEndpoints;
@@ -46,15 +54,33 @@ public final class AddVoterHandlerState {
         this.timeout = timeout;
     }
 
+    /**
+     * Returns the time in milliseconds until this operation expires.
+     *
+     * @param currentTimeMs the current time in milliseconds
+     * @return the remaining time in milliseconds until expiration
+     */
     public long timeUntilOperationExpiration(long currentTimeMs) {
         timeout.update(currentTimeMs);
         return timeout.remainingMs();
     }
 
+    /**
+     * Checks whether this handler state is expecting an API_VERSIONS response from the given replica.
+     *
+     * @param replicaId the replica id to check
+     * @return true if expecting a response from this replica, false otherwise
+     */
     public boolean expectingApiResponse(int replicaId) {
         return lastOffset.isEmpty() && replicaId == voterKey.id();
     }
 
+    /**
+     * Sets the offset of the VotersRecord that was appended to the log for this add voter operation.
+     *
+     * @param lastOffset the offset of the VotersRecord that was appended to the log
+     * @throws IllegalStateException if the last offset has already been set
+     */
     public void setLastOffset(long lastOffset) {
         if (this.lastOffset.isPresent()) {
             throw new IllegalStateException(
@@ -71,23 +97,53 @@ public final class AddVoterHandlerState {
         this.lastOffset = OptionalLong.of(lastOffset);
     }
 
+    /**
+     * Returns the voter key for the voter being added.
+     *
+     * @return the voter key
+     */
     public ReplicaKey voterKey() {
         return voterKey;
     }
 
+    /**
+     * Returns the endpoints for the voter being added.
+     *
+     * @return the voter endpoints
+     */
     public Endpoints voterEndpoints() {
         return voterEndpoints;
     }
 
+    /**
+     * Returns whether the AddVoter response should be withheld until the voter change commits.
+     *
+     * @return true if the response should be sent only after the change commits, false if it
+     *         should be sent as soon as the change is appended to the log
+     */
     public boolean ackWhenCommitted() {
         return ackWhenCommitted;
     }
 
+    /**
+     * Returns the offset of the VotersRecord if it has been appended to the log.
+     *
+     * @return the last offset, or empty if not yet appended
+     */
     public OptionalLong lastOffset() {
         return lastOffset;
     }
 
-    public CompletableFuture<AddRaftVoterResponseData> future() {
+    /**
+     * Completes the future with the provided response.
+     *
+     * @param response the response to complete the future with
+     */
+    public void completeFuture(AddRaftVoterResponseData response) {
+        future.complete(response);
+    }
+
+    CompletionStage<AddRaftVoterResponseData> future() {
         return future;
     }
 }

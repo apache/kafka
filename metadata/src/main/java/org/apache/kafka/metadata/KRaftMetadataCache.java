@@ -518,6 +518,10 @@ public class KRaftMetadataCache implements MetadataCache {
         if (kraftVersionLevel > 0) {
             finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionLevel);
         }
-        return new FinalizedFeatures(image.features().metadataVersionOrThrow(), finalizedFeatures, image.highestOffsetAndEpoch().offset());
+        return FinalizedFeatures.of(
+            image.features().metadataVersionOrThrow(),
+            finalizedFeatures,
+            image.highestOffsetAndEpoch().offset()
+        );
     }
 }

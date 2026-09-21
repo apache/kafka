@@ -17,10 +17,6 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-
-import java.util.Optional;
-
 /**
  * Application event indicating that the subscription state has changed, triggered when a user
  * calls the subscribe API. This will make the consumer join a consumer group if not part of it
@@ -28,19 +24,7 @@ import java.util.Optional;
  */
 public abstract class SubscriptionChangeEvent extends CompletableApplicationEvent<Void> {
 
-    private final Optional<ConsumerRebalanceListener> listener;
-
-    public SubscriptionChangeEvent(final Type type, final Optional<ConsumerRebalanceListener> listener, final long deadlineMs) {
+    public SubscriptionChangeEvent(final Type type, final long deadlineMs) {
         super(type, deadlineMs);
-        this.listener = listener;
-    }
-
-    public Optional<ConsumerRebalanceListener> listener() {
-        return listener;
-    }
-
-    @Override
-    protected String toStringBase() {
-        return super.toStringBase() + ", listener=" + listener;
     }
 }

@@ -18,68 +18,23 @@
 package kafka.network
 
 import java.util.concurrent._
-import com.fasterxml.jackson.databind.JsonNode
 import kafka.utils.Logging
-import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.metrics.internals.MetricsUtils
-import org.apache.kafka.network.{BaseRequest, CallbackRequest, Request, ShutdownRequest, WakeupRequest}
+import org.apache.kafka.network.{BaseRequest, CallbackRequest, CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, Request, Response, SendResponse, ShutdownRequest, StartThrottlingResponse, WakeupRequest}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util.OptionalLong
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
 
 object RequestChannel extends Logging {
 
   private val RequestQueueSizeMetric = "RequestQueueSize"
   private val ResponseQueueSizeMetric = "ResponseQueueSize"
   val ProcessorMetricTag = "processor"
-
-  sealed abstract class Response(val request: Request) {
-
-    def processor: Int = request.processor
-
-    def responseLog: Option[JsonNode] = None
-
-    def onComplete: Option[Send => Unit] = None
-  }
-
-  /** responseLogValue should only be defined if request logging is enabled */
-  class SendResponse(request: Request,
-                     val responseSend: Send,
-                     val responseLogValue: Option[JsonNode],
-                     val onCompleteCallback: Option[Send => Unit]) extends Response(request) {
-    override def responseLog: Option[JsonNode] = responseLogValue
-
-    override def onComplete: Option[Send => Unit] = onCompleteCallback
-
-    override def toString: String =
-      s"Response(type=Send, request=$request, send=$responseSend, asString=$responseLogValue)"
-  }
-
-  class NoOpResponse(request: Request) extends Response(request) {
-    override def toString: String =
-      s"Response(type=NoOp, request=$request)"
-  }
-
-  class CloseConnectionResponse(request: Request) extends Response(request) {
-    override def toString: String =
-      s"Response(type=CloseConnection, request=$request)"
-  }
-
-  class StartThrottlingResponse(request: Request) extends Response(request) {
-    override def toString: String =
-      s"Response(type=StartThrottling, request=$request)"
-  }
-
-  class EndThrottlingResponse(request: Request) extends Response(request) {
-    override def toString: String =
-      s"Response(type=EndThrottling, request=$request)"
-  }
 }
 
 class RequestChannel(val queueSize: Int,
@@ -130,29 +85,27 @@ class RequestChannel(val queueSize: Int,
     // This case is used when the request handler has encountered an error, but the client
     // does not expect a response (e.g. when produce request has acks set to 0)
     updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
-    sendResponse(new RequestChannel.CloseConnectionResponse(request))
+    sendResponse(new CloseConnectionResponse(request))
   }
 
   def sendResponse(
     request: Request,
-    response: AbstractResponse,
-    onComplete: Option[Send => Unit]
+    response: AbstractResponse
   ): Unit = {
     updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala)
-    sendResponse(new RequestChannel.SendResponse(
+    sendResponse(new SendResponse(
       request,
       request.buildResponseSend(response),
-      request.responseNode(response).toScala,
-      onComplete
+      request.responseNode(response)
     ))
   }
 
   def sendNoOpResponse(request: Request): Unit = {
-    sendResponse(new RequestChannel.NoOpResponse(request))
+    sendResponse(new NoOpResponse(request))
   }
 
   def startThrottling(request: Request): Unit = {
-    sendResponse(new RequestChannel.StartThrottlingResponse(request))
+    sendResponse(new StartThrottlingResponse(request))
   }
 
   def endThrottling(request: Request): Unit = {
@@ -160,7 +113,7 @@ class RequestChannel(val queueSize: Int,
   }
 
   /** Send a response back to the socket server to be sent over the network */
-  private[network] def sendResponse(response: RequestChannel.Response): Unit = {
+  private[network] def sendResponse(response: Response): Unit = {
     if (isTraceEnabled) {
       val requestHeader = response.request.headerForLoggingOrThrottling()
       val message = response match {
@@ -193,7 +146,7 @@ class RequestChannel(val queueSize: Int,
       case _: StartThrottlingResponse | _: EndThrottlingResponse => ()
     }
 
-    val processor = processors.get(response.processor)
+    val processor = processors.get(response.request.processor)
     // The processor may be null if it was shutdown. In this case, the connections
     // are closed, so the response is dropped.
     if (processor != null) {
@@ -223,7 +176,7 @@ class RequestChannel(val queueSize: Int,
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]): Unit = {
     errors.foreachEntry { (error, count) =>
-      metrics(apiKey.name).markErrorMeter(error, count)
+      metrics.get(apiKey.name).markErrorMeter(error, count)
     }
   }
 

@@ -18,6 +18,7 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
@@ -43,6 +44,7 @@ import java.util.stream.Collectors;
  * <p>
  * This class holds both the original configuration that was provided as well as the parsed
  */
+@InterfaceAudience.Public
 public class AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractConfig.class);

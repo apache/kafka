@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.utils.TestUtils;
-
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -98,6 +96,7 @@ import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -115,7 +114,6 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -144,7 +142,7 @@ public class DumpLogSegmentsTest {
         boolean hasValues
     ) { }
 
-    private final File tmpDir = TestUtils.tempDir();
+    private final File tmpDir = TestUtils.tempDirectory();
     private final File logDir = TestUtils.randomPartitionLogDir(tmpDir);
     private final String segmentName = "00000000000000000000";
     private final String logFilePath = new File(logDir, segmentName + ".log").getAbsolutePath();
@@ -315,7 +313,7 @@ public class DumpLogSegmentsTest {
 
         Map<String, Map<Long, Long>> offsetMismatches = new HashMap<>();
         DumpLogSegments.dumpIndex(new File(indexFilePath), false, true, offsetMismatches, Integer.MAX_VALUE);
-        assertEquals(Collections.emptyMap(), offsetMismatches);
+        assertEquals(Map.of(), offsetMismatches);
     }
 
     @Test
@@ -326,9 +324,9 @@ public class DumpLogSegmentsTest {
 
         DumpLogSegments.TimeIndexDumpErrors errors = new DumpLogSegments.TimeIndexDumpErrors();
         DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), false, true, errors);
-        assertEquals(Collections.emptyMap(), errors.misMatchesForTimeIndexFilesMap);
-        assertEquals(Collections.emptyMap(), errors.outOfOrderTimestamp);
-        assertEquals(Collections.emptyMap(), errors.shallowOffsetNotFound);
+        assertEquals(Map.of(), errors.misMatchesForTimeIndexFilesMap);
+        assertEquals(Map.of(), errors.outOfOrderTimestamp);
+        assertEquals(Map.of(), errors.shallowOffsetNotFound);
     }
 
     @Test
@@ -801,14 +799,14 @@ public class DumpLogSegmentsTest {
 
         // Get all the batches
         String output = runDumpLogSegments(new String[] {"--files", logFilePath});
-        ListIterator<String> lines = Arrays.asList(output.split("\n")).listIterator();
+        ListIterator<String> lines = List.of(output.split("\n")).listIterator();
 
         // Get total bytes of the partial batches
         int partialBatchesBytes = readPartialBatchesBytes(lines, partialBatches);
 
         // Request only the partial batches by bytes
         String partialOutput = runDumpLogSegments(new String[] {"--max-bytes", Integer.toString(partialBatchesBytes), "--files", logFilePath});
-        ListIterator<String> partialLines = Arrays.asList(partialOutput.split("\n")).listIterator();
+        ListIterator<String> partialLines = List.of(partialOutput.split("\n")).listIterator();
 
         // Count the total of partial batches limited by bytes
         int partialBatchesCount = countBatches(partialLines);
@@ -818,7 +816,7 @@ public class DumpLogSegmentsTest {
 
     private Record serializedRecord(ApiMessage key, ApiMessageAndVersion value) {
         byte[] valueBytes = value == null ? null : MessageUtil.toVersionPrefixedBytes(value.version(), value.message());
-        return TestUtils.singletonRecords(
+        return singletonRecords(
             valueBytes,
             MessageUtil.toCoordinatorTypePrefixedBytes(key),
             Compression.NONE,
@@ -835,7 +833,7 @@ public class DumpLogSegmentsTest {
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () ->
-                parser.parse(TestUtils.singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                parser.parse(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
                     RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next())
             ).getMessage()
         );
@@ -863,7 +861,7 @@ public class DumpLogSegmentsTest {
                         .setProtocol("range")
                         .setLeader("member")
                         .setGeneration(10)
-                        .setMembers(Collections.singletonList(
+                        .setMembers(List.of(
                             new GroupMetadataValue.MemberMetadata()
                                 .setMemberId("member")
                                 .setClientId("client")
@@ -873,13 +871,13 @@ public class DumpLogSegmentsTest {
                                 .setRebalanceTimeout(1000)
                                 .setSubscription(Utils.toArray(ConsumerProtocol.serializeSubscription(
                                     new Subscription(
-                                        Collections.singletonList("foo"),
+                                        List.of("foo"),
                                         null,
-                                        Collections.singletonList(new TopicPartition("foo", 0)),
+                                        List.of(new TopicPartition("foo", 0)),
                                         0,
                                         Optional.of("rack")))))
                                 .setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
-                                    new Assignment(Collections.singletonList(new TopicPartition("foo", 0))))))
+                                    new Assignment(List.of(new TopicPartition("foo", 0))))))
                         )),
                     GroupMetadataValue.HIGHEST_SUPPORTED_VERSION
                 )
@@ -904,7 +902,7 @@ public class DumpLogSegmentsTest {
                         .setProtocol("range")
                         .setLeader("member")
                         .setGeneration(10)
-                        .setMembers(Collections.singletonList(
+                        .setMembers(List.of(
                             new GroupMetadataValue.MemberMetadata()
                                 .setMemberId("member")
                                 .setClientId("client")
@@ -939,7 +937,7 @@ public class DumpLogSegmentsTest {
         // An unknown record type should be handled and reported as such.
         assertParseResult(
             parser.parse(
-                TestUtils.singletonRecords(
+                singletonRecords(
                     new byte[0],
                     ByteBuffer.allocate(2).putShort(Short.MAX_VALUE).array(),
                     Compression.NONE,
@@ -974,7 +972,7 @@ public class DumpLogSegmentsTest {
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () ->
-                parser.parse(TestUtils.singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                parser.parse(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
                     RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next())
             ).getMessage()
         );
@@ -990,7 +988,7 @@ public class DumpLogSegmentsTest {
             )),
             Optional.of("{\"type\":\"0\",\"data\":{\"transactionalId\":\"txnId\"}}"),
             Optional.of("{\"version\":\"0\",\"data\":{\"producerId\":123,\"producerEpoch\":0,\"transactionTimeoutMs\":0," +
-                "\"transactionStatus\":0,\"transactionPartitions\":[],\"transactionLastUpdateTimestampMs\":0," +
+                "\"transactionStatus\":\"Empty\",\"transactionPartitions\":[],\"transactionLastUpdateTimestampMs\":0," +
                 "\"transactionStartTimestampMs\":0}}")
         );
 
@@ -1007,7 +1005,7 @@ public class DumpLogSegmentsTest {
         // An unknown record type should be handled and reported as such.
         assertParseResult(
             parser.parse(
-                TestUtils.singletonRecords(
+                singletonRecords(
                     new byte[0],
                     ByteBuffer.allocate(2).putShort(Short.MAX_VALUE).array(),
                     Compression.NONE,
@@ -1047,7 +1045,7 @@ public class DumpLogSegmentsTest {
             )),
             Optional.of("{\"type\":\"0\",\"data\":{\"transactionalId\":\"txnId\"}}"),
             Optional.of("{\"version\":\"1\",\"data\":{\"producerId\":12,\"previousProducerId\":11,\"nextProducerId\":10," +
-                "\"producerEpoch\":2,\"transactionTimeoutMs\":14,\"transactionStatus\":0," +
+                "\"producerEpoch\":2,\"transactionTimeoutMs\":14,\"transactionStatus\":\"Empty\"," +
                 "\"transactionPartitions\":[{\"topic\":\"topic1\",\"partitionIds\":[0,1,2]}," +
                 "{\"topic\":\"topic2\",\"partitionIds\":[3,4,5]}],\"transactionLastUpdateTimestampMs\":123," +
                 "\"transactionStartTimestampMs\":13}}")
@@ -1142,7 +1140,7 @@ public class DumpLogSegmentsTest {
         FetchDataInfo logReadInfo = log.read(0, Integer.MAX_VALUE, FetchIsolation.LOG_END, true);
 
         String output = runDumpLogSegments(new String[] {"--deep-iteration", "--files", logFilePath});
-        ListIterator<String> lines = Arrays.asList(output.split("\n")).listIterator();
+        ListIterator<String> lines = List.of(output.split("\n")).listIterator();
 
         for (RecordBatch batch : logReadInfo.records.batches()) {
             Optional<String> parsedBatchOpt = readBatchMetadata(lines);
@@ -1196,7 +1194,7 @@ public class DumpLogSegmentsTest {
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () ->
-                parser.parse(TestUtils.singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                parser.parse(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
                     RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next())
             ).getMessage()
         );
@@ -1272,7 +1270,7 @@ public class DumpLogSegmentsTest {
         // An unknown record type should be handled and reported as such.
         assertParseResult(
             parser.parse(
-                TestUtils.singletonRecords(
+                singletonRecords(
                     new byte[0],
                     ByteBuffer.allocate(2).putShort(Short.MAX_VALUE).array(),
                     Compression.NONE,
@@ -1615,5 +1613,15 @@ public class DumpLogSegmentsTest {
         String errOutput = captureStandardErr(
             () -> runDumpLogSegments(new String[]{"--files", noDotFile.getAbsolutePath()}));
         assertTrue(errOutput.contains("Ignoring unknown file"), errOutput);
+    }
+
+    private static MemoryRecords singletonRecords(byte[] value, byte[] key, Compression compression, long timestamp, byte magicValue) {
+        return MemoryRecords.withRecords(
+            magicValue,
+            0L,
+            compression,
+            TimestampType.CREATE_TIME,
+            new SimpleRecord(timestamp, key, value)
+        );
     }
 }

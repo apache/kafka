@@ -746,13 +746,11 @@ public class ConfigCommandIntegrationTest {
                             "--add-config", "log.cleaner.threads=2",
                             "--entity-type", "brokers",
                             "--entity-default"))));
-            kafka.utils.TestUtils.waitUntilTrue(
+            TestUtils.waitForCondition(
                     () -> cluster.brokers().values().stream()
                         .map(KafkaBroker::config)
                         .allMatch(config -> config.getInt("log.cleaner.threads") == 2),
-                    () -> "Timeout waiting for topic config propagating to broker",
-                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
-                    100L);
+                    () -> "Timeout waiting for topic config propagating to broker");
         }
     }
 

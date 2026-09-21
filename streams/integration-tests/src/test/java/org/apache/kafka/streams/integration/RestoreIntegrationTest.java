@@ -67,7 +67,6 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -111,11 +110,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForStandbyCompletion;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -135,7 +130,7 @@ public class RestoreIntegrationTest {
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
-        
+
         final Properties adminConfig = new Properties();
         adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         admin = Admin.create(adminConfig);
@@ -185,6 +180,15 @@ public class RestoreIntegrationTest {
         streamsConfigurations.add(streamsConfiguration);
 
         return streamsConfiguration;
+    }
+
+    // Enables transactional state stores (KIP-892) when requested. Transactional stores are only supported
+    // under exactly-once, so this also sets the processing guarantee to EXACTLY_ONCE_V2.
+    private static void maybeSetTransactionalStateStores(final Properties props, final boolean transactional) {
+        if (transactional) {
+            props.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
     }
 
     @AfterEach
@@ -325,10 +329,10 @@ public class RestoreIntegrationTest {
             startApplicationAndWaitUntilRunning(kafkaStreams);
         }
 
-        assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
+        assertEquals((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2, restored.get());
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
-        assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
+        assertEquals(offsetLimitDelta * 2, numReceived.get());
     }
 
     @ParameterizedTest
@@ -391,15 +395,27 @@ public class RestoreIntegrationTest {
 
         }
 
-        assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
+        assertEquals((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2, restored.get());
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
-        assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
+        assertEquals(offsetLimitDelta * 2, numReceived.get());
     }
 
+    // Adds a transactional dimension on top of (useNewProtocol, withHeaders). When transactional is true the
+    // state stores are transactional (KIP-892), which requires EXACTLY_ONCE_V2 processing guarantee. This
+    // exercises the transactional-store lifecycle over the changelog restore path.
     @ParameterizedTest
-    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
-    public void shouldRestoreStateFromChangelogTopic(final boolean useNewProtocol, final boolean withHeaders) throws Exception {
+    @CsvSource({
+        "false, false, false",
+        "false, true, false",
+        "true, false, false",
+        "true, true, false",
+        "false, false, true",
+        "true, false, true"
+    })
+    public void shouldRestoreStateFromChangelogTopic(final boolean useNewProtocol,
+                                                     final boolean withHeaders,
+                                                     final boolean transactional) throws Exception {
         final String changelog = appId + "-store-changelog";
         CLUSTER.createTopic(changelog, 2, 1);
 
@@ -412,6 +428,7 @@ public class RestoreIntegrationTest {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        maybeSetTransactionalStateStores(props, transactional);
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
@@ -443,10 +460,10 @@ public class RestoreIntegrationTest {
         kafkaStreams.start();
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
-        assertThat(restored.get(), equalTo((long) numberOfKeys - 2 * offsetCheckpointed));
+        assertEquals((long) numberOfKeys - 2 * offsetCheckpointed, restored.get());
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
-        assertThat(numReceived.get(), equalTo(numberOfKeys));
+        assertEquals(numberOfKeys, numReceived.get());
     }
 
     @ParameterizedTest
@@ -597,17 +614,18 @@ public class RestoreIntegrationTest {
             waitForCompletion(streams1, 1, 30 * 1000L);
             waitForStandbyCompletion(streams1, 1, 30 * 1000L);
 
-            assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
+            assertEquals(initialNunRestoredCount, restoreListener.totalNumRestored());
 
-            // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed the stores on instance 2.
-            // Under the new group protocol, an extra store close can occur during rebalance; account for that here.
-            final int expectedAfterStreams2Close = initialStoreCloseCount + (useNewProtocol ? 3 : 2);
-            assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(expectedAfterStreams2Close));
+            // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
+            // total: the active and standby tasks on instance 2. The new protocol used to close one store more, because
+            // the standby that instance 1 already held was closed and re-created instead of being promoted in place;
+            // now that the reconciler changes the role in place, both protocols close the same two stores.
+            assertEquals(initialStoreCloseCount + 2, CloseCountingInMemoryStore.numStoresClosed());
         } finally {
             streams1.close(Duration.ofSeconds(60));
         }
         waitForTransitionTo(transitionedStates1, State.NOT_RUNNING, Duration.ofSeconds(60));
-        assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
+        assertEquals(initialStoreCloseCount + 4, CloseCountingInMemoryStore.numStoresClosed());
     }
 
     @ParameterizedTest
@@ -717,7 +735,7 @@ public class RestoreIntegrationTest {
         kafkaStreams.start();
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
-        assertThat(numReceived.get(), equalTo(numberOfKeys));
+        assertEquals(numberOfKeys, numReceived.get());
 
         final Map<String, Long> taskIdToMetricValue = kafkaStreams.metrics().entrySet().stream()
                 .filter(e -> e.getKey().name().equals("restore-latency-max"))
@@ -726,7 +744,8 @@ public class RestoreIntegrationTest {
         for (final Map.Entry<TopicPartition, Long> entry : restoreListener.changelogToRestoreTime().entrySet()) {
             final long lowerBound = entry.getValue() - TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
             final long upperBound = entry.getValue() + TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
-            assertThat(taskIdToMetricValue.get("0_" + entry.getKey().partition()), allOf(greaterThanOrEqualTo(lowerBound), lessThanOrEqualTo(upperBound)));
+            final Long metricValue = taskIdToMetricValue.get("0_" + entry.getKey().partition());
+            assertTrue(metricValue != null && metricValue >= lowerBound && metricValue <= upperBound);
         }
     }
 

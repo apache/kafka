@@ -395,7 +395,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "disabled")
     )
   )
-  def testDowngradeWithDisabledMigrationPolicy(): Unit = {
+  def testClassicMemberJoinToConsumerGroupWithDisabledMigrationPolicy(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -407,24 +407,50 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     val groupId = "grp"
+    val instanceId = "instance-id"
 
-    // Consumer member 1 joins the group.
-    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
-
-    // Classic member 2 joins the group.
-    val joinGroupResponseData = sendJoinRequest(
-      groupId = groupId
-    )
-    sendJoinRequest(
+    // A static member using the consumer protocol joins the group.
+    consumerGroupHeartbeat(
       groupId = groupId,
-      memberId = joinGroupResponseData.memberId,
-      metadata = metadata(List.empty)
+      memberId = Uuid.randomUuid.toString,
+      instanceId = instanceId,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
     )
 
-    // Try to downgrade the group by leaving member 1.
-    leaveGroupWithNewProtocol(
-      groupId = groupId,
-      memberId = memberId1
+    val rejectedResponse = new JoinGroupResponseData()
+      .setProtocolName(null)
+      .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code)
+
+    // A new dynamic member is rejected.
+    assertEquals(
+      rejectedResponse,
+      sendJoinRequest(
+        groupId = groupId,
+        metadata = metadata(List.empty)
+      )
+    )
+
+    // A new static member with a different instance id is rejected.
+    assertEquals(
+      rejectedResponse,
+      sendJoinRequest(
+        groupId = groupId,
+        groupInstanceId = "another-instance-id",
+        metadata = metadata(List.empty)
+      )
+    )
+
+    // A static member reusing the existing instance id is also rejected.
+    assertEquals(
+      rejectedResponse,
+      sendJoinRequest(
+        groupId = groupId,
+        groupInstanceId = instanceId,
+        metadata = metadata(List.empty)
+      )
     )
 
     // The group is still a consumer group.
@@ -433,7 +459,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         new ListGroupsResponseData.ListedGroup()
           .setGroupId(groupId)
           .setProtocolType("consumer")
-          .setGroupState(ConsumerGroupState.ASSIGNING.toString)
+          .setGroupState(ConsumerGroupState.STABLE.toString)
           .setGroupType(Group.GroupType.CONSUMER.toString)
       ),
       listGroups(

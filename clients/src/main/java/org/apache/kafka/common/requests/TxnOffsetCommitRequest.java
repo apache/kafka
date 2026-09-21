@@ -85,14 +85,13 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         public static Builder forTopicIdsOrNames(
             final TxnOffsetCommitRequestData data,
-            final boolean isTransactionV2Enabled,
-            final boolean enableUnstableLastVersion
+            final boolean isTransactionV2Enabled
         ) {
             return new Builder(
                 data,
                 ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(),
                 isTransactionV2Enabled
-                    ? ApiKeys.TXN_OFFSET_COMMIT.latestVersion(enableUnstableLastVersion)
+                    ? ApiKeys.TXN_OFFSET_COMMIT.latestVersion()
                     : LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2
             );
         }

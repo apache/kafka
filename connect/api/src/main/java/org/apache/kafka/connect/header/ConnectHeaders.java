@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.header;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.internals.AbstractIterator;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -42,6 +43,7 @@ import java.util.Set;
 /**
  * A basic {@link Headers} implementation.
  */
+@InterfaceAudience.Public
 public class ConnectHeaders implements Headers {
 
     private static final int EMPTY_HASH = Objects.hash(new LinkedList<>());

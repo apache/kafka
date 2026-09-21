@@ -88,7 +88,7 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
-
+        // headers aren't needed because the prefix already arrives serialized
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
         final Bytes to = ByteUtils.increment(from);
 

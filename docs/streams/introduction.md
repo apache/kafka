@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: 
+description: Learn what Kafka Streams is and how to build stream processing applications with it.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 
@@ -75,7 +75,7 @@ Kafka Streams is a client library for building applications and microservices, w
 
 
 
-[Write your first app](/44/documentation/streams/tutorial)
+[Write your first app](/45/documentation/streams/tutorial)
 
 * * *
 

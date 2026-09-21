@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.serialization;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 import java.util.Map;
@@ -26,6 +29,7 @@ import java.util.Map;
  *
  * A class that implements this interface is expected to have a constructor with no parameter.
  */
+@InterfaceAudience.Public
 public interface Serde<T> extends Closeable {
 
     /**

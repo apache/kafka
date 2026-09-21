@@ -23,6 +23,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -75,8 +77,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings({"unchecked"})
@@ -212,7 +213,7 @@ public class TimeWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
@@ -289,7 +290,7 @@ public class TimeWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
@@ -388,9 +389,11 @@ public class TimeWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
 
-        kafkaStreams.close();
+        // Leave the group on close so the immediate restart below does not have to wait for the
+        // previous member to be evicted via session timeout (~45s) before its rebalance completes.
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
         kafkaStreams.cleanUp(); // Purge store to force restoration
 
         produceMessages(
@@ -434,7 +437,7 @@ public class TimeWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
