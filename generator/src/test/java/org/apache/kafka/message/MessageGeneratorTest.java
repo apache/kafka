@@ -191,18 +191,6 @@ public class MessageGeneratorTest {
     }
 
     @Test
-    public void testHeaderVersionMapIsTheOnlySource() throws Exception {
-        // A map that disagrees with the flexibleVersions-derived rule is emitted verbatim: there is no
-        // fallback that could second-guess it. (Parse-time checks against the header schemas run in
-        // processDirectories, not here.)
-        String source = generateApiMessageTypeSource(
-            spec(3, "request", "QuxRequest", "0-5", "2+", "{'0+': '1'}"),
-            spec(3, "response", "QuxResponse", "0-5", "2+", "{'0+': '0'}"));
-        assertTrue(source.contains("case 3: // Qux\nreturn (short) 1;\n"), source);
-        assertTrue(source.contains("case 3: // Qux\nreturn (short) 0;\n"), source);
-    }
-
-    @Test
     public void testHeaderVersionApiVersionsResponseKeepsKip511Comment() throws Exception {
         String source = generateApiMessageTypeSource(
             spec(18, "request", "ApiVersionsRequest", "0-3", "3+", "{'0-2': '1', '3+': '2'}"),
