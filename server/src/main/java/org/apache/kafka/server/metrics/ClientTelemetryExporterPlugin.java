@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.metrics;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
@@ -53,12 +54,12 @@ public class ClientTelemetryExporterPlugin {
         exporters.add(exporter);
     }
 
-    public DefaultClientTelemetryPayload getPayLoad(PushTelemetryRequest request, int maxDecompressedBytes) {
-        return new DefaultClientTelemetryPayload(request, maxDecompressedBytes);
+    public DefaultClientTelemetryPayload getPayLoad(PushTelemetryRequest request, Uuid clientInstanceId, int maxDecompressedBytes) {
+        return new DefaultClientTelemetryPayload(request, clientInstanceId, maxDecompressedBytes);
     }
 
-    public void exportMetrics(RequestContext context, PushTelemetryRequest request, int pushIntervalMs, int maxDecompressedBytes) {
-        DefaultClientTelemetryPayload payload = getPayLoad(request, maxDecompressedBytes);
+    public void exportMetrics(RequestContext context, PushTelemetryRequest request, Uuid clientInstanceId, int pushIntervalMs, int maxDecompressedBytes) {
+        DefaultClientTelemetryPayload payload = getPayLoad(request, clientInstanceId, maxDecompressedBytes);
 
         // Export to deprecated receivers
         for (ClientTelemetryReceiver receiver : receivers) {
