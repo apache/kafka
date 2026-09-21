@@ -53,6 +53,7 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -1056,7 +1057,7 @@ public class ClassicGroupTest {
             assertThrows(FencedInstanceIdException.class,
                 () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version));
 
-            assertEquals(1, appender.getMessages("INFO").stream()
+            assertEquals(1, appender.getMessages(Level.INFO).stream()
                 .filter(msg -> msg.contains("during operation offset-commit"))
                 .count());
         }
@@ -1066,7 +1067,7 @@ public class ClassicGroupTest {
             assertThrows(FencedInstanceIdException.class,
                 () -> group.validateOffsetCommit("member-id", "instance-id", 1, true, version));
 
-            assertEquals(1, appender.getMessages("INFO").stream()
+            assertEquals(1, appender.getMessages(Level.INFO).stream()
                 .filter(msg -> msg.contains("during operation txn-offset-commit"))
                 .count());
         }
