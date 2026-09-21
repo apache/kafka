@@ -1692,6 +1692,7 @@ org.apache.kafka.coordinator.group.streams.TasksTupleTest:
 - testSameTasks
 - testTasksCannotBeNull
 org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochsTest:
+- testActiveTasks
 - testFromCurrentAssignmentRecord
 - testFromCurrentAssignmentRecordWithMismatchedEpochs
 - testFromCurrentAssignmentRecordWithoutEpochs

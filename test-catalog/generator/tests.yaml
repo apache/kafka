@@ -7,7 +7,11 @@ org.apache.kafka.message.EntityTypeTest:
 - testVerifyTypeMatches
 - testVerifyTypeMismatches
 org.apache.kafka.message.HeaderVersionsTest:
-- testAbsentProperty
+- testAbsentPropertyAllowedOnHeaderType
+- testAbsentPropertyAllowedWithNoValidVersions
+- testAbsentPropertyRejectedByDirectConstructor
+- testAbsentPropertyRejectedForRequest
+- testAbsentPropertyRejectedForResponse
 - testApiVersionsRequestFollowsFlexibilityRule
 - testApiVersionsResponseHeaderVersionZeroAcceptedForFlexibleVersions
 - testApiVersionsResponseMustUseHeaderVersionZero
@@ -24,6 +28,7 @@ org.apache.kafka.message.HeaderVersionsTest:
 - testGap
 - testHeaderVersionThreeAcceptedWhenHeaderSchemaAllowsIt
 - testHighestExistingHeaderVersionsAccepted
+- testJacksonRoundTripPreservesMap
 - testLastRangeNotOpenEnded
 - testMatchingFlexibilityMappingAccepted
 - testMissingHeaderSchemaRejected
@@ -82,17 +87,17 @@ org.apache.kafka.message.MessageGeneratorTest:
 - testConstants
 - testFirstIsCapitalized
 - testGenerateAndWriteMessageClasses
-- testHeaderVersionExplicitApiVersionsResponse
+- testHeaderVersionApiVersionsResponseKeepsKip511Comment
 - testHeaderVersionExplicitSingleRange
 - testHeaderVersionExplicitTwoRangeChain
-- testHeaderVersionFallbackApiVersionsResponse
-- testHeaderVersionFallbackFlexibleDerived
-- testHeaderVersionMixedExplicitAndFallback
+- testHeaderVersionNoValidVersionsGetsNoCase
 - testHeaderVersionRetiredVersionsGetNoBranch
 - testHeaderVersionRetiredVersionsKeepBranchInsideValidRange
+- testHeaderVersionThreeRangeChain
 - testLowerCaseFirst
 - testProcessDirectoriesChecksHeaderVersions
 - testProcessDirectoriesRejectsMissingHeaderSchema
+- testProcessDirectoriesRejectsMissingHeaderVersions
 - testProcessDirectoriesRejectsNonExistentHeaderVersion
 - testToSnakeCase
 org.apache.kafka.message.StructRegistryTest:
