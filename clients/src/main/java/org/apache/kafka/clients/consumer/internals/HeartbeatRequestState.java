@@ -80,7 +80,7 @@ public class HeartbeatRequestState extends RequestState {
                 // thread still has to notice a request timeout promptly
                 // (NetworkClient only checks timed-out requests after selector.poll returns, and
                 // ConsumerNetworkThread caps the poll at 5s), so it must come back and re-check.
-                return exponentialBackoff.initialInterval();
+                return retryBackoffMs();
             }
             return remainingBackoffMs(currentTimeMs);
         }
