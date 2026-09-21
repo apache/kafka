@@ -79,6 +79,9 @@ public class RequestHeader implements AbstractRequestResponse {
         return data.correlationId();
     }
 
+    /**
+     * Returns {@link Uuid#ZERO_UUID} if the header predates v3 or the client sent no ID.
+     */
     public Uuid clientInstanceId() {
         return data.clientInstanceId();
     }

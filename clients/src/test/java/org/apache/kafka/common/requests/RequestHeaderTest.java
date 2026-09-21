@@ -87,7 +87,7 @@ public class RequestHeaderTest {
             setClientInstanceId(clientInstanceId);
         RequestHeader header = new RequestHeader(headerData, (short) 3);
 
-        // The 11 bytes of a v2 header, plus the tagged field's count, tag, size and 16-byte UUID.
+        // The 10 bytes of header fields, plus the tagged field's count, tag, size and 16-byte UUID.
         ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
         assertEquals(29, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
