@@ -258,30 +258,30 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         if (currentChunk == null)  // already deallocated; nothing attached
             return;
         List<ByteBuffer> unused = chunks.subList(currentChunkIndex + 1, chunks.size());
-        if (pool != null) {
-            for (ByteBuffer chunk : unused)
+        for (ByteBuffer chunk : unused) {
+            boolean poolOwned = removeByIdentity(poolAllocatedChunks, chunk);
+            if (poolOwned && pool != null)
                 pool.deallocate(chunk);
         }
-        for (ByteBuffer chunk : unused)
-            // use references to remove deallocated chunks from poolAllocatedChunks
-            removeByIdentity(poolAllocatedChunks, chunk);
         // Remove the released chunks from `chunks`, so they are
         // not deallocated again on batch completion.
         unused.clear();
     }
 
     /**
-     * Removes the first element identical ({@code ==}) to {@code target} from {@code list}. Uses
-     * reference identity rather than {@link Object#equals} because {@link ByteBuffer#equals} compares
-     * contents, which would match the wrong chunk (e.g. two empty chunks compare equal).
+     * Removes the first element identical ({@code ==}) to {@code target} from {@code list}, returning
+     * whether it was present. Uses reference identity rather than {@link Object#equals} because
+     * {@link ByteBuffer#equals} compares contents, which would match the wrong chunk (e.g. two empty
+     * chunks compare equal).
      */
-    private static void removeByIdentity(List<ByteBuffer> list, ByteBuffer target) {
+    private static boolean removeByIdentity(List<ByteBuffer> list, ByteBuffer target) {
         for (int i = 0; i < list.size(); i++) {
             if (list.get(i) == target) {
                 list.remove(i);
-                return;
+                return true;
             }
         }
+        return false;
     }
 
     /**
