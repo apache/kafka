@@ -1234,15 +1234,6 @@ org.apache.kafka.coordinator.group.modern.TopicIdsTest:
 - testTopicNamesCannotBeNull
 - testTopicResolverCannotBeNull
 - testTopicsImageCannotBeNull
-org.apache.kafka.coordinator.group.modern.UnionSetTest:
-- testContains
-- testEquals
-- testIsEmpty
-- testSetsCannotBeNull
-- testSize
-- testToArray
-- testToArrayWithArrayParameter
-- testUnion
 org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMemberTest:
 - testAsConsumerGroupDescribeMember
 - testAsConsumerGroupDescribeMemberWithSameTopicPendingRevocation
@@ -1878,6 +1869,15 @@ org.apache.kafka.coordinator.group.util.OverlayMapTest:
 - testRemove
 - testRemoveExistingKey
 - testSize
+org.apache.kafka.coordinator.group.util.UnionSetTest:
+- testContains
+- testEquals
+- testIsEmpty
+- testSetsCannotBeNull
+- testSize
+- testToArray
+- testToArrayWithArrayParameter
+- testUnion
 org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentViewTest:
 - testAddMember
 - testAddStaticMember
