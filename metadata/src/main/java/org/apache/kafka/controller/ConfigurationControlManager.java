@@ -48,12 +48,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -294,7 +296,7 @@ public class ConfigurationControlManager {
         boolean forwarded
     ) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
-        List<String> explicitlyDeletedConfigs = new ArrayList<>();
+        Set<String> deletedConfigs = new HashSet<>();
         for (Entry<String, Entry<OpType, String>> keysToOpsEntry : keysToOps.entrySet()) {
             String key = keysToOpsEntry.getKey();
             String currentValue = null;
@@ -312,7 +314,7 @@ public class ConfigurationControlManager {
                     break;
                 case DELETE:
                     newValue = null;
-                    explicitlyDeletedConfigs.add(key);
+                    deletedConfigs.add(key);
                     break;
                 case APPEND:
                 case SUBTRACT:
@@ -345,7 +347,7 @@ public class ConfigurationControlManager {
                     setValue(newValue), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), explicitlyDeletedConfigs,
+        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), deletedConfigs,
             newlyCreatedResource, forwarded);
         if (error.isFailure()) {
             return error;
@@ -358,7 +360,7 @@ public class ConfigurationControlManager {
         ConfigResource configResource,
         List<ApiMessageAndVersion> recordsExplicitlyAltered,
         List<ApiMessageAndVersion> recordsImplicitlyDeleted,
-        List<String> explicitlyDeletedConfigs,
+        Set<String> deletedConfigs,
         boolean newlyCreatedResource,
         boolean forwarded
     ) {
@@ -391,7 +393,6 @@ public class ConfigurationControlManager {
             }
             alteredConfigsForAlterConfigPolicyCheck.put(configRecord.name(), configRecord.value());
         }
-        explicitlyDeletedConfigs.forEach(config -> alteredConfigsForAlterConfigPolicyCheck.put(config, null));
         for (ApiMessageAndVersion recordImplicitlyDeleted : recordsImplicitlyDeleted) {
             ConfigRecord configRecord = (ConfigRecord) recordImplicitlyDeleted.message();
             if (isDisallowedBrokerMinIsrTransition(configRecord)) {
@@ -413,7 +414,8 @@ public class ConfigurationControlManager {
             if (!newlyCreatedResource) {
                 existenceChecker.accept(configResource);
             }
-            alterConfigPolicy.ifPresent(policy -> policy.validate(new RequestMetadata(configResource, alteredConfigsForAlterConfigPolicyCheck)));
+            alterConfigPolicy.ifPresent(policy -> policy.validate(new RequestMetadata(
+                configResource, alteredConfigsForAlterConfigPolicyCheck, deletedConfigs)));
         } catch (ConfigException e) {
             return new ApiError(INVALID_CONFIG, e.getMessage());
         } catch (Throwable e) {
@@ -568,7 +570,7 @@ public class ConfigurationControlManager {
                     setValue(null), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, List.of(),
+        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, Set.of(),
             newlyCreatedResource, forwarded);
         if (error.isFailure()) {
             outputResults.put(configResource, error);

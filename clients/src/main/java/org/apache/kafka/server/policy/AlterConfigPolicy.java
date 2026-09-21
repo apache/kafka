@@ -21,8 +21,10 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.PolicyViolationException;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * <p>An interface for enforcing a policy on alter configs requests.
@@ -44,6 +46,7 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
         private final ConfigResource resource;
         private final Map<String, String> configs;
+        private final Set<String> deletedConfigs;
 
         /**
          * Create an instance of this class with the provided parameters.
@@ -51,16 +54,42 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
          * This constructor is public to make testing of <code>AlterConfigPolicy</code> implementations easier.
          */
         public RequestMetadata(ConfigResource resource, Map<String, String> configs) {
-            this.resource = resource;
-            this.configs = configs;
+            this(resource, configs, Set.of());
         }
 
         /**
-         * Return the configs in the request. For incremental alter configs requests, entries explicitly deleted by
-         * the request are mapped to {@code null}, even if the resource has no existing value for the configuration.
+         * Create an instance with the provided configs and explicitly deleted config names.
+         */
+        public RequestMetadata(ConfigResource resource, Map<String, String> configs, Set<String> deletedConfigs) {
+            this.resource = resource;
+            this.configs = configs;
+            this.deletedConfigs = Set.copyOf(deletedConfigs);
+        }
+
+        /**
+         * Return the configs represented by records generated for the request. For incremental alter configs
+         * requests, a DELETE is mapped to {@code null} when a record is generated. A no-op DELETE of an unset topic
+         * configuration is omitted, while broker DELETEs generate records even if the value is unset.
          */
         public Map<String, String> configs() {
             return configs;
+        }
+
+        /**
+         * Return the names explicitly deleted by an incremental alter configs request, including no-op deletions.
+         * This set is empty for legacy alter configs requests.
+         */
+        public Set<String> deletedConfigs() {
+            return deletedConfigs;
+        }
+
+        /**
+         * Return the entries from {@link #configs()} whose values are not {@code null}.
+         */
+        public Map<String, String> configsWithoutNullValues() {
+            Map<String, String> nonNullConfigs = new HashMap<>(configs);
+            nonNullConfigs.values().removeIf(Objects::isNull);
+            return nonNullConfigs;
         }
 
         public ConfigResource resource() {
@@ -69,7 +98,7 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
         @Override
         public int hashCode() {
-            return Objects.hash(resource, configs);
+            return Objects.hash(resource, configs, deletedConfigs);
         }
 
         @Override
@@ -77,7 +106,8 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
             if ((o == null) || (!o.getClass().equals(getClass()))) return false;
             RequestMetadata other = (RequestMetadata) o;
             return resource.equals(other.resource) &&
-                configs.equals(other.configs);
+                configs.equals(other.configs) &&
+                deletedConfigs.equals(other.deletedConfigs);
         }
 
         @Override
