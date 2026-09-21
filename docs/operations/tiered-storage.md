@@ -174,7 +174,10 @@ By default, non-active log segments are uploaded to remote storage as soon as th
 For example, you can configure both settings for one topic as follows:
 
 ```properties
+# Default value is 0 (upload immediately).
 remote.copy.lag.ms=3600000
+
+# Default value is -1 (follow local.retention.bytes).
 remote.copy.lag.bytes=1073741824
 ```
 
