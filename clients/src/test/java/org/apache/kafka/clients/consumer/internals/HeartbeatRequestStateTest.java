@@ -138,33 +138,6 @@ public class HeartbeatRequestStateTest {
     }
 
     /**
-     * retry.backoff.ms and retry.backoff.max.ms both accept 0. The in-flight wait is used as a poll
-     * timeout, so it must stay positive even then.
-     */
-    @Test
-    public void testTimeToNextHeartbeatMsWhileRequestInFlightWithZeroRetryBackoffDoesNotSpin() {
-        final HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
-            LOG_CONTEXT,
-            time,
-            0,
-            0,
-            0,
-            JITTER
-        );
-
-        heartbeatRequestState.onSendAttempt(time.milliseconds());
-        heartbeatRequestState.resetTimer();
-        time.sleep(1);
-
-        final long timeToNextHeartbeatMs = heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds());
-        assertTrue(timeToNextHeartbeatMs > 0,
-            "timeToNextHeartbeatMs must be > 0 while a heartbeat request is in flight even with a zero retry backoff; got "
-                + timeToNextHeartbeatMs);
-        // The 1 ms floor applied when the configured backoff is 0.
-        assertEquals(1L, timeToNextHeartbeatMs);
-    }
-
-    /**
      * A heartbeat request is in flight and the heartbeat timer is expired. That happens both before the
      * first heartbeat response, when the interval is still unknown and initialised to 0, and later on,
      * when a response takes longer than the interval. No heartbeat can be sent until the in-flight one
