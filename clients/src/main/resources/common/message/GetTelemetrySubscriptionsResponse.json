@@ -17,7 +17,8 @@
   "apiKey": 71,
   "type": "response",
   "name": "GetTelemetrySubscriptionsResponse",
-  "validVersions": "0",
+  // Version 1 removes ClientInstanceId (KIP-1313).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {
     "0+": "1"
@@ -32,7 +33,7 @@
       "about": "The error code, or 0 if there was no error."
     },
     {
-      "name": "ClientInstanceId", "type": "uuid", "versions": "0+",
+      "name": "ClientInstanceId", "type": "uuid", "versions": "0",
       "about": "Assigned client instance id if ClientInstanceId was 0 in the request, else 0."
     },
     {

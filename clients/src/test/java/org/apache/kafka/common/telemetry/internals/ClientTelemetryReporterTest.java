@@ -227,10 +227,11 @@ public class ClientTelemetryReporterTest {
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
         assertInstanceOf(GetTelemetrySubscriptionsRequest.class, requestOptional.get().build());
-        GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build();
+        // Built at v0, where the client instance ID is part of the body rather than the request header.
+        GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build((short) 0);
 
         GetTelemetrySubscriptionsRequest expectedResult = new GetTelemetrySubscriptionsRequest.Builder(
-            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(uuid), true).build();
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(uuid), true).build((short) 0);
 
         assertEquals(expectedResult.data(), request.data());
         assertEquals(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS, telemetrySender.state());
@@ -246,10 +247,10 @@ public class ClientTelemetryReporterTest {
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
         assertInstanceOf(GetTelemetrySubscriptionsRequest.class, requestOptional.get().build());
-        GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build();
+        GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build((short) 0);
 
         GetTelemetrySubscriptionsRequest expectedResult = new GetTelemetrySubscriptionsRequest.Builder(
-            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(uuid), true).build();
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(uuid), true).build((short) 0);
 
         assertEquals(expectedResult.data(), request.data());
         assertEquals(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS, telemetrySender.state());
@@ -270,11 +271,11 @@ public class ClientTelemetryReporterTest {
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
         assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
-        PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
+        PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build((short) 0);
 
         PushTelemetryRequest expectedResult = new PushTelemetryRequest.Builder(
             new PushTelemetryRequestData().setClientInstanceId(uuid)
-                .setSubscriptionId(subscription.subscriptionId()), true).build();
+                .setSubscriptionId(subscription.subscriptionId()), true).build((short) 0);
 
         assertEquals(expectedResult.data(), request.data());
         assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
@@ -353,7 +354,8 @@ public class ClientTelemetryReporterTest {
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
         assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
-        PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
+        // Built at v0, where the client instance ID is part of the body rather than the request header.
+        PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build((short) 0);
 
         assertEquals(uuid, request.data().clientInstanceId());
         assertEquals(subscription.subscriptionId(), request.data().subscriptionId());
@@ -382,7 +384,8 @@ public class ClientTelemetryReporterTest {
             assertNotNull(requestOptional);
             assertTrue(requestOptional.isPresent());
             assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
-            PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
+            // Built at v0, where the client instance ID is part of the body rather than the request header.
+            PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build((short) 0);
 
             assertEquals(uuid, request.data().clientInstanceId());
             assertEquals(subscription.subscriptionId(), request.data().subscriptionId());
