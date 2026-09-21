@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ClientInstanceIdCapture;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
@@ -74,6 +76,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 
 // This test exercises the KafkaShareConsumer with the MockClient to validate the Kafka protocol RPCs
 @Timeout(value = 120)
@@ -476,5 +480,16 @@ public class KafkaShareConsumerTest {
 
         KafkaException e = assertThrows(KafkaException.class, () -> new KafkaShareConsumer<>(configs));
         assertInstanceOf(ConfigException.class, e.getCause());
+    }
+
+    @Test
+    public void testClientInstanceIdIsPassedToTheNetworkClient() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group");
+        ClientInstanceIdCapture.assertGenerated(NetworkClientDelegate.class,
+            captor -> () -> NetworkClientDelegate.supplier(any(), any(), any(), any(), any(), any(), any(),
+                any(), captor.capture(), any(), anyBoolean(), any()),
+            () -> new KafkaShareConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 }
