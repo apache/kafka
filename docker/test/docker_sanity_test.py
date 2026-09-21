@@ -146,7 +146,7 @@ class DockerSanityTest(unittest.TestCase):
         
         metrics_after_message = self.get_metrics(jmx_tool_config)
         try:
-            self.assertEqual(len(metrics_before_message), 2)
+            self.assertEqual(len(metrics_after_message), 2)
             self.assertEqual(metrics_after_message[0], constants.BROKER_METRICS_HEADING)
             before_metrics_data, after_metrics_data = metrics_before_message[1].split(","), metrics_after_message[1].split(",")
             self.assertEqual(len(before_metrics_data), len(after_metrics_data))
