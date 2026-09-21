@@ -34,6 +34,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -1050,9 +1051,25 @@ public class ClassicGroupTest {
         // Replace static member.
         group.replaceStaticMember("instance-id", "member-id", "new-member-id");
 
-        // The old instance id should be fenced.
-        assertThrows(FencedInstanceIdException.class,
-            () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version));
+        // The old instance id should be fenced. The log should name the correct operation.
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ClassicGroup.class)) {
+            assertThrows(FencedInstanceIdException.class,
+                () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version));
+
+            assertEquals(1, appender.getMessages("INFO").stream()
+                .filter(msg -> msg.contains("during operation offset-commit"))
+                .count());
+        }
+
+        // Same fencing check for a transactional offset commit. The log should name txn-offset-commit.
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ClassicGroup.class)) {
+            assertThrows(FencedInstanceIdException.class,
+                () -> group.validateOffsetCommit("member-id", "instance-id", 1, true, version));
+
+            assertEquals(1, appender.getMessages("INFO").stream()
+                .filter(msg -> msg.contains("during operation txn-offset-commit"))
+                .count());
+        }
 
         // Remove member and transitions to dead.
         group.remove("new-instance-id");
