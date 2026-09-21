@@ -368,6 +368,8 @@ public class SharePartitionManagerTest {
             .build();
 
         SharePartition sharePartition = mock(SharePartition.class);
+        when(sharePartition.releaseAcquiredRecords(any())).thenReturn(CompletableFuture.completedFuture(null));
+
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             for (int i = 0; i < iterations; i++) {
