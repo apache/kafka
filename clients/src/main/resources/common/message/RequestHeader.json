@@ -43,6 +43,6 @@
     { "name": "ClientId", "type": "string", "versions": "1+", "nullableVersions": "1+", "flexibleVersions": "none",
       "about": "The client ID string." },
     { "name": "ClientInstanceId", "type": "uuid", "versions": "3+", "taggedVersions": "3+", "tag": 0,
-      "about": "The client instance ID, for identifying an instance of an application." }
+      "about": "Unique ID for identifying the client instance." }
   ]
 }
