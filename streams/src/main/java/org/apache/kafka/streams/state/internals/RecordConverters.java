@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.nio.ByteBuffer;
@@ -103,6 +104,48 @@ public final class RecordConverters {
 
     public static RecordConverter rawValueToSessionHeadersValue() {
         return RAW_TO_SESSION_WITH_HEADERS_INSTANCE;
+    }
+
+    private static final RecordConverter RAW_LIST_TO_HEADERS_LIST_INSTANCE = record -> {
+        // The outer-join ListValueStore changelog stores the whole list blob, always in the PLAIN
+        // element format, with the per-element headers parked in a reserved record header. Restoring
+        // means re-inlining them. Legacy records written before the headers format simply lack that
+        // header, which is the same as "every element has empty headers" — so there is one path, not
+        // two. A tombstone (null value) is passed through.
+        if (record.value() == null) {
+            return record;
+        }
+
+        final byte[] convertedValue = ListValueStoreUpgradeUtils.joinPlainListBlobWithElementHeaders(
+            record.value(),
+            ListValueStoreUpgradeUtils.elementHeaders(record.headers())
+        );
+
+        // Our control header has done its job once the prefixes are back inside the value, so keep it
+        // off the restored record. Copy rather than remove in place: the Headers instance belongs to the
+        // caller, and a converter must not have side effects on its input. Everything else is passed
+        // through, because the restore path reads the position/vector clock back out of these headers
+        // (see ChangelogRecordDeserializationHelper#applyChecksAndUpdatePosition).
+        final Headers headers = new RecordHeaders(record.headers());
+        headers.remove(ListValueStoreUpgradeUtils.LIST_VALUE_HEADERS_HEADER_KEY);
+
+        return new ConsumerRecord<>(
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            record.timestamp(),
+            record.timestampType(),
+            record.serializedKeySize(),
+            convertedValue.length,
+            record.key(),
+            convertedValue,
+            headers,
+            record.leaderEpoch()
+        );
+    };
+
+    public static RecordConverter rawListValueToHeadersListValue() {
+        return RAW_LIST_TO_HEADERS_LIST_INSTANCE;
     }
 
     // privatize the constructor so the class cannot be instantiated (only used for its static members)

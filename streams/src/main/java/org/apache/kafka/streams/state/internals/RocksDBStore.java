@@ -391,6 +391,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                         }
                     }
 
+                    if (Arrays.equals(existingFamily, RocksDBListValueStoreWithHeaders.LIST_VALUE_WITH_HEADERS_CF_NAME)) {
+                        throw new ProcessorStateException(
+                                "Store " + name + " is a headers-aware list-value store and cannot be opened as a regular store. " +
+                                "Downgrade from headers-aware to regular store is not supported. " +
+                                "To downgrade, you can delete the local state in the state directory, and rebuild the store from the changelog.");
+                    }
+
                     final String unexpectedFamily = new String(existingFamily, StandardCharsets.UTF_8);
                     throw new ProcessorStateException(
                             "Unexpected column family '" + unexpectedFamily + "' found in store " + name + ". " +
