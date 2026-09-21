@@ -633,6 +633,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG);
     }
 
+    public Integer maxDecompressedMessageBytes() {
+        return getInt(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG);
+    }
+
     public String compressionType() {
         return getString(ServerConfigs.COMPRESSION_TYPE_CONFIG);
     }
@@ -708,6 +712,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, logRetentionBytes());
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, logRetentionTimeMillis());
         logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, messageMaxBytes());
+        logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, maxDecompressedMessageBytes());
         logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, logIndexIntervalBytes());
         logProps.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, logCleanerDeleteRetentionMs());
         logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, logCleanerMinCompactionLagMs());

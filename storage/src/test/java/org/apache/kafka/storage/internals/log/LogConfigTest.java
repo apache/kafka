@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
@@ -87,6 +88,25 @@ public class LogConfigTest {
             case LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG -> null;
             default -> new Object[]{"not_a_number", "-1"};
         };
+    }
+
+    @Test
+    public void testMaxDecompressedMessageBytesProps() {
+        // Default is the unlimited sentinel, so the limit is a no-op until an operator opts in.
+        assertEquals(Records.SOFT_MAX_ARRAY_LENGTH, LogConfig.DEFAULT_MAX_DECOMPRESSED_MESSAGE_BYTES);
+        assertEquals(Records.SOFT_MAX_ARRAY_LENGTH, new LogConfig(new Properties()).maxDecompressedMessageBytes());
+
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, "1000");
+        assertEquals(1000, new LogConfig(props).maxDecompressedMessageBytes());
+
+        // Values outside [1, SOFT_MAX_ARRAY_LENGTH] are rejected; the upper bound guarantees a validated
+        // config can never weaken the pre-allocation array-length guard in the record decoders.
+        for (String invalid : new String[]{"0", String.valueOf(Integer.MAX_VALUE)}) {
+            Properties invalidProps = new Properties();
+            invalidProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, invalid);
+            assertThrows(ConfigException.class, () -> new LogConfig(invalidProps));
+        }
     }
 
     @Test
