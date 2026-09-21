@@ -171,6 +171,18 @@ After topics are deleted, you're safe to set `remote.log.storage.system.enable=f
 
 By default, non-active log segments are uploaded to remote storage as soon as they are eligible, keeping data in remote storage as up to date as possible. As a result, some segments before local retention are stored redundantly in both the local and remote tiers. If you do not need remote storage to always hold the newest data, you can delay upload with `remote.copy.lag.ms` and `remote.copy.lag.bytes` to reduce this redundancy and save remote storage space. The remote log manager uses these time-based and size-based lag parameters to decide when a segment becomes eligible for upload; the same settings are also available at the broker level as `log.remote.copy.lag.ms` and `log.remote.copy.lag.bytes`.
 
+For example, you can configure both settings for one topic as follows:
+
+```properties
+remote.copy.lag.ms=3600000
+remote.copy.lag.bytes=1073741824
+```
+
+With both settings configured, a non-active segment becomes eligible for upload
+when either the time-based threshold is reached (the newest message in the
+segment is at least one hour old) or the size-based threshold is reached
+(at least 1 GiB of local log remains after that segment).
+
 For more information, please check [KIP-1241](https://cwiki.apache.org/confluence/x/A4LMFw).
 
 ## Limitations
