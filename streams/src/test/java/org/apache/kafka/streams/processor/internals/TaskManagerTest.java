@@ -58,6 +58,7 @@ import org.apache.logging.log4j.Level;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -116,6 +117,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -1586,6 +1588,52 @@ public class TaskManagerTest {
         verify(task2).closeDirty();
         verify(task3).suspend();
         verify(task3).closeClean();
+    }
+
+    @Test
+    @Timeout(30)
+    public void shouldRecoverTasksWhoseRemovalCompletedAfterTheInterruptedWait() {
+        final StreamTask removedTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask failedTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId01Partitions).build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.tasks()).thenReturn(Set.of(removedTask, failedTask));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> removalFuture = new CompletableFuture<>();
+        final CompletableFuture<StateUpdater.RemovedTaskResult> failedRemovalFuture = new CompletableFuture<>();
+        when(stateUpdater.remove(eq(removedTask.id()), eq(SuspendReason.MIGRATED)))
+            .thenReturn(removalFuture);
+        when(stateUpdater.remove(eq(failedTask.id()), eq(SuspendReason.MIGRATED)))
+            .thenReturn(failedRemovalFuture);
+
+        // the state updater completes the removals only while it is being shut down, i.e. after the
+        // interrupted wait already gave up on the futures
+        doAnswer(invocation -> {
+            removalFuture.complete(new StateUpdater.RemovedTaskResult(removedTask));
+            failedRemovalFuture.complete(
+                new StateUpdater.RemovedTaskResult(failedTask, new RuntimeException("KABOOM!")));
+            return null;
+        }).when(stateUpdater).shutdown(any(Duration.class));
+
+        final boolean interruptStatusPreserved;
+        try {
+            Thread.currentThread().interrupt();
+            taskManager.shutdown(false);
+            interruptStatusPreserved = Thread.currentThread().isInterrupted();
+        } finally {
+            Thread.interrupted();
+        }
+
+        assertTrue(interruptStatusPreserved, "shutdown should preserve the interrupt status for the caller");
+        // without the rescan neither task is owned by anybody: both are gone from the state updater
+        // and are only reachable through their removal futures
+        verify(tasks).addTask(removedTask);
+        verify(failedTask).closeDirty();
     }
 
     private TaskManager setupForRevocationAndLost(final Set<Task> tasksInStateUpdater,
@@ -5253,5 +5301,50 @@ public class TaskManagerTest {
 
     private File getCheckpointFile(final TaskId task) {
         return new File(new File(testFolder.toAbsolutePath().toString(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
+    }
+
+    @Test
+    // waitForFuture retries in a loop, so a lost interrupt would hang this test
+    @Timeout(30)
+    public void shouldCloseTasksAndReleaseResourcesOnUncleanShutdownWhenThreadIsInterrupted() {
+        // a task owned by the state updater whose removal future never completes
+        final StreamTask taskInStateUpdater = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+
+        // an already initialized task, to show that the skipped clean-up reaches beyond the state updater
+        final StreamTask initializedTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.tasks()).thenReturn(Set.of(taskInStateUpdater));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> neverCompletes = new CompletableFuture<>();
+        when(stateUpdater.remove(eq(taskInStateUpdater.id()), eq(SuspendReason.MIGRATED)))
+            .thenReturn(neverCompletes);
+        when(tasks.activeInitializedTasks()).thenReturn(Set.of(initializedTask));
+        // the real updater moves the tasks it still owns into its failed queue while shutting
+        // down, so the drain below is what hands this task back
+        when(stateUpdater.drainQueuedTasks()).thenReturn(Set.of(taskInStateUpdater));
+
+        final boolean interruptStatusPreserved;
+        try {
+            Thread.currentThread().interrupt(); // set the flag only after all stubbing is done
+            taskManager.shutdown(false);
+            interruptStatusPreserved = Thread.currentThread().isInterrupted();
+        } finally {
+            Thread.interrupted(); // clear the flag so that it does not leak into the other tests
+        }
+
+        assertTrue(interruptStatusPreserved, "shutdown should preserve the interrupt status for the caller");
+
+        // only the clean-up that must happen regardless of how the interrupt is finally reported
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
+        verify(taskInStateUpdater).closeDirty();
+        verify(initializedTask).closeDirty();
+        verify(activeTaskCreator).close();
+        verify(tasks).clear();
     }
 }

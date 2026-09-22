@@ -1538,9 +1538,47 @@ public class TaskManager {
         }
         final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
         final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
-        addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
-        // at this point we removed all tasks, so the shutdown should not take a lot of time
+        try {
+            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
+        } catch (final IllegalStateException interruptedDuringRemoval) {
+            if (!(interruptedDuringRemoval.getCause() instanceof InterruptedException)) {
+                // waitForFuture throws this without a cause when a task is not found in the state
+                // updater, which is a bug and must not be swallowed
+                throw interruptedDuringRemoval;
+            }
+            // The wait for the removals was cut short by an interrupt. Returning here would skip
+            // the rest of the clean-up, so continue instead: the tasks the updater still owns are
+            // moved to its failed queue by failRemainingTasks() during shutdown() below, and are
+            // collected from there by drainQueuedTasks().
+            log.warn("Interrupted while removing tasks from the state updater during shutdown. "
+                + "Continuing to close the remaining tasks.", interruptedDuringRemoval);
+        }
+        // at this point all tasks have been removed, or the removals were interrupted and the
+        // tasks are recovered below, so the shutdown should not take a lot of time
         stateUpdater.shutdown(Duration.ofMinutes(1L));
+
+        // The wait above can be cut short by an interrupt, leaving some removal futures
+        // unconsumed. A task whose removal completed after that point is no longer owned by
+        // the state updater, so neither failRemainingTasks() nor drainQueuedTasks() can
+        // recover it. Collect those results now that the updater thread has stopped.
+        for (final CompletableFuture<StateUpdater.RemovedTaskResult> future : futures.values()) {
+            if (!future.isDone() || future.isCompletedExceptionally()) {
+                continue;
+            }
+            final StateUpdater.RemovedTaskResult removedTaskResult = future.getNow(null);
+            if (removedTaskResult == null) {
+                continue;
+            }
+            final Task task = removedTaskResult.task();
+            if (tasksToCloseClean.contains(task) || tasksToCloseDirty.contains(task)) {
+                continue;
+            }
+            if (removedTaskResult.exception().isPresent()) {
+                tasksToCloseDirty.add(task);
+            } else {
+                tasksToCloseClean.add(task);
+            }
+        }
 
         for (final Task task : tasksToCloseClean) {
             tasks.addTask(task);
