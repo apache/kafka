@@ -180,12 +180,18 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     private void handleTokenCallback(OAuthBearerTokenCallback callback) {
         if (callback.token() != null)
             throw new IllegalArgumentException("Callback had a token already");
-        if (moduleOptions.isEmpty()) {
-            log.debug("Token not provided, this login cannot be used to establish client connections");
+        if (!hasUnsecuredLoginOptions()) {
+            if (moduleOptions.isEmpty())
+                log.debug("Token not provided, this login cannot be used to establish client connections");
+            else
+                log.debug("Token not provided (no {}* options; ignoring options {}), this login cannot be used to establish client connections",
+                        OPTION_PREFIX, moduleOptions.keySet());
             callback.token(null);
             return;
         }
-        if (moduleOptions.keySet().stream().allMatch(name -> name.startsWith(EXTENSION_PREFIX))) {
+        if (moduleOptions.keySet().stream()
+                .filter(name -> name.startsWith(OPTION_PREFIX))
+                .allMatch(name -> name.startsWith(EXTENSION_PREFIX))) {
             throw new OAuthBearerConfigException("Extensions provided in login context without a token");
         }
         String principalClaimNameValue = optionValue(PRINCIPAL_CLAIM_NAME_OPTION);
@@ -215,6 +221,16 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             // occurs if the principal claim doesn't exist or has an empty value
             throw new OAuthBearerConfigException(e.getMessage(), e);
         }
+    }
+
+    /**
+     * Returns true if any module option is relevant to unsecured token creation.
+     * Options that do not start with the {@code unsecuredLogin} prefix (e.g.
+     * {@code ssl.*} options used for JWKS endpoint TLS trust) are not related to
+     * unsecured token minting and should not trigger token creation.
+     */
+    private boolean hasUnsecuredLoginOptions() {
+        return moduleOptions.keySet().stream().anyMatch(name -> name.startsWith(OPTION_PREFIX));
     }
 
     /**
