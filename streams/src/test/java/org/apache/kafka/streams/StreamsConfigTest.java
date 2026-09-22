@@ -336,7 +336,7 @@ public class StreamsConfigTest {
 
             final List<String> warnings = appender.getMessages().stream()
                 .filter(msg -> msg.contains("config 'bootstrap.resolve.timeout.ms' found")
-                    && msg.contains("User setting (120000) will be ignored and the Streams default setting (0) will be used"))
+                    && msg.contains("User setting (120000) will be ignored and the value set by Kafka Streams (0) will be used"))
                 .collect(Collectors.toList());
             assertEquals(5, warnings.size(), "Should log exactly one warning per client, got: " + warnings);
             // main, restore, and global consumer
@@ -814,6 +814,46 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldLogWarningWhenUserSetsConsumerPrefixedGroupProtocol() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), "consumer");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            streamsConfig.getRestoreConsumerConfigs(clientId);
+            streamsConfig.getGlobalConsumerConfigs(clientId);
+
+            assertEquals(3, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'group.protocol' found")
+                            && msg.contains("User setting (consumer) will be ignored"))
+                    .count(),
+                "Should log one warning per consumer for the consumer-prefixed group.protocol");
+        }
+    }
+
+    @Test
+    public void shouldNotLogConsumerGroupProtocolWarningForStreamsGroupProtocol() {
+        // The unprefixed group.protocol is the Streams config, not the consumer config of the same name.
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            assertEquals("classic", streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+            assertEquals("classic", streamsConfig.getRestoreConsumerConfigs(clientId).get(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+            assertEquals("classic", streamsConfig.getGlobalConsumerConfigs(clientId).get(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+
+            assertTrue(
+                appender.getMessages().stream().noneMatch(msg -> msg.contains("config 'group.protocol' found")),
+                "Unexpected group.protocol warning(s): " + appender.getMessages()
+            );
+        }
+    }
+
+    @Test
     public void testGetGlobalConsumerConfigsWithGlobalConsumerOverriddenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
@@ -1016,8 +1056,9 @@ public class StreamsConfigTest {
                     .filter(msg -> msg.contains("Unexpected user-specified producer config 'enable.idempotence' found"))
                     .count(), "Should warn once for the enable.idempotence override");
             assertEquals(1, messages.stream()
-                    .filter(msg -> msg.contains("Unexpected user-specified producer config 'transactional.id' found"))
-                    .count(), "Should warn once for the transactional.id override");
+                    .filter(msg -> msg.contains("Unexpected user-specified producer config 'transactional.id' found")
+                            && msg.contains("because Kafka Streams generates a unique transactional.id for the producer of each stream thread"))
+                    .count(), "Should warn once for the transactional.id override, explaining that Streams generates it");
             assertEquals(2, messages.stream()
                     .filter(msg -> msg.contains("Streams controls this config when 'processing.guarantee' is set to \""
                             + EXACTLY_ONCE_V2 + "\""))

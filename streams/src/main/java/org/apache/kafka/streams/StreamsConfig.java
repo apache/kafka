@@ -1790,9 +1790,12 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private Map<String, Object> getCommonConsumerConfigs() {
-        final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
-
+        final Map<String, Object> clientProvidedProps = clientProps(ConsumerConfig.configNames(), originals());
+        // The unprefixed group.protocol is the Streams config (classic|streams), not the consumer config of the
+        // same name, so drop it before layering on the consumer-prefixed props. A consumer-prefixed
+        // group.protocol is kept so that it is warned about and overwritten with the other controlled configs.
         clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
+        clientProvidedProps.putAll(originalsWithPrefix(CONSUMER_PREFIX));
 
         final Map<String, Object> consumerProps = new HashMap<>(DEFAULT_CONSUMER_CONFIGS);
         if (StreamsConfigUtils.eosEnabled(this)) {
@@ -1814,7 +1817,11 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private static final String CONTROLLED_CONFIG_OVERRIDE_MESSAGE =
-        "Unexpected user-specified {} config '{}' found. User setting ({}) will be ignored and the Streams default setting ({}) will be used.{}";
+        "Unexpected user-specified {} config '{}' found. User setting ({}) will be ignored and the value set by Kafka Streams ({}) will be used.{}";
+
+    private static final String TRANSACTIONAL_ID_OVERRIDE_MESSAGE =
+        "Unexpected user-specified producer config '" + ProducerConfig.TRANSACTIONAL_ID_CONFIG + "' found. User setting ({}) will be ignored"
+            + " because Kafka Streams generates a unique " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " for the producer of each stream thread.{}";
 
     /**
      * Enforce a config that Streams controls: if the user set a different value, log a warning that it
@@ -1869,12 +1876,11 @@ public class StreamsConfig extends AbstractConfig {
         CONTROLLED_PRODUCER_CONFIGS_EOS_ONLY.forEach((config, streamsValue) ->
             overwriteControlledConfig(producerProps, config, streamsValue, "producer", eosControlledConfigReason));
 
-        // Streams assigns a unique transactional.id per task later (see ActiveTaskCreator), so any
-        // user-provided value is ignored. Warn and drop it rather than forcing a fixed value.
+        // Streams sets a unique transactional.id for each stream thread's producer later (see ActiveTaskCreator),
+        // so any user-provided value is ignored. Warn and drop it rather than forcing a fixed value.
         if (producerProps.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG)) {
-            log.warn(CONTROLLED_CONFIG_OVERRIDE_MESSAGE, "producer", ProducerConfig.TRANSACTIONAL_ID_CONFIG,
-                producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), "<application.id>-<generated suffix>",
-                eosControlledConfigReason);
+            log.warn(TRANSACTIONAL_ID_OVERRIDE_MESSAGE,
+                producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), eosControlledConfigReason);
             producerProps.remove(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
         }
 
