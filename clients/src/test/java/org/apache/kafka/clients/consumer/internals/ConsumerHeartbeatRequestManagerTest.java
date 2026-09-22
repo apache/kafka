@@ -338,7 +338,7 @@ public class ConsumerHeartbeatRequestManagerTest
         time.sleep(heartbeatIntervalMs + 1);
 
         NetworkClientDelegate.PollResult secondResult = heartbeatRequestManager.poll(time.milliseconds());
-        assertHeartbeatInFlightWaitDoesNotSpin(secondResult);
+        assertHeartbeatInFlightWaitDoesNotBusyLoop(secondResult);
     }
 
     /**
@@ -386,10 +386,10 @@ public class ConsumerHeartbeatRequestManagerTest
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS + 1);
 
         NetworkClientDelegate.PollResult inFlightResult = heartbeatRequestManager.poll(time.milliseconds());
-        assertHeartbeatInFlightWaitDoesNotSpin(inFlightResult);
+        assertHeartbeatInFlightWaitDoesNotBusyLoop(inFlightResult);
     }
 
-    private void assertHeartbeatInFlightWaitDoesNotSpin(final NetworkClientDelegate.PollResult inFlightResult) {
+    private void assertHeartbeatInFlightWaitDoesNotBusyLoop(final NetworkClientDelegate.PollResult inFlightResult) {
         assertEquals(0, inFlightResult.unsentRequests.size(),
             "No heartbeat should be sent while another one is in flight");
         assertTrue(inFlightResult.timeUntilNextPollMs > 0,
