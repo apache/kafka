@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientRequest;
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
@@ -28,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
@@ -41,6 +41,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -1596,21 +1597,7 @@ public class KafkaConsumerTest {
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testWakeupWithFetchDataAvailable(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
-
-        AtomicInteger fetchCorrelationId = new AtomicInteger(-1);
-        AtomicBoolean fetchResponseCompleted = new AtomicBoolean(false);
-        MockClient client = new MockClient(time, metadata) {
-            @Override
-            public List<ClientResponse> poll(long timeoutMs, long now) {
-                List<ClientResponse> completed = super.poll(timeoutMs, now);
-                completed.stream()
-                        .filter(response -> response.requestHeader().apiKey() == ApiKeys.FETCH)
-                        .filter(response -> response.requestHeader().correlationId() == fetchCorrelationId.get())
-                        .findAny()
-                        .ifPresent(response -> fetchResponseCompleted.set(true));
-                return completed;
-            }
-        };
+        MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Map.of(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
@@ -1623,14 +1610,14 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         // respond to the outstanding fetch so that we have data available on the next poll
-        ClientRequest fetchRequest = findRequest(client, ApiKeys.FETCH);
-        fetchCorrelationId.set(fetchRequest.correlationId());
-
         client.respondFrom(fetchResponse(tp0, 0, 5), node);
+
+        ClassicKafkaConsumer<?, ?> delegate = TestUtils.fieldValue(consumer, KafkaConsumer.class, "delegate");
+        Fetcher<?, ?> fetcher = TestUtils.fieldValue(delegate, ClassicKafkaConsumer.class, "fetcher");
         TestUtils.waitForCondition(() -> {
             client.poll(0, time.milliseconds());
-            return fetchResponseCompleted.get();
-        }, "Fetch response was not completed.");
+            return fetcher.hasAvailableFetches();
+        }, "Fetch data was not buffered.");
         
         consumer.wakeup();
 
@@ -2500,12 +2487,9 @@ public class KafkaConsumerTest {
 
             // Close task should not complete until commit succeeds or close times out
             // if close timeout is not zero.
-            try {
-                future.get(100, TimeUnit.MILLISECONDS);
-                if (closeTimeoutMs != 0)
-                    fail("Close completed without waiting for commit or leave response");
-            } catch (TimeoutException swallow) {
-                // Expected exception
+            if (closeTimeoutMs != 0) {
+                assertThrows(TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS),
+                        "Close completed without waiting for commit or leave response");
             }
 
             // Ensure close has started and queued at least one more request after commitAsync.
@@ -2514,13 +2498,13 @@ public class KafkaConsumerTest {
             // LEAVE_GROUP as part of coordinator close and second is FETCH with epoch=FINAL_EPOCH. At this stage
             // we expect only the first one to have been requested. Hence, waiting for total 2 requests, one for
             // commit and another for LEAVE_GROUP.
-            client.waitForRequests(2, 1000);
+            client.waitForRequests(2, TestUtils.DEFAULT_MAX_WAIT_MS);
 
             // In graceful mode, commit response results in close() completing immediately without a timeout
             // In non-graceful mode, close() times out without an exception even though commit response is pending
             int nonCloseRequests = 1;
             for (int i = 0; i < responses.size(); i++) {
-                client.waitForRequests(1, 1000);
+                client.waitForRequests(1, TestUtils.DEFAULT_MAX_WAIT_MS);
                 if (i == responses.size() - 1 && responses.get(i) instanceof FetchResponse) {
                     // last request is the close session request which is sent to the leader of the partition.
                     client.respondFrom(responses.get(i), node);
@@ -2543,7 +2527,9 @@ public class KafkaConsumerTest {
 
                 assertInstanceOf(InterruptException.class, closeException.get(), "Expected exception not thrown " + closeException);
             } else {
-                future.get(closeTimeoutMs, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+                // The close timeout runs on MockTime, so bound the wait in real time; it should complete without
+                // TimeoutException or ExecutionException.
+                future.get(TestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
                 assertNull(closeException.get(), "Unexpected exception during close");
             }
         } finally {
@@ -2814,7 +2800,16 @@ public class KafkaConsumerTest {
         fetches1.put(t2p0, new FetchInfo(0, 10));
         client.respondFrom(fetchResponse(fetches1), node);
 
-        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+        // A background heartbeat poll can retrieve a completed fetch, then trigger its completion
+        // logic in a separate step to put the data in the buffer. If the app thread poll runs in
+        // between, it finds no completed request or buffered data, so it may return empty on a
+        // first poll attempt.
+        AtomicReference<ConsumerRecords<String, String>> polled = new AtomicReference<>(ConsumerRecords.empty());
+        TestUtils.waitForCondition(() -> {
+            polled.set(consumer.poll(Duration.ZERO));
+            return polled.get().count() == 11;
+        }, "Consumer did not return the fetched records in time");
+        ConsumerRecords<String, String> records = polled.get();
 
         // verify that the fetch occurred as expected
         assertEquals(11, records.count());
@@ -2843,7 +2838,11 @@ public class KafkaConsumerTest {
         AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, partitionOffsets1);
 
         // poll once which would not complete the rebalance
-        records = consumer.poll(Duration.ZERO);
+        TestUtils.waitForCondition(() -> {
+            polled.set(consumer.poll(Duration.ZERO));
+            return polled.get().count() == 1;
+        }, "Consumer did not return the fetched records in time");
+        records = polled.get();
 
         // clear out the prefetch so it doesn't interfere with the rest of the test
         fetches1.clear();
@@ -2866,7 +2865,11 @@ public class KafkaConsumerTest {
 
         // we need to poll 1) for getting the join response, and then send the sync request;
         //                 2) for getting the sync response
-        records = consumer.poll(Duration.ZERO);
+        TestUtils.waitForCondition(() -> {
+            polled.set(consumer.poll(Duration.ZERO));
+            return polled.get().count() == 1;
+        }, "Consumer did not return the fetched records in time");
+        records = polled.get();
 
         // should not finish the response yet
         assertEquals(Set.of(topic, topic3), consumer.subscription());
@@ -2884,11 +2887,15 @@ public class KafkaConsumerTest {
         client.respondFrom(syncGroupResponse(Arrays.asList(tp0, t3p0), Errors.NONE), coordinator);
 
         AtomicInteger count = new AtomicInteger(0);
-        AtomicReference<ConsumerRecords<String, String>> recs1 = new AtomicReference<>();
+        AtomicReference<ConsumerRecords<String, String>> recs1 = new AtomicReference<>(ConsumerRecords.empty());
         TestUtils.waitForCondition(() -> {
-            recs1.set(consumer.poll(Duration.ofMillis(100L)));
-            return consumer.assignment().equals(Set.of(tp0, t3p0)) && count.addAndGet(recs1.get().count()) == 1;
-
+            ConsumerRecords<String, String> p = consumer.poll(Duration.ofMillis(100L));
+            // The record can be returned before the rebalance assignment is reconciled, so count on
+            // every poll; gating the count on the assignment would drop an early record.
+            if (p.count() > 0)
+                recs1.set(p);
+            count.addAndGet(p.count());
+            return consumer.assignment().equals(Set.of(tp0, t3p0)) && count.get() == 1;
         }, "Does not complete rebalance in time");
 
         // should have t3 but not sent yet the t3 records
@@ -4396,6 +4403,25 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
             // accidentally clearing the bootstrap error from the metadata layer.
             assertThrows(BootstrapResolutionException.class, () -> consumer.poll(Duration.ofMillis(100)));
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testConsumerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero(GroupProtocol protocol) {
+        // Default bootstrap.resolve.timeout.ms=0 resolves DNS synchronously in the constructor;
+        // any failure surfaces as ConfigException (wrapped in KafkaException by the constructor's
+        // outer try/catch), so no consumer instance is created.
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol.name(),
+            ConsumerConfig.GROUP_ID_CONFIG, "test-group"
+        );
+
+        KafkaException e = assertThrows(KafkaException.class, () -> new KafkaConsumer<>(configs));
+        assertInstanceOf(ConfigException.class, e.getCause());
     }
 
     private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {

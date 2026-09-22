@@ -25,9 +25,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.SimpleTimeZone;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -316,7 +313,7 @@ public class KeyValueSegmentsTest extends AbstractSegmentsTest<KeyValueSegments>
     public void shouldClearSegmentsOnClose() {
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.close();
-        assertThat(segments.segmentForTimestamp(0), is(nullValue()));
+        assertNull(segments.segmentForTimestamp(0));
     }
 
     private void verifyCorrectSegments(final long first, final int numSegments) {

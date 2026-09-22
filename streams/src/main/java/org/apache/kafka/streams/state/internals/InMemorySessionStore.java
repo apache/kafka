@@ -476,6 +476,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
+        // We enter handleBasicQueries (which takes the store monitor) while holding the
+        // position lock. This is safe only because this store's writers take only the
+        // position lock, never the store monitor; if a synchronized method is ever added
+        // here, take the store monitor before the position lock instead (KAFKA-19629).
         synchronized (position) {
             // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
             // transaction buffer since the last commit by merging the buffer's pending position

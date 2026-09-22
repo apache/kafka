@@ -31,8 +31,8 @@ import org.junit.jupiter.api.Timeout;
 import java.util.Map;
 import java.util.TreeMap;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 public class RelationalSmokeTestTest extends SmokeTestUtil {
@@ -95,16 +95,15 @@ public class RelationalSmokeTestTest extends SmokeTestUtil {
             final Map<Integer, RelationalSmokeTest.AugmentedComment> augmentedCommentResults =
                 augmentedComments.readKeyValuesToMap();
 
-            assertThat(augmentedArticleResults.size(), is(dataSet.getArticles().length));
-            assertThat(augmentedCommentResults.size(), is(dataSet.getComments().length));
+            assertEquals(dataSet.getArticles().length, augmentedArticleResults.size());
+            assertEquals(dataSet.getComments().length, augmentedCommentResults.size());
 
-            assertThat(
+            assertTrue(
                 RelationalSmokeTest.App.verifySync(true,
                                                    articleMap,
                                                    commentMap,
                                                    augmentedArticleResults,
-                                                   augmentedCommentResults),
-                is(true));
+                                                   augmentedCommentResults));
         }
     }
 }

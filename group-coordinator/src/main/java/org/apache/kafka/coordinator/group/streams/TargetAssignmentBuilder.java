@@ -124,18 +124,14 @@ public class TargetAssignmentBuilder {
         MemberTaskOffsets taskOffsets
     ) {
         // Active, standby and warm-up tasks all reflect the tasks the member currently has, not the
-        // target assignment. Active tasks are stored with epochs; MemberAssignmentState exposes them
-        // without, so drop the epoch.
+        // target assignment.
         TasksTupleWithEpochs currentAssignment = member.assignedTasks();
-        Map<String, Set<Integer>> activeTasks = new HashMap<>();
-        currentAssignment.activeTasksWithEpochs().forEach((subtopologyId, partitionsWithEpochs) ->
-            activeTasks.put(subtopologyId, new HashSet<>(partitionsWithEpochs.keySet())));
         return new MemberMetadataAndStateImpl(
             member.instanceId(),
             member.rackId(),
             member.processId(),
             member.clientTags(),
-            activeTasks,
+            currentAssignment.activeTasks(),
             currentAssignment.standbyTasks(),
             currentAssignment.warmupTasks(),
             taskOffsets.taskOffsets(),

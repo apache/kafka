@@ -131,7 +131,7 @@ public enum MetadataVersion {
     IBP_4_4_IV1(32, "4.4", "IV1", true),
 
     // Add support for controller unregistration (KIP-1312).
-    IBP_4_4_IV2(33, "4.4", "IV2", true);
+    IBP_4_4_IV2(33, "4.4", "IV2", true),
 
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
@@ -139,6 +139,9 @@ public enum MetadataVersion {
     // they have set the configuration unstable.feature.versions.enable=true.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
+
+    // New version for the Kafka 4.5.0 release.
+    IBP_4_5_IV0(34, "4.5", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version

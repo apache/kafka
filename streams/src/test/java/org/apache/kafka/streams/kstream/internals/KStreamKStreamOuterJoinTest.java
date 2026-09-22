@@ -59,8 +59,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class KStreamKStreamOuterJoinTest {
     private final String topic1 = "topic1";
@@ -1481,8 +1481,10 @@ public class KStreamKStreamOuterJoinTest {
 
         // create a TTD so that the topology gets built
         try (final TopologyTestDriver ignored = new TopologyTestDriverBuilder(builder.build(PROPS)).withConfig(PROPS).build()) {
-            assertThat("Expected stream joined to supply builders that create non-timestamped stores",
-                    !WrappedStateStore.isTimestamped(suppliers.capture.get().get()));
+            assertFalse(
+                WrappedStateStore.isTimestamped(suppliers.capture.get().get()),
+                "Expected stream joined to supply builders that create non-timestamped stores"
+            );
         }
     }
 

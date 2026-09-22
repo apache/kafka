@@ -75,7 +75,11 @@ public class PunctuationSchedule extends Stamped<ProcessorNode<?, ?, ?, ?>> {
             //   received for at least 2*interval
             // - when using WALL_CLOCK_TIME and there was a gap i.e., punctuation was delayed for at least 2*interval (GC pause, overload, ...)
             final long intervalsMissed = (currTimestamp - timestamp) / interval;
-            nextPunctuationTime = timestamp + (intervalsMissed + 1) * interval;
+            try {
+                nextPunctuationTime = Math.addExact(timestamp, Math.multiplyExact(intervalsMissed + 1, interval));
+            } catch (final ArithmeticException endOfTime) {
+                nextPunctuationTime = Long.MAX_VALUE;
+            }
         }
 
         final PunctuationSchedule nextSchedule = new PunctuationSchedule(value, nextPunctuationTime, interval, punctuator, cancellable);

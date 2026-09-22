@@ -53,6 +53,10 @@ import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializati
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -65,7 +69,6 @@ import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -101,21 +104,17 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.RocksDBStore.DB_FILE_DIR;
-import static org.hamcrest.CoreMatchers.either;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -441,11 +440,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         context.restore(DB_NAME, restoreBytes);
 
-        assertThat(
+        assertEquals(
+            "restoredValue",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "restoredKey")))),
-            equalTo("restoredValue"));
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "restoredKey")))));
     }
 
     @Test
@@ -466,7 +465,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore.init(context, rocksDBStore);
 
         assertTrue(MockRocksDbConfigSetter.called);
-        assertThat(MockRocksDbConfigSetter.configMap.get("abc.def"), equalTo(param));
+        assertEquals(param, MockRocksDbConfigSetter.configMap.get("abc.def"));
     }
 
     @Test
@@ -530,6 +529,23 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldMatchPositionAfterPutAll() {
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Every entry in one putAll is processed under the same record context, so the per-entry
+        // updatePosition calls are idempotent: the position lands exactly where a single update at
+        // that offset would leave it, regardless of the batch size.
+        context.setRecordContext(new ProcessorRecordContext(0, 5, 0, "", new RecordHeaders()));
+        rocksDBStore.putAll(List.of(
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "one")), stringSerializer.serialize(null, "A")),
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "two")), stringSerializer.serialize(null, "B")),
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "three")), stringSerializer.serialize(null, "C"))));
+
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 5L)))));
+        assertEquals(expected, rocksDBStore.getPosition());
+    }
+
+    @Test
     public void shouldReturnKeysWithGivenPrefix() {
         final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(
@@ -564,10 +580,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 valuesWithPrefix.add(new String(next.value));
                 numberOfKeysReturned++;
             }
-            assertThat(numberOfKeysReturned, is(3));
-            assertThat(valuesWithPrefix.get(0), is("f"));
-            assertThat(valuesWithPrefix.get(1), is("d"));
-            assertThat(valuesWithPrefix.get(2), is("b"));
+            assertEquals(3, numberOfKeysReturned);
+            assertEquals("f", valuesWithPrefix.get(0));
+            assertEquals("d", valuesWithPrefix.get(1));
+            assertEquals("b", valuesWithPrefix.get(2));
         }
     }
 
@@ -598,7 +614,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 numberOfKeysReturned++;
             }
 
-            assertThat(numberOfKeysReturned, is(1));
+            assertEquals(1, numberOfKeysReturned);
         }
     }
 
@@ -609,29 +625,29 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
 
         final KeyValueIterator<Bytes, byte[]> prefixScanIterator = rocksDBStore.prefixScan("abcd", stringSerializer, openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         prefixScanIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
 
         final KeyValueIterator<Bytes, byte[]> rangeIterator = rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         rangeIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
 
         final KeyValueIterator<Bytes, byte[]> reverseRangeIterator = rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         reverseRangeIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
 
         final KeyValueIterator<Bytes, byte[]> allIterator = rocksDBStore.all(openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         allIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
 
         final KeyValueIterator<Bytes, byte[]> reverseAllIterator = rocksDBStore.reverseAll(openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         reverseAllIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
     }
 
     @SuppressWarnings("resource")
@@ -698,11 +714,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 numberOfKeysReturned++;
             }
 
-            assertThat(numberOfKeysReturned, is(numMatches));
+            assertEquals(numMatches, numberOfKeysReturned);
             if (numMatches == 2) {
-                assertThat(valuesWithPrefix.get(0), either(is("a")).or(is("b")));
+                assertTrue("a".equals(valuesWithPrefix.get(0)) || "b".equals(valuesWithPrefix.get(0)));
             } else {
-                assertThat(valuesWithPrefix.get(0), is("a"));
+                assertEquals("a", valuesWithPrefix.get(0));
             }
         }
     }
@@ -730,7 +746,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keysWithPrefix.next();
                 numberOfKeysReturned++;
             }
-            assertThat(numberOfKeysReturned, is(0));
+            assertEquals(0, numberOfKeysReturned);
         }
     }
 
@@ -787,7 +803,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Set.of("2", "3")));
+            assertEquals(Set.of("2", "3"), keys);
         }
     }
 
@@ -812,7 +828,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Set.of("1", "2", "3")));
+            assertEquals(Set.of("1", "2", "3"), keys);
 
             assertEquals(
                 "restored",
@@ -871,7 +887,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Set.of("2", "3")));
+            assertEquals(Set.of("2", "3"), keys);
         }
     }
 
@@ -954,7 +970,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         int expectedIndex = 0;
         for (final KeyValue<byte[], byte[]> keyValue : keyValues) {
             final byte[] valBytes = rocksDBStore.get(new Bytes(keyValue.key));
-            assertThat(new String(valBytes, UTF_8), is(expectedValues.get(expectedIndex++)));
+            assertEquals(expectedValues.get(expectedIndex++), new String(valBytes, UTF_8));
         }
         assertFalse(TestingBloomFilterRocksDBConfigSetter.bloomFiltersSet);
 
@@ -968,7 +984,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         for (final KeyValue<byte[], byte[]> keyValue : keyValues) {
             final byte[] valBytes = rocksDBStore.get(new Bytes(keyValue.key));
-            assertThat(new String(valBytes, UTF_8), is(expectedValues.get(expectedIndex++)));
+            assertEquals(expectedValues.get(expectedIndex++), new String(valBytes, UTF_8));
         }
 
         assertTrue(TestingBloomFilterRocksDBConfigSetter.bloomFiltersSet);
@@ -1004,7 +1020,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             "description is not verified",
             streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
         ));
-        assertThat((double) bytesWrittenTotal.metricValue(), greaterThan(0d));
+        assertTrue(Double.compare((double) bytesWrittenTotal.metricValue(), 0d) > 0);
     }
 
     @Test
@@ -1035,8 +1051,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             "description is not verified",
             streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
         ));
-        assertThat(numberOfEntriesActiveMemTable, notNullValue());
-        assertThat((BigInteger) numberOfEntriesActiveMemTable.metricValue(), greaterThan(BigInteger.valueOf(0)));
+        assertNotNull(numberOfEntriesActiveMemTable);
+        assertTrue(((BigInteger) numberOfEntriesActiveMemTable.metricValue()).compareTo(BigInteger.valueOf(0)) > 0);
     }
 
     @Test
@@ -1087,7 +1103,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 "description is not verified",
                 streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
             ));
-            assertThat("Metric " + propertyname + " not found!", metric, notNullValue());
+            assertNotNull(metric, "Metric " + propertyname + " not found!");
             metric.metricValue();
         }
     }
@@ -1168,9 +1184,9 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                         null,
                         rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
 
-        assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions(""), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions(""), hasEntry(0, 3L));
+        assertNotNull(rocksDBStore.getPosition());
+        assertNotNull(rocksDBStore.getPosition().getPartitionPositions(""));
+        assertEquals(3L, rocksDBStore.getPosition().getPartitionPositions("").get(0));
     }
 
     @Test
@@ -1205,11 +1221,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                         null,
                         rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
 
-        assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("A"), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("A"), hasEntry(0, 3L));
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("B"), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("B"), hasEntry(0, 2L));
+        assertNotNull(rocksDBStore.getPosition());
+        assertNotNull(rocksDBStore.getPosition().getPartitionPositions("A"));
+        assertEquals(3L, rocksDBStore.getPosition().getPartitionPositions("A").get(0));
+        assertNotNull(rocksDBStore.getPosition().getPartitionPositions("B"));
+        assertEquals(2L, rocksDBStore.getPosition().getPartitionPositions("B").get(0));
     }
 
     @Test
@@ -1232,8 +1248,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 null,
                 rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
 
-        assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("A"), hasEntry(0, 2L));
+        assertNotNull(rocksDBStore.getPosition());
+        assertEquals(2L, rocksDBStore.getPosition().getPartitionPositions("A").get(0));
     }
 
     @Test
@@ -1251,7 +1267,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         );
         rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
-        assertThat(rocksDBStore.getPosition(), is(Position.emptyPosition()));
+        assertEquals(Position.emptyPosition(), rocksDBStore.getPosition());
     }
 
     @Test
@@ -1662,6 +1678,181 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         try (KeyValueIterator<Bytes, byte[]> it = rocksDBStore.prefixScan("k", stringSerializer)) {
             assertEquals(List.of("k1"), keysOf(it));
         }
+    }
+
+    @Test
+    public void putAllShouldStageWritesUntilCommitWhenTransactional() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        // An empty RocksDB WriteBatch already reports a fixed header size, so the baseline is non-zero.
+        final long emptyBufferBytes = rocksDBStore.approximateNumUncommittedBytes();
+
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        rocksDBStore.putAll(List.of(
+            KeyValue.pair(k1, stringSerializer.serialize(null, "v1")),
+            KeyValue.pair(k2, stringSerializer.serialize(null, "v2"))));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> committed = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED);
+
+        // the batch is staged rather than written: it counts towards the uncommitted byte total ...
+        assertTrue(rocksDBStore.approximateNumUncommittedBytes() > emptyBufferBytes);
+        // ... is visible to the owner and at READ_UNCOMMITTED ...
+        assertEquals("v1", stringDeserializer.deserialize(null, rocksDBStore.get(k1)));
+        assertEquals("v2", stringDeserializer.deserialize(null, uncommitted.get(k2)));
+        // ... and stays hidden at READ_COMMITTED until the store commits.
+        assertNull(committed.get(k1));
+        assertNull(committed.get(k2));
+
+        rocksDBStore.commit(Map.of());
+
+        assertEquals("v1", stringDeserializer.deserialize(null, committed.get(k1)));
+        assertEquals("v2", stringDeserializer.deserialize(null, committed.get(k2)));
+    }
+
+    @Test
+    public void putAllShouldBeDiscardedOnRollbackWhenTransactional() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "committed"));
+        rocksDBStore.commit(Map.of());
+
+        rocksDBStore.putAll(List.of(
+            KeyValue.pair(k1, stringSerializer.serialize(null, "k1-new-staged")),
+            KeyValue.pair(k2, stringSerializer.serialize(null, "k2-staged"))));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> readUncommittedView =
+            rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertEquals("k1-new-staged", stringDeserializer.deserialize(null, readUncommittedView.get(k1)));
+        assertEquals("k2-staged", stringDeserializer.deserialize(null, readUncommittedView.get(k2)));
+
+        rocksDBStore.dbAccessor.rollbackStagedWrites();
+
+        assertEquals("committed", stringDeserializer.deserialize(null, rocksDBStore.get(k1)));
+        assertNull(rocksDBStore.get(k2));
+    }
+
+    @Test
+    public void putAllShouldStageTombstonesWhenTransactional() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "v1"));
+        rocksDBStore.put(k2, stringSerializer.serialize(null, "v2"));
+        rocksDBStore.commit(Map.of());
+
+        // a null value in the batch is a delete, and must be staged like any other write
+        rocksDBStore.putAll(Arrays.asList(
+            KeyValue.pair(k1, null),
+            KeyValue.pair(k2, stringSerializer.serialize(null, "v2-updated"))));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> committed = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertNull(uncommitted.get(k1));
+        assertEquals("v1", stringDeserializer.deserialize(null, committed.get(k1)));
+        assertEquals("v2-updated", stringDeserializer.deserialize(null, uncommitted.get(k2)));
+        assertEquals("v2", stringDeserializer.deserialize(null, committed.get(k2)));
+
+        rocksDBStore.commit(Map.of());
+
+        assertNull(committed.get(k1));
+        assertEquals("v2-updated", stringDeserializer.deserialize(null, committed.get(k2)));
+    }
+
+    @Test
+    public void putAllShouldRejectNullKeyWithoutStagingAnyEntryWhenTransactional() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final long emptyBufferBytes = rocksDBStore.approximateNumUncommittedBytes();
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+
+        assertThrows(NullPointerException.class, () -> rocksDBStore.putAll(Arrays.asList(
+            KeyValue.pair(k1, stringSerializer.serialize(null, "v1")),
+            KeyValue.pair(null, stringSerializer.serialize(null, "v2")))));
+
+        // the batch is rejected whole: the valid entry ahead of the null key was never staged
+        assertEquals(emptyBufferBytes, rocksDBStore.approximateNumUncommittedBytes());
+        assertNull(rocksDBStore.get(k1));
+    }
+
+    @Test
+    public void putAllShouldThrowOnClosedStore() {
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.close();
+
+        assertThrows(InvalidStateStoreException.class, () -> rocksDBStore.putAll(List.of(
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "k1")),
+                stringSerializer.serialize(null, "v1")))));
+    }
+
+    @Test
+    public void shouldNotDeadlockOnConcurrentPutAndQuery() throws Exception {
+        // KAFKA-19629: put() takes the store monitor and then the position lock, so IQ queries
+        // must take the two locks in the same order.
+        rocksDBStore.init(context, rocksDBStore);
+
+        final int iterations = 5000;
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        final Thread writer = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    rocksDBStore.put(
+                        new Bytes(stringSerializer.serialize(null, "key" + (i % 100))),
+                        stringSerializer.serialize(null, "value" + i));
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "writer");
+
+        final Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    final QueryResult<KeyValueIterator<Bytes, byte[]>> result = rocksDBStore.query(
+                        RangeQuery.withNoBounds(),
+                        PositionBound.unbounded(),
+                        new QueryConfig(false));
+                    result.getResult().close();
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "iq-reader");
+
+        writer.setDaemon(true);
+        reader.setDaemon(true);
+        writer.start();
+        reader.start();
+        final long deadlineMs = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(60);
+        writer.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+        reader.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        final boolean deadlocked = writer.isAlive() || reader.isAlive();
+        if (deadlocked) {
+            // leak the deadlocked store: tearDown's synchronized close() would block forever
+            rocksDBStore = getRocksDBStore();
+        }
+        assertFalse(deadlocked, "deadlock between concurrent put and IQ query");
     }
 
     private List<String> keysOf(final KeyValueIterator<Bytes, byte[]> it) {

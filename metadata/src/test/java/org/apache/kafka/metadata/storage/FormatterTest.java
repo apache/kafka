@@ -70,7 +70,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 @Timeout(value = 40)
 public class FormatterTest {
@@ -300,7 +299,6 @@ public class FormatterTest {
 
     @Test
     public void testFormatWithUnstableReleaseVersionFailsWithoutEnableUnstable() throws Exception {
-        assumeFalse(MetadataVersion.latestTesting().isProduction());
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setReleaseVersion(MetadataVersion.latestTesting());
@@ -311,7 +309,6 @@ public class FormatterTest {
 
     @Test
     public void testFormatWithUnstableReleaseVersion() throws Exception {
-        assumeFalse(MetadataVersion.latestTesting().isProduction());
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setReleaseVersion(MetadataVersion.latestTesting());

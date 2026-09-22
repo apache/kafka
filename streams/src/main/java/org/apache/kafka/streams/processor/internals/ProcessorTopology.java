@@ -254,6 +254,6 @@ public class ProcessorTopology {
             }
         }
 
-        return Collections.emptySet();
+        return Set.of();
     }
 }

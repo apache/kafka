@@ -129,7 +129,7 @@ public class Position {
      */
     public Map<Integer, Long> getPartitionPositions(final String topic) {
         final ConcurrentHashMap<Integer, Long> bound = position.get(topic);
-        return bound == null ? Collections.emptyMap() : Collections.unmodifiableMap(bound);
+        return bound == null ? Map.of() : Collections.unmodifiableMap(bound);
     }
 
     private static ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> deepCopy(

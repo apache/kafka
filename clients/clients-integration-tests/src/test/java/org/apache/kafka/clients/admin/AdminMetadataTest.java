@@ -16,11 +16,18 @@
  */
 package org.apache.kafka.clients.admin;
 
+import kafka.server.KafkaBroker;
+
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicCollection;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
@@ -34,8 +41,11 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -43,6 +53,8 @@ import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -150,6 +162,120 @@ public class AdminMetadataTest {
     }
 
     @ClusterTest
+    public void testCreateExistingTopicsThrowTopicExistsException() throws Exception {
+        String topic = "mytopic";
+        clusterInstance.createTopic(topic, 1, (short) 1);
+        try (Admin admin = clusterInstance.admin()) {
+            short invalidReplicationFactor = (short) (clusterInstance.brokerIds().size() + 1);
+            KafkaFuture<Void> future = admin.createTopics(
+                    List.of(new NewTopic(topic, 1, invalidReplicationFactor)),
+                    new CreateTopicsOptions().validateOnly(true)).all();
+            assertFutureThrows(TopicExistsException.class, future);
+        }
+    }
+
+    @ClusterTest
+    public void testDeleteTopicsWithIds() throws Exception {
+        try (Admin admin = clusterInstance.admin()) {
+            List<Integer> brokerIds = clusterInstance.brokerIds().stream().sorted().toList();
+            List<String> topics = List.of("mytopic", "mytopic2", "mytopic3");
+            List<NewTopic> newTopics = List.of(
+                    new NewTopic("mytopic", Map.of(
+                            0, List.of(brokerIds.get(1), brokerIds.get(2)),
+                            1, List.of(brokerIds.get(2), brokerIds.get(0)))),
+                    new NewTopic("mytopic2", 3, (short) brokerIds.size()),
+                    new NewTopic("mytopic3", Optional.empty(), Optional.empty())
+            );
+            CreateTopicsResult createResult = admin.createTopics(newTopics);
+            createResult.all().get();
+            clusterInstance.waitTopicCreation("mytopic", 2);
+            clusterInstance.waitTopicCreation("mytopic2", 3);
+            clusterInstance.waitTopicCreation("mytopic3", 1);
+
+            Set<Uuid> topicIds = Set.of(
+                    createResult.topicId("mytopic").get(),
+                    createResult.topicId("mytopic2").get(),
+                    createResult.topicId("mytopic3").get());
+            admin.deleteTopics(TopicCollection.ofTopicIds(topicIds)).all().get();
+            TestUtils.waitForCondition(() -> {
+                Set<String> remainingTopics = admin.listTopics().names().get();
+                return topics.stream().noneMatch(remainingTopics::contains);
+            }, "Timed out waiting for topics to be deleted");
+        }
+    }
+
+    @ClusterTest
+    public void testDeleteTopicsWithOptionTimeoutMs() {
+        Admin admin = createInvalidAdminClient();
+        try {
+            DeleteTopicsOptions timeoutOption = new DeleteTopicsOptions().timeoutMs(0);
+            ExecutionException exception = assertThrows(ExecutionException.class,
+                    () -> admin.deleteTopics(List.of("test-topic"), timeoutOption).all().get());
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+        } finally {
+            admin.close(Duration.ZERO);
+        }
+    }
+
+    @ClusterTest
+    public void testDescribeLogDirs() throws Exception {
+        String topic = "topic";
+        clusterInstance.createTopic(topic, 10, (short) 1);
+        try (Admin admin = clusterInstance.admin()) {
+            TopicDescription topicDescription = admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic);
+            Map<Integer, Set<Integer>> partitionsByBroker = new HashMap<>();
+            topicDescription.partitions().forEach(partition -> partitionsByBroker
+                    .computeIfAbsent(partition.leader().id(), ignored -> new HashSet<>())
+                    .add(partition.partition()));
+
+            Map<Integer, Map<String, LogDirDescription>> logDirInfosByBroker = admin
+                    .describeLogDirs(clusterInstance.brokerIds()).allDescriptions().get();
+            for (int brokerId : clusterInstance.brokerIds()) {
+                KafkaBroker broker = clusterInstance.brokers().get(brokerId);
+                Map<String, LogDirDescription> logDirInfos = logDirInfosByBroker.get(brokerId);
+                assertNotNull(logDirInfos);
+
+                Set<Integer> actualPartitions = new HashSet<>();
+                logDirInfos.forEach((logDir, logDirInfo) -> {
+                    assertTrue(logDirInfo.totalBytes().isPresent());
+                    assertTrue(logDirInfo.usableBytes().isPresent());
+                    logDirInfo.replicaInfos().keySet().forEach(topicPartition -> {
+                        if (topicPartition.topic().equals(topic)) {
+                            actualPartitions.add(topicPartition.partition());
+                        }
+                        assertEquals(
+                                broker.logManager().getLog(topicPartition, false).get().dir().getParent(),
+                                logDir);
+                    });
+                });
+                assertEquals(partitionsByBroker.getOrDefault(brokerId, Set.of()), actualPartitions);
+            }
+        }
+    }
+
+    @ClusterTest
+    public void testDescribeReplicaLogDirs() throws Exception {
+        String topic = "topic";
+        clusterInstance.createTopic(topic, 10, (short) 1);
+        try (Admin admin = clusterInstance.admin()) {
+            TopicDescription topicDescription = admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic);
+            List<TopicPartitionReplica> replicas = topicDescription.partitions().stream()
+                    .map(partition -> new TopicPartitionReplica(
+                            topic, partition.partition(), partition.leader().id()))
+                    .toList();
+            Map<TopicPartitionReplica, DescribeReplicaLogDirsResult.ReplicaLogDirInfo> replicaDirInfos =
+                    admin.describeReplicaLogDirs(replicas).all().get();
+            replicaDirInfos.forEach((replica, replicaDirInfo) -> {
+                KafkaBroker broker = clusterInstance.brokers().get(replica.brokerId());
+                TopicPartition topicPartition = new TopicPartition(replica.topic(), replica.partition());
+                assertEquals(
+                        broker.logManager().getLog(topicPartition, false).get().dir().getParent(),
+                        replicaDirInfo.getCurrentReplicaLogDir());
+            });
+        }
+    }
+
+    @ClusterTest
     public void testDescribeTopicsWithOptionPartitionSizeLimitPerResponse() throws Exception {
         try (Admin admin = clusterInstance.admin()) {
             String testTopic = "test-topic";
@@ -226,6 +352,46 @@ public class AdminMetadataTest {
             Map<String, KafkaFuture<TopicDescription>> results = admin.describeTopics(
                     TopicCollection.ofTopicNames(List.of(existingTopic))).topicNameValues();
             assertEquals(existingTopicId, results.get(existingTopic).get().topicId());
+        }
+    }
+
+    @ClusterTest
+    public void testDescribeConfigsForTopic() throws Exception {
+        String topic = "topic";
+        clusterInstance.createTopic(topic, 2, (short) clusterInstance.brokerIds().size());
+        try (Admin admin = clusterInstance.admin()) {
+            ConfigResource existingTopic = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+            admin.describeConfigs(List.of(existingTopic)).values().get(existingTopic).get();
+
+            ConfigResource defaultTopic = new ConfigResource(ConfigResource.Type.TOPIC, "");
+            assertFutureThrows(InvalidTopicException.class, admin.describeConfigs(List.of(defaultTopic)).all());
+
+            ConfigResource nonExistentTopic = new ConfigResource(ConfigResource.Type.TOPIC, "unknown");
+            assertFutureThrows(UnknownTopicOrPartitionException.class,
+                    admin.describeConfigs(List.of(nonExistentTopic)).all());
+
+            ConfigResource invalidTopic = new ConfigResource(ConfigResource.Type.TOPIC, "(invalid topic)");
+            assertFutureThrows(InvalidTopicException.class, admin.describeConfigs(List.of(invalidTopic)).all());
+        }
+    }
+
+    @ClusterTest
+    public void testIncludeDocumentation() throws Exception {
+        String topic = "topic";
+        clusterInstance.createTopic(topic, 1, (short) 1);
+        try (Admin admin = clusterInstance.admin()) {
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+            List<ConfigResource> resources = List.of(resource);
+
+            Config config = admin.describeConfigs(
+                    resources, new DescribeConfigsOptions().includeDocumentation(true))
+                    .values().get(resource).get();
+            config.entries().forEach(entry -> assertNotNull(entry.documentation()));
+
+            config = admin.describeConfigs(
+                    resources, new DescribeConfigsOptions().includeDocumentation(false))
+                    .values().get(resource).get();
+            config.entries().forEach(entry -> assertNull(entry.documentation()));
         }
     }
 

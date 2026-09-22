@@ -314,6 +314,53 @@ public class RocksDBTransactionBufferTest {
     }
 
     @Test
+    public void stageAllShouldNotExposeAPartiallyStagedBatchToNonOwnerReads() throws Exception {
+        final int batchSize = 50;
+        final AtomicBoolean stop = new AtomicBoolean(false);
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+        // A non-owner read takes the read lock, which stageAll holds off for the whole batch, so the
+        // batch is either wholly absent or wholly present -- the all-or-nothing view a caller would
+        // otherwise get from a single WriteBatch write. Keys are scanned in the "k" range so the
+        // base-store keys (a, b, c) are excluded from the count.
+        final Thread reader = new Thread(() -> {
+            try {
+                while (!stop.get()) {
+                    int staged = 0;
+                    try (KeyValueIterator<Bytes, byte[]> iter = buffer.range(key("k000"), key("k999"), true, true)) {
+                        while (iter.hasNext()) {
+                            iter.next();
+                            staged++;
+                        }
+                    }
+                    if (staged != 0 && staged != batchSize) {
+                        throw new AssertionError("non-owner read observed a partially staged batch of " + staged
+                            + " of " + batchSize + " writes");
+                    }
+                }
+            } catch (final Throwable t) {
+                failure.compareAndSet(null, t);
+            }
+        });
+        reader.start();
+        try {
+            for (int i = 0; i < 1_000 && failure.get() == null; i++) {
+                buffer.stageAll(() -> {
+                    for (int k = 0; k < batchSize; k++) {
+                        buffer.stage(key(String.format("k%03d", k)), val("v" + k));
+                    }
+                });
+                buffer.rollback();
+            }
+        } finally {
+            stop.set(true);
+            reader.join();
+        }
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent non-owner reader failed", failure.get());
+        }
+    }
+
+    @Test
     public void shouldNotShowStagedWritesInBaseAfterRollback() throws RocksDBException {
         buffer.stage(key("x"), val("staged-x"));
         buffer.rollback();

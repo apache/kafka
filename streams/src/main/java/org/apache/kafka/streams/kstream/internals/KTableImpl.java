@@ -83,7 +83,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -451,7 +450,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             // only materialize if materialized is specified and it has queryable name
             if (queryableStoreName != null) {
                 final StoreFactory storeFactory = new KeyValueStoreMaterializer<>(materializedInternal);
-                storeBuilder = Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
+                storeBuilder = Set.of(new FactoryWrappingStoreBuilder<>(storeFactory));
             } else {
                 storeBuilder = null;
             }
@@ -601,7 +600,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             name,
             keySerde,
             valueSerde,
-            Collections.singleton(this.name),
+            Set.of(this.name),
             null,
             suppressionSupplier,
             node,
@@ -738,7 +737,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final NamedInternal renamed = new NamedInternal(joinName);
         final String joinMergeName = renamed.orElseGenerateWithPrefix(builder, MERGE_NAME);
-        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) other));
+        final Set<String> allSourceNodes = ensureCopartitionWith(Set.of((AbstractStream<K, VO>) other));
 
         if (leftOuter) {
             enableSendingOldValues(true);
@@ -1291,7 +1290,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final StreamSourceNode<KO, SubscriptionWrapper<K>> subscriptionSource = new StreamSourceNode<>(
             renamed.suffixWithOrElseGet("-subscription-registration-source", builder, SOURCE_NAME),
-            Collections.singleton(subscriptionTopicName),
+            Set.of(subscriptionTopicName),
             new ConsumedInternal<>(Consumed.with(foreignKeySerde, subscriptionWrapperSerde))
         );
         builder.addGraphNode(subscriptionSink, subscriptionSource);
@@ -1328,7 +1327,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                     ),
                     renamed.suffixWithOrElseGet("-subscription-join-foreign", builder, SUBSCRIPTION_PROCESSOR)
                 ),
-                Collections.singleton(foreignKeyValueGetter)
+                Set.of(foreignKeyValueGetter)
             );
         builder.addGraphNode(subscriptionReceiveNode, subscriptionJoinNode);
 
@@ -1364,7 +1363,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final StreamSourceNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSource = new StreamSourceNode<>(
             renamed.suffixWithOrElseGet("-subscription-response-source", builder, SOURCE_NAME),
-            Collections.singleton(finalRepartitionTopicName),
+            Set.of(finalRepartitionTopicName),
             new ConsumedInternal<>(Consumed.with(keySerde, responseWrapperSerde))
         );
         builder.addGraphNode(foreignResponseSink, foreignResponseSource);
@@ -1386,7 +1385,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 ),
                 renamed.suffixWithOrElseGet("-subscription-response-resolver", builder, SUBSCRIPTION_RESPONSE_RESOLVER_PROCESSOR)
             ),
-            Collections.singleton(primaryKeyValueGetter)
+            Set.of(primaryKeyValueGetter)
         );
         builder.addGraphNode(foreignResponseSource, responseJoinNode);
 
@@ -1506,7 +1505,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                                  final Headers headers,
                                                  final int numPartitions) {
             final Integer partition = value.primaryPartition();
-            return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
+            return partition == null ? Optional.empty() : Optional.of(Set.of(partition));
         }
     }
 }
