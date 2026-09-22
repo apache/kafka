@@ -1978,11 +1978,11 @@ public class StreamTaskTest {
             final String expectedNotReadyMessage = "stream-thread [Test worker] task [0_0] Partition topic2-0 has fetched lag of -1\n\tWaiting to fetch data for topic2-0";
             final String expectedReadyMessage = "Partition topic1-0 has buffered data, ready for processing";
             assertEquals(1, messages.size(), "Should have logged not ready message");
-            assertTrue(streamTaskAppender.getMessages("INFO").contains(expectedNotReadyMessage));
+            assertTrue(streamTaskAppender.getMessages(Level.INFO).contains(expectedNotReadyMessage));
             assertEquals(expectedNotReadyMessage, messages.get(0));
             
             // Validate TRACE log from PartitionGroup about partition1 being ready
-            assertTrue(partitionGroupAppender.getMessages("TRACE").stream().anyMatch(message -> message.contains(expectedReadyMessage)));
+            assertTrue(partitionGroupAppender.getMessages(Level.TRACE).stream().anyMatch(message -> message.contains(expectedReadyMessage)));
         }
     }
 
