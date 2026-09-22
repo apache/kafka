@@ -291,6 +291,10 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
             }
         }
 
+        // Generate target assignment records for all current members.
+        // We must take care to generate empty assignment records for members without an entry in
+        // newTargetAssignment, otherwise we may leave partitions double-assigned if a custom
+        // assignor omits entries for members when it decides to give them an empty assignment.
         for (String memberId : currentMemberIds) {
             String previousMemberId = staticMemberIdRemapping.getOrDefault(memberId, memberId);
 
