@@ -159,9 +159,20 @@ public class ValuesTest {
 
     @Test
     public void shouldParseStringsBeginningWithNumberAsStrings() {
-        SchemaAndValue schemaAndValue = Values.parseString("1::2");
-        assertEquals(Type.STRING, schemaAndValue.schema().type());
-        assertEquals("1::2", schemaAndValue.value());
+        for (String value : List.of("1::2", "1|2", "1,2", "-1}", "+1]", "1.5:2.5")) {
+            SchemaAndValue schemaAndValue = Values.parseString(value);
+            assertEquals(Type.STRING, schemaAndValue.schema().type(), value);
+            assertEquals(value, schemaAndValue.value(), value);
+        }
+    }
+
+    @Test
+    public void shouldParseTemporalStringsWithTrailingTokensAsStrings() {
+        for (String value : List.of("2020-01-01:foo", "2020-01-01,x")) {
+            SchemaAndValue schemaAndValue = Values.parseString(value);
+            assertEquals(Type.STRING, schemaAndValue.schema().type(), value);
+            assertEquals(value, schemaAndValue.value(), value);
+        }
     }
 
     @Test

@@ -864,7 +864,9 @@ public class Values {
             // Temporal types are more restrictive, so try them first
             if (firstCharIsDigit) {
                 SchemaAndValue temporal = parseMultipleTokensAsTemporal(token);
-                if (temporal != null) {
+                // Only accept the temporal if it's embedded or nothing is left over, so a
+                // value like "2020-01-01:foo" is not misread as the date 2020-01-01.
+                if (temporal != null && (embedded || !parser.hasNext())) {
                     return temporal;
                 }
             }
