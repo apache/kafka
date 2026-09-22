@@ -63,7 +63,6 @@ final class KRaftControlRecordStateMachineTest {
         return new KRaftControlRecordStateMachine(
             staticVoterSet,
             log,
-            STRING_SERDE,
             1024,
             new LogContext(),
             raftMetrics,

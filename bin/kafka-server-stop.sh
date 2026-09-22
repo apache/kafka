@@ -40,7 +40,7 @@ else
   if [ -z "$INPUT_PROCESS_ROLE" ] && [ -z "$INPUT_NID" ]; then
     kill -s $SIGNAL $PIDS
   else
-    RelativePathToConfig=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | sed 's/--override property=[^ ]*//g' | awk 'NF>1{print $NF}' | xargs)
+    RelativePathToConfig=$(ps axww | grep ' kafka\.Kafka ' | grep java | grep -v grep | sed 's/--override property=[^ ]*//g' | awk 'NF>1{print $NF}' | xargs)
     IFS=' ' read -ra PIDSArray <<< "$PIDS"
     IFS=' ' read -ra RelativePathArray <<< "$RelativePathToConfig"
     for ((i = 0; i < ${#RelativePathArray[@]}; i++)); do

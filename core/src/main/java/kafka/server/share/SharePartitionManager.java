@@ -540,15 +540,19 @@ public class SharePartitionManager implements AutoCloseable {
                     log.error("Acknowledge data present in Initial Fetch Request for group {} member {}", groupId, memberId);
                     throw Errors.INVALID_REQUEST.exception();
                 }
-                if (cache.remove(key) != null) {
-                    log.debug("Removed share session with key {}", key);
+                // The remove and the subsequent create must happen atomically under the cache's lock.
+                ShareSessionKey responseShareSessionKey;
+                synchronized (cache) {
+                    if (cache.remove(key) != null) {
+                        log.debug("Removed share session with key {}", key);
+                    }
+                    ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new
+                            ImplicitLinkedHashCollection<>(shareFetchData.size());
+                    shareFetchData.forEach(topicIdPartition ->
+                        cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
+                    responseShareSessionKey = cache.maybeCreateSession(groupId, memberId,
+                        cachedSharePartitions, clientConnectionId);
                 }
-                ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new
-                        ImplicitLinkedHashCollection<>(shareFetchData.size());
-                shareFetchData.forEach(topicIdPartition ->
-                    cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
-                ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, memberId,
-                    cachedSharePartitions, clientConnectionId);
                 if (responseShareSessionKey == null) {
                     log.error("Could not create a share session for group {} member {}", groupId, memberId);
                     throw Errors.SHARE_SESSION_LIMIT_REACHED.exception();
@@ -849,6 +853,8 @@ public class SharePartitionManager implements AutoCloseable {
             sharePartition.markFenced();
             metadataProvider.removePartitionListener(sharePartitionKey.topicIdPartition(), sharePartition.listener());
             delayedRequestNotifier.accept(new DelayedShareFetchGroupKey(sharePartitionKey.groupId(), sharePartitionKey.topicIdPartition()));
+            // Close the share partition to release any resources held by it.
+            sharePartition.close();
         }
     }
 

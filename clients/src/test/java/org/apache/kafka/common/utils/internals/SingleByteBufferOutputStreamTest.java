@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ByteBufferOutputStreamTest {
+public class SingleByteBufferOutputStreamTest {
 
     @Test
     public void testExpandByteBufferOnPositionIncrease() throws Exception {
@@ -37,7 +37,7 @@ public class ByteBufferOutputStreamTest {
     }
 
     private void testExpandByteBufferOnPositionIncrease(ByteBuffer initialBuffer) throws Exception {
-        ByteBufferOutputStream output = new ByteBufferOutputStream(initialBuffer);
+        ByteBufferOutputStream output = new SingleByteBufferOutputStream(initialBuffer);
         output.write("hello".getBytes());
         output.position(32);
         assertEquals(32, output.position());
@@ -64,7 +64,7 @@ public class ByteBufferOutputStreamTest {
     }
 
     private void testExpandByteBufferOnWrite(ByteBuffer initialBuffer) throws Exception {
-        ByteBufferOutputStream output = new ByteBufferOutputStream(initialBuffer);
+        ByteBufferOutputStream output = new SingleByteBufferOutputStream(initialBuffer);
         output.write("hello".getBytes());
         output.write(new byte[27]);
         assertEquals(32, output.position());
@@ -95,7 +95,7 @@ public class ByteBufferOutputStreamTest {
         input.putLong(value);
         input.flip();
 
-        ByteBufferOutputStream output = new ByteBufferOutputStream(ByteBuffer.allocate(32));
+        ByteBufferOutputStream output = new SingleByteBufferOutputStream(ByteBuffer.allocate(32));
         output.write(input);
         assertEquals(8, input.position());
         assertEquals(8, output.position());

@@ -48,7 +48,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -96,7 +95,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * Start up Streams with a single initial NamedTopology
      */
     public void start(final NamedTopology initialTopology) {
-        start(Collections.singleton(initialTopology));
+        start(Set.of(initialTopology));
     }
 
     /**

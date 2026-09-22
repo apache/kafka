@@ -273,6 +273,7 @@ import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -589,8 +590,18 @@ public class KafkaAdminClient extends AdminClient {
                 ? config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)
                 : config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
 
-            // Don't create bootstrap cluster here - let NetworkClient.ensureBootstrapped() handle it
-            // during the first poll after DNS resolution succeeds
+            // bootstrap.resolve.timeout.ms=0 resolves DNS synchronously here and primes the
+            // metadata manager, so any DNS failure surfaces as a ConfigException and no admin
+            // client instance is created. A positive value opts in to asynchronous bootstrap
+            // resolution, where resolution is deferred to the first poll.
+            if (config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG) == 0L) {
+                List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+                    bootstrapAddressesToUse,
+                    config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
+                metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
+            }
+            // Otherwise, let NetworkClient.ensureBootstrapped() handle it during the first poll
+            // after DNS resolution succeeds.
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             clientTelemetryReporter.ifPresent(reporters::add);

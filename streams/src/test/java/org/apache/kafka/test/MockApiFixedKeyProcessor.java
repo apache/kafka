@@ -22,7 +22,6 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.time.Duration;
@@ -31,9 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 
 public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcessor<KIn, VIn, VOut> {
 
@@ -92,47 +88,8 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
         }
     }
 
-    public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
-        assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
-        for (int i = 0; i < expected.length; i++) {
-            final FixedKeyRecord<KIn, VIn> record = processed.get(i);
-            assertThat(
-                "output[" + i + "]:",
-                new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()),
-                is(expected[i])
-            );
-        }
-
-        processed.clear();
-    }
-
-    public void checkAndClearProcessedRecords(final Record<?, ?>... expected) {
-        assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
-        for (int i = 0; i < expected.length; i++) {
-            assertThat("output[" + i + "]:", processed.get(i), is(expected[i]));
-        }
-
-        processed.clear();
-    }
-
     public void requestCommit() {
         commitRequested = true;
-    }
-
-    public void checkEmptyAndClearProcessResult() {
-        assertThat("the number of outputs:", processed.size(), is(0));
-        processed.clear();
-    }
-
-    public void checkAndClearPunctuateResult(final PunctuationType type, final long... expected) {
-        final ArrayList<Long> punctuated = type == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime;
-        assertThat("the number of outputs:", punctuated.size(), is(expected.length));
-
-        for (int i = 0; i < expected.length; i++) {
-            assertThat("output[" + i + "]:", punctuated.get(i), is(expected[i]));
-        }
-
-        processed.clear();
     }
 
     public ArrayList<KeyValueTimestamp<KIn, VIn>> processed() {

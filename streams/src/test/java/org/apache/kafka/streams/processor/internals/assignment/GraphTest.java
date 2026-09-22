@@ -25,10 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -60,7 +59,7 @@ public class GraphTest {
     public void testBasic() {
         final Set<Integer> nodes = graph.nodes();
         assertEquals(6, nodes.size());
-        assertThat(nodes, contains(-1, 0, 1, 2, 3, 99));
+        assertIterableEquals(List.of(-1, 0, 1, 2, 3, 99), nodes);
 
         Map<Integer, Graph<Integer>.Edge> edges = graph.edges(0);
         assertEquals(2, edges.size());
@@ -99,7 +98,7 @@ public class GraphTest {
 
         final Set<Integer> nodes = residualGraph.nodes();
         assertEquals(6, nodes.size());
-        assertThat(nodes, contains(-1, 0, 1, 2, 3, 99));
+        assertIterableEquals(List.of(-1, 0, 1, 2, 3, 99), nodes);
 
         Map<Integer, Graph<Integer>.Edge> edges = residualGraph.edges(0);
         assertEquals(3, edges.size());

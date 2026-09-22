@@ -83,6 +83,7 @@ import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -897,6 +898,8 @@ public class KafkaAdminClientStreamsGroupTest extends KafkaAdminClientTestBase {
             final StreamsGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
 
             assertNull(groupDescription.authorizedOperations());
+            String descriptionText = assertDoesNotThrow(groupDescription::toString);
+            assertTrue(descriptionText.contains(", authorizedOperations=null,"));
         }
     }
 

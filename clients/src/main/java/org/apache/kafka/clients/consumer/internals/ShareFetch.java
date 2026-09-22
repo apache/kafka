@@ -23,9 +23,11 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,7 +42,7 @@ import java.util.Optional;
  * @param <V> The record value
  */
 public class ShareFetch<K, V> {
-    private final Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches;
+    private final Map<TopicIdPartition, List<ShareInFlightBatch<K, V>>> batches;
     private Optional<Integer> acquisitionLockTimeoutMs;
     private Optional<Integer> acquisitionLockTimeoutMsRenewed;
 
@@ -48,7 +50,7 @@ public class ShareFetch<K, V> {
         return new ShareFetch<>(new HashMap<>(), Optional.empty());
     }
 
-    private ShareFetch(Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches, Optional<Integer> acquisitionLockTimeoutMs) {
+    private ShareFetch(Map<TopicIdPartition, List<ShareInFlightBatch<K, V>>> batches, Optional<Integer> acquisitionLockTimeoutMs) {
         this.batches = batches;
         this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
         this.acquisitionLockTimeoutMsRenewed = Optional.empty();
@@ -56,21 +58,16 @@ public class ShareFetch<K, V> {
 
     /**
      * Add another {@link ShareInFlightBatch} to this one; all of its records will be added to this object's
-     * {@link #records() records}.
+     * {@link #records() records}. Generally, we will only have one {@link ShareInFlightBatch} for a partition
+     * at a time, but in some cases (such as a repeated request after an empty response, or partition leader
+     * changes), there might be more than one.
      *
      * @param partition the topic-partition
      * @param batch the batch to add; may not be null
      */
     public void add(TopicIdPartition partition, ShareInFlightBatch<K, V> batch) {
         Objects.requireNonNull(batch);
-        ShareInFlightBatch<K, V> currentBatch = this.batches.get(partition);
-        if (currentBatch == null) {
-            this.batches.put(partition, batch);
-        } else {
-            // This case shouldn't usually happen because we only send one fetch at a time per partition,
-            // but it might conceivably happen in some rare cases (such as partition leader changes).
-            currentBatch.merge(batch);
-        }
+        batches.computeIfAbsent(partition, k -> new LinkedList<>()).add(batch);
         if (batch.getAcquisitionLockTimeoutMs().isPresent()) {
             acquisitionLockTimeoutMs = batch.getAcquisitionLockTimeoutMs();
         }
@@ -81,7 +78,13 @@ public class ShareFetch<K, V> {
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> records() {
         final LinkedHashMap<TopicPartition, List<ConsumerRecord<K, V>>> result = new LinkedHashMap<>();
-        batches.forEach((tip, batch) -> result.put(tip.topicPartition(), batch.getInFlightRecords()));
+        batches.forEach((tip, batchList) -> {
+            List<ConsumerRecord<K, V>> records = new ArrayList<>();
+            for (ShareInFlightBatch<K, V> batch : batchList) {
+                records.addAll(batch.getInFlightRecords());
+            }
+            result.put(tip.topicPartition(), records);
+        });
         return Map.copyOf(result);
     }
 
@@ -91,16 +94,16 @@ public class ShareFetch<K, V> {
     public int numRecords() {
         int numRecords = 0;
         if (!batches.isEmpty()) {
-            Iterator<Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>>> iterator = batches.entrySet().iterator();
+            Iterator<Map.Entry<TopicIdPartition, List<ShareInFlightBatch<K, V>>>> iterator = batches.entrySet().iterator();
             while (iterator.hasNext()) {
-                Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry = iterator.next();
-                ShareInFlightBatch<K, V> batch = entry.getValue();
-                if (batch.isEmpty()) {
-                    if (!batch.hasRenewals()) {
-                        iterator.remove();
-                    }
-                } else {
+                Map.Entry<TopicIdPartition, List<ShareInFlightBatch<K, V>>> entry = iterator.next();
+                List<ShareInFlightBatch<K, V>> batchList = entry.getValue();
+                batchList.removeIf(batch -> batch.isEmpty() && !batch.hasRenewals());
+                for (ShareInFlightBatch<K, V> batch : batchList) {
                     numRecords += batch.numRecords();
+                }
+                if (batchList.isEmpty()) {
+                    iterator.remove();
                 }
             }
         }
@@ -126,22 +129,24 @@ public class ShareFetch<K, V> {
      * @return {@code true} if this fetch contains records being renewed
      */
     public boolean hasRenewals() {
-        boolean hasRenewals = false;
-        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
-            if (entry.getValue().hasRenewals()) {
-                hasRenewals = true;
-                break;
+        for (Map.Entry<TopicIdPartition, List<ShareInFlightBatch<K, V>>> entry : batches.entrySet()) {
+            for (ShareInFlightBatch<K, V> batch : entry.getValue()) {
+                if (batch.hasRenewals()) {
+                    return true;
+                }
             }
         }
-        return hasRenewals;
+        return false;
     }
 
     /**
      * Take any renewed records and move them back into in-flight state.
      */
     public void takeRenewedRecords() {
-        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
-            entry.getValue().takeRenewals();
+        for (Map.Entry<TopicIdPartition, List<ShareInFlightBatch<K, V>>> entry : batches.entrySet()) {
+            for (ShareInFlightBatch<K, V> batch : entry.getValue()) {
+                batch.takeRenewals();
+            }
         }
         // Any acquisition lock timeout updated by renewal is applied as the renewed records are move back to in-flight
         if (acquisitionLockTimeoutMsRenewed.isPresent()) {
@@ -156,11 +161,15 @@ public class ShareFetch<K, V> {
      * @param type The acknowledge type which indicates whether it was processed successfully
      */
     public void acknowledge(final ConsumerRecord<K, V> record, final AcknowledgeType type) {
-        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> tipBatch : batches.entrySet()) {
-            TopicIdPartition tip = tipBatch.getKey();
+        for (Map.Entry<TopicIdPartition, List<ShareInFlightBatch<K, V>>> entry : batches.entrySet()) {
+            TopicIdPartition tip = entry.getKey();
             if (tip.topic().equals(record.topic()) && (tip.partition() == record.partition())) {
-                tipBatch.getValue().acknowledge(record, type);
-                return;
+                for (ShareInFlightBatch<K, V> batch : entry.getValue()) {
+                    if (batch.isInFlight(record.offset())) {
+                        batch.acknowledge(record, type);
+                        return;
+                    }
+                }
             }
         }
         throw new IllegalStateException("The record cannot be acknowledged.");
@@ -177,15 +186,16 @@ public class ShareFetch<K, V> {
      * @param type      The acknowledge type which indicates whether it was processed successfully
      */
     public void acknowledge(final String topic, final int partition, final long offset, final AcknowledgeType type) {
-        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> tipBatch : batches.entrySet()) {
-            TopicIdPartition tip = tipBatch.getKey();
-            ShareInFlightBatchException exception = tipBatch.getValue().getException();
-            if (tip.topic().equals(topic) && (tip.partition() == partition) &&
-                exception != null &&
-                exception.offsets().contains(offset)) {
-
-                tipBatch.getValue().addAcknowledgement(offset, type);
-                return;
+        for (Map.Entry<TopicIdPartition, List<ShareInFlightBatch<K, V>>> entry : batches.entrySet()) {
+            TopicIdPartition tip = entry.getKey();
+            if (tip.topic().equals(topic) && (tip.partition() == partition)) {
+                for (ShareInFlightBatch<K, V> batch : entry.getValue()) {
+                    ShareInFlightBatchException exception = batch.getException();
+                    if (exception != null && exception.offsets().contains(offset)) {
+                        batch.addAcknowledgement(offset, type);
+                        return;
+                    }
+                }
             }
         }
         throw new IllegalStateException("The record cannot be acknowledged.");
@@ -198,7 +208,7 @@ public class ShareFetch<K, V> {
      * @param type The acknowledge type which indicates whether it was processed successfully
      */
     public void acknowledgeAll(final AcknowledgeType type) {
-        batches.forEach((tip, batch) -> batch.acknowledgeAll(type));
+        batches.forEach((tip, batchList) -> batchList.forEach(batch -> batch.acknowledgeAll(type)));
     }
 
     /**
@@ -208,14 +218,14 @@ public class ShareFetch<K, V> {
      * @return Whether all in-flight records have been acknowledged
      */
     public boolean checkAllInFlightAreAcknowledged() {
-        boolean allInFlightAreAcknowledged = true;
-        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
-            if (!entry.getValue().checkAllInFlightAreAcknowledged()) {
-                allInFlightAreAcknowledged = false;
-                break;
+        for (Map.Entry<TopicIdPartition, List<ShareInFlightBatch<K, V>>> entry : batches.entrySet()) {
+            for (ShareInFlightBatch<K, V> batch : entry.getValue()) {
+                if (!batch.checkAllInFlightAreAcknowledged()) {
+                    return false;
+                }
             }
         }
-        return allInFlightAreAcknowledged;
+        return true;
     }
 
     /**
@@ -227,11 +237,16 @@ public class ShareFetch<K, V> {
      */
     public Map<TopicIdPartition, NodeAcknowledgements> takeAcknowledgedRecords() {
         Map<TopicIdPartition, NodeAcknowledgements> acknowledgementMap = new LinkedHashMap<>();
-        batches.forEach((tip, batch) -> {
-            int nodeId = batch.nodeId();
-            Acknowledgements acknowledgements = batch.takeAcknowledgedRecords();
-            if (!acknowledgements.isEmpty())
-                acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
+        batches.forEach((tip, batchList) -> {
+            if (!batchList.isEmpty()) {
+                Acknowledgements acknowledgements = Acknowledgements.empty();
+                int nodeId = batchList.get(0).nodeId();
+                for (ShareInFlightBatch<K, V> batch : batchList) {
+                    acknowledgements.merge(batch.takeAcknowledgedRecords());
+                }
+                if (!acknowledgements.isEmpty())
+                    acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
+            }
         });
         return acknowledgementMap;
     }
@@ -249,9 +264,11 @@ public class ShareFetch<K, V> {
     public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, Optional<Integer> acquisitionLockTimeoutMs) {
         int recordsRenewed = 0;
         for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
-            ShareInFlightBatch<K, V> batch = batches.get(entry.getKey());
-            if (batch != null) {
-                recordsRenewed += batch.renew(entry.getValue());
+            List<ShareInFlightBatch<K, V>> batchList = batches.get(entry.getKey());
+            if (batchList != null) {
+                for (ShareInFlightBatch<K, V> batch : batchList) {
+                    recordsRenewed += batch.renew(entry.getValue());
+                }
             }
         }
         acquisitionLockTimeoutMsRenewed = acquisitionLockTimeoutMs;

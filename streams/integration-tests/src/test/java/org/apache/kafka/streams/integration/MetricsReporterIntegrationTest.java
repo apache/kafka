@@ -43,8 +43,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Timeout(600)
 @Tag("integration")
@@ -123,7 +122,7 @@ public class MetricsReporterIntegrationTest {
         try (KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration)) {
             kafkaStreams.metrics().keySet().forEach(metricName -> {
                 final Object initialMetricValue = METRIC_NAME_TO_INITIAL_VALUE.get(metricName.name());
-                assertThat(initialMetricValue, notNullValue());
+                assertNotNull(initialMetricValue);
             });
         }
     }

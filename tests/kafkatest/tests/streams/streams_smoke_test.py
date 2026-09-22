@@ -16,9 +16,10 @@
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
-from kafkatest.services.kafka import quorum
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
+from kafkatest.version import LATEST_4_3
 
 class StreamsSmokeTest(BaseStreamsTest):
     """
@@ -122,3 +123,49 @@ class StreamsSmokeTest(BaseStreamsTest):
         processor3.stop()
 
         self.driver.node.account.ssh("grep SUCCESS %s" % self.driver.STDOUT_FILE, allow_fail=False)
+
+    @cluster(num_nodes=5)
+    @matrix(metadata_quorum=[quorum.combined_kraft])
+    def test_old_client_not_solicited_for_topology_push(self, metadata_quorum):
+        """
+        Test the situation when a pre-KIP-1331 Kafka Streams client uses the streams group
+        protocol against a broker on this branch with the topology description plugin configured
+        (the default broker setup from BaseStreamsTest). StreamsGroupHeartbeat negotiates down to
+        version 0 for this client, so the broker must never solicit a topology description push
+        for it.
+        """
+        processor = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, 'at_least_once', 'streams')
+        processor.set_version(str(LATEST_4_3))
+
+        broker_log = "%s/server.log" % KafkaService.OPERATIONAL_LOG_INFO_DIR
+
+        with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+            processor.start()
+            monitor.wait_until('REBALANCING -> RUNNING',
+                               timeout_sec=60,
+                               err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account)
+                               )
+
+            self.driver.start()
+
+            monitor.wait_until('processed',
+                                timeout_sec=30,
+                                err_msg="Didn't see any processing messages " + str(processor.node.account)
+                                )
+
+        self.driver.wait()
+        self.driver.stop()
+        processor.stop()
+
+        self.driver.node.account.ssh("grep SUCCESS %s" % self.driver.STDOUT_FILE, allow_fail=False)
+
+        # BaseStreamsTest runs 3 brokers and the group coordinator for this group can land on
+        # any of them, so every broker's log needs to be checked, not just one.
+        solicited = 0
+        for broker_node in self.kafka.nodes:
+            count = broker_node.account.ssh_capture(
+                "grep -c 'Requested topology description push at topology epoch' %s || true" % broker_log,
+                allow_fail=False)
+            solicited += int(next(count).strip())
+        assert solicited == 0, \
+            "A broker solicited a topology description push for a pre-KIP-1331 streams client"

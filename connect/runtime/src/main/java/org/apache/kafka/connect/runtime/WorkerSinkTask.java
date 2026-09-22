@@ -870,7 +870,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
             putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeAvg), new Avg());
         }
 
-        void computeSinkRecordLag() {
+        void computeSinkRecordActiveCount() {
             Map<TopicPartition, OffsetAndMetadata> consumed = this.consumedOffsets;
             Map<TopicPartition, OffsetAndMetadata> committed = this.committedOffsets;
             long activeRecords = 0L;
@@ -915,24 +915,24 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
 
         void recordConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
             consumedOffsets.putAll(offsets);
-            computeSinkRecordLag();
+            computeSinkRecordActiveCount();
         }
 
         void recordCommittedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
             committedOffsets = offsets;
-            computeSinkRecordLag();
+            computeSinkRecordActiveCount();
         }
 
         void assignedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
             consumedOffsets = new HashMap<>(offsets);
             committedOffsets = offsets;
-            computeSinkRecordLag();
+            computeSinkRecordActiveCount();
         }
 
         void clearOffsets(Collection<TopicPartition> topicPartitions) {
             consumedOffsets.keySet().removeAll(topicPartitions);
             committedOffsets.keySet().removeAll(topicPartitions);
-            computeSinkRecordLag();
+            computeSinkRecordActiveCount();
         }
 
         void recordOffsetCommitSuccess() {

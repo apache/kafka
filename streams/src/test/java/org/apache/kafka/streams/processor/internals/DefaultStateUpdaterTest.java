@@ -32,8 +32,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -47,11 +47,17 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -63,13 +69,10 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.apache.kafka.test.StreamsTestUtils.TopologyMetadataBuilder.unnamedTopology;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -155,8 +158,8 @@ class DefaultStateUpdaterTest {
 
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        verifyRestoredActiveTasks(statelessTask, restoredStatefulTask);
-        verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, failedStatefulTask));
+        verifyRestoredActiveTasks();
+        verifyFailedTasks(StreamsException.class, statelessTask, restoredStatefulTask, failedStatefulTask, standbyTask);
         verifyUpdatingTasks();
         verifyPausedTasks();
         verify(changelogReader).clear();
@@ -178,23 +181,24 @@ class DefaultStateUpdaterTest {
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
         verifyRestoredActiveTasks();
-        verifyExceptionsAndFailedTasks();
+        verifyFailedTasks(StreamsException.class, statefulTask, standbyTask);
         verifyUpdatingTasks();
         verifyPausedTasks();
         verify(changelogReader).clear();
     }
 
     @Test
-    public void shouldShutdownStateUpdaterAndRestart() {
+    public void shouldThrowIfStartedAfterShutdown() {
         stateUpdater.start();
 
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        stateUpdater.start();
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, stateUpdater::start);
 
-        stateUpdater.shutdown(Duration.ofMinutes(1));
-
-        verify(changelogReader, times(2)).clear();
+        assertEquals("State updater cannot be started again after it was shut down."
+            + " This indicates a bug. Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the"
+            + " dev-mailing list (https://kafka.apache.org/contact).", exception.getMessage());
+        verify(changelogReader).clear();
     }
 
     @Test
@@ -626,7 +630,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldPublishEmptyTaskEndOffsetSumSnapshotBeforeStart() {
-        assertThat(stateUpdater.taskEndOffsetSumSnapshot(), is(Collections.emptyMap()));
+        assertTrue(stateUpdater.taskEndOffsetSumSnapshot().isEmpty());
     }
 
     @Test
@@ -943,6 +947,134 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks(new ExceptionAndTask(exception, task));
         assertEquals(shouldStillBeRunning, stateUpdater.isRunning());
+    }
+
+    @Test
+    public void shouldFailPendingRemovalsWhenStateUpdaterThreadDies() throws Exception {
+        final StreamTask taskWithFailingRemoval = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask otherTask = statefulTask(TASK_1_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final RuntimeException fatalException = new RuntimeException("Something happened");
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        final Collection<TopicPartition> changelogPartitions = taskWithFailingRemoval.changelogPartitions();
+        doThrow(fatalException).when(changelogReader)
+            .unregister(changelogPartitions, StandbyUpdateListener.SuspendReason.MIGRATED);
+        stateUpdater.start();
+        stateUpdater.add(taskWithFailingRemoval);
+        stateUpdater.add(otherTask);
+        verifyUpdatingTasks(taskWithFailingRemoval, otherTask);
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfFailingRemoval =
+            stateUpdater.remove(taskWithFailingRemoval.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfOtherTask =
+            stateUpdater.remove(otherTask.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+
+        assertInstanceOf(
+            StreamsException.class,
+            assertThrows(ExecutionException.class, futureOfFailingRemoval::get).getCause()
+        );
+        assertInstanceOf(
+            StreamsException.class,
+            assertThrows(ExecutionException.class, futureOfOtherTask::get).getCause()
+        );
+        verifyExceptionsAndFailedTasks(
+            new ExceptionAndTask(fatalException, taskWithFailingRemoval),
+            new ExceptionAndTask(fatalException, otherTask)
+        );
+        // the exception that made the thread die is reported separately, so that the stream thread can fail the
+        // application even if the thread did not own any task
+        assertEquals(Optional.of(fatalException), stateUpdater.fatalException());
+        assertFalse(stateUpdater.isRunning());
+    }
+
+    @Test
+    public void shouldFailRemovalOfTaskWhenStateUpdaterThreadDiesWhilePerformingIt() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
+        doThrow(new Error("Something happened")).when(changelogReader)
+            .unregister(changelogPartitions, StandbyUpdateListener.SuspendReason.MIGRATED);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future =
+            stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+
+        assertInstanceOf(StreamsException.class, assertThrows(ExecutionException.class, future::get).getCause());
+        verifyFailedTasks(StreamsException.class, task);
+        assertFalse(stateUpdater.isRunning());
+    }
+
+    @Test
+    public void shouldFailRemovalOfTaskWhenStateUpdaterThreadIsNotRunningAnymore() throws Exception {
+        killStateUpdaterThread();
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future =
+            stateUpdater.remove(TASK_0_1, StandbyUpdateListener.SuspendReason.MIGRATED);
+
+        assertInstanceOf(StreamsException.class, assertThrows(ExecutionException.class, future::get).getCause());
+    }
+
+    @Test
+    public void shouldFailRemovalOfTaskAfterStateUpdaterWasShutDown() {
+        stateUpdater.start();
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future =
+            stateUpdater.remove(TASK_0_0, StandbyUpdateListener.SuspendReason.MIGRATED);
+
+        assertInstanceOf(StreamsException.class, assertThrows(ExecutionException.class, future::get).getCause());
+    }
+
+    @Test
+    public void shouldReportTaskAsFailedWhenStateUpdaterThreadIsNotRunningAnymore() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        killStateUpdaterThread();
+
+        stateUpdater.add(task);
+
+        verifyFailedTasks(StreamsException.class, task);
+        verifyUpdatingTasks();
+    }
+
+    @Test
+    public void shouldReportFatalExceptionWhenStateUpdaterThreadDied() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final RuntimeException fatalException = new RuntimeException("Something happened");
+        doThrow(fatalException).when(changelogReader).restore(mkMap(mkEntry(TASK_0_0, task)));
+        assertEquals(Optional.empty(), stateUpdater.fatalException());
+        stateUpdater.start();
+        assertEquals(Optional.empty(), stateUpdater.fatalException());
+
+        stateUpdater.add(task);
+
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(fatalException, task));
+        assertEquals(Optional.of(fatalException), stateUpdater.fatalException());
+    }
+
+    @Test
+    public void shouldNotReportFatalExceptionWhenStateUpdaterWasShutDown() {
+        stateUpdater.start();
+
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        assertEquals(Optional.empty(), stateUpdater.fatalException());
+    }
+
+    private void killStateUpdaterThread() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final RuntimeException fatalException = new RuntimeException("Something happened");
+        doThrow(fatalException).when(changelogReader).restore(mkMap(mkEntry(TASK_0_0, task)));
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(fatalException, task));
+        // the changelog reader is cleared at the very end of the state updater thread, so this ensures that the thread
+        // stopped completely
+        verify(changelogReader, timeout(VERIFICATION_TIMEOUT)).clear();
+        assertFalse(stateUpdater.isRunning());
+        stateUpdater.drainExceptionsAndFailedTasks();
     }
 
     @Test
@@ -1673,6 +1805,100 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
+    public void shouldDrainQueuedTasks() throws Exception {
+        final StreamTask restoredTask = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedTask = statefulTask(TASK_1_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final StreamsException streamsException = new StreamsException("Something happened", failedTask.id());
+        when(changelogReader.completedChangelogs()).thenReturn(Set.of(TOPIC_PARTITION_A_0));
+        doThrow(streamsException).when(changelogReader).restore(mkMap(mkEntry(TASK_1_0, failedTask)));
+        stateUpdater.start();
+        // the restored task waits in the queue of restored tasks, the failed task in the queue of failed tasks
+        stateUpdater.add(restoredTask);
+        verifyRestoredActiveTasks(restoredTask);
+        stateUpdater.add(failedTask);
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(streamsException, failedTask));
+        assertEquals(
+            Set.of(restoredTask.id(), failedTask.id()),
+            stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toSet())
+        );
+
+        final Set<Task> drainedTasks = stateUpdater.drainQueuedTasks();
+
+        // in contrast to tasks(), the tasks themselves are returned, so that the caller can close them
+        assertEquals(Set.of(restoredTask, failedTask), drainedTasks);
+        assertTrue(stateUpdater.tasks().isEmpty());
+    }
+
+    @Test
+    public void shouldDrainQueuedTaskThatWasNotPickedUpFromTheInputQueue() {
+        final StreamTask taskInInputQueue = statefulTask(TASK_1_1, Set.of(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
+        // the state updater thread was never started, so nothing ever picks this task up from the input queue
+        stateUpdater.add(taskInInputQueue);
+        assertEquals(
+            Set.of(taskInInputQueue.id()),
+            stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toSet())
+        );
+
+        final Set<Task> drainedTasks = stateUpdater.drainQueuedTasks();
+
+        assertEquals(Set.of(taskInInputQueue), drainedTasks);
+        assertTrue(stateUpdater.tasks().isEmpty());
+    }
+
+    @Test
+    public void shouldFailTaskAddedWhileStateUpdaterThreadIsStopping() throws Exception {
+        final StreamTask taskBeingUpdated = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask taskAddedWhileStopping = statefulTask(TASK_1_1, Set.of(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
+        // clear() is the last call of failRemainingTasks(), so blocking it parks the stopping thread in the window
+        // between shutdown() setting isRunning to false and failPendingActions() publishing threadStopped
+        final CountDownLatch stoppingThreadInWindow = new CountDownLatch(1);
+        final CountDownLatch releaseStoppingThread = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            stoppingThreadInWindow.countDown();
+            releaseStoppingThread.await();
+            return null;
+        }).when(changelogReader).clear();
+        stateUpdater.start();
+        stateUpdater.add(taskBeingUpdated);
+        verifyUpdatingTasks(taskBeingUpdated);
+
+        final AtomicReference<RuntimeException> shutdownException = new AtomicReference<>();
+        final Thread shutdownThread = new Thread(() -> {
+            try {
+                stateUpdater.shutdown(Duration.ofMinutes(1));
+            } catch (final RuntimeException shutdownFailed) {
+                shutdownException.set(shutdownFailed);
+            }
+        });
+        shutdownThread.start();
+        try {
+            assertTrue(stoppingThreadInWindow.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+            // threadStopped is not published yet, so this task goes into the input queue that nobody polls anymore
+            stateUpdater.add(taskAddedWhileStopping);
+            // verify that the window was really hit, i.e. that the task is queued and not already reported as failed,
+            // because after threadStopped is published add() fails the task immediately and the queue stays empty
+            assertTrue(stateUpdater.tasks().stream().anyMatch(task -> task.id().equals(taskAddedWhileStopping.id())));
+            assertTrue(stateUpdater.exceptionsAndFailedTasks().stream()
+                .noneMatch(exceptionAndTask -> exceptionAndTask.task().id().equals(taskAddedWhileStopping.id())));
+        } finally {
+            // release the parked thread even if an assertion failed, so that the failure is not masked by the
+            // shutdown and the tearDown each waiting a minute for a thread that never leaves clear()
+            releaseStoppingThread.countDown();
+        }
+
+        shutdownThread.join();
+        assertNull(shutdownException.get());
+
+        // the task did not stay behind in the input queue, the stopping thread reported it as failed instead
+        final Set<Task> failedTasks = stateUpdater.drainExceptionsAndFailedTasks().stream()
+            .map(ExceptionAndTask::task)
+            .collect(Collectors.toSet());
+        assertEquals(Set.of(taskBeingUpdated, taskAddedWhileStopping), failedTasks);
+        assertTrue(stateUpdater.tasks().isEmpty());
+    }
+
+    @Test
     public void shouldGetTasksFromPausedTasks() throws Exception {
         final StreamTask activeTask = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
@@ -1720,7 +1946,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask4);
 
         verifyPausedTasks(activeTask2, standbyTask4);
-        assertThat(metrics.metrics().size(), is(11));
+        assertEquals(11, metrics.metrics().size());
 
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put("thread-id", "test-state-updater");
@@ -1729,64 +1955,64 @@ class DefaultStateUpdaterTest {
             "stream-state-updater-metrics",
             "The number of active tasks currently undergoing restoration",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("standby-updating-tasks",
             "stream-state-updater-metrics",
             "The number of standby tasks currently undergoing state update",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("active-paused-tasks",
             "stream-state-updater-metrics",
             "The number of active tasks paused restoring",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("standby-paused-tasks",
             "stream-state-updater-metrics",
             "The number of standby tasks paused state update",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("idle-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent being idle",
             tagMap);
-        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
+        verifyMetric(metrics, metricName, value -> assertTrue(Double.compare((Double) value, 0.0d) >= 0));
 
         metricName = new MetricName("active-restore-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent restoring active tasks",
             tagMap);
-        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
+        verifyMetric(metrics, metricName, value -> assertTrue(Double.compare((Double) value, 0.0d) >= 0));
 
         metricName = new MetricName("standby-update-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent updating standby tasks",
             tagMap);
-        verifyMetric(metrics, metricName, is(0.0d));
+        verifyMetric(metrics, metricName, value -> assertEquals(0.0d, value));
 
         metricName = new MetricName("checkpoint-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent checkpointing tasks restored progress",
             tagMap);
-        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
+        verifyMetric(metrics, metricName, value -> assertTrue(Double.compare((Double) value, 0.0d) >= 0));
 
         metricName = new MetricName("restore-records-rate",
             "stream-state-updater-metrics",
             "The average per-second number of records restored",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, value -> assertNotEquals(0.0d, value));
 
         metricName = new MetricName("restore-call-rate",
             "stream-state-updater-metrics",
             "The average per-second number of restore calls triggered",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, value -> assertNotEquals(0.0d, value));
 
         stateUpdater.shutdown(Duration.ofMinutes(1));
-        assertThat(metrics.metrics().size(), is(1));
+        assertEquals(1, metrics.metrics().size());
     }
 
     @Test
@@ -1933,6 +2159,121 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(activeTask1, activeTask2);
     }
 
+    @Test
+    public void shouldNotListTheSameTaskTwiceWhilePausingAStandbyTask() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        // pauseTask() moves the task from the updating tasks to the paused tasks
+        shouldNotListTheSameTaskTwiceWhileMovingIt(
+            "updatingTasks",
+            () -> when(topologyMetadata.isPaused(null)).thenReturn(true)
+        );
+    }
+
+    @Test
+    public void shouldNotListTheSameTaskTwiceWhileResumingAStandbyTask() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyPausedTasks(task);
+
+        // resumeTask() moves the task from the paused tasks to the updating tasks
+        shouldNotListTheSameTaskTwiceWhileMovingIt(
+            "pausedTasks",
+            () -> {
+                when(topologyMetadata.isPaused(null)).thenReturn(false);
+                stateUpdater.signalResume();
+            }
+        );
+    }
+
+    private void shouldNotListTheSameTaskTwiceWhileMovingIt(final String mapToFreeze,
+                                                            final Runnable triggerMove) throws Exception {
+        final CountDownLatch removeInitiatedLatch = new CountDownLatch(1);
+        final CountDownLatch removeCompletedLatch = new CountDownLatch(1);
+        // Replacing the map in the state updater to be able to synchronize the calls so that they happen in the right order
+        replaceTasksMap(mapToFreeze, removeInitiatedLatch, removeCompletedLatch);
+
+        final AtomicReference<List<TaskId>> taskIds = new AtomicReference<>();
+        // Calling tasks() concurrently to avoid a deadlock
+        final Thread reader = new Thread(
+                () -> taskIds.set(stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toList()))
+        );
+        try {
+            triggerMove.run();
+            assertTrue(
+                removeInitiatedLatch.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS),
+                "State updater thread never reached the put->remove window of " + mapToFreeze + "!"
+            );
+
+            reader.start();
+            waitForCondition(
+                () -> !reader.isAlive() || reader.getState() == Thread.State.WAITING,
+                VERIFICATION_TIMEOUT,
+                "Reader thread neither completed nor got blocked on the state updater lock!"
+            );
+        } finally {
+            removeCompletedLatch.countDown();
+        }
+
+        reader.join(VERIFICATION_TIMEOUT);
+        assertFalse(reader.isAlive(), "Reader thread did not finish within " + VERIFICATION_TIMEOUT + " ms!");
+
+        assertEquals(
+                taskIds.get().size(),
+                taskIds.get().stream().distinct().count(),
+                "tasks() returned duplicate task IDs while the task was moved between the maps: " + taskIds.get()
+        );
+    }
+
+    private void replaceTasksMap(final String fieldName,
+                                 final CountDownLatch removeInitiatedLatch,
+                                 final CountDownLatch removeCompletedLatch) throws Exception {
+        final Object stateUpdaterThread = TestUtils.fieldValue(stateUpdater, DefaultStateUpdater.class, "stateUpdaterThread");
+        final Map<TaskId, Task> tasks =
+                TestUtils.fieldValue(stateUpdaterThread, stateUpdaterThread.getClass(), fieldName);
+        TestUtils.setFieldValue(
+                stateUpdaterThread,
+                fieldName,
+                new SynchronizedTestMap(tasks, removeInitiatedLatch, removeCompletedLatch)
+        );
+    }
+
+    private static class SynchronizedTestMap extends ConcurrentHashMap<TaskId, Task> {
+
+        private final CountDownLatch removeInitiatedLatch;
+        private final CountDownLatch removeCompletedLatch;
+        private boolean frozen = false;
+
+        SynchronizedTestMap(final Map<TaskId, Task> oldMap,
+                            final CountDownLatch removeInitiatedLatch,
+                            final CountDownLatch removeCompletedLatch) {
+            super(oldMap);
+            this.removeInitiatedLatch = removeInitiatedLatch;
+            this.removeCompletedLatch = removeCompletedLatch;
+        }
+
+        @Override
+        public Task remove(final Object key) {
+            // Freeze the first removal (the one that moves the task between the maps), holding the task in both
+            // maps until the test releases us. Time out instead of blocking forever if the test never does.
+            if (!frozen) {
+                frozen = true;
+                removeInitiatedLatch.countDown();
+                try {
+                    assertTrue(removeCompletedLatch.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+                } catch (final InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return super.remove(key);
+        }
+    }
+
     private static List<MetricName> getMetricNames(final String threadId) {
         final Map<String, String> tagMap = Map.of("thread-id", threadId);
         return List.of(
@@ -1948,13 +2289,12 @@ class DefaultStateUpdaterTest {
         );
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> void verifyMetric(final StreamsMetricsImpl metrics,
-                                         final MetricName metricName,
-                                         final Matcher<T> matcher) {
-        assertThat(metrics.metrics().get(metricName).metricName().description(), is(metricName.description()));
-        assertThat(metrics.metrics().get(metricName).metricName().tags(), is(metricName.tags()));
-        assertThat((T) metrics.metrics().get(metricName).metricValue(), matcher);
+    private static void verifyMetric(final StreamsMetricsImpl metrics,
+                                     final MetricName metricName,
+                                     final Consumer<Object> valueAssertion) {
+        assertEquals(metricName.description(), metrics.metrics().get(metricName).metricName().description());
+        assertEquals(metricName.tags(), metrics.metrics().get(metricName).metricName().tags());
+        valueAssertion.accept(metrics.metrics().get(metricName).metricValue());
     }
 
     private void verifyGetTasks(final Set<StreamTask> expectedActiveTasks,

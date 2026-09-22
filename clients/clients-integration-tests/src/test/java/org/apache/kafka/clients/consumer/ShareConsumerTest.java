@@ -1863,23 +1863,32 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
         // Produce a fixed number of messages for deterministic testing.
         int targetRecordCount = 2000;
+        int producerBatchSize = 100;
         service.execute(() -> {
             try (Producer<byte[], byte[]> producer = createProducer()) {
                 do {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(multiTp.topic(), multiTp.partition(), null, "key".getBytes(), "value".getBytes());
                     producer.send(record);
-                    producer.flush();
-                } while (prodState.count().incrementAndGet() < targetRecordCount);
+                    if (prodState.count().incrementAndGet() % producerBatchSize == 0) {
+                        producer.flush();
+                    }
+                } while (prodState.count().get() < targetRecordCount);
+                producer.flush();
                 prodState.done().set(true);
             }
         });
 
         // Init a complex share consumer.
+        // ComplexShareConsumer builds its KafkaShareConsumer directly rather than going through
+        // cluster.shareConsumer(), so it is the one consumer in this suite that does not get the
+        // harness's client security settings injected for it. Route the configs through
+        // setClientSaslConfig() so it authenticates on clusters that require it; the default
+        // implementation is a no-op unless the broker security protocol is SASL_PLAINTEXT.
         ComplexShareConsumer<byte[], byte[]> complexCons1 = new ComplexShareConsumer<>(
             cluster.bootstrapServers(),
             topicName,
             groupId,
-            Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT)
+            cluster.setClientSaslConfig(Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
         );
         alterShareAutoOffsetReset(groupId, "earliest");
 

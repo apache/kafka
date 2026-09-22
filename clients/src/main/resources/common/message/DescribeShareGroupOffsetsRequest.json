@@ -23,6 +23,9 @@
   // Version 1 introduces Lag in the response (KIP-1226).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "Groups", "type": "[]DescribeShareGroupOffsetsRequestGroup", "versions": "0+",
       "about": "The groups to describe offsets for.", "fields": [
