@@ -314,7 +314,7 @@ public class ConsumerHeartbeatRequestManagerTest
      * longer than the interval. In that window no heartbeat can be sent until the in-flight one
      * completes, so both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
      * {@link AbstractHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay;
-     * returning 0 busy-spins the consumer network thread and the application thread until the in-flight
+     * returning 0 causes a busy loop in the consumer network thread and the application thread until the in-flight
      * request completes, which can be as long as request.timeout.ms when the coordinator is unreachable.
      */
     @ParameterizedTest
@@ -352,7 +352,7 @@ public class ConsumerHeartbeatRequestManagerTest
      * {@code onResponse -> updateHeartbeatIntervalMs} lands the manager in exactly the same state: no heartbeat
      * can be sent, and both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
      * {@link AbstractHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay rather than
-     * busy-spinning the application and network threads.
+     * causing a busy loop in the application and network threads.
      */
     @Test
     public void testMaximumTimeToWaitWhenResponseIsSlowerThanIntervalDoesNotSpin() {
@@ -393,13 +393,13 @@ public class ConsumerHeartbeatRequestManagerTest
         assertEquals(0, inFlightResult.unsentRequests.size(),
             "No heartbeat should be sent while another one is in flight");
         assertTrue(inFlightResult.timeUntilNextPollMs > 0,
-            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy-spin; got "
+            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy loop; got "
                 + inFlightResult.timeUntilNextPollMs);
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, inFlightResult.timeUntilNextPollMs);
 
         long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
         assertTrue(result > 0,
-            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy-spin; got " + result);
+            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy loop; got " + result);
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
     }
 

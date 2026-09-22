@@ -2490,7 +2490,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
      * longer than the interval. In that window no heartbeat can be sent until the in-flight one
      * completes, so both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
      * {@link StreamsGroupHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay;
-     * returning 0 busy-spins the consumer network thread and the application thread until the in-flight
+     * returning 0 causes a busy loop in the consumer network thread and the application thread until the in-flight
      * request completes, which can be as long as request.timeout.ms when the coordinator is unreachable.
      */
     @ParameterizedTest
@@ -2520,13 +2520,13 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(0, secondResult.unsentRequests.size(),
             "No heartbeat should be sent while another one is in flight");
         assertTrue(secondResult.timeUntilNextPollMs > 0,
-            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy-spin; got "
+            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy loop; got "
                 + secondResult.timeUntilNextPollMs);
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, secondResult.timeUntilNextPollMs);
 
         final long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
         assertTrue(result > 0,
-            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy-spin; got " + result);
+            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy loop; got " + result);
         // maximumTimeToWait is min(pollTimer.remainingMs() / 2, retry backoff), and half of the remaining
         // max.poll.interval.ms is still larger than the backoff at this point.
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);

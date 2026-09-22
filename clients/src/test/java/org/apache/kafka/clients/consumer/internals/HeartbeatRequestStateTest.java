@@ -141,8 +141,8 @@ public class HeartbeatRequestStateTest {
      * A heartbeat request is in flight and the heartbeat timer is expired. That happens both before the
      * first heartbeat response, when the interval is still unknown and initialised to 0, and later on,
      * when a response takes longer than the interval. No heartbeat can be sent until the in-flight one
-     * completes, so the wait must stay positive; returning the remaining backoff gives 0 and busy-spins
-     * the callers that use it as a poll timeout.
+     * completes, so the wait must stay positive; returning the remaining backoff gives 0 and causes a busy loop
+     * in callers that use it as a poll timeout.
      */
     @ParameterizedTest
     @ValueSource(longs = {0, 5000})
@@ -168,7 +168,7 @@ public class HeartbeatRequestStateTest {
             "No request should be sendable while one is in flight");
         final long timeToNextHeartbeatMs = heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds());
         assertTrue(timeToNextHeartbeatMs > 0,
-            "timeToNextHeartbeatMs must be > 0 while a heartbeat request is in flight to avoid a busy-spin; got "
+            "timeToNextHeartbeatMs must be > 0 while a heartbeat request is in flight to avoid a busy loop; got "
                 + timeToNextHeartbeatMs);
         assertEquals(RETRY_BACKOFF_MS, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
     }
