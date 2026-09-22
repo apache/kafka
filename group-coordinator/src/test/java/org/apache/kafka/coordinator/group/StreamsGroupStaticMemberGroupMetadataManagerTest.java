@@ -1597,6 +1597,123 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
     @Test
+    public void testRejectedJoinDoesNotRelabelCachedRefinedAssignment() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId1 = "instance-1";
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+        TasksTuple targetAssignment1 = topic.targetAssignment(0, 1);
+        TasksTuple targetAssignment2 = topic.targetAssignment(2, 3);
+
+        // Streams group with two static members. Member 2 has left the group and released
+        // instance id 2.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1, instanceId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, targetAssignment1)
+                .withTargetAssignment(memberId2, targetAssignment2)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // Prime the cached intermediate assignment for the current assignment epoch with an entry
+        // for each member.
+        StreamsGroup streamsGroup = context.groupMetadataManager.streamsGroup(groupId);
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            memberId1, targetAssignment1,
+            memberId2, targetAssignment2
+        );
+        streamsGroup.setRefinedAssignment(groupEpoch, refinedAssignment);
+
+        // Member 1 rejoins with its own member id and the released instance id 2. The join is
+        // rejected and the cached intermediate assignment must be left untouched. In particular,
+        // member 2's entry must not be re-keyed to member 1, which would overwrite member 1's own
+        // entry, because the cache is not rolled back when the request is rejected.
+        assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId1, instanceId2, topic)
+        ));
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(groupEpoch));
+    }
+
+    @Test
+    public void testFencedHeartbeatDoesNotRelabelCachedRefinedAssignment() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId1 = "instance-1";
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+        TasksTuple targetAssignment1 = topic.targetAssignment(0, 1);
+        TasksTuple targetAssignment2 = topic.targetAssignment(2, 3);
+
+        // Streams group with two active static members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1, instanceId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, targetAssignment1)
+                .withTargetAssignment(memberId2, targetAssignment2)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // Prime the cached intermediate assignment for the current assignment epoch with an entry
+        // for each member.
+        StreamsGroup streamsGroup = context.groupMetadataManager.streamsGroup(groupId);
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            memberId1, targetAssignment1,
+            memberId2, targetAssignment2
+        );
+        streamsGroup.setRefinedAssignment(groupEpoch, refinedAssignment);
+
+        // Member 1 heartbeats with instance id 2, which is owned by member 2. The heartbeat is
+        // fenced and the cached intermediate assignment must be left untouched.
+        assertThrows(FencedInstanceIdException.class, () -> context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId1, instanceId2, groupEpoch)
+        ));
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(groupEpoch));
+    }
+
+    @Test
     public void testStaticMemberCannotRejoinWithDifferentInstanceId() {
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 

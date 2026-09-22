@@ -2164,13 +2164,6 @@ public class GroupMetadataManager {
             StreamsGroupMember maybeOldStaticMember = group.staticMember(instanceId);
             if (maybeOldStaticMember != null && !maybeOldStaticMember.memberId().equals(memberId)) {
                 replaceStaticOldMember = maybeOldStaticMember;
-                // Replacing a static member relabels its target assignment from the old to the new member ID without
-                // bumping the assignment epoch, so an intermediate assignment derived for this epoch no longer matches
-                // the members it was derived for. Re-key it rather than dropping it: the replacement copies the old
-                // member's state, so the decisions of this epoch still hold, and deriving a new one here would re-plan
-                // mid-epoch and could revise the slice of a member that already reconciled and is therefore not
-                // reconciled again within this epoch.
-                group.relabelRefinedAssignment(maybeOldStaticMember.memberId(), memberId);
             }
             member = getOrMaybeCreateStaticStreamsGroupMember(
                 group,
@@ -3641,6 +3634,15 @@ public class GroupMetadataManager {
             .build();
 
         replaceStreamsMember(records, group, previousStaticMemberOrNull, newMember);
+
+        // Replacing a static member relabels its target assignment from the old to the new member ID without
+        // bumping the assignment epoch, so an intermediate assignment derived for this epoch no longer matches
+        // the members it was derived for. Re-key it rather than dropping it: the replacement copies the old
+        // member's state, so the decisions of this epoch still hold, and deriving a new one here would re-plan
+        // mid-epoch and could revise the slice of a member that already reconciled and is therefore not
+        // reconciled again within this epoch. This must only happen once the replacement is certain, because
+        // the cache is mutated directly and is not rolled back if the request is rejected.
+        group.relabelRefinedAssignment(previousStaticMemberOrNull.memberId(), memberId);
 
         log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the streams group " +
                 "using the streams protocol. Created a new member {} to replace the existing member {}.",
