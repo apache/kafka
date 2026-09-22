@@ -48,12 +48,12 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -139,7 +139,7 @@ public class RepartitionTopicsTest {
         repartitionTopics.setup();
 
         final Map<TopicPartition, PartitionInfo> topicPartitionsInfo = repartitionTopics.topicPartitionsInfo();
-        assertThat(topicPartitionsInfo.size(), is(6));
+        assertEquals(6, topicPartitionsInfo.size());
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME1, 0);
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME1, 1);
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME1, 2);
@@ -147,8 +147,8 @@ public class RepartitionTopicsTest {
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME2, 0);
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME2, 1);
 
-        assertThat(repartitionTopics.topologiesWithMissingInputTopics().isEmpty(), is(true));
-        assertThat(repartitionTopics.missingSourceTopicExceptions().isEmpty(), is(true));
+        assertTrue(repartitionTopics.topologiesWithMissingInputTopics().isEmpty());
+        assertTrue(repartitionTopics.missingSourceTopicExceptions().isEmpty());
 
         verify(copartitionedTopicsEnforcer).enforce(eq(coPartitionGroup1), any(), eq(clusterMetadata));
         verify(copartitionedTopicsEnforcer).enforce(eq(coPartitionGroup2), any(), eq(clusterMetadata));
@@ -169,14 +169,11 @@ public class RepartitionTopicsTest {
         );
         repartitionTopics.setup();
 
-        assertThat(
-            repartitionTopics.topologiesWithMissingInputTopics(),
-            equalTo(Collections.singleton(UNNAMED_TOPOLOGY))
-        );
+        assertEquals(Set.of(UNNAMED_TOPOLOGY), repartitionTopics.topologiesWithMissingInputTopics());
         final StreamsException exception = repartitionTopics.missingSourceTopicExceptions().poll();
-        assertThat(exception, notNullValue());
-        assertThat(exception.taskId().isPresent(), is(true));
-        assertThat(exception.taskId().get(), equalTo(new TaskId(0, 0)));
+        assertNotNull(exception);
+        assertTrue(exception.taskId().isPresent());
+        assertEquals(new TaskId(0, 0), exception.taskId().get());
     }
 
     @Test
@@ -198,9 +195,11 @@ public class RepartitionTopicsTest {
         );
 
         final TaskAssignmentException exception = assertThrows(TaskAssignmentException.class, repartitionTopics::setup);
-        assertThat(exception.getMessage(), is("Failed to compute number of partitions for all repartition topics, make sure all user input topics are created and all Pattern subscriptions match at least one topic in the cluster"));
-        assertThat(repartitionTopics.topologiesWithMissingInputTopics().isEmpty(), is(true));
-        assertThat(repartitionTopics.missingSourceTopicExceptions().isEmpty(), is(true));
+        assertEquals(
+            "Failed to compute number of partitions for all repartition topics, make sure all user input topics are created and all Pattern subscriptions match at least one topic in the cluster",
+            exception.getMessage());
+        assertTrue(repartitionTopics.topologiesWithMissingInputTopics().isEmpty());
+        assertTrue(repartitionTopics.missingSourceTopicExceptions().isEmpty());
     }
 
     @Test
@@ -230,12 +229,9 @@ public class RepartitionTopicsTest {
         );
 
         final TaskAssignmentException exception = assertThrows(TaskAssignmentException.class, repartitionTopics::setup);
-        assertThat(
-            exception.getMessage(),
-            is("No partition count found for source topic " + SOURCE_TOPIC_NAME1 + ", but it should have been.")
-        );
-        assertThat(repartitionTopics.topologiesWithMissingInputTopics().isEmpty(), is(true));
-        assertThat(repartitionTopics.missingSourceTopicExceptions().isEmpty(), is(true));
+        assertEquals("No partition count found for source topic " + SOURCE_TOPIC_NAME1 + ", but it should have been.", exception.getMessage());
+        assertTrue(repartitionTopics.topologiesWithMissingInputTopics().isEmpty());
+        assertTrue(repartitionTopics.missingSourceTopicExceptions().isEmpty());
     }
 
     @Test
@@ -277,7 +273,7 @@ public class RepartitionTopicsTest {
         repartitionTopics.setup();
 
         final Map<TopicPartition, PartitionInfo> topicPartitionsInfo = repartitionTopics.topicPartitionsInfo();
-        assertThat(topicPartitionsInfo.size(), is(9));
+        assertEquals(9, topicPartitionsInfo.size());
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME1, 0);
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME1, 1);
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME1, 2);
@@ -288,8 +284,8 @@ public class RepartitionTopicsTest {
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_WITHOUT_PARTITION_COUNT, 1);
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_WITHOUT_PARTITION_COUNT, 2);
 
-        assertThat(repartitionTopics.topologiesWithMissingInputTopics().isEmpty(), is(true));
-        assertThat(repartitionTopics.missingSourceTopicExceptions().isEmpty(), is(true));
+        assertTrue(repartitionTopics.topologiesWithMissingInputTopics().isEmpty());
+        assertTrue(repartitionTopics.missingSourceTopicExceptions().isEmpty());
     }
 
     @Test
@@ -331,7 +327,7 @@ public class RepartitionTopicsTest {
         repartitionTopics.setup();
 
         final Map<TopicPartition, PartitionInfo> topicPartitionsInfo = repartitionTopics.topicPartitionsInfo();
-        assertThat(topicPartitionsInfo.size(), is(10));
+        assertEquals(10, topicPartitionsInfo.size());
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME1, 0);
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME1, 1);
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_TOPIC_NAME1, 2);
@@ -343,8 +339,8 @@ public class RepartitionTopicsTest {
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_WITHOUT_PARTITION_COUNT, 2);
         verifyRepartitionTopicPartitionInfo(topicPartitionsInfo, REPARTITION_WITHOUT_PARTITION_COUNT, 3);
 
-        assertThat(repartitionTopics.topologiesWithMissingInputTopics().isEmpty(), is(true));
-        assertThat(repartitionTopics.missingSourceTopicExceptions().isEmpty(), is(true));
+        assertTrue(repartitionTopics.topologiesWithMissingInputTopics().isEmpty());
+        assertTrue(repartitionTopics.missingSourceTopicExceptions().isEmpty());
     }
 
     @Test
@@ -369,24 +365,24 @@ public class RepartitionTopicsTest {
         repartitionTopics.setup();
 
         final Map<TopicPartition, PartitionInfo> topicPartitionsInfo = repartitionTopics.topicPartitionsInfo();
-        assertThat(topicPartitionsInfo, is(Collections.emptyMap()));
+        assertTrue(topicPartitionsInfo.isEmpty());
 
-        assertThat(repartitionTopics.topologiesWithMissingInputTopics().isEmpty(), is(true));
-        assertThat(repartitionTopics.missingSourceTopicExceptions().isEmpty(), is(true));
+        assertTrue(repartitionTopics.topologiesWithMissingInputTopics().isEmpty());
+        assertTrue(repartitionTopics.missingSourceTopicExceptions().isEmpty());
     }
 
     private void verifyRepartitionTopicPartitionInfo(final Map<TopicPartition, PartitionInfo> topicPartitionsInfo,
                                                      final String topic,
                                                      final int partition) {
         final TopicPartition repartitionTopicPartition = new TopicPartition(topic, partition);
-        assertThat(topicPartitionsInfo.containsKey(repartitionTopicPartition), is(true));
+        assertTrue(topicPartitionsInfo.containsKey(repartitionTopicPartition));
         final PartitionInfo repartitionTopicInfo = topicPartitionsInfo.get(repartitionTopicPartition);
-        assertThat(repartitionTopicInfo.topic(), is(topic));
-        assertThat(repartitionTopicInfo.partition(), is(partition));
-        assertThat(repartitionTopicInfo.inSyncReplicas(), is(new Node[0]));
-        assertThat(repartitionTopicInfo.leader(), nullValue());
-        assertThat(repartitionTopicInfo.offlineReplicas(), is(new Node[0]));
-        assertThat(repartitionTopicInfo.replicas(), is(new Node[0]));
+        assertEquals(topic, repartitionTopicInfo.topic());
+        assertEquals(partition, repartitionTopicInfo.partition());
+        assertArrayEquals(new Node[0], repartitionTopicInfo.inSyncReplicas());
+        assertNull(repartitionTopicInfo.leader());
+        assertArrayEquals(new Node[0], repartitionTopicInfo.offlineReplicas());
+        assertArrayEquals(new Node[0], repartitionTopicInfo.replicas());
     }
 
     private void setupCluster(final boolean mockPartitionCount) {

@@ -84,6 +84,15 @@ import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LIS
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
 
 
+/**
+ * An in-process Kafka cluster for integration testing.
+ *
+ * <p>This class starts real {@link BrokerServer} and {@link ControllerServer} instances
+ * inside the test JVM (no Docker required), providing fast startup and direct access
+ * to server internals. It is the backing implementation for {@code @ClusterTest}.
+ *
+ * @see org.apache.kafka.common.test.api.ClusterTest
+ */
 public class KafkaClusterTestKit implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(KafkaClusterTestKit.class);
 

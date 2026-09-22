@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.RebalanceListenerMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -107,11 +108,11 @@ public class DefaultStreamsRebalanceListenerTest {
     }
 
     private String warningContaining(final LogCaptureAppender appender, final String fragment) {
-        return appender.getMessages("WARN").stream()
+        return appender.getMessages(Level.WARN).stream()
             .filter(message -> message.contains(fragment))
             .findFirst()
             .orElseThrow(() -> new AssertionError(
-                "No WARN containing \"" + fragment + "\". Messages: " + appender.getMessages("WARN")));
+                "No WARN containing \"" + fragment + "\". Messages: " + appender.getMessages(Level.WARN)));
     }
 
     @ParameterizedTest
@@ -208,8 +209,8 @@ public class DefaultStreamsRebalanceListenerTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultStreamsRebalanceListener.class)) {
             assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment));
 
-            assertTrue(appender.getMessages("WARN").isEmpty(),
-                "No warning should be logged for an assignment without overlapping roles: " + appender.getMessages("WARN"));
+            assertTrue(appender.getMessages(Level.WARN).isEmpty(),
+                "No warning should be logged for an assignment without overlapping roles: " + appender.getMessages(Level.WARN));
         }
 
         final InOrder inOrder = inOrder(taskManager, streamThread, streamsRebalanceData);

@@ -56,11 +56,8 @@ import java.util.Optional;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -152,22 +149,22 @@ public class RecordQueueTest {
         ++totalRecords;
         totalBytes += consumerRecordSizeInBytes(records.get(0));
 
-        assertThat(bytesConsumed.metricValue(), equalTo(totalBytes));
-        assertThat(recordsConsumed.metricValue(), equalTo(totalRecords));
+        assertEquals(totalBytes, bytesConsumed.metricValue());
+        assertEquals(totalRecords, recordsConsumed.metricValue());
 
         queue.poll(6L);
         ++totalRecords;
         totalBytes += consumerRecordSizeInBytes(records.get(1));
 
-        assertThat(bytesConsumed.metricValue(), equalTo(totalBytes));
-        assertThat(recordsConsumed.metricValue(), equalTo(totalRecords));
+        assertEquals(totalBytes, bytesConsumed.metricValue());
+        assertEquals(totalRecords, recordsConsumed.metricValue());
 
         queue.poll(7L);
         ++totalRecords;
         totalBytes += consumerRecordSizeInBytes(records.get(2));
 
-        assertThat(bytesConsumed.metricValue(), equalTo(totalBytes));
-        assertThat(recordsConsumed.metricValue(), equalTo(totalRecords));
+        assertEquals(totalBytes, bytesConsumed.metricValue());
+        assertEquals(totalRecords, recordsConsumed.metricValue());
     }
 
     @Test
@@ -285,9 +282,9 @@ public class RecordQueueTest {
     @Test
     public void shouldTrackPartitionTimeAsMaxProcessedTimestamp() {
         assertTrue(queue.isEmpty());
-        assertThat(queue.size(), is(0));
-        assertThat(queue.headRecordTimestamp(), is(RecordQueue.UNKNOWN));
-        assertThat(queue.partitionTime(), is(RecordQueue.UNKNOWN));
+        assertEquals(0, queue.size());
+        assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
+        assertEquals(RecordQueue.UNKNOWN, queue.partitionTime());
 
         // add three 3 out-of-order records with timestamp 2, 1, 3, 4
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -301,27 +298,27 @@ public class RecordQueueTest {
                 new RecordHeaders(), Optional.empty()));
 
         queue.addRawRecords(list1);
-        assertThat(queue.partitionTime(), is(RecordQueue.UNKNOWN));
+        assertEquals(RecordQueue.UNKNOWN, queue.partitionTime());
 
         queue.poll(0);
-        assertThat(queue.partitionTime(), is(2L));
+        assertEquals(2L, queue.partitionTime());
 
         queue.poll(0);
-        assertThat(queue.partitionTime(), is(2L));
+        assertEquals(2L, queue.partitionTime());
 
         queue.poll(0);
-        assertThat(queue.partitionTime(), is(3L));
+        assertEquals(3L, queue.partitionTime());
     }
 
     @Test
     public void shouldSetTimestampAndRespectMaxTimestampPolicy() {
         assertTrue(queue.isEmpty());
-        assertThat(queue.size(), is(0));
-        assertThat(queue.headRecordTimestamp(), is(RecordQueue.UNKNOWN));
-        assertThat(queue.partitionTime(), is(RecordQueue.UNKNOWN));
+        assertEquals(0, queue.size());
+        assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
+        assertEquals(RecordQueue.UNKNOWN, queue.partitionTime());
 
         queue.setPartitionTime(150L);
-        assertThat(queue.partitionTime(), is(150L));
+        assertEquals(150L, queue.partitionTime());
 
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 200, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue,
@@ -334,16 +331,16 @@ public class RecordQueueTest {
                 new RecordHeaders(), Optional.empty()));
 
         queue.addRawRecords(list1);
-        assertThat(queue.partitionTime(), is(150L));
+        assertEquals(150L, queue.partitionTime());
 
         queue.poll(0);
-        assertThat(queue.partitionTime(), is(200L));
+        assertEquals(200L, queue.partitionTime());
 
         queue.setPartitionTime(500L);
-        assertThat(queue.partitionTime(), is(500L));
+        assertEquals(500L, queue.partitionTime());
 
         queue.poll(0);
-        assertThat(queue.partitionTime(), is(500L));
+        assertEquals(500L, queue.partitionTime());
     }
 
     @Test
@@ -357,7 +354,7 @@ public class RecordQueueTest {
             StreamsException.class,
             () -> queue.addRawRecords(records)
         );
-        assertThat(exception.getCause(), instanceOf(SerializationException.class));
+        assertInstanceOf(SerializationException.class, exception.getCause());
     }
 
     @Test
@@ -371,7 +368,7 @@ public class RecordQueueTest {
             StreamsException.class,
             () -> queue.addRawRecords(records)
         );
-        assertThat(exception.getCause(), instanceOf(SerializationException.class));
+        assertInstanceOf(SerializationException.class, exception.getCause());
     }
 
     @Test
@@ -419,12 +416,14 @@ public class RecordQueueTest {
             StreamsException.class,
             () -> queue.addRawRecords(records)
         );
-        assertThat(exception.getMessage(), equalTo("Input record ConsumerRecord(topic = topic, partition = 1, " +
-            "leaderEpoch = null, offset = 1, CreateTime = -1, deliveryCount = null, serialized key size = 0, " +
-            "serialized value size = 0, headers = RecordHeaders(headers = [], isReadOnly = false), key = 1, value = 10) " +
-            "has invalid (negative) timestamp. Possibly because a pre-0.10 producer client was used to write this record " +
-            "to Kafka without embedding a timestamp, or because the input topic was created before upgrading the Kafka " +
-            "cluster to 0.10+. Use a different TimestampExtractor to process this data."));
+        assertEquals(
+            "Input record ConsumerRecord(topic = topic, partition = 1, " +
+                "leaderEpoch = null, offset = 1, CreateTime = -1, deliveryCount = null, serialized key size = 0, " +
+                "serialized value size = 0, headers = RecordHeaders(headers = [], isReadOnly = false), key = 1, value = 10) " +
+                "has invalid (negative) timestamp. Possibly because a pre-0.10 producer client was used to write this record " +
+                "to Kafka without embedding a timestamp, or because the input topic was created before upgrading the Kafka " +
+                "cluster to 0.10+. Use a different TimestampExtractor to process this data.",
+            exception.getMessage());
     }
 
     @Test

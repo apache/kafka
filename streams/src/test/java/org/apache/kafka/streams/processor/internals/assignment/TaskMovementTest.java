@@ -31,9 +31,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
 import static java.util.Collections.emptySortedSet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -48,6 +45,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasProperty;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.clientState;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,9 +67,7 @@ public class TaskMovementTest {
         final ClientState client2 = getClientStateWithActiveAssignment(Set.of(TASK_0_1, TASK_1_1), allTasks, allTasks);
         final ClientState client3 = getClientStateWithActiveAssignment(Set.of(TASK_0_2, TASK_1_2), allTasks, allTasks);
 
-        assertEquals(
-            0,
-            assignActiveTaskMovements(
+        assertEquals(0, assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
                 getClientStatesMap(client1, client2, client3),
@@ -106,9 +102,7 @@ public class TaskMovementTest {
             mkEntry(TASK_1_1, mkOrderedSet(PID_1, PID_2, PID_3)),
             mkEntry(TASK_1_2, mkOrderedSet(PID_1, PID_2, PID_3))
         );
-        assertEquals(
-            0,
-            assignActiveTaskMovements(
+        assertEquals(0, assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
                 getClientStatesMap(client1, client2, client3),
@@ -138,8 +132,7 @@ public class TaskMovementTest {
             mkEntry(TASK_0_2, mkOrderedSet(PID_2, PID_1, PID_3))
         );
 
-        assertEquals(
-            2,
+        assertEquals(2,
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
@@ -147,8 +140,7 @@ public class TaskMovementTest {
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
             ),
-            "should have assigned movements"
-        );
+            "should have assigned movements");
         // The active tasks have changed to the ones that each client is caught up on
         assertHasProperty(client1, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_0));
         assertHasProperty(client2, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_2));
@@ -185,17 +177,15 @@ public class TaskMovementTest {
                 mkEntry(TASK_0_2, mkOrderedSet(PID_2, PID_3, PID_1))
         );
 
-        assertEquals(
-                2,
-                assignActiveTaskMovements(
+        assertEquals(2,
+            assignActiveTaskMovements(
                         tasksToCaughtUpClients,
                         tasksToClientByLag,
                         clientStates,
                         new TreeMap<>(),
                         new AtomicInteger(maxWarmupReplicas)
                 ),
-                "should have assigned movements"
-        );
+            "should have assigned movements");
         // The active tasks have changed to the ones that each client is most caught up on
         assertHasProperty(client1, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_0));
         assertHasProperty(client2, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_2));
@@ -227,8 +217,7 @@ public class TaskMovementTest {
             mkEntry(TASK_0_2, mkOrderedSet(PID_2, PID_1, PID_3))
         );
 
-        assertEquals(
-            2,
+        assertEquals(2,
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
@@ -236,8 +225,7 @@ public class TaskMovementTest {
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
             ),
-            "should have assigned movements"
-        );
+            "should have assigned movements");
         // The active tasks have changed to the ones that each client is caught up on
         assertHasProperty(client1, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_0));
         assertHasProperty(client2, "activeTasks", ClientState::activeTasks, Set.of(TASK_0_2));
@@ -265,8 +253,7 @@ public class TaskMovementTest {
             mkEntry(TASK_0_0, mkOrderedSet(PID_1, PID_2))
         );
 
-        assertEquals(
-            1,
+        assertEquals(1,
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
                 tasksToClientByLag,
@@ -274,8 +261,7 @@ public class TaskMovementTest {
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
             ),
-            "should have assigned movements"
-        );
+            "should have assigned movements");
         // Even though we have no warmups allowed, we still let client1 take over active processing while
         // client2 "warms up" because client1 was a caught-up standby, so it can "trade" standby status with
         // the not-caught-up active client2.
@@ -306,7 +292,7 @@ public class TaskMovementTest {
 
     private static ClientState getClientStateWithLags(final Set<TaskId> activeTasks,
                                                       final Map<TaskId, Long> taskLags) {
-        final ClientState client1 = new ClientState(activeTasks, emptySet(), taskLags, emptyMap(), 1);
+        final ClientState client1 = clientState(activeTasks, Set.of(), taskLags, 1);
         client1.assignActiveTasks(activeTasks);
         return client1;
     }
@@ -315,7 +301,7 @@ public class TaskMovementTest {
      * Creates a SortedSet with the sort order being the order of elements in the parameter list
      */
     private static SortedSet<ProcessId> mkOrderedSet(final ProcessId... clients) {
-        final List<ProcessId> clientList = asList(clients);
+        final List<ProcessId> clientList = List.of(clients);
         final SortedSet<ProcessId> set = new TreeSet<>(Comparator.comparing(clientList::indexOf));
         set.addAll(clientList);
         return set;

@@ -209,7 +209,23 @@ final class StateManagerUtil {
                     }
                 }
             } else {
-                log.warn("Unable to acquire lock while closing the state store for {} task {}", taskType, id);
+                // lock() fails only when another thread is recorded as owner. A live owner is the
+                // expected in-process hand-off (state updater / other stream thread). lockOwner()
+                // may then be null if that owner unlocked between the two calls — still the
+                // hand-off, just completed. WARN only when the recorded owner has already
+                // terminated without unlocking; a hung-but-still-alive owner is indistinguishable
+                // from a live hand-off here and is reported at StateDirectory.close() instead.
+                final Thread lockOwner = stateDirectory.lockOwner(id);
+                if (lockOwner != null && !lockOwner.isAlive()) {
+                    log.warn("Unable to acquire lock while closing the state store for {} task {}; " +
+                            "held by terminated thread {}",
+                        taskType, id, lockOwner.getName());
+                } else if (lockOwner != null) {
+                    log.debug("Unable to acquire lock while closing the state store for {} task {}; held by {}",
+                        taskType, id, lockOwner.getName());
+                } else {
+                    log.debug("Unable to acquire lock while closing the state store for {} task {}", taskType, id);
+                }
             }
         } catch (final IOException e) {
             final ProcessorStateException exception = new ProcessorStateException(

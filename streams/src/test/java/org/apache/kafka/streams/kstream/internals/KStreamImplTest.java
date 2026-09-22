@@ -93,16 +93,11 @@ import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.hamcrest.core.IsNull.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -135,7 +130,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filter(null));
-        assertThat(exception.getMessage(), equalTo("predicate cannot be null"));
+        assertEquals("predicate cannot be null", exception.getMessage());
     }
 
     @Test
@@ -143,7 +138,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filter(null, Named.as("filter")));
-        assertThat(exception.getMessage(), equalTo("predicate cannot be null"));
+        assertEquals("predicate cannot be null", exception.getMessage());
     }
 
     @Test
@@ -151,7 +146,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filter((k, v) -> true, null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -159,7 +154,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filterNot(null));
-        assertThat(exception.getMessage(), equalTo("predicate cannot be null"));
+        assertEquals("predicate cannot be null", exception.getMessage());
     }
 
     @Test
@@ -167,7 +162,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filterNot(null, Named.as("filter")));
-        assertThat(exception.getMessage(), equalTo("predicate cannot be null"));
+        assertEquals("predicate cannot be null", exception.getMessage());
     }
 
     @Test
@@ -175,7 +170,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filterNot((k, v) -> true, null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -183,7 +178,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.selectKey(null));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -191,7 +186,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.selectKey(null, Named.as("keySelector")));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -199,7 +194,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.selectKey((k, v) -> k, null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -207,7 +202,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.map(null));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -215,7 +210,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.map(null, Named.as("map")));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -223,7 +218,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.map(KeyValue::pair, null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -231,7 +226,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.mapValues((ValueMapper<Object, Object>) null));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -239,7 +234,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.mapValues((ValueMapperWithKey<Object, Object, Object>) null));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -247,7 +242,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.mapValues((ValueMapper<Object, Object>) null, Named.as("valueMapper")));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -257,7 +252,7 @@ public class KStreamImplTest {
             () -> testStream.mapValues(
                 (ValueMapperWithKey<Object, Object, Object>) null,
                 Named.as("valueMapperWithKey")));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -265,7 +260,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.mapValues(v -> v, null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -273,7 +268,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.mapValues((k, v) -> v, null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -281,7 +276,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMap(null));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -289,7 +284,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMap(null, Named.as("flatMapper")));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -297,7 +292,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMap((k, v) -> Collections.singleton(new KeyValue<>(k, v)), null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -305,7 +300,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMapValues((ValueMapper<Object, Iterable<Object>>) null));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -313,7 +308,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMapValues((ValueMapperWithKey<Object, Object, ? extends Iterable<Object>>) null));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -323,7 +318,7 @@ public class KStreamImplTest {
             () -> testStream.flatMapValues(
                 (ValueMapper<Object, Iterable<Object>>) null,
                 Named.as("flatValueMapper")));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -333,7 +328,7 @@ public class KStreamImplTest {
             () -> testStream.flatMapValues(
                 (ValueMapperWithKey<Object, Object, ? extends Iterable<Object>>) null,
                 Named.as("flatValueMapperWithKey")));
-        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
+        assertEquals("mapper cannot be null", exception.getMessage());
     }
 
     @Test
@@ -341,7 +336,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMapValues(v -> Collections.emptyList(), null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -349,7 +344,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMapValues((k, v) -> Collections.emptyList(), null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -357,7 +352,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.print(null));
-        assertThat(exception.getMessage(), equalTo("printed cannot be null"));
+        assertEquals("printed cannot be null", exception.getMessage());
     }
 
     @Test
@@ -365,7 +360,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.foreach(null));
-        assertThat(exception.getMessage(), equalTo("action cannot be null"));
+        assertEquals("action cannot be null", exception.getMessage());
     }
 
     @Test
@@ -373,7 +368,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.foreach(null, Named.as("foreach")));
-        assertThat(exception.getMessage(), equalTo("action cannot be null"));
+        assertEquals("action cannot be null", exception.getMessage());
     }
 
     @Test
@@ -381,7 +376,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.foreach((k, v) -> { }, null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -389,7 +384,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.peek(null));
-        assertThat(exception.getMessage(), equalTo("action cannot be null"));
+        assertEquals("action cannot be null", exception.getMessage());
     }
 
     @Test
@@ -397,7 +392,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.peek(null, Named.as("peek")));
-        assertThat(exception.getMessage(), equalTo("action cannot be null"));
+        assertEquals("action cannot be null", exception.getMessage());
     }
 
     @Test
@@ -405,7 +400,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.peek((k, v) -> { }, null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -413,7 +408,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.merge(null));
-        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
+        assertEquals("otherStream cannot be null", exception.getMessage());
     }
 
     @Test
@@ -421,7 +416,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.merge(null, Named.as("merge")));
-        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
+        assertEquals("otherStream cannot be null", exception.getMessage());
     }
 
     @Test
@@ -429,7 +424,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.merge(testStream, null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -437,7 +432,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.to((String) null));
-        assertThat(exception.getMessage(), equalTo("topic cannot be null"));
+        assertEquals("topic cannot be null", exception.getMessage());
     }
 
     @Test
@@ -445,7 +440,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.repartition(null));
-        assertThat(exception.getMessage(), equalTo("repartitioned cannot be null"));
+        assertEquals("repartitioned cannot be null", exception.getMessage());
     }
 
     @Test
@@ -453,7 +448,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.to((TopicNameExtractor<String, String>) null));
-        assertThat(exception.getMessage(), equalTo("topicExtractor cannot be null"));
+        assertEquals("topicExtractor cannot be null", exception.getMessage());
     }
 
     @Test
@@ -461,7 +456,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.to((String) null, Produced.as("to")));
-        assertThat(exception.getMessage(), equalTo("topic cannot be null"));
+        assertEquals("topic cannot be null", exception.getMessage());
     }
 
     @Test
@@ -469,7 +464,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.to((TopicNameExtractor<String, String>) null, Produced.as("to")));
-        assertThat(exception.getMessage(), equalTo("topicExtractor cannot be null"));
+        assertEquals("topicExtractor cannot be null", exception.getMessage());
     }
 
     @Test
@@ -477,7 +472,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.to("topic", null));
-        assertThat(exception.getMessage(), equalTo("produced cannot be null"));
+        assertEquals("produced cannot be null", exception.getMessage());
     }
 
     @Test
@@ -485,7 +480,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.to((k, v, ctx) -> "topic", null));
-        assertThat(exception.getMessage(), equalTo("produced cannot be null"));
+        assertEquals("produced cannot be null", exception.getMessage());
     }
 
     @Test
@@ -493,7 +488,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.groupBy(null));
-        assertThat(exception.getMessage(), equalTo("keySelector cannot be null"));
+        assertEquals("keySelector cannot be null", exception.getMessage());
     }
 
     @Test
@@ -501,7 +496,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.groupBy(null, Grouped.as("name")));
-        assertThat(exception.getMessage(), equalTo("keySelector cannot be null"));
+        assertEquals("keySelector cannot be null", exception.getMessage());
     }
 
     @Test
@@ -509,7 +504,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.groupBy((k, v) -> k, null));
-        assertThat(exception.getMessage(), equalTo("grouped cannot be null"));
+        assertEquals("grouped cannot be null", exception.getMessage());
     }
 
     @Test
@@ -517,7 +512,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.groupByKey(null));
-        assertThat(exception.getMessage(), equalTo("grouped cannot be null"));
+        assertEquals("grouped cannot be null", exception.getMessage());
     }
 
     @Test
@@ -525,7 +520,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.toTable((Named) null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -533,7 +528,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.toTable((Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null));
-        assertThat(exception.getMessage(), equalTo("materialized cannot be null"));
+        assertEquals("materialized cannot be null", exception.getMessage());
     }
 
     @Test
@@ -541,7 +536,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.toTable(null, Materialized.with(null, null)));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -549,7 +544,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.toTable(Named.as("name"), null));
-        assertThat(exception.getMessage(), equalTo("materialized cannot be null"));
+        assertEquals("materialized cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -558,7 +553,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
+        assertEquals("otherStream cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -571,7 +566,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
+        assertEquals("otherStream cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -580,7 +575,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testStream, (ValueJoiner<? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -589,7 +584,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -602,7 +597,7 @@ public class KStreamImplTest {
                   (ValueJoiner<? super String, ? super String, ?>) null,
                   JoinWindows.of(ofMillis(10)),
                   StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -615,7 +610,7 @@ public class KStreamImplTest {
                     (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
                     JoinWindows.of(ofMillis(10)),
                     StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -623,7 +618,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, null));
-        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
+        assertEquals("windows cannot be null", exception.getMessage());
     }
 
     @Test
@@ -635,7 +630,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 null,
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
+        assertEquals("windows cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -648,7 +643,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 null));
-        assertThat(exception.getMessage(), equalTo("streamJoined cannot be null"));
+        assertEquals("streamJoined cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -657,7 +652,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
+        assertEquals("otherStream cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -670,7 +665,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
+        assertEquals("otherStream cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -679,7 +674,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testStream, (ValueJoiner<? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -688,7 +683,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -701,7 +696,7 @@ public class KStreamImplTest {
                 (ValueJoiner<? super String, ? super String, ?>) null,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -714,7 +709,7 @@ public class KStreamImplTest {
                     (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
                     JoinWindows.of(ofMillis(10)),
                     StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
 
@@ -723,7 +718,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testStream, MockValueJoiner.TOSTRING_JOINER, null));
-        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
+        assertEquals("windows cannot be null", exception.getMessage());
     }
 
     @Test
@@ -735,7 +730,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 null,
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
+        assertEquals("windows cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -748,7 +743,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 null));
-        assertThat(exception.getMessage(), equalTo("streamJoined cannot be null"));
+        assertEquals("streamJoined cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -757,7 +752,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
+        assertEquals("otherStream cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -770,7 +765,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
+        assertEquals("otherStream cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -779,7 +774,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(testStream, (ValueJoiner<? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -788,7 +783,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -801,7 +796,7 @@ public class KStreamImplTest {
                 (ValueJoiner<? super String, ? super String, ?>) null,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -814,7 +809,7 @@ public class KStreamImplTest {
                     (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
                     JoinWindows.of(ofMillis(10)),
                     StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -822,7 +817,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, null));
-        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
+        assertEquals("windows cannot be null", exception.getMessage());
     }
 
     @Test
@@ -834,7 +829,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 null,
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
+        assertEquals("windows cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings("deprecation")
@@ -847,7 +842,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 null));
-        assertThat(exception.getMessage(), equalTo("streamJoined cannot be null"));
+        assertEquals("streamJoined cannot be null", exception.getMessage());
     }
 
     @Test
@@ -855,7 +850,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(null, MockValueJoiner.TOSTRING_JOINER));
-        assertThat(exception.getMessage(), equalTo("table cannot be null"));
+        assertEquals("table cannot be null", exception.getMessage());
     }
 
     @Test
@@ -863,7 +858,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(null, MockValueJoiner.TOSTRING_JOINER, Joined.as("name")));
-        assertThat(exception.getMessage(), equalTo("table cannot be null"));
+        assertEquals("table cannot be null", exception.getMessage());
     }
 
     @Test
@@ -871,7 +866,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testTable, (ValueJoiner<? super String, ? super String, ?>) null));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -879,7 +874,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testTable, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -887,7 +882,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testTable, (ValueJoiner<? super String, ? super String, ?>) null, Joined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -895,7 +890,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testTable, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, Joined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -903,7 +898,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testTable, MockValueJoiner.TOSTRING_JOINER, null));
-        assertThat(exception.getMessage(), equalTo("joined cannot be null"));
+        assertEquals("joined cannot be null", exception.getMessage());
     }
 
     @Test
@@ -911,7 +906,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(null, MockValueJoiner.TOSTRING_JOINER));
-        assertThat(exception.getMessage(), equalTo("table cannot be null"));
+        assertEquals("table cannot be null", exception.getMessage());
     }
 
     @Test
@@ -919,7 +914,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(null, MockValueJoiner.TOSTRING_JOINER, Joined.as("name")));
-        assertThat(exception.getMessage(), equalTo("table cannot be null"));
+        assertEquals("table cannot be null", exception.getMessage());
     }
 
     @Test
@@ -927,7 +922,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testTable, (ValueJoiner<? super String, ? super String, ?>) null));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -935,7 +930,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testTable, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -943,7 +938,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testTable, (ValueJoiner<? super String, ? super String, ?>) null, Joined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -951,7 +946,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testTable, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, Joined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -959,7 +954,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testTable, MockValueJoiner.TOSTRING_JOINER, null));
-        assertThat(exception.getMessage(), equalTo("joined cannot be null"));
+        assertEquals("joined cannot be null", exception.getMessage());
     }
 
     @Test
@@ -967,7 +962,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(null, MockMapper.selectValueMapper(), MockValueJoiner.TOSTRING_JOINER));
-        assertThat(exception.getMessage(), equalTo("globalTable cannot be null"));
+        assertEquals("globalTable cannot be null", exception.getMessage());
     }
 
     @Test
@@ -979,7 +974,7 @@ public class KStreamImplTest {
                 MockMapper.selectValueMapper(),
                 MockValueJoiner.TOSTRING_JOINER,
                 Named.as("name")));
-        assertThat(exception.getMessage(), equalTo("globalTable cannot be null"));
+        assertEquals("globalTable cannot be null", exception.getMessage());
     }
 
     @Test
@@ -987,7 +982,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testGlobalTable, null, MockValueJoiner.TOSTRING_JOINER));
-        assertThat(exception.getMessage(), equalTo("keySelector cannot be null"));
+        assertEquals("keySelector cannot be null", exception.getMessage());
     }
 
     @Test
@@ -999,7 +994,7 @@ public class KStreamImplTest {
                 null,
                 MockValueJoiner.TOSTRING_JOINER,
                 Named.as("name")));
-        assertThat(exception.getMessage(), equalTo("keySelector cannot be null"));
+        assertEquals("keySelector cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1007,7 +1002,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testGlobalTable, MockMapper.selectValueMapper(), (ValueJoiner<? super String, ? super String, ?>) null));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1015,7 +1010,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testGlobalTable, MockMapper.selectValueMapper(), (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1027,7 +1022,7 @@ public class KStreamImplTest {
                 MockMapper.selectValueMapper(),
                 (ValueJoiner<? super String, ? super String, ?>) null,
                 Named.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1039,7 +1034,7 @@ public class KStreamImplTest {
                     MockMapper.selectValueMapper(),
                     (ValueJoiner<? super String, ? super String, ?>) null,
                     Named.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1047,7 +1042,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(null, MockMapper.selectValueMapper(), MockValueJoiner.TOSTRING_JOINER));
-        assertThat(exception.getMessage(), equalTo("globalTable cannot be null"));
+        assertEquals("globalTable cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1059,7 +1054,7 @@ public class KStreamImplTest {
                 MockMapper.selectValueMapper(),
                 MockValueJoiner.TOSTRING_JOINER,
                 Named.as("name")));
-        assertThat(exception.getMessage(), equalTo("globalTable cannot be null"));
+        assertEquals("globalTable cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1067,7 +1062,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testGlobalTable, null, MockValueJoiner.TOSTRING_JOINER));
-        assertThat(exception.getMessage(), equalTo("keySelector cannot be null"));
+        assertEquals("keySelector cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1079,7 +1074,7 @@ public class KStreamImplTest {
                 null,
                 MockValueJoiner.TOSTRING_JOINER,
                 Named.as("name")));
-        assertThat(exception.getMessage(), equalTo("keySelector cannot be null"));
+        assertEquals("keySelector cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1087,7 +1082,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testGlobalTable, MockMapper.selectValueMapper(), (ValueJoiner<? super String, ? super String, ?>) null));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1095,7 +1090,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testGlobalTable, MockMapper.selectValueMapper(), (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1107,7 +1102,7 @@ public class KStreamImplTest {
                 MockMapper.selectValueMapper(),
                 (ValueJoiner<? super String, ? super String, ?>) null,
                 Named.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1119,7 +1114,7 @@ public class KStreamImplTest {
                     MockMapper.selectValueMapper(),
                     (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
                     Named.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
+        assertEquals("joiner cannot be null", exception.getMessage());
     }
 
     @SuppressWarnings({"rawtypes", "deprecation"})  // specifically testing the deprecated variant
@@ -1219,7 +1214,7 @@ public class KStreamImplTest {
         stream2.repartition(Repartitioned.as("topic-6"));
 
         final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
-        assertThat(processorTopology.source("X-topic-6-repartition").timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+        assertInstanceOf(FailOnInvalidTimestamp.class, processorTopology.source("X-topic-6-repartition").timestampExtractor());
         assertNull(processorTopology.source("topic-4").timestampExtractor());
         assertNull(processorTopology.source("topic-3").timestampExtractor());
         assertNull(processorTopology.source("topic-2").timestampExtractor());
@@ -1238,7 +1233,7 @@ public class KStreamImplTest {
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("a", "b");
         }
-        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
+        assertEquals(List.of(new KeyValueTimestamp<>("a", "b", 0)), processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test
@@ -1254,7 +1249,7 @@ public class KStreamImplTest {
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("e", "f");
         }
-        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("e", "f", 0))));
+        assertEquals(List.of(new KeyValueTimestamp<>("e", "f", 0)), processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test
@@ -1275,9 +1270,11 @@ public class KStreamImplTest {
             inputTopic.pipeInput("b", "v1");
         }
         final List<MockApiProcessor<String, String, Void, Void>> mockProcessors = processorSupplier.capturedProcessors(2);
-        assertThat(mockProcessors.get(0).processed(), equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
-            new KeyValueTimestamp<>("a", "v2", 0))));
-        assertThat(mockProcessors.get(1).processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
+        assertEquals(
+            List.of(new KeyValueTimestamp<>("a", "v1", 0), new KeyValueTimestamp<>("a", "v2", 0)),
+            mockProcessors.get(0).processed()
+        );
+        assertEquals(List.of(new KeyValueTimestamp<>("b", "v1", 0)), mockProcessors.get(1).processed());
     }
 
     @SuppressWarnings("deprecation")
@@ -1303,7 +1300,7 @@ public class KStreamImplTest {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.timestampExtractor());
             } else {
-                assertThat(sourceNode.timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+                assertInstanceOf(FailOnInvalidTimestamp.class, sourceNode.timestampExtractor());
             }
         }
     }
@@ -1333,7 +1330,7 @@ public class KStreamImplTest {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.timestampExtractor());
             } else {
-                assertThat(sourceNode.timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+                assertInstanceOf(FailOnInvalidTimestamp.class, sourceNode.timestampExtractor());
             }
         }
     }
@@ -1354,7 +1351,7 @@ public class KStreamImplTest {
         final Matcher matcher = repartitionTopicPattern.matcher(topology);
         assertTrue(matcher.find());
         final String match = matcher.group();
-        assertThat(match, notNullValue());
+        assertNotNull(match);
         assertTrue(match.endsWith("repartition"));
     }
 
@@ -1511,7 +1508,7 @@ public class KStreamImplTest {
             IllegalArgumentException.class,
             () -> testStream.process(() -> processor)
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1522,7 +1519,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.process(() -> processor, "storeName")
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1533,7 +1530,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.process(() -> processor, Named.as("processor"))
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1544,7 +1541,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.process(() -> processor, Named.as("processor"), "storeName")
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1555,7 +1552,7 @@ public class KStreamImplTest {
             IllegalArgumentException.class,
             () -> testStream.processValues(() -> processor)
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1566,7 +1563,7 @@ public class KStreamImplTest {
             IllegalArgumentException.class,
             () -> testStream.processValues(() -> processor, "storeName")
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1577,7 +1574,7 @@ public class KStreamImplTest {
             IllegalArgumentException.class,
             () -> testStream.processValues(() -> processor, Named.as("processor"))
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1588,7 +1585,7 @@ public class KStreamImplTest {
             IllegalArgumentException.class,
             () -> testStream.processValues(() -> processor, Named.as("processor"), "storeName")
         );
-        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+        assertTrue(exception.getMessage().contains("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1596,7 +1593,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null));
-        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+        assertEquals("processorSupplier cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1605,7 +1602,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                                      "storeName"));
-        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+        assertEquals("processorSupplier cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1614,7 +1611,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                                      Named.as("processor")));
-        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+        assertEquals("processorSupplier cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1623,7 +1620,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                                      Named.as("processor"), "stateStore"));
-        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+        assertEquals("processorSupplier cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1631,7 +1628,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
+        assertEquals("stateStoreNames cannot be a null array", exception.getMessage());
     }
 
     @Test
@@ -1639,7 +1636,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, (String) null));
-        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
+        assertEquals("state store name cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1647,7 +1644,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, Named.as("processor"), (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
+        assertEquals("stateStoreNames cannot be a null array", exception.getMessage());
     }
 
     @Test
@@ -1655,7 +1652,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, Named.as("processor"), (String) null));
-        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
+        assertEquals("state store name cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1663,7 +1660,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, (Named) null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1671,7 +1668,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, (Named) null, "storeName"));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1679,7 +1676,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues((FixedKeyProcessorSupplier<? super String, ? super String, Void>) null));
-        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+        assertEquals("processorSupplier cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1688,7 +1685,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.processValues((FixedKeyProcessorSupplier<? super String, ? super String, Void>) null,
                 "storeName"));
-        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+        assertEquals("processorSupplier cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1697,7 +1694,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                 Named.as("processor")));
-        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+        assertEquals("processorSupplier cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1706,7 +1703,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                 Named.as("processor"), "stateStore"));
-        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
+        assertEquals("processorSupplier cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1714,7 +1711,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
+        assertEquals("stateStoreNames cannot be a null array", exception.getMessage());
     }
 
     @Test
@@ -1722,7 +1719,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, (String) null));
-        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
+        assertEquals("state store name cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1730,7 +1727,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, Named.as("processor"), (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
+        assertEquals("stateStoreNames cannot be a null array", exception.getMessage());
     }
 
     @Test
@@ -1738,7 +1735,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, Named.as("processor"), (String) null));
-        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
+        assertEquals("state store name cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1746,7 +1743,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, (Named) null));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1754,7 +1751,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, (Named) null, "storeName"));
-        assertThat(exception.getMessage(), equalTo("named cannot be null"));
+        assertEquals("named cannot be null", exception.getMessage());
     }
 
     @Test
@@ -1770,9 +1767,8 @@ public class KStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
                 "      --> KSTREAM-TOTABLE-0000000001\n" +
@@ -1783,7 +1779,8 @@ public class KStreamImplTest {
                 "      --> KSTREAM-SINK-0000000004\n" +
                 "      <-- KSTREAM-TOTABLE-0000000001\n" +
                 "    Sink: KSTREAM-SINK-0000000004 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000003\n\n")
+                "      <-- KTABLE-TOSTREAM-0000000003\n\n",
+            topologyDescription
         );
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
@@ -1854,15 +1851,15 @@ public class KStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n"
+        assertEquals(
+            "Topologies:\n"
                 + "   Sub-topology: 0\n"
                 + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n"
                 + "      --> p\n"
                 + "    Processor: p (stores: [sum])\n"
                 + "      --> none\n"
-                + "      <-- KSTREAM-SOURCE-0000000000\n\n")
+                + "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            topologyDescription
         );
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
@@ -1942,15 +1939,15 @@ public class KStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n"
+        assertEquals(
+            "Topologies:\n"
                 + "   Sub-topology: 0\n"
                 + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n"
                 + "      --> p\n"
                 + "    Processor: p (stores: [sum])\n"
                 + "      --> none\n"
-                + "      <-- KSTREAM-SOURCE-0000000000\n\n")
+                + "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            topologyDescription
         );
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
@@ -1996,9 +1993,8 @@ public class KStreamImplTest {
 
         final String topologyDescription = builder.build().describe().toString();
 
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                         "   Sub-topology: 0\n" +
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
                         "      --> fkp\n" +
@@ -2006,7 +2002,8 @@ public class KStreamImplTest {
                         "      --> KSTREAM-SINK-0000000001\n" +
                         "      <-- KSTREAM-SOURCE-0000000000\n" +
                         "    Sink: KSTREAM-SINK-0000000001 (topic: output)\n" +
-                        "      <-- fkp\n\n")
+                        "      <-- fkp\n\n",
+            topologyDescription
         );
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
@@ -2056,15 +2053,15 @@ public class KStreamImplTest {
         final Topology topology = builder.build();
 
         final String topologyDescription = topology.describe().toString();
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
                 "      --> KSTREAM-TOTABLE-0000000001\n" +
                 "    Processor: KSTREAM-TOTABLE-0000000001 (stores: [store])\n" +
                 "      --> none\n" +
-                "      <-- KSTREAM-SOURCE-0000000000\n\n")
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            topologyDescription
         );
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
@@ -2077,7 +2074,7 @@ public class KStreamImplTest {
             inputTopic.pipeInput("A", "03");
             final Map<String, String> expectedStore = mkMap(mkEntry("A", "03"), mkEntry("B", "02"));
 
-            assertThat(asMap(store), is(expectedStore));
+            assertEquals(expectedStore, asMap(store));
         }
     }
 
@@ -2098,9 +2095,8 @@ public class KStreamImplTest {
         final Topology topology = builder.build();
 
         final String topologyDescription = topology.describe().toString();
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
                 "      --> KSTREAM-MAP-0000000001\n" +
@@ -2123,7 +2119,8 @@ public class KStreamImplTest {
                 "      --> KSTREAM-SINK-0000000008\n" +
                 "      <-- KSTREAM-TOTABLE-0000000002\n" +
                 "    Sink: KSTREAM-SINK-0000000008 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000007\n\n")
+                "      <-- KTABLE-TOSTREAM-0000000007\n\n",
+            topologyDescription
         );
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
@@ -2172,9 +2169,8 @@ public class KStreamImplTest {
 
         final String topologyDescription = topology.describe().toString();
 
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KTABLE-SOURCE-0000000016 (topics: [KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic])\n" +
                 "      --> KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-0000000017\n" +
@@ -2218,7 +2214,8 @@ public class KStreamImplTest {
                 "      --> KTABLE-SINK-0000000015\n" +
                 "      <-- KSTREAM-TOTABLE-0000000004\n" +
                 "    Sink: KTABLE-SINK-0000000015 (topic: KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic)\n" +
-                "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012, KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013\n\n")
+                "      <-- KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000012, KTABLE-FK-JOIN-SUBSCRIPTION-PROCESSOR-0000000013\n\n",
+            topologyDescription
         );
 
 
@@ -2232,7 +2229,7 @@ public class KStreamImplTest {
             right.pipeInput("rhs2", "rhsValue2");
             right.pipeInput("rhs3", "rhsValue3"); // this unreferenced FK won't show up in any results
 
-            assertThat(outputTopic.readKeyValuesToMap(), is(emptyMap()));
+            assertTrue(outputTopic.readKeyValuesToMap().isEmpty());
 
             left.pipeInput("lhs1", "lhsValue1|rhs1");
             left.pipeInput("lhs2", "lhsValue2|rhs2");
@@ -2241,25 +2238,15 @@ public class KStreamImplTest {
                 mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
                 mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)")
             );
-            assertThat(outputTopic.readKeyValuesToMap(), is(expected));
+            assertEquals(expected, outputTopic.readKeyValuesToMap());
 
             // Add another reference to an existing FK
             left.pipeInput("lhs3", "lhsValue3|rhs1");
 
-            assertThat(
-                outputTopic.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)")
-                ))
-            );
+            assertEquals(mkMap(mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)")), outputTopic.readKeyValuesToMap());
 
             left.pipeInput("lhs1", (String) null);
-            assertThat(
-                outputTopic.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs1", null)
-                ))
-            );
+            assertEquals(mkMap(mkEntry("lhs1", null)), outputTopic.readKeyValuesToMap());
         }
     }
 
@@ -2280,9 +2267,8 @@ public class KStreamImplTest {
         final Topology topology = builder.build(props);
 
         final String topologyDescription = topology.describe().toString();
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [left])\n" +
                 "      --> KSTREAM-TOTABLE-0000000001\n" +
@@ -2307,7 +2293,9 @@ public class KStreamImplTest {
                 "      --> KSTREAM-SINK-0000000010\n" +
                 "      <-- KTABLE-MERGE-0000000006\n" +
                 "    Sink: KSTREAM-SINK-0000000010 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000009\n\n"));
+                "      <-- KTABLE-TOSTREAM-0000000009\n\n",
+            topologyDescription
+        );
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(leftTopic, new StringSerializer(), new StringSerializer());
@@ -2318,7 +2306,7 @@ public class KStreamImplTest {
             right.pipeInput("rhs2", "rhsValue2");
             right.pipeInput("lhs3", "rhsValue3");
 
-            assertThat(output.readKeyValuesToMap(), is(emptyMap()));
+            assertTrue(output.readKeyValuesToMap().isEmpty());
 
             left.pipeInput("lhs1", "lhsValue1");
             left.pipeInput("lhs2", "lhsValue2");
@@ -2327,27 +2315,14 @@ public class KStreamImplTest {
                 mkEntry("lhs1", "lhsValue1+rhsValue1")
             );
 
-            assertThat(
-                output.readKeyValuesToMap(),
-                is(expected)
-            );
+            assertEquals(expected, output.readKeyValuesToMap());
 
             left.pipeInput("lhs3", "lhsValue3");
 
-            assertThat(
-                output.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs3", "lhsValue3+rhsValue3")
-                ))
-            );
+            assertEquals(mkMap(mkEntry("lhs3", "lhsValue3+rhsValue3")), output.readKeyValuesToMap());
 
             left.pipeInput("lhs1", "lhsValue4");
-            assertThat(
-                output.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs1", "lhsValue4+rhsValue1")
-                ))
-            );
+            assertEquals(mkMap(mkEntry("lhs1", "lhsValue4+rhsValue1")), output.readKeyValuesToMap());
         }
     }
 
@@ -2368,9 +2343,8 @@ public class KStreamImplTest {
         final Topology topology = builder.build(props);
 
         final String topologyDescription = topology.describe().toString();
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [streamTopic])\n" +
                 "      --> KSTREAM-JOIN-0000000004\n" +
@@ -2383,7 +2357,9 @@ public class KStreamImplTest {
                 "      <-- KSTREAM-JOIN-0000000004\n" +
                 "    Processor: KSTREAM-TOTABLE-0000000002 (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000003])\n" +
                 "      --> none\n" +
-                "      <-- KSTREAM-SOURCE-0000000001\n\n"));
+                "      <-- KSTREAM-SOURCE-0000000001\n\n",
+            topologyDescription
+        );
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(streamTopic, new StringSerializer(), new StringSerializer());
@@ -2394,7 +2370,7 @@ public class KStreamImplTest {
             right.pipeInput("rhs2", "rhsValue2");
             right.pipeInput("lhs3", "rhsValue3");
 
-            assertThat(output.readKeyValuesToMap(), is(emptyMap()));
+            assertTrue(output.readKeyValuesToMap().isEmpty());
 
             left.pipeInput("lhs1", "lhsValue1");
             left.pipeInput("lhs2", "lhsValue2");
@@ -2403,27 +2379,14 @@ public class KStreamImplTest {
                 mkEntry("lhs1", "lhsValue1+rhsValue1")
             );
 
-            assertThat(
-                output.readKeyValuesToMap(),
-                is(expected)
-            );
+            assertEquals(expected, output.readKeyValuesToMap());
 
             left.pipeInput("lhs3", "lhsValue3");
 
-            assertThat(
-                output.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs3", "lhsValue3+rhsValue3")
-                ))
-            );
+            assertEquals(mkMap(mkEntry("lhs3", "lhsValue3+rhsValue3")), output.readKeyValuesToMap());
 
             left.pipeInput("lhs1", "lhsValue4");
-            assertThat(
-                output.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs1", "lhsValue4+rhsValue1")
-                ))
-            );
+            assertEquals(mkMap(mkEntry("lhs1", "lhsValue4+rhsValue1")), output.readKeyValuesToMap());
         }
     }
 
@@ -2446,9 +2409,8 @@ public class KStreamImplTest {
         final Topology topology = builder.build(props);
 
         final String topologyDescription = topology.describe().toString();
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
                 "      --> KSTREAM-TOTABLE-0000000001\n" +
@@ -2471,7 +2433,9 @@ public class KStreamImplTest {
                 "      --> KSTREAM-SINK-0000000009\n" +
                 "      <-- KTABLE-AGGREGATE-0000000007\n" +
                 "    Sink: KSTREAM-SINK-0000000009 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000008\n\n"));
+                "      <-- KTABLE-TOSTREAM-0000000008\n\n",
+            topologyDescription
+        );
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
@@ -2520,9 +2484,8 @@ public class KStreamImplTest {
         final Topology topology = builder.build(props);
 
         final String topologyDescription = topology.describe().toString();
-        assertThat(
-            topologyDescription,
-            equalTo("Topologies:\n" +
+        assertEquals(
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
                 "      --> KSTREAM-TOTABLE-0000000001\n" +
@@ -2536,7 +2499,9 @@ public class KStreamImplTest {
                 "      --> KSTREAM-SINK-0000000005\n" +
                 "      <-- KTABLE-MAPVALUES-0000000003\n" +
                 "    Sink: KSTREAM-SINK-0000000005 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000004\n\n"));
+                "      <-- KTABLE-TOSTREAM-0000000004\n\n",
+            topologyDescription
+        );
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
