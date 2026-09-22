@@ -27,7 +27,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
-import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
@@ -182,9 +181,12 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     nowMs = time.milliseconds();
                 } else if (appendResult.needsNewBatch() && newBatch == null) {
                     // The open batch is done (e.g., full, closed) so start a new one. Size it for
-                    // this first record only (not a whole batch.size), to the same upper bound the
-                    // first-record capacity check in ChunkedProducerBatch.tryAppend will demand.
-                    int newBatchSize = initialChunkedBatchSize(key, value, headers);
+                    // this first record only (not a whole batch.size), to the uncompressed upper bound
+                    // the first-record capacity check in ChunkedProducerBatch.tryAppend demands. For a
+                    // compressed batch this is only a heuristic (that check is skipped for it): any
+                    // compressor overshoot is absorbed by the stream growing mid-write.
+                    int newBatchSize = AbstractRecords.estimateSizeInBytesUpperBound(
+                            RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
                     long remainingTimeToBlock = remainingTimeToBlockMs(deadlineMs);
                     log.trace("Allocating {} byte chunked buffer ({} byte chunks) for topic {} partition {} with remaining timeout {}ms",
                             newBatchSize, chunkedFree.poolableSize(), topic, effectivePartition, remainingTimeToBlock);
@@ -354,23 +356,6 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
     @Override
     protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
         return new ChunkedProducerBatch(tp, recordsBuilder, nowMs);
-    }
-
-    /**
-     * Upper bound on the bytes the batch's first record will write, used both to pre-size the batch's
-     * chunks and as its write-limit basis. Starts from the uncompressed record-size upper bound
-     * ({@link AbstractRecords#estimateSizeInBytesUpperBound}, which ignores compression), then for a
-     * compressed codec inflates by the same {@link MemoryRecordsBuilder#COMPRESSION_RATE_ESTIMATION_FACTOR}
-     * that {@link MemoryRecordsBuilder#estimatedBytesWrittenAfter} applies. Without the inflation that
-     * first-record check (in {@link ChunkedProducerBatch#tryAppend}) can demand ~5% more than was
-     * reserved and throw for large compressed records.
-     */
-    private int initialChunkedBatchSize(byte[] key, byte[] value, Header[] headers) {
-        int uncompressed = AbstractRecords.estimateSizeInBytesUpperBound(
-                RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
-        if (compression.type() == CompressionType.NONE)
-            return uncompressed;
-        return (int) (uncompressed * MemoryRecordsBuilder.COMPRESSION_RATE_ESTIMATION_FACTOR);
     }
 
     /**

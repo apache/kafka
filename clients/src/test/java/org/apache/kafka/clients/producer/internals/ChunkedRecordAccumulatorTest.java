@@ -28,6 +28,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
@@ -51,6 +52,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -221,6 +223,75 @@ public class ChunkedRecordAccumulatorTest {
 
         accum.deallocate(batch);
         accum.close();
+    }
+
+    /**
+     * A topic whose data doesn't compress drives its compression ratio estimate above 1.0 (it rises by
+     * at least COMPRESSION_RATIO_DETERIORATE_STEP after a single such batch). The first record of a new
+     * batch must still append: its chunks are pre-sized to the uncompressed upper bound, and any
+     * compressor overshoot must be absorbed by mid-write growth rather than rejected up front.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testLargeFirstRecordAppendsWhenCompressionRatioEstimateAboveOne(String codec) throws Exception {
+        int chunkSize = 256;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        ChunkedRecordAccumulator accum = newAccumulator(8192, chunkSize, 1024L * chunkSize, compression);
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 1.3f);
+        try {
+            // Random bytes don't compress, and the record spans many chunks so the estimate's
+            // inflation isn't absorbed by rounding up to a whole chunk.
+            byte[] value = new byte[20_000];
+            new Random(42).nextBytes(value);
+            accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            ProducerBatch batch = dq.peekFirst();
+            assertNotNull(batch);
+            assertEquals(1, batch.recordCount);
+
+            batch.close();
+            Record record = batch.records().records().iterator().next();
+            assertArrayEquals(value, readBytes(record.value()));
+
+            accum.deallocate(batch);
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * The first-record capacity check in {@link ChunkedProducerBatch#tryAppend} still guards
+     * uncompressed batches, where the pre-size is an exact upper bound, but not compressed ones,
+     * whose pre-size is only a heuristic and which instead grow mid-write.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"none", "gzip", "snappy", "lz4", "zstd"})
+    public void testFirstRecordCapacityCheckOnlyAppliesToUncompressedBatches(String codec) {
+        int chunkSize = 256;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        // Deliberately under-sized: a single chunk for a record that needs several.
+        ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(
+                List.of(ByteBuffer.allocate(chunkSize)), chunkSize, pool);
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(stream, RecordBatch.CURRENT_MAGIC_VALUE,
+                compression, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, 8192);
+        ChunkedProducerBatch batch = new ChunkedProducerBatch(tp1, builder, time.milliseconds());
+        byte[] value = new byte[4 * chunkSize];
+
+        if (compression.type() == CompressionType.NONE) {
+            assertThrows(IllegalStateException.class, () ->
+                    batch.tryAppend(0L, key, value, Record.EMPTY_HEADERS, null, time.milliseconds()));
+        } else {
+            assertNotNull(batch.tryAppend(0L, key, value, Record.EMPTY_HEADERS, null, time.milliseconds()));
+            assertEquals(1, batch.recordCount);
+        }
     }
 
     private static byte[] readBytes(ByteBuffer buf) {
