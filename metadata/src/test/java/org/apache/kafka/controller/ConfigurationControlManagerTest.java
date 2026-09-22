@@ -359,7 +359,7 @@ public class ConfigurationControlManagerTest {
             new RequestMetadata(BROKER0, toMap(
                 entry("foo.bar", "123"),
                 entry("quux", "456"),
-                entry("broker.config.to.remove", null)))));
+                entry("broker.config.to.remove", null)), Set.of("broker.config.to.remove"))));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
@@ -399,7 +399,7 @@ public class ConfigurationControlManagerTest {
     }
 
     @Test
-    public void testIncrementalDeletePolicyIncludesUnsetConfigs() {
+    public void testIncrementalDeletePolicyExposesDeletedConfigs() {
         List<RequestMetadata> validations = new ArrayList<>();
         AlterConfigPolicy policy = new AlterConfigPolicy() {
             @Override
@@ -426,16 +426,28 @@ public class ConfigurationControlManagerTest {
 
         assertEquals(ApiError.NONE, manager.incrementalAlterConfig(
             MYTOPIC, toMap(entry("abc", entry(DELETE, null))), false, false).response());
+        manager.replay(new ConfigRecord().setResourceType(TOPIC.id()).setResourceName(MYTOPIC.name()).
+            setName("abc").setValue("123"));
+        assertEquals(ApiError.NONE, manager.incrementalAlterConfig(
+            MYTOPIC, toMap(entry("abc", entry(DELETE, null))), false, false).response());
         assertEquals(ApiError.NONE, manager.incrementalAlterConfig(
             BROKER0, toMap(entry("foo.bar", entry(DELETE, null))), false, false).response());
-        assertEquals(List.of(
-            new RequestMetadata(MYTOPIC, toMap(entry("abc", null))),
-            new RequestMetadata(BROKER0, toMap(entry("foo.bar", null)))), validations);
+        assertEquals(3, validations.size());
+        assertEquals(MYTOPIC, validations.get(0).resource());
+        assertEquals(Map.of(), validations.get(0).configs());
+        assertEquals(Set.of("abc"), validations.get(0).deletedConfigs());
+        assertEquals(MYTOPIC, validations.get(1).resource());
+        assertEquals(toMap(entry("abc", null)), validations.get(1).configs());
+        assertEquals(Set.of("abc"), validations.get(1).deletedConfigs());
+        assertEquals(BROKER0, validations.get(2).resource());
+        assertEquals(toMap(entry("foo.bar", null)), validations.get(2).configs());
+        assertEquals(Set.of("foo.bar"), validations.get(2).deletedConfigs());
     }
 
     private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
         @Override
         public void validate(RequestMetadata actual) throws PolicyViolationException {
+            assertEquals(Set.of(), actual.deletedConfigs());
             actual.configs().forEach((key, value) -> {
                 if (value == null) {
                     throw new PolicyViolationException("Legacy Alter Configs should not see null values");
