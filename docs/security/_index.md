@@ -1,6 +1,6 @@
 ---
 title: Security
-description: 
+description: Kafka security configuration for authentication, encryption, and authorization.
 weight: 7
 tags: ['kafka', 'docs', 'security']
 aliases: 

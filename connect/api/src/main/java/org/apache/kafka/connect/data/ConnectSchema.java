@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.errors.DataException;
 
 import java.math.BigDecimal;
@@ -28,6 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+@InterfaceAudience.Public
 public class ConnectSchema implements Schema {
     /**
      * Maps {@link Schema.Type}s to a list of Java classes that can be used to represent them.

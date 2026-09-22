@@ -1,6 +1,6 @@
 ---
 title: Docker
-description: 
+description: Learn how to pull and run the Kafka JVM Docker image and the experimental native Docker image.
 weight: 8
 tags: ['kafka', 'docs']
 aliases: 

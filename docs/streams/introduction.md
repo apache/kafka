@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: 
+description: Learn what Kafka Streams is and how to build stream processing applications with it.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 

@@ -84,7 +84,11 @@ if __name__ == "__main__":
     lines = stream.readlines()
     all_reviewers = defaultdict(int)
     for line in lines:
-        stripped = line.strip().lstrip("Reviewers: ").lstrip("Author: ")
+        stripped = line.strip()
+        if stripped.startswith("Reviewers: "):
+            stripped = stripped[len("Reviewers: "):]
+        elif stripped.startswith("Author: "):
+            stripped = stripped[len("Author: "):]
         reviewers = stripped.split(",")
         for reviewer in reviewers:
             all_reviewers[reviewer.strip()] += 1

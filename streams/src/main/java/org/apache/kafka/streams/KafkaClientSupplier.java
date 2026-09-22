@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -29,6 +30,7 @@ import java.util.Map;
  *
  * @see KafkaStreams#KafkaStreams(Topology, java.util.Properties, KafkaClientSupplier)
  */
+@InterfaceAudience.Public
 public interface KafkaClientSupplier {
     /**
      * Create an {@link Admin} which is used for internal topic management.

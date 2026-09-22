@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.tiered.storage;
 
+import kafka.server.KafkaBroker;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
@@ -37,9 +39,12 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
+import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.test.TestUtils;
@@ -57,12 +62,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 
 public final class TieredStorageTestContext implements AutoCloseable {
 
@@ -104,8 +111,36 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     private void initContext() {
-        remoteStorageManagers = TieredStorageTestHarness.remoteStorageManagers(cluster.aliveBrokers().values());
-        localStorages = TieredStorageTestHarness.localStorages(cluster.aliveBrokers().values());
+        remoteStorageManagers = remoteStorageManagers(cluster.aliveBrokers().values());
+        localStorages = localStorages(cluster.aliveBrokers().values());
+    }
+
+    private static List<LocalTieredStorage> remoteStorageManagers(Collection<KafkaBroker> brokers) {
+        List<LocalTieredStorage> storages = new ArrayList<>();
+        brokers.forEach(broker -> {
+            if (broker.remoteLogManagerOpt().isDefined()) {
+                RemoteLogManager remoteLogManager = broker.remoteLogManagerOpt().get();
+                RemoteStorageManager storageManager = remoteLogManager.storageManager();
+                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager loaderAwareRSM) {
+                    if (loaderAwareRSM.delegate() instanceof LocalTieredStorage) {
+                        storages.add((LocalTieredStorage) loaderAwareRSM.delegate());
+                    }
+                } else if (storageManager instanceof LocalTieredStorage) {
+                    storages.add((LocalTieredStorage) storageManager);
+                }
+            } else {
+                throw new AssertionError("Broker " + broker.config().brokerId()
+                        + " does not have a remote log manager.");
+            }
+        });
+        return storages;
+    }
+
+    private static List<BrokerLocalStorage> localStorages(Collection<KafkaBroker> brokers) {
+        return brokers.stream()
+                .map(b -> new BrokerLocalStorage(b.config().brokerId(), Set.copyOf(b.config().logDirs()),
+                        STORAGE_WAIT_TIMEOUT_SEC))
+                .toList();
     }
 
     public void createTopic(TopicSpec spec) throws ExecutionException, InterruptedException {
@@ -260,7 +295,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
                                    boolean isStopped) throws IOException {
         BrokerLocalStorage brokerLocalStorage;
         if (isStopped) {
-            brokerLocalStorage = TieredStorageTestHarness.localStorages(cluster.brokers().values())
+            brokerLocalStorage = localStorages(cluster.brokers().values())
                     .stream()
                     .filter(bls -> bls.getBrokerId() == brokerId)
                     .findFirst()

@@ -54,6 +54,13 @@ public interface Records extends TransferableRecords {
     int MAGIC_LENGTH = 1;
     int HEADER_SIZE_UP_TO_MAGIC = MAGIC_OFFSET + MAGIC_LENGTH;
 
+    // The largest byte array the JVM reliably allocates, mirroring the JDK's internal
+    // ArraysSupport.SOFT_MAX_ARRAY_LENGTH: some VMs reserve header words inside the array object,
+    // so allocations at Integer.MAX_VALUE may fail with OutOfMemoryError regardless of available
+    // heap. Used as the ceiling (and default) for the declared size of a record body read from a
+    // decompressed stream, where the size must be checked before it is allocated.
+    int SOFT_MAX_ARRAY_LENGTH = Integer.MAX_VALUE - 8;
+
     /**
      * Get the record batches. Note that the signature allows subclasses
      * to return a more specific batch type. This enables optimizations such as in-place offset

@@ -24,7 +24,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 
-import java.util.Arrays;
+import java.util.List;
 
 public class MetadataImageBuilder {
     private final MetadataDelta delta;
@@ -52,7 +52,7 @@ public class MetadataImageBuilder {
             delta.replay(new PartitionRecord()
                 .setTopicId(topicId)
                 .setPartitionId(i)
-                .setReplicas(Arrays.asList(i % 4, (i + 1) % 4)));
+                .setReplicas(List.of(i % 4, (i + 1) % 4)));
         }
         return this;
     }

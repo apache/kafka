@@ -1,0 +1,46 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+/**
+ * Indicates that the {@link org.apache.kafka.clients.NetworkClient} was unable to resolve a DNS address within
+ * the time specified by {@link org.apache.kafka.clients.CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG}.
+ * <p>
+ * This is an unrecoverable error: the failure is permanently attached to the client and is re-thrown on every
+ * subsequent API call. Callers must close the client and construct a new one after resolving the underlying
+ * DNS or {@code bootstrap.servers} configuration issue.
+ * <p>
+ * This exception is only thrown when {@code bootstrap.resolve.timeout.ms} is set to a positive value.
+ * This feature is evolving and may undergo compatibility-breaking changes in a minor release.
+ *
+ * @see org.apache.kafka.clients.CommonClientConfigs
+ */
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
+public class BootstrapResolutionException extends KafkaException {
+    public BootstrapResolutionException(String message) {
+        super(message);
+    }
+
+    public BootstrapResolutionException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}

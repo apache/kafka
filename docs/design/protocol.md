@@ -1,6 +1,6 @@
 ---
 title: Protocol
-description: 
+description: Kafka communication protocol, request formats, API versions, and client implementation details.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 
@@ -137,6 +137,8 @@ For interoperability with 0.9.0.x clients, the first packet received by the serv
 The protocol is built out of the following primitive types.
 
 {{< include-html file="/static/{version}/generated/protocol_types.html" >}} 
+
+Message versions marked as flexible use the compact encoding for variable-length fields. In particular, arrays use `COMPACT_ARRAY` rather than `ARRAY`; strings and byte arrays similarly use their corresponding `COMPACT_*` types. Compact encodings store their length as an unsigned variable-length integer instead of a fixed-width integer. Flexible versions also include a tagged-fields section at the end of every request and response component.
 
 ### Notes on reading the request format grammars
 

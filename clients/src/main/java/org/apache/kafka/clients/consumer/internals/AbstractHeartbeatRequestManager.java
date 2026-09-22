@@ -245,18 +245,37 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * <p>Similarly, we may have to unblock the application thread to send a {@link AsyncPollEvent} to make sure
      * our poll timer will not expire while we are polling.
      *
-     * <p>When the member is {@link MemberState#UNSUBSCRIBED} (for example, with manual assignment),
-     * this returns {@code Long.MAX_VALUE} to indicate there is no next heartbeat to wait for,
-     * allowing the application thread to block for the full user-specified poll timeout rather than
-     * spinning in a busy loop.
+     * <p>When the member is {@link MemberState#UNSUBSCRIBED} or in the terminal {@link MemberState#FATAL} state,
+     * this returns {@code Long.MAX_VALUE} to indicate there is no next heartbeat to wait for, allowing the application
+     * thread to block for the full user-specified poll timeout rather than spinning in a busy loop.
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
+        MemberState state = membershipManager().state();
+        // No heartbeat can be sent in these states: UNSUBSCRIBED has nothing to heartbeat for,
+        // and FATAL is terminal. The fatal error has already been propagated to the
+        // application thread, so there is no need to wake it before its poll timeout expires.
+        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
             return Long.MAX_VALUE;
         }
-        if (pollTimer.isExpired() || (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())) {
+        // Unblock the application thread so STALE/FENCED members can run
+        // assignment-release callbacks and rejoin during the next poll.
+        if (pollTimer.isExpired()) {
+            return 0L;
+        }
+        // Mirror the guard in poll(). A heartbeat is only sent when the coordinator is known and the
+        // member is in a state that can send heartbeats. This covers cases such as:
+        // - The coordinator is unavailable (for example, during bootstrap DNS resolution or after a
+        //   re-authentication failure).
+        // - The member is FENCED (or STALE with the poll timer already reset) and waiting for the
+        //   application thread to run assignment-release callbacks before rejoining.
+        // Return retryBackoffMs rather than the heartbeat interval, since the interval remains 0 until
+        // the first heartbeat response is received, which would also lead to busy-spinning.
+        if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
+            return heartbeatRequestState.retryBackoffMs();
+        }
+        if (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight()) {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
@@ -345,7 +364,14 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
 
     private void onResponse(final R response, final long currentTimeMs) {
         if (errorForResponse(response) == Errors.NONE) {
-            heartbeatRequestState.updateHeartbeatIntervalMs(heartbeatIntervalForResponse(response));
+            long previousHeartbeatIntervalMs = heartbeatRequestState.heartbeatIntervalMs();
+            long heartbeatIntervalMs = heartbeatIntervalForResponse(response);
+            // The heartbeat interval is a group config owned by the broker, so log it when it changes to give
+            // visibility into the value the coordinator is applying (it is not derivable from client config).
+            if (heartbeatIntervalMs != previousHeartbeatIntervalMs) {
+                logger.info("Member {} received heartbeat interval {}ms from the group coordinator", membershipManager().memberId(), heartbeatIntervalMs);
+            }
+            heartbeatRequestState.updateHeartbeatIntervalMs(heartbeatIntervalMs);
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             membershipManager().onHeartbeatSuccess(response);
             return;
@@ -445,7 +471,6 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
                     logger.info("{} received GROUP_ID_NOT_FOUND for group {} while unsubscribed. ",
                             heartbeatRequestName(), membershipManager().groupId());
-                    membershipManager().onHeartbeatRequestSkipped();
                 } else {
                     // Else, this is a fatal error, we should throw it and transition to fatal state.
                     logger.error("{} failed due to unexpected error {}: {}", heartbeatRequestName(), error, errorMessage);

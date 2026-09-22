@@ -324,7 +324,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateSubscribedRegularExpression(oldMember, newMember);
-        updateStaticMember(newMember);
+        updateStaticMember(oldMember, newMember);
         maybeUpdateGroupState();
         maybeUpdateGroupSubscriptionType();
         maybeUpdateNumClassicProtocolMembers(oldMember, newMember);
@@ -334,9 +334,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Updates the member id stored against the instance id if the member is a static member.
      *
+     * @param oldMember The old member state.
      * @param newMember The new member state.
      */
-    private void updateStaticMember(ConsumerGroupMember newMember) {
+    private void updateStaticMember(ConsumerGroupMember oldMember, ConsumerGroupMember newMember) {
+        if (oldMember != null && oldMember.instanceId() != null) {
+            staticMembers.remove(oldMember.instanceId());
+        }
         if (newMember.instanceId() != null) {
             staticMembers.put(newMember.instanceId(), newMember.memberId());
         }

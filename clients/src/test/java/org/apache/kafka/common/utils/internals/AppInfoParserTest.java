@@ -38,8 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AppInfoParserTest {
-    private static final String EXPECTED_COMMIT_VERSION = AppInfoParser.DEFAULT_VALUE;
-    private static final String EXPECTED_VERSION = AppInfoParser.DEFAULT_VALUE;
+    private static final String EXPECTED_COMMIT_VERSION = AppInfoParser.getCommitId();
+    private static final String EXPECTED_VERSION = AppInfoParser.getVersion();
     private static final Long EXPECTED_START_MS = 1552313875722L;
     private static final String METRICS_PREFIX = "app-info-test";
     private static final String METRICS_ID = "test";

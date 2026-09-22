@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
@@ -46,7 +45,7 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
         this.maxRecords = Long.MAX_VALUE;
         this.maxBytes = Long.MAX_VALUE;
         this.bufferFullStrategy = SHUT_DOWN;
-        this.logConfig = Collections.emptyMap();
+        this.logConfig = Map.of();
     }
 
     @Override
@@ -91,7 +90,7 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
 
     @Override
     public Map<String, String> logConfig() {
-        return isLoggingEnabled() ? logConfig : Collections.emptyMap();
+        return isLoggingEnabled() ? logConfig : Map.of();
     }
 
     @Override

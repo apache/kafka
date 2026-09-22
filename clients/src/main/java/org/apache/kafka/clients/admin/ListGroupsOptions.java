@@ -14,17 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
 
 /**
  * Options for {@link Admin#listGroups()}.
  */
+@InterfaceAudience.Public
 public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
 
     private Set<GroupState> groupStates = Set.of();

@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor.api;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Processor context interface for {@link FixedKeyRecord}.
@@ -22,6 +25,7 @@ package org.apache.kafka.streams.processor.api;
  * @param <KForward> a bound on the types of keys that may be forwarded
  * @param <VForward> a bound on the types of values that may be forwarded
  */
+@InterfaceAudience.Public
 public interface FixedKeyProcessorContext<KForward, VForward> extends ProcessingContext {
 
     /**

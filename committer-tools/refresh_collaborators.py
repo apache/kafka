@@ -22,14 +22,14 @@ committers, and updating a local configuration file (.asf.yaml) to include these
 new contributors.
 """
 
-import io
+import json
 import logging
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from bs4 import BeautifulSoup
-from github import Github
+from github import Auth, Github
 from github.Commit import Commit
 from github.ContentFile import ContentFile
 from github.PaginatedList import PaginatedList
@@ -45,7 +45,7 @@ logging.basicConfig(
 GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN")
 REPO_KAFKA_SITE: str = "apache/kafka-site"
 REPO_KAFKA: str = "apache/kafka"
-ASF_YAML_PATH: str = "../.asf.yaml"
+ASF_YAML_PATH: str = str(Path(__file__).resolve().parents[1] / ".asf.yaml")
 TOP_N_CONTRIBUTORS: int = 10
 
 
@@ -58,7 +58,7 @@ def get_github_client() -> Github:
         raise ValueError("GITHUB_TOKEN is not set in the environment")
 
     logging.info("Successfully initialized GitHub client")
-    return Github(GITHUB_TOKEN)
+    return Github(auth=Auth.Token(GITHUB_TOKEN))
 
 
 def get_committers_list(repo: Repository) -> List[str]:
@@ -66,11 +66,11 @@ def get_committers_list(repo: Repository) -> List[str]:
     Fetch the committers from the given repository.
     """
     logging.info(f"Fetching committers from the repository {REPO_KAFKA_SITE}")
-    committers_file: ContentFile = repo.get_contents("committers.html")
+    committers_file: ContentFile = repo.get_contents("data/committers.json")
     content: bytes = committers_file.decoded_content
-    soup: BeautifulSoup = BeautifulSoup(content, "html.parser")
+    committer_entries: List[Dict[str, Any]] = json.loads(content.decode("utf-8"))
+    committers = [committer["github"].rstrip("/").rsplit("/", 1)[-1] for committer in committer_entries]
 
-    committers = [login.text for login in soup.find_all("div", class_="github_login")]
     logging.info(f"Found {len(committers)} committers")
     return committers
 

@@ -165,7 +165,6 @@ public class PersisterStateManager {
     public void start() {
         if (isStarted.compareAndSet(false, true)) {
             this.sender.start();
-            isStarted.set(true);
         }
     }
 

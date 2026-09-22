@@ -73,8 +73,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings({"unchecked"})
 @Tag("integration")
@@ -135,20 +134,29 @@ public class SlidingWindowedKStreamIntegrationTest {
 
     public static Stream<Arguments> data() {
         return Stream.of(
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false),
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true),
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false),
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, true),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, false),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, true),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, true)
+            // (strategyType, withCache, withHeaders, transactional)
+            // Existing non-transactional coverage (at-least-once) is preserved unchanged.
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, true, false),
+            // Sparse transactional (KIP-892) coverage: enable.transactional.statestores=true always
+            // implies exactly_once_v2. One representative case per emit strategy, cache disabled and no
+            // store-format headers, exercising the transactional sliding-window aggregation store path.
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false, true)
         );
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
+    public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders, final boolean transactional) throws Exception {
+        maybeSetTransactionalStateStores(transactional);
+
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -211,12 +219,14 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
+    public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders, final boolean transactional) throws Exception {
+        maybeSetTransactionalStateStores(transactional);
+
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -288,12 +298,14 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
+    public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache, final boolean withHeaders, final boolean transactional) throws Exception {
+        maybeSetTransactionalStateStores(transactional);
+
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "L1", 0),
@@ -379,7 +391,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
 
         kafkaStreams.close();
         kafkaStreams.cleanUp(); // Purge store to force restoration
@@ -418,7 +430,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     private void produceMessages(final String topic, final KeyValueTimestamp<String, String>... records) {
@@ -432,6 +444,15 @@ public class SlidingWindowedKStreamIntegrationTest {
             Optional.empty(),
             Arrays.asList(records)
         );
+    }
+
+    private void maybeSetTransactionalStateStores(final boolean transactional) {
+        if (transactional) {
+            // KIP-892 transactional state stores are only supported under exactly-once semantics, so
+            // enabling them requires exactly_once_v2 as the processing guarantee.
+            streamsConfiguration.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
     }
 
     private Materialized getMaterialized(final boolean withCache) {

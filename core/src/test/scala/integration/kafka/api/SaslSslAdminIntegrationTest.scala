@@ -13,7 +13,6 @@
 package kafka.api
 
 import java.time
-import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin._
@@ -33,6 +32,7 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._

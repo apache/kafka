@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 
@@ -26,6 +27,7 @@ import java.util.Objects;
  * {@code DslSessionParams} is a wrapper class for all parameters that function
  * as inputs to {@link DslStoreSuppliers#sessionStore(DslSessionParams)}.
  */
+@InterfaceAudience.Public
 public class DslSessionParams {
 
     private final String name;

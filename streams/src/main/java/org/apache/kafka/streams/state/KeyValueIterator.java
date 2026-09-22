@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KeyValue;
 
 import java.io.Closeable;
@@ -31,6 +32,7 @@ import java.util.Iterator;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
+@InterfaceAudience.Public
 public interface KeyValueIterator<K, V> extends Iterator<KeyValue<K, V>>, Closeable {
 
     @Override

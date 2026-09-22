@@ -165,7 +165,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     topic: String,
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
-    topicConfig: Properties = new Properties,
+    topicConfig: util.Map[String, String] = util.Map.of(),
     listenerName: ListenerName = listenerName,
     adminClientConfig: Properties = new Properties
   ): scala.collection.immutable.Map[Int, Int] = {

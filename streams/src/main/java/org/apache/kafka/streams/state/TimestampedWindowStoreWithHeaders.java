@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Interface for storing the aggregated values of fixed-size time windows with headers support.
@@ -30,5 +32,6 @@ package org.apache.kafka.streams.state;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
+@InterfaceAudience.Public
 public interface TimestampedWindowStoreWithHeaders<K, V> extends WindowStore<K, ValueTimestampHeaders<V>> {
 }

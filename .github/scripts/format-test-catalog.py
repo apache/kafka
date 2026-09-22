@@ -60,7 +60,7 @@ if __name__ == "__main__":
                         help="Output file location")
 
     if not os.getenv("GITHUB_WORKSPACE"):
-        print("This script is intended to by run by GitHub Actions.")
+        print("This script is intended to be run by GitHub Actions.")
         exit(1)
 
     args = parser.parse_args()

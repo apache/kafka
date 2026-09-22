@@ -45,7 +45,6 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -112,7 +111,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
      context. These additional labels from the request context should be added by broker prior
      exporting the metrics to the telemetry backend.
     */
-    private static final Set<String> EXCLUDE_LABELS = Collections.singleton("client_id");
+    private static final Set<String> EXCLUDE_LABELS = Set.of("client_id");
 
     public static final int DEFAULT_PUSH_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -976,7 +975,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             this.clientInstanceId = clientInstanceId;
             this.subscriptionId = subscriptionId;
             this.pushIntervalMs = pushIntervalMs;
-            this.acceptedCompressionTypes = Collections.unmodifiableList(acceptedCompressionTypes);
+            this.acceptedCompressionTypes = List.copyOf(acceptedCompressionTypes);
             this.deltaTemporality = deltaTemporality;
             this.selector = selector;
         }

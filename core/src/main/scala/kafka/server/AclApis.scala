@@ -31,6 +31,7 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.network.Request
 import org.apache.kafka.security.authorizer.AuthorizerUtils
+import org.apache.kafka.server.AuthHelper
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.purgatory.DelayedFuturePurgatory

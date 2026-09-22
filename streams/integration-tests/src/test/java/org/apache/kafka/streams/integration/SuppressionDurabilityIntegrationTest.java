@@ -51,7 +51,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,9 +75,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.qu
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 @Timeout(600)
@@ -103,9 +101,17 @@ public class SuppressionDurabilityIntegrationTest {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final long COMMIT_INTERVAL = 100L;
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldRecoverBufferAfterShutdown(final boolean withHeaders, final TestInfo testInfo) {
+    @ParameterizedTest(name = "{displayName} withHeaders={0}, transactional={1}")
+    @CsvSource({
+        // withHeaders, transactional
+        // transactional=false keeps the existing (at-least-once) coverage over the DSL store-format header dimension.
+        "false, false",
+        "true,  false",
+        // transactional=true always implies exactly-once-v2; a single sparse invocation exercises the
+        // suppress-buffer restore path over transactional (KIP-892) state stores.
+        "false, true"
+    })
+    public void shouldRecoverBufferAfterShutdown(final boolean withHeaders, final boolean transactional, final TestInfo testInfo) {
         final String testId = safeUniqueTestName(testInfo);
         final String appId = "appId_" + testId;
         final String input = "input" + testId;
@@ -154,6 +160,12 @@ public class SuppressionDurabilityIntegrationTest {
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
+        if (transactional) {
+            // Transactional state stores (KIP-892) require exactly-once-v2.
+            streamsConfig.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
+
         KafkaStreams driver = getStartedStreams(streamsConfig, builder, true);
         try {
             // start by putting some stuff in the buffer
@@ -175,7 +187,7 @@ public class SuppressionDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k3", 1L, scaledTime(3L))
                 )
             );
-            assertThat(eventCount.get(), is(0));
+            assertEquals(0, eventCount.get());
 
             // flush two of the first three events out.
             produceSynchronouslyToPartitionZero(
@@ -192,7 +204,7 @@ public class SuppressionDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k5", 1L, scaledTime(5L))
                 )
             );
-            assertThat(eventCount.get(), is(2));
+            assertEquals(2, eventCount.get());
             verifyOutput(
                 outputSuppressed,
                 asList(
@@ -206,7 +218,7 @@ public class SuppressionDurabilityIntegrationTest {
 
             // restart the driver
             driver.close();
-            assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
+            assertEquals(KafkaStreams.State.NOT_RUNNING, driver.state());
             driver = getStartedStreams(streamsConfig, builder, false);
 
 
@@ -227,8 +239,8 @@ public class SuppressionDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k8", 1L, scaledTime(8L))
                 )
             );
-            assertThat("suppress has apparently produced some duplicates. There should only be 5 output events.",
-                       eventCount.get(), is(5));
+            assertEquals(5, eventCount.get(),
+                "suppress has apparently produced some duplicates. There should only be 5 output events.");
 
             verifyOutput(
                 outputSuppressed,
@@ -269,7 +281,7 @@ public class SuppressionDurabilityIntegrationTest {
                 @Override
                 public void process(final Record<String, Long> record) {
                     try {
-                        assertThat(context.recordMetadata().get().topic(), equalTo(topic));
+                        assertEquals(topic, context.recordMetadata().get().topic());
                     } catch (final Throwable e) {
                         firstException.compareAndSet(null, e);
                         LOG.error("Validation Failed", e);

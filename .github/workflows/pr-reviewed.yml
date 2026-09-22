@@ -37,12 +37,8 @@ jobs:
           GITHUB_CONTEXT: ${{ toJson(github) }}
       - name: Save PR Number
         run: echo ${{ github.event.pull_request.number }} > PR_NUMBER.txt
-      - name: Save Reviewer Login
-        if: github.event_name == 'pull_request_review'
-        run: echo ${{ github.event.review.user.login }} > REVIEWER_LOGIN.txt
       - uses: actions/upload-artifact@v4
         with:
           name: PR_NUMBER.txt
           path: |
             PR_NUMBER.txt
-            REVIEWER_LOGIN.txt

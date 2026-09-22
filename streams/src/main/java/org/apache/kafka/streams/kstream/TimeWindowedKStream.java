@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -59,6 +60,7 @@ import java.time.Duration;
  *
  * @see SessionWindowedKStream
  */
+@InterfaceAudience.Public
 public interface TimeWindowedKStream<K, V> {
 
     /**

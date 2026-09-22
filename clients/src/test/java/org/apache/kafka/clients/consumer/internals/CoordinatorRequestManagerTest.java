@@ -73,7 +73,9 @@ public class CoordinatorRequestManagerTest {
 
         Optional<Node> coordinatorOpt = coordinatorManager.coordinator();
         assertTrue(coordinatorOpt.isPresent());
-        assertEquals(Integer.MAX_VALUE - node.id(), coordinatorOpt.get().id());
+        assertEquals(node.id(), coordinatorOpt.get().id());
+        assertInstanceOf(GroupCoordinatorNode.class, coordinatorOpt.get());
+        assertEquals(node.id(), Integer.parseInt(coordinatorOpt.get().idString()));
         assertEquals(node.host(), coordinatorOpt.get().host());
         assertEquals(node.port(), coordinatorOpt.get().port());
 
@@ -234,6 +236,28 @@ public class CoordinatorRequestManagerTest {
         time.sleep(1);
         res2 = coordinatorManager.poll(time.milliseconds());
         assertEquals(1, res2.unsentRequests.size());
+    }
+
+    @Test
+    public void testNoBusyPollWhileFindCoordinatorRequestInFlight() {
+        // KAFKA-20253: while a FindCoordinator request is in flight and its backoff has already
+        // elapsed, poll() must not return timeUntilNextPollMs == 0. Doing so drives the consumer
+        // network thread into a NetworkClient.poll(0) busy-spin, since there is nothing to send
+        // until the in-flight request completes.
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
+
+        // First poll sends a FindCoordinator request, marking it in-flight. Do NOT complete it.
+        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+
+        // Advance well past the retry backoff while the request is still in flight.
+        time.sleep(60_000);
+
+        NetworkClientDelegate.PollResult res2 = coordinatorManager.poll(time.milliseconds());
+        assertEquals(0, res2.unsentRequests.size(), "no new request should be sent while one is in flight");
+        assertTrue(res2.timeUntilNextPollMs > 0,
+            "must not busy-poll (timeUntilNextPollMs == 0) while a FindCoordinator request is in flight; got "
+                + res2.timeUntilNextPollMs);
     }
 
     @ParameterizedTest

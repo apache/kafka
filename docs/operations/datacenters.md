@@ -1,6 +1,6 @@
 ---
 title: Datacenters
-description: Datacenters
+description: Kafka deployment patterns for multiple datacenters.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 

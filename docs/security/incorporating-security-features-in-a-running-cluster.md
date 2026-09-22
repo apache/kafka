@@ -1,6 +1,6 @@
 ---
 title: Incorporating Security Features in a Running Cluster
-description: Incorporating Security Features in a Running Cluster
+description: Phased rollout of security features in a running Kafka cluster.
 weight: 6
 tags: ['kafka', 'docs']
 aliases: 

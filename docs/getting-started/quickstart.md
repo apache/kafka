@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: 
+description: Run Kafka locally, create a topic, produce and consume events, and explore Kafka Connect and Kafka Streams.
 weight: 3
 tags: ['kafka', 'docs']
 aliases: 
@@ -31,8 +31,8 @@ type: docs
 [Download](https://www.apache.org/dyn/closer.cgi?path=/kafka/4.3.0/kafka_2.13-4.3.0.tgz) the latest Kafka release and extract it: 
 
 ```bash
-$ tar -xzf kafka_2.13-4.3.0.tgz
-$ cd kafka_2.13-4.3.0
+tar -xzf kafka_2.13-4.3.0.tgz
+cd kafka_2.13-4.3.0
 ```
 
 ## Step 2: Start the Kafka environment
@@ -46,19 +46,19 @@ Kafka can be run using local scripts and downloaded files or the docker image.
 Generate a Cluster UUID
 
 ```bash
-$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"
+KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"
 ```
 
 Format Log Directories
 
 ```bash
-$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/server.properties
+bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/server.properties
 ```
 
 Start the Kafka Server
 
 ```bash
-$ bin/kafka-server-start.sh config/server.properties
+bin/kafka-server-start.sh config/server.properties
 ```
 
 Once the Kafka server has successfully launched, you will have a basic Kafka environment running and ready to use.
@@ -68,13 +68,13 @@ Once the Kafka server has successfully launched, you will have a basic Kafka env
 Get the Docker image:
 
 ```bash
-$ docker pull apache/kafka:4.3.0
+docker pull apache/kafka:4.3.0
 ```
 
 Start the Kafka Docker container: 
 
 ```bash
-$ docker run -p 9092:9092 apache/kafka:4.3.0
+docker run -p 9092:9092 apache/kafka:4.3.0
 ```
 
 ### Using GraalVM Based Native Apache Kafka Docker Image
@@ -82,13 +82,13 @@ $ docker run -p 9092:9092 apache/kafka:4.3.0
 Get the Docker image:
 
 ```bash
-$ docker pull apache/kafka-native:4.3.0
+docker pull apache/kafka-native:4.3.0
 ```
 
 Start the Kafka Docker container:
 
 ```bash
-$ docker run -p 9092:9092 apache/kafka-native:4.3.0
+docker run -p 9092:9092 apache/kafka-native:4.3.0
 ```
 
 ## Step 3: Create a topic to store your events
@@ -100,13 +100,18 @@ Example events are payment transactions, geolocation updates from mobile phones,
 So before you can write your first events, you must create a topic. Open another terminal session and run: 
 
 ```bash
-$ bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092
+bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092
 ```
 
 All of Kafka's command line tools have additional options: run the `kafka-topics.sh` command without any arguments to display usage information. For example, it can also show you [details such as the partition count](/{version}/getting-started/introduction/#main-concepts-and-terminology) of the new topic: 
 
 ```bash
-$ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092
+bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092
+```
+
+The output should look similar to:
+
+```text
 Topic: quickstart-events        TopicId: NPmZHyhbR9y00wMglMH2sg PartitionCount: 1       ReplicationFactor: 1	Configs:
 Topic: quickstart-events Partition: 0    Leader: 0   Replicas: 0 Isr: 0
 ```
@@ -118,9 +123,14 @@ A Kafka client communicates with the Kafka brokers via the network for writing (
 Run the console producer client to write a few events into your topic. By default, each line you enter will result in a separate event being written to the topic. 
 
 ```bash
-$ bin/kafka-console-producer.sh --topic quickstart-events --bootstrap-server localhost:9092
->This is my first event
->This is my second event
+bin/kafka-console-producer.sh --topic quickstart-events --bootstrap-server localhost:9092
+```
+
+When the `>` prompt appears, enter a few events, one per line:
+
+```text
+This is my first event
+This is my second event
 ```
 
 You can stop the producer client with `Ctrl-C` at any time.
@@ -130,7 +140,12 @@ You can stop the producer client with `Ctrl-C` at any time.
 Open another terminal session and run the console consumer client to read the events you just created:
 
 ```bash
-$ bin/kafka-console-consumer.sh --topic quickstart-events --from-beginning --bootstrap-server localhost:9092
+bin/kafka-console-consumer.sh --topic quickstart-events --from-beginning --bootstrap-server localhost:9092
+```
+
+Example output:
+
+```text
 This is my first event
 This is my second event
 ```
@@ -152,27 +167,20 @@ First, make sure to add `connect-file-4.3.0.jar` to the `plugin.path` property i
 Edit the `config/connect-standalone.properties` file, add or change the `plugin.path` configuration property match the following, and save the file: 
 
 ```bash
-$ echo "plugin.path=libs/connect-file-4.3.0.jar" >> config/connect-standalone.properties
+echo "plugin.path=libs/connect-file-4.3.0.jar" >> config/connect-standalone.properties
 ```
 
 Then, start by creating some seed data to test with: 
 
 ```bash
-$ echo -e "foo
-bar" > test.txt
-```
-
-Or on Windows: 
-
-```bash
-$ echo foo > test.txt
-$ echo bar >> test.txt
+echo foo > test.txt
+echo bar >> test.txt
 ```
 
 Next, we'll start two connectors running in _standalone_ mode, which means they run in a single, local, dedicated process. We provide three configuration files as parameters. The first is always the configuration for the Kafka Connect process, containing common configuration such as the Kafka brokers to connect to and the serialization format for data. The remaining configuration files each specify a connector to create. These files include a unique connector name, the connector class to instantiate, and any other configuration required by the connector. 
 
 ```bash
-$ bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties
+bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties
 ```
 
 These sample configuration files, included with Kafka, use the default local cluster configuration you started earlier and create two connectors: the first is a source connector that reads lines from an input file and produces each to a Kafka topic and the second is a sink connector that reads messages from a Kafka topic and produces each as a line in an output file. 
@@ -180,7 +188,12 @@ These sample configuration files, included with Kafka, use the default local clu
 During startup you'll see a number of log messages, including some indicating that the connectors are being instantiated. Once the Kafka Connect process has started, the source connector should start reading lines from `test.txt` and producing them to the topic `connect-test`, and the sink connector should start reading messages from the topic `connect-test` and write them to the file `test.sink.txt`. We can verify the data has been delivered through the entire pipeline by examining the contents of the output file: 
 
 ```bash
-$ more test.sink.txt
+more test.sink.txt
+```
+
+Example output:
+
+```text
 foo
 bar
 ```
@@ -188,7 +201,12 @@ bar
 Note that the data is being stored in the Kafka topic `connect-test`, so we can also run a console consumer to see the data in the topic (or use custom consumer code to process it): 
 
 ```bash
-$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
+bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
+```
+
+Example output:
+
+```text
 {"schema":{"type":"string","optional":false},"payload":"foo"}
 {"schema":{"type":"string","optional":false},"payload":"bar"}
 …
@@ -197,7 +215,7 @@ $ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connec
 The connectors continue to process data, so we can add data to the file and see it move through the pipeline:
 
 ```bash
-$ echo "Another line" >> test.txt
+echo "Another line" >> test.txt
 ```
 
 You should see the line appear in the console consumer output and in the sink file.
@@ -233,7 +251,7 @@ Now that you reached the end of the quickstart, feel free to tear down the Kafka
 If you also want to delete any data of your local Kafka environment including any events you have created along the way, run the command: 
 
 ```bash
-$ rm -rf /tmp/kafka-logs /tmp/kraft-combined-logs
+rm -rf /tmp/kafka-logs /tmp/kraft-combined-logs
 ```
 
 ## Congratulations!

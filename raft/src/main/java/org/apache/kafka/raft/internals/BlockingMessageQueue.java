@@ -17,60 +17,104 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.RaftMessage;
 import org.apache.kafka.raft.RaftMessageQueue;
 
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BlockingMessageQueue implements RaftMessageQueue {
-    private static final RaftMessage WAKEUP_MESSAGE = new RaftMessage() {
-        @Override
-        public int correlationId() {
-            return 0;
+    private final BlockingQueue<InternalQueueEntry> queue = new LinkedBlockingQueue<>();
+    private final AtomicInteger messageCount = new AtomicInteger(0);
+
+    /**
+     * Internal queue entry type used to discriminate between messages and wakeup signals.
+     *
+     * This sealed interface ensures type safety when polling the queue.
+     */
+    private sealed interface InternalQueueEntry { }
+
+    /**
+     * Marker entry used to unblock threads waiting on {@link #poll(long)} without delivering a message.
+     *
+     * Wakeup entries are drained during polling and do not contribute to the message count.
+     */
+    private record WakeupMarker() implements InternalQueueEntry { }
+
+    private static final WakeupMarker WAKEUP = new WakeupMarker();
+
+    /**
+     * A queue entry that contains a message and its associated future.
+     */
+    private static final class MessageEntry implements QueueEntry, InternalQueueEntry {
+        private final CompletableFuture<RaftMessage> future = new CompletableFuture<>();
+        private final RaftMessage message;
+
+        MessageEntry(RaftMessage message) {
+            this.message = message;
         }
 
         @Override
-        public ApiMessage data() {
-            return null;
+        public RaftMessage message() {
+            return message;
         }
-    };
 
-    private final BlockingQueue<RaftMessage> queue = new LinkedBlockingQueue<>();
-    private final AtomicInteger size = new AtomicInteger(0);
+        @Override
+        public CompletableFuture<RaftMessage> future() {
+            return future;
+        }
+
+        @Override
+        public String toString() {
+            return String.format(
+                "MessageEntry(message=%s, future.isDone=%s)",
+                message,
+                future.isDone()
+            );
+        }
+    }
 
     @Override
-    public RaftMessage poll(long timeoutMs) {
+    public Optional<QueueEntry> poll(long timeoutMs) {
         try {
-            RaftMessage message = queue.poll(timeoutMs, TimeUnit.MILLISECONDS);
-            if (message == null || message == WAKEUP_MESSAGE) {
-                return null;
-            } else {
-                size.decrementAndGet();
-                return message;
+            InternalQueueEntry entry = queue.poll(timeoutMs, TimeUnit.MILLISECONDS);
+            // Drain all wakeup markers until we find a message or the queue is empty
+            while (entry instanceof WakeupMarker) {
+                entry = queue.poll();
             }
+            if (entry instanceof MessageEntry messageEntry) {
+                messageCount.decrementAndGet();
+                return Optional.of(messageEntry);
+            }
+            return Optional.empty();
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
     }
 
     @Override
-    public void add(RaftMessage message) {
-        queue.add(message);
-        size.incrementAndGet();
+    public CompletionStage<RaftMessage> add(RaftMessage message) {
+        if (message == null) {
+            throw new IllegalArgumentException("message cannot be null");
+        }
+        var entry = new MessageEntry(message);
+        queue.add(entry);
+        messageCount.incrementAndGet();
+        return entry.future();
     }
 
     @Override
     public boolean isEmpty() {
-        return size.get() == 0;
+        return messageCount.get() == 0;
     }
 
     @Override
     public void wakeup() {
-        queue.add(WAKEUP_MESSAGE);
+        queue.add(WAKEUP);
     }
-
 }

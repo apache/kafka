@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.connector;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
@@ -31,6 +32,7 @@ import java.util.Objects;
  * notion of offset, it is not included here because they differ in type.
  * </p>
  */
+@InterfaceAudience.Public
 public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     private final String topic;
     private final Integer kafkaPartition;
