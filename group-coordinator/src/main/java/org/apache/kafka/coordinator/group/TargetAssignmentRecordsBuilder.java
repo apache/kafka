@@ -246,8 +246,7 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
                 newMemberAssignment = emptyMemberAssignment();
             }
 
-            if (oldMemberAssignment == null ||
-                !newMemberAssignment.equals(oldMemberAssignment)) {
+            if (oldMemberAssignment == null || !newMemberAssignment.equals(oldMemberAssignment)) {
                 // If the member had no assignment or had a different assignment, we
                 // create a record for the new assignment.
                 records.add(newTargetAssignmentRecord(
