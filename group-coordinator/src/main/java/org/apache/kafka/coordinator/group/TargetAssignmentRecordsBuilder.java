@@ -180,7 +180,17 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
      *
      * @param records The list to accumulate records.
      */
+    @SuppressWarnings("NPathComplexity")
     public void build(List<CoordinatorRecord> records) {
+        if (targetAssignmentMetadata == null)
+            throw new IllegalArgumentException("Target assignment metadata must be set.");
+        if (currentMemberIds == null)
+            throw new IllegalArgumentException("Current member ids must be set.");
+        if (currentTargetAssignment == null)
+            throw new IllegalArgumentException("Current target assignment must be set.");
+        if (newTargetAssignment == null)
+            throw new IllegalArgumentException("New target assignment must be set.");
+
         // The members in the group may have changed while the target assignment was computed.
         // We want to act as if concurrent member operations such as leaves and static member
         // replacements happened *after* the target assignment was computed.
