@@ -4180,8 +4180,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @Test
   def testListStreamsGroupOffsets(): Unit = {
-    val streamsGroupId = "stream_group_id"
-    val testTopicName = "test_topic"
+    val streamsGroupId = "stream_group_list"
+    val testTopicName = "test_list_streams_group_offsets"
     val testNumPartitions = 3
 
     val config = createConfig
@@ -4255,8 +4255,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @Test
   def testDeleteStreamsGroupOffsets(): Unit = {
-    val streamsGroupId = "stream_group_id"
-    val testTopicName = "test_topic"
+    val streamsGroupId = "stream_group_delete"
+    val testTopicName = "test_delete_streams_group_offsets"
     val testNumPartitions = 3
 
     val config = createConfig
@@ -4344,8 +4344,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @Test
   def testAlterStreamsGroupOffsets(): Unit = {
-    val streamsGroupId = "stream_group_id"
-    val testTopicName = "test_topic"
+    val streamsGroupId = "stream_group_alter"
+    val testTopicName = "test_alter_streams_group_offsets"
     val testNumPartitions = 3
 
     val config = createConfig
