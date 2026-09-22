@@ -146,6 +146,11 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  *   <li>{@link ConsumerConfig#GROUP_ID_CONFIG "group.id"} (&lt;application.id&gt;) - Streams client will always use the application ID a consumer group ID</li>
  *   <li>{@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG "enable.auto.commit"} (false) - Streams client will always disable/turn off auto committing</li>
  *   <li>{@link ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG "partition.assignment.strategy"} (<code>StreamsPartitionAssignor</code>) - Streams client will always use its own partition assignor</li>
+ *   <li>{@link ConsumerConfig#ALLOW_AUTO_CREATE_TOPICS_CONFIG "allow.auto.create.topics"} (false) - Consumers will never trigger automatic topic creation</li>
+ *   <li>{@link ConsumerConfig#GROUP_PROTOCOL_CONFIG "group.protocol"} as a consumer config, e.g. {@code consumer.group.protocol} (classic) -
+ *       Streams ignores it; to select the rebalance protocol, set the Streams config {@link #GROUP_PROTOCOL_CONFIG "group.protocol"} instead</li>
+ *   <li>{@link CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG "bootstrap.resolve.timeout.ms"} (0) - All clients created by Streams
+ *       will always resolve bootstrap servers synchronously</li>
  * </ul>
  *
  * If {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} is set to {@link #EXACTLY_ONCE_V2 "exactly_once_v2"},
@@ -153,6 +158,8 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  * <ul>
  *   <li>{@link ConsumerConfig#ISOLATION_LEVEL_CONFIG "isolation.level"} (read_committed) - Consumers will always read committed data only</li>
  *   <li>{@link ProducerConfig#ENABLE_IDEMPOTENCE_CONFIG "enable.idempotence"} (true) - Producer will always have idempotency enabled</li>
+ *   <li>{@link ProducerConfig#TRANSACTIONAL_ID_CONFIG "transactional.id"} (generated) - Streams sets a unique transactional ID for the
+ *       producer of each stream thread</li>
  * </ul>
  *
  * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.Topology, Properties)
