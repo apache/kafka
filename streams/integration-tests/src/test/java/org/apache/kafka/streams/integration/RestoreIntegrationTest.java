@@ -37,6 +37,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -257,7 +258,7 @@ public class RestoreIntegrationTest {
                 consumerConfig, outputTopic, initialKeyValues);
 
         // wipe out state store to trigger restore process on restart
-        streams.close();
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         streams.cleanUp();
 
         // Restart the stream instance. There should not be exception handling the null
@@ -318,7 +319,8 @@ public class RestoreIntegrationTest {
 
         if (useNewProtocol) {
             // For new protocol, we need to stop the streams instance before altering offsets
-            kafkaStreams.close(Duration.ofSeconds(60));
+            kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+                .withTimeout(Duration.ofSeconds(60)));
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
             setCheckpointedOffset(props, inputStream, offsetCheckpointed);
 
@@ -383,7 +385,7 @@ public class RestoreIntegrationTest {
 
         if (useNewProtocol) {
             // For new protocol, we need to stop the streams instance before altering offsets
-            kafkaStreams.close();
+            kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
             setCheckpointedOffset(props, inputStream, offsetCheckpointed);
 
@@ -664,7 +666,7 @@ public class RestoreIntegrationTest {
         validateReceivedMessages(sampleData, outputTopic);
 
         // Close kafkaStreams1 (with cleanup) and start it again to force the restoration of the state.
-        kafkaStreams.close();
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
 
         final TestStateRestoreListener kafkaStreams1StateRestoreListener = new TestStateRestoreListener("ks1", RESTORATION_DELAY);
