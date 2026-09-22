@@ -48,7 +48,9 @@ public class TargetAssignmentRecordsBuilderTest {
         List<CoordinatorRecord> records =
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                 .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                .withPreviousStaticMembers(Map.of())
                 .withCurrentMemberIds(Set.of())
+                .withCurrentStaticMembers(Map.of())
                 .withCurrentTargetAssignment(Map.of())
                 .withNewTargetAssignment(Map.of())
                 .build();
@@ -66,7 +68,9 @@ public class TargetAssignmentRecordsBuilderTest {
         List<CoordinatorRecord> records =
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                 .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                .withPreviousStaticMembers(Map.of())
                 .withCurrentMemberIds(Set.of("member-1", "member-2"))
+                .withCurrentStaticMembers(Map.of())
                 .withCurrentTargetAssignment(Map.of(
                     "member-1", new Assignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -102,7 +106,9 @@ public class TargetAssignmentRecordsBuilderTest {
         List<CoordinatorRecord> records =
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                 .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                .withPreviousStaticMembers(Map.of())
                 .withCurrentMemberIds(Set.of("member-1", "member-2"))
+                .withCurrentStaticMembers(Map.of())
                 .withCurrentTargetAssignment(Map.of(
                     "member-1", new Assignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -148,7 +154,9 @@ public class TargetAssignmentRecordsBuilderTest {
         List<CoordinatorRecord> records =
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                 .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                .withPreviousStaticMembers(Map.of())
                 .withCurrentMemberIds(Set.of("member-1", "member-2", "member-3"))
+                .withCurrentStaticMembers(Map.of())
                 .withCurrentTargetAssignment(Map.of(
                     "member-1", new Assignment(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
@@ -200,7 +208,9 @@ public class TargetAssignmentRecordsBuilderTest {
         List<CoordinatorRecord> records =
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                 .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                .withPreviousStaticMembers(Map.of())
                 .withCurrentMemberIds(Set.of("member-1"))
+                .withCurrentStaticMembers(Map.of())
                 .withCurrentTargetAssignment(Map.of())
                 // The assignor did not include an entry for member 1.
                 .withNewTargetAssignment(Map.of())
@@ -221,7 +231,9 @@ public class TargetAssignmentRecordsBuilderTest {
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                 .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
                 // Member 2 has left.
+                .withPreviousStaticMembers(Map.of())
                 .withCurrentMemberIds(Set.of("member-1"))
+                .withCurrentStaticMembers(Map.of())
                 .withCurrentTargetAssignment(Map.of(
                     "member-1", new Assignment(mkAssignment(
                         mkTopicAssignment(topicId, 0, 1, 2, 3)
@@ -256,7 +268,9 @@ public class TargetAssignmentRecordsBuilderTest {
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                 .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
                 // Member 2 has joined.
+                .withPreviousStaticMembers(Map.of())
                 .withCurrentMemberIds(Set.of("member-1", "member-2"))
+                .withCurrentStaticMembers(Map.of())
                 .withCurrentTargetAssignment(Map.of(
                     "member-1", new Assignment(mkAssignment(
                         mkTopicAssignment(topicId, 0, 1, 2)
@@ -283,9 +297,9 @@ public class TargetAssignmentRecordsBuilderTest {
         List<CoordinatorRecord> records =
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                 .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
-                .withCurrentMemberIds(Set.of("member-1", "member-3"))
                 // Static member 2 has been replaced with member 3.
                 .withPreviousStaticMembers(Map.of("instance-id", "member-2"))
+                .withCurrentMemberIds(Set.of("member-1", "member-3"))
                 .withCurrentStaticMembers(Map.of("instance-id", "member-3"))
                 .withCurrentTargetAssignment(Map.of(
                     "member-1", new Assignment(mkAssignment(
@@ -329,8 +343,8 @@ public class TargetAssignmentRecordsBuilderTest {
                 //   member id 1 has been around the whole time and member id 2 is new.
                 // instance-id-2 has "moved" from member id 3 to member id 4.
                 //   member id 3 left and member id 4 has been around the whole time.
-                .withCurrentMemberIds(Set.of("member-1", "member-2", "member-4"))
                 .withPreviousStaticMembers(Map.of("instance-id-1", "member-1", "instance-id-2", "member-3"))
+                .withCurrentMemberIds(Set.of("member-1", "member-2", "member-4"))
                 .withCurrentStaticMembers(Map.of("instance-id-1", "member-2", "instance-id-2", "member-4"))
                 .withCurrentTargetAssignment(Map.of())
                 .withNewTargetAssignment(Map.of(
@@ -373,7 +387,9 @@ public class TargetAssignmentRecordsBuilderTest {
             List<CoordinatorRecord> records =
                 new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                     .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                    .withPreviousStaticMembers(Map.of())
                     .withCurrentMemberIds(Set.of("member-1"))
+                    .withCurrentStaticMembers(Map.of())
                     .withCurrentTargetAssignment(Map.of())
                     .withNewTargetAssignment(Map.of())
                     .build();
@@ -392,7 +408,9 @@ public class TargetAssignmentRecordsBuilderTest {
             List<CoordinatorRecord> records =
                 new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                     .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                    .withPreviousStaticMembers(Map.of())
                     .withCurrentMemberIds(Set.of("member-1"))
+                    .withCurrentStaticMembers(Map.of())
                     .withCurrentTargetAssignment(Map.of(
                         "member-1", new Assignment(mkAssignment(mkTopicAssignment(topicId, 0)))
                     ))
@@ -418,7 +436,9 @@ public class TargetAssignmentRecordsBuilderTest {
             List<CoordinatorRecord> records =
                 new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(LOG, "my-group")
                     .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                    .withPreviousStaticMembers(Map.of())
                     .withCurrentMemberIds(Set.of("member-1"))
+                    .withCurrentStaticMembers(Map.of())
                     .withCurrentTargetAssignment(Map.of())
                     .withNewTargetAssignment(Map.of())
                     .build();
@@ -437,7 +457,9 @@ public class TargetAssignmentRecordsBuilderTest {
             List<CoordinatorRecord> records =
                 new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(LOG, "my-group")
                     .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                    .withPreviousStaticMembers(Map.of())
                     .withCurrentMemberIds(Set.of("member-1"))
+                    .withCurrentStaticMembers(Map.of())
                     .withCurrentTargetAssignment(Map.of(
                         "member-1", new Assignment(mkAssignment(mkTopicAssignment(topicId, 0, 1)))
                     ))
@@ -463,7 +485,9 @@ public class TargetAssignmentRecordsBuilderTest {
             List<CoordinatorRecord> records =
                 new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(LOG, "my-group")
                     .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                    .withPreviousStaticMembers(Map.of())
                     .withCurrentMemberIds(Set.of("member-1"))
+                    .withCurrentStaticMembers(Map.of())
                     .withCurrentTargetAssignment(Map.of())
                     .withNewTargetAssignment(Map.of())
                     .build();
@@ -482,7 +506,9 @@ public class TargetAssignmentRecordsBuilderTest {
             List<CoordinatorRecord> records =
                 new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(LOG, "my-group")
                     .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
+                    .withPreviousStaticMembers(Map.of())
                     .withCurrentMemberIds(Set.of("member-1"))
+                    .withCurrentStaticMembers(Map.of())
                     .withCurrentTargetAssignment(Map.of(
                         "member-1", mkTasksTuple(TaskRole.ACTIVE,
                             mkTasks(subtopology1, 0)

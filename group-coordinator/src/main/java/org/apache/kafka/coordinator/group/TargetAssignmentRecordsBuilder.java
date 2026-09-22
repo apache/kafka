@@ -62,7 +62,7 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
     /**
      * The static members in the group at the time the new target assignment was computed.
      */
-    private Map<String, String> previousStaticMembers = Map.of();
+    private Map<String, String> previousStaticMembers;
 
     /**
      * The current member ids in the group.
@@ -72,7 +72,7 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
     /**
      * The current static members in the group.
      */
-    private Map<String, String> currentStaticMembers = Map.of();
+    private Map<String, String> currentStaticMembers;
 
     /**
      * The current target assignment.
@@ -184,8 +184,12 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
     public void build(List<CoordinatorRecord> records) {
         if (targetAssignmentMetadata == null)
             throw new IllegalArgumentException("Target assignment metadata must be set.");
+        if (previousStaticMembers == null)
+            throw new IllegalArgumentException("Previous static members must be set.");
         if (currentMemberIds == null)
             throw new IllegalArgumentException("Current member ids must be set.");
+        if (currentStaticMembers == null)
+            throw new IllegalArgumentException("Current static members must be set.");
         if (currentTargetAssignment == null)
             throw new IllegalArgumentException("Current target assignment must be set.");
         if (newTargetAssignment == null)
