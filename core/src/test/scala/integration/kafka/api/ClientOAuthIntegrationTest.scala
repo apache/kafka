@@ -93,7 +93,14 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
 
     val listenerNamePrefix = s"listener.name.${listenerName.value().toLowerCase}"
 
-    serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${SaslConfigs.SASL_JAAS_CONFIG}", s"${classOf[OAuthBearerLoginModule].getName} required ;")
+    // The JWKS endpoint of the mock server is plain HTTP, so these ssl.* options are never used to build
+    // an SSL socket factory; they only exercise the broker's tokenless login path (KAFKA-21143).
+    val brokerJaasOptions =
+      if (testInfo.getTestMethod.get.getName == "testBrokerStartsWithJaasSslOptionsForJwks") {
+        val truststore = TestUtils.tempFile()
+        s"""ssl.truststore.location="${truststore.getAbsolutePath}" ssl.truststore.type="PKCS12" ssl.truststore.password="changeit""""
+      } else ""
+    serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${SaslConfigs.SASL_JAAS_CONFIG}", s"${classOf[OAuthBearerLoginModule].getName} required $brokerJaasOptions;")
     serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE}", issuerId)
     serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER}", mockOAuthServer.issuerUrl(issuerId).toString)
     serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL}", jwksUrl)
@@ -154,6 +161,23 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     assertDoesNotThrow(() => createProducer(configOverrides = configs))
     assertDoesNotThrow(() => createConsumer(configOverrides = configs))
     assertDoesNotThrow(() => createAdminClient(configOverrides = configs))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testBrokerStartsWithJaasSslOptionsForJwks(groupProtocol: String): Unit = {
+    val topic = "jaas-ssl-options-test"
+    val configs = defaultClientCredentialsConfigs()
+
+    val admin = createAdminClient(configOverrides = configs)
+    admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
+
+    val producer = createProducer(configOverrides = configs)
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "key".getBytes, "value".getBytes)).get()
+
+    val consumer = createConsumer(configOverrides = configs)
+    consumer.subscribe(Collections.singletonList(topic))
+    assertEquals(1, KafkaTestUtils.consumeRecords(consumer, 1).size)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
