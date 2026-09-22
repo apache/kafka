@@ -86,16 +86,25 @@ import java.util.stream.Stream;
  * Strategies: {@code full} reserves a whole {@code batch.size} buffer per batch; {@code full-lz4} is
  * the same compressed; {@code incremental} is {@link ChunkedRecordAccumulator} over an
  * {@link BufferPool.AllocationMode#INCREMENTAL} pool, taking chunks on demand. Under {@code incremental}
- * a batch extends when a record does not fit its attached chunks. Larger batches and values load the
- * extension path more heavily, e.g. {@code -p batchSize=262144 -p valueSize=8192}.
+ * a batch extends when a record does not fit its attached chunks; larger batches and values load that
+ * path more heavily.
  * <p>
  * {@code full-lz4} appends a zero-filled value, so it measures the compressed path on a highly
  * compressible payload.
  * <p>
  * TODO: extend to support compression under {@code incremental}.
  * <p>
- * Run a subset with, for example,
- * {@code jmh.sh -p strategy=full,incremental -p batchSize=16384 ProducerAppendPathBenchmark.steadyStateAppend}.
+ * Some examples of how to run it:
+ * <pre>
+ * # everything
+ * jmh-benchmarks/jmh.sh ProducerAppendPathBenchmark
+ * # both strategies, per-append cost only
+ * jmh-benchmarks/jmh.sh -p strategy=full,incremental ProducerAppendPathBenchmark.steadyStateAppend
+ * # load the incremental extension path
+ * jmh-benchmarks/jmh.sh -p strategy=incremental -p batchSize=262144 -p valueSize=8192 ProducerAppendPathBenchmark
+ * # allocation per record
+ * jmh-benchmarks/jmh.sh -prof gc ProducerAppendPathBenchmark
+ * </pre>
  */
 @State(Scope.Benchmark)
 @Fork(value = 3, jvmArgs = {"-Xmx3g"})
