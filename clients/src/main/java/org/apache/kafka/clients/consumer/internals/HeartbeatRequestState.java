@@ -71,15 +71,8 @@ public class HeartbeatRequestState extends RequestState {
     public long timeToNextHeartbeatMs(final long currentTimeMs) {
         if (heartbeatTimer.isExpired()) {
             if (requestInFlight()) {
-                // The timer can be expired while a request is in flight both for the first heartbeat (the
-                // interval is initialised to 0 and only learned from the first response) and for any later
-                // heartbeat whose response takes longer than the interval. No heartbeat can be sent until
-                // the in-flight one completes. The remaining backoff is measured from the last response and,
-                // with default settings, is already 0 here, which would busy-spin both the application and
-                // network threads. Wait the initial retry backoff instead of waiting forever: the network
-                // thread still has to notice a request timeout promptly
-                // (NetworkClient only checks timed-out requests after selector.poll returns, and
-                // ConsumerNetworkThread caps the poll at 5s), so it must come back and re-check.
+                // The heartbeat timer can expire while a request is in flight, and the backoff since the
+                // last response may already be exhausted. Wait the retry backoff to avoid busy-spinning.
                 return retryBackoffMs();
             }
             return remainingBackoffMs(currentTimeMs);
