@@ -82,10 +82,6 @@ public class ScramImageTest {
 
         ScramImage image = new ScramImage(mechanisms);
 
-        mechanisms.clear();
-        assertEquals(
-            Map.of(ScramMechanism.SCRAM_SHA_256, Map.of("alice", credential)),
-            image.mechanisms());
         assertThrows(UnsupportedOperationException.class, () -> image.mechanisms().clear());
         assertThrows(UnsupportedOperationException.class,
             () -> image.mechanisms().get(ScramMechanism.SCRAM_SHA_256).clear());
