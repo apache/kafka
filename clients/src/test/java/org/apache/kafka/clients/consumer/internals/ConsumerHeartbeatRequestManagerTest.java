@@ -491,8 +491,6 @@ public class ConsumerHeartbeatRequestManagerTest
         long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
         assertTrue(result > 0,
             "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy-spin; got " + result);
-        // maximumTimeToWait is min(pollTimer.remainingMs() / 2, retry backoff), and half of the remaining
-        // max.poll.interval.ms is still larger than the backoff at this point.
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
     }
 
@@ -551,8 +549,6 @@ public class ConsumerHeartbeatRequestManagerTest
         long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
         assertTrue(result > 0,
             "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy-spin; got " + result);
-        // maximumTimeToWait is min(pollTimer.remainingMs() / 2, retry backoff), and half of the remaining
-        // max.poll.interval.ms is still larger than the backoff at this point.
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
     }
 
