@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -520,6 +521,45 @@ public class AbstractConfigTest {
     }
 
     @Test
+    public void testConfigProvidersClosedWhenLaterProviderClassNotFound() {
+        Properties props = new Properties();
+        props.put("config.providers", "a,b");
+        props.put("config.providers.a.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        props.put("config.providers.a.param.testId", id);
+        props.put("config.providers.b.class", "org.example.DoesNotExist");
+        ConfigException e = assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(props));
+        assertTrue(e.getMessage().contains("Could not load config provider class"));
+        MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testConfigProvidersClosedWhenLaterProviderConfigureThrows() {
+        Properties props = new Properties();
+        props.put("config.providers", "a,b");
+        props.put("config.providers.a.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        props.put("config.providers.a.param.testId", id);
+        // provider "b" is missing the required testId param, so its configure() will throw
+        props.put("config.providers.b.class", MockFileConfigProvider.class.getName());
+        RuntimeException e = assertThrows(RuntimeException.class, () -> new TestIndirectConfigResolution(props));
+        assertTrue(e.getMessage().contains("missing 'testId' config"));
+        MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testConfigProvidersClosedWhenGetThrows() {
+        Properties props = new Properties();
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class", ThrowingGetConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        props.put("config.providers.file.param.testId", id);
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(props));
+        MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
     public void testAutoConfigResolutionWithInvalidConfigProviderClass() {
         // Test Case: Invalid class for Config Provider
         Properties props = new Properties();
@@ -653,6 +693,13 @@ public class AbstractConfigTest {
 
         public TestIndirectConfigResolution(Map<?, ?> props, Map<String, ?> providers) {
             super(CONFIG, props, providers, true);
+        }
+    }
+
+    public static class ThrowingGetConfigProvider extends MockFileConfigProvider {
+        @Override
+        public ConfigData get(String path, Set<String> keys) {
+            throw new ConfigException("simulated failure in ConfigProvider#get");
         }
     }
 
