@@ -220,14 +220,14 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
                 continue;
             }
 
-            if (newTargetAssignment.containsKey(newMemberId)) {
-                // The new member id has been in the group the whole time. Avoid creating a
-                // remapping entry. Note that this is best effort, since newTargetAssignment may not
-                // contain entries for every member that used to be in the group.
-                continue;
-            }
-
             if (newMemberId != null) {
+                if (newTargetAssignment.containsKey(newMemberId)) {
+                    // The new member id has been in the group the whole time. Avoid creating a
+                    // remapping entry. Note that this is best effort, since newTargetAssignment may not
+                    // contain entries for every member that used to be in the group.
+                    continue;
+                }
+
                 staticMemberIdRemapping.put(newMemberId, oldMemberId);
             }
         }
