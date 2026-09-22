@@ -316,30 +316,23 @@ public class TargetAssignmentRecordsBuilderTest {
 
     @Test
     public void testStaticMemberAndMemberIdConflict() {
-        // This scenario will never happen when using the official Java client and may be forbidden
-        // in the future.
+        // This scenario can arise when static members leave the group fully and rejoin with the
+        // same member id but different instance id. It will never happen when using the official
+        // Java client.
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
         List<CoordinatorRecord> records =
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, "my-group")
                 .withTargetAssignmentMetadata(new TargetAssignmentMetadata(20, 12345L))
-                // instance-id-1 has "moved" from member 1 to member 2.
-                //   member 1 has been around the whole time and member 2 is new.
-                // instance-id-2 has "moved" from member 3 to member 4.
-                //   member 3 left and member 4 has been around the whole time.
+                // instance-id-1 has "moved" from member id 1 to member id 2.
+                //   member id 1 has been around the whole time and member id 2 is new.
+                // instance-id-2 has "moved" from member id 3 to member id 4.
+                //   member id 3 left and member id 4 has been around the whole time.
                 .withCurrentMemberIds(Set.of("member-1", "member-2", "member-4"))
                 .withPreviousStaticMembers(Map.of("instance-id-1", "member-1", "instance-id-2", "member-3"))
                 .withCurrentStaticMembers(Map.of("instance-id-1", "member-2", "instance-id-2", "member-4"))
-                .withCurrentTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
-                        mkTopicAssignment(topicId1, 0, 1, 2)
-                    )),
-                    // member-3's assignment was removed when they left.
-                    "member-4", new Assignment(mkAssignment(
-                        mkTopicAssignment(topicId2, 3, 4, 5)
-                    ))
-                ))
+                .withCurrentTargetAssignment(Map.of())
                 .withNewTargetAssignment(Map.of(
                     "member-1", new Assignment(mkAssignment(
                         mkTopicAssignment(topicId1, 0, 1, 2, 3)
@@ -355,14 +348,15 @@ public class TargetAssignmentRecordsBuilderTest {
 
         assertUnorderedRecordsEquals(List.of(
             List.of(
-                // Member 1 gets the target assignment.
+                // Member 1 gets the target assignment because we prioritize matching on member id.
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                     mkTopicAssignment(topicId1, 0, 1, 2, 3)
                 )),
-                // Member 2 does not get member 1's target assignment.
+                // Member 2 does not get member 1's target assignment even though it has a matching instance id.
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment()),
                 // Member 3 gets nothing because it is no longer in the group.
-                // Member 4 gets the target assignment.
+                // Member 4 gets the target assignment of member id 4, even though it has member 3's instance id,
+                // because we prioritize matching on member id.
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord("my-group", "member-4", mkAssignment(
                     mkTopicAssignment(topicId2, 4, 5, 6, 7)
                 ))

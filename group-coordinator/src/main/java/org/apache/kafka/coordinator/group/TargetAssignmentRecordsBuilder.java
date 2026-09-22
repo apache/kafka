@@ -199,14 +199,14 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
         //    assignment.
         //  * When static members are replaced, the group coordinator moves the assignment from the
         //    old member id to the new member id.
-        //  * When members rejoin with the same member id but a different instance id, they keep
-        //    their existing assignment. This operation will never happen when using the official
-        //    Java client and may be forbidden in the future.
         //
         // Thus, when building the new target assignment records,
         //  * we should not emit records for members that have left the group
         //  * we should relabel records with the latest member id for static members
-        //  * we should match up members using member ids first, then fall back to instance ids.
+        //
+        // It is allowed by the protocol, but extremely unlikely, for static members to fully leave
+        // the group and rejoin with the same member id but different instance ids. We choose to
+        // match up assignments using member ids first, then fall back to instance ids.
 
         // Build map of replacement member ids for static members that have churned.
         Map<String, String> staticMemberIdRemapping = new HashMap<>();
@@ -242,7 +242,7 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
 
                 if (currentMemberIds.contains(oldMemberId) ||
                     newTargetAssignment.containsKey(newMemberId)) {
-                    // The member has been in the group the whole time.
+                    // The member id has been in the group the whole time.
                     continue;
                 }
 
@@ -260,7 +260,7 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
                 String newMemberId = entry.getValue();
 
                 if (newTargetAssignment.containsKey(newMemberId)) {
-                    // The member has been in the group the whole time.
+                    // The member id has been in the group the whole time.
                     continue;
                 }
 
@@ -272,7 +272,7 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
 
             for (String memberId : newTargetAssignment.keySet()) {
                 if (currentMemberIds.contains(memberId)) {
-                    // The member has been in the group the whole time.
+                    // The member id has been in the group the whole time.
                     continue;
                 }
 
@@ -282,7 +282,7 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
 
             for (String memberId : currentMemberIds) {
                 if (newTargetAssignment.containsKey(memberId)) {
-                    // The member has been in the group the whole time.
+                    // The member id has been in the group the whole time.
                     continue;
                 }
 
