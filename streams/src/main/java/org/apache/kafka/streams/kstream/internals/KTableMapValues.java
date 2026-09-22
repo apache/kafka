@@ -28,7 +28,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
-import java.util.Collections;
 import java.util.Set;
 
 import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
@@ -63,7 +62,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
         if (storeFactory == null) {
             return null;
         }
-        return Collections.singleton(new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory));
+        return Set.of(new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override

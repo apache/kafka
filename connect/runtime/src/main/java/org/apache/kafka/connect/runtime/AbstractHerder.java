@@ -825,16 +825,20 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Function<String, TemporaryStage> reportStage,
             boolean doLog
     ) {
+        connectorProps = removeCustomConfigProviders(connectorProps);
+
+        String connType = connectorProps.get(CONNECTOR_CLASS_CONFIG);
+        if (connType == null) {
+            throw new BadRequestException("Connector config contains no connector type");
+        }
+
+        Map<String, String> originalProps = new HashMap<>(connectorProps);
         String stageDescription;
         if (worker.configTransformer() != null) {
             stageDescription = "resolving transformed configuration properties for the connector";
             try (TemporaryStage stage = reportStage.apply(stageDescription)) {
                 connectorProps = worker.configTransformer().transform(connectorProps);
             }
-        }
-        String connType = connectorProps.get(CONNECTOR_CLASS_CONFIG);
-        if (connType == null) {
-            throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
         }
 
         VersionRange connVersion;
@@ -848,7 +852,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         } catch (VersionedPluginLoadingException e) {
             log.warn("Failed to load connector {} with version {}, skipping additional validations (connector, converters, transformations, client overrides) ",
                     connType, connectorProps.get(CONNECTOR_VERSION), e);
-            return invalidVersionedConnectorValidation(connectorProps, e, reportStage);
+            return redactResolvedValues(
+                    invalidVersionedConnectorValidation(connectorProps, e, reportStage),
+                    originalProps, connectorProps);
         } catch (Exception e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -882,12 +888,58 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             ConfigInfos clientOverrideInfo = validateClientOverrides(connectorProps, connectorType, connector.getClass(), reportStage, doLog);
             ConfigInfos connectorConfigInfo = validateConnectorPluginSpecifiedConfigs(connectorProps, validatedConnectorConfig, enrichedConfigDef, connector, reportStage);
 
-            return mergeConfigInfos(connType,
-                    connectorConfigInfo,
-                    clientOverrideInfo,
-                    converterConfigInfo
-            );
+            return redactResolvedValues(
+                    mergeConfigInfos(connType, connectorConfigInfo, clientOverrideInfo, converterConfigInfo),
+                    originalProps,
+                    connectorProps);
         }
+    }
+
+    static Map<String, String> removeCustomConfigProviders(Map<String, String> connectorProps) {
+        Map<String, String> sanitized = new HashMap<>(connectorProps);
+        String prefix = AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".";
+        sanitized.keySet().removeIf(k -> k.equals(AbstractConfig.CONFIG_PROVIDERS_CONFIG) || k.startsWith(prefix));
+        return sanitized;
+    }
+
+    static ConfigInfos redactResolvedValues(ConfigInfos infos, Map<String, String> originalProps, Map<String, String> resolvedProps) {
+        Map<String, String> substitutedKeys = new HashMap<>();
+        for (Map.Entry<String, String> entry : originalProps.entrySet()) {
+            String resolvedValue = resolvedProps.get(entry.getKey());
+            if (resolvedValue != null && !resolvedValue.equals(entry.getValue())) {
+                substitutedKeys.put(entry.getKey(), entry.getValue());
+            }
+        }
+        if (substitutedKeys.isEmpty()) {
+            return infos;
+        }
+
+        List<ConfigInfo> redactedConfigs = new ArrayList<>();
+        int errorCount = 0;
+        for (ConfigInfo info : infos.configs()) {
+            ConfigValueInfo cv = info.configValue();
+            if (cv != null && substitutedKeys.containsKey(cv.name())) {
+                String placeholder = substitutedKeys.get(cv.name());
+                List<String> errors = List.of();
+                if (!cv.errors().isEmpty()) {
+                    if (log.isTraceEnabled()) {
+                        log.trace("Error while validating configuration {} for connector {}: {}",
+                                cv.name(), originalProps.get(CONNECTOR_CLASS_CONFIG), cv.errors());
+                    }
+                    errors = List.of("Invalid value for configuration '" + cv.name()
+                            + "': the value resolved from the config provider reference failed validation");
+                }
+                ConfigValueInfo redacted = new ConfigValueInfo(cv.name(), placeholder, List.of(), errors, cv.visible());
+                redactedConfigs.add(new ConfigInfo(info.configKey(), redacted));
+                errorCount += errors.size();
+            } else {
+                redactedConfigs.add(info);
+                if (cv != null) {
+                    errorCount += cv.errors().size();
+                }
+            }
+        }
+        return new ConfigInfos(infos.name(), errorCount, infos.groups(), redactedConfigs);
     }
 
     private static ConfigInfos mergeConfigInfos(String connType, ConfigInfos... configInfosList) {

@@ -33,6 +33,16 @@ smoke_test_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6),
                        str(LATEST_4_0), str(LATEST_4_1), str(LATEST_4_2),
                        str(LATEST_4_3)]
 
+# The headers-aware suppress buffer (KAFKA-20413) is only on trunk, so 4.3 is the newest
+# release that still writes plain V3 suppress-changelog records even with this config set.
+DSL_STORE_FORMAT_CONFIG = "dsl.store.format"
+DSL_STORE_FORMAT_HEADERS = "HEADERS"
+SUPPRESS_HEADERS_OLD_VERSION = str(LATEST_4_3)
+
+# InMemoryTimeOrderedKeyValueChangeBuffer throws this when it cannot make sense of a
+# suppress-changelog record while restoring.
+INVALID_CHANGELOG_RECORD_MSG = "Restoring apparently invalid changelog record"
+
 class StreamsUpgradeTest(Test):
     """
     Test upgrading Kafka Streams (all possible version combination)
@@ -58,13 +68,52 @@ class StreamsUpgradeTest(Test):
             self.kafka.start_node(node)
 
     @cluster(num_nodes=9)
-    @matrix(from_version=smoke_test_versions, bounce_type=["full"], metadata_quorum=[quorum.combined_kraft])
-    def test_app_upgrade(self, from_version, bounce_type, metadata_quorum):
+    @matrix(from_version=smoke_test_versions, metadata_quorum=[quorum.combined_kraft])
+    def test_app_upgrade(self, from_version, metadata_quorum):
         """
-        Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
+        Starts 3 KafkaStreams instances with <from_version> and upgrades them all at once to <DEV_VERSION>.
         """
+        self._run_app_transition(from_version, str(DEV_VERSION))
 
-        to_version = str(DEV_VERSION)
+    @cluster(num_nodes=9)
+    @matrix(direction=["upgrade", "downgrade"], metadata_quorum=[quorum.combined_kraft])
+    def test_suppress_headers_app_transition(self, direction, metadata_quorum):
+        """
+        Same smoke-test application as test_app_upgrade, but with dsl.store.format=HEADERS so that
+        suppress() uses the headers-aware buffer (KAFKA-20413).
+
+        The transition crosses the 4.3/trunk boundary in both directions because the two sides write
+        the suppress changelog differently even though both tag the record as V3:
+          - 4.3 has the dsl.store.format config but not the headers-aware buffer, so it writes the
+            whole BufferValue into the record value.
+          - trunk writes only the plain value bytes into the record value and ships the
+            value/timestamp/headers prefixes in extra Kafka record headers.
+
+        The suppress buffer is in-memory only, so every restart replays its entire changelog. That
+        makes this an actual cross-format restore test: on upgrade, trunk must restore records that
+        carry no value-part headers; on downgrade, 4.3 must cope with records whose prefixes it never
+        learned to read.
+        """
+        old_version = SUPPRESS_HEADERS_OLD_VERSION
+        dev_version = str(DEV_VERSION)
+
+        if direction == "upgrade":
+            from_version, to_version = old_version, dev_version
+        else:
+            from_version, to_version = dev_version, old_version
+
+        self._run_app_transition(
+            from_version,
+            to_version,
+            extra_configs={DSL_STORE_FORMAT_CONFIG: DSL_STORE_FORMAT_HEADERS},
+            verify_suppress_restore=True)
+
+    def _run_app_transition(self, from_version, to_version,
+                            extra_configs=None, verify_suppress_restore=False):
+        """
+        Starts 3 KafkaStreams instances with <from_version> and moves them all to <to_version>,
+        keeping the smoke-test workload running throughout.
+        """
 
         if from_version == to_version:
             return
@@ -89,9 +138,9 @@ class StreamsUpgradeTest(Test):
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.driver.disable_auto_terminate()
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
-        self.processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
-        self.processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1, extra_configs = extra_configs)
+        self.processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1, extra_configs = extra_configs)
+        self.processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1, extra_configs = extra_configs)
 
         self.purge_state_dir(self.processor1)
         self.purge_state_dir(self.processor2)
@@ -102,20 +151,14 @@ class StreamsUpgradeTest(Test):
 
         self.processors = [self.processor1, self.processor2, self.processor3]
 
-        if bounce_type == "rolling":
-            counter = 1
-            random.seed()
-            # upgrade one-by-one via rolling bounce
-            random.shuffle(self.processors)
-            for p in self.processors:
-                p.CLEAN_NODE_ENABLED = False
-                self.do_stop_start_bounce(p, None, from_version, to_version, counter)
-                counter = counter + 1
-        elif bounce_type == "full":
-            self.restart_all_nodes_with(from_version, to_version)
-        else:
-            raise Exception("Unrecognized bounce_type: " + str(bounce_type))
+        self.restart_all_nodes_with(from_version, to_version)
 
+        if verify_suppress_restore:
+            # The liveness checks above only prove the app came back up. A suppress-changelog record
+            # that is misread rather than rejected is silent, so also assert that no instance logged
+            # a restore rejection while replaying the buffer.
+            for p in self.processors:
+                self.verify_no_suppress_restore_failure(p)
 
         # shutdown
         self.driver.stop()
@@ -224,6 +267,15 @@ class StreamsUpgradeTest(Test):
             self.logger.warn("Command failed with ValueError: " + result)
             return 0
 
+    def verify_no_suppress_restore_failure(self, processor):
+        node = processor.node
+        for file in [processor.STDERR_FILE, processor.LOG_FILE]:
+            found = list(node.account.ssh_capture(
+                "grep -F '%s' %s" % (INVALID_CHANGELOG_RECORD_MSG, file), allow_fail=True))
+            if len(found) > 0:
+                raise Exception("Suppress buffer failed to restore its changelog on %s: %s"
+                                % (str(node.account), found[0]))
+
     def set_version(self, processor, version):
         if version == str(DEV_VERSION):
             processor.set_version("")  # set to TRUNK
@@ -232,77 +284,6 @@ class StreamsUpgradeTest(Test):
 
     def purge_state_dir(self, processor):
         processor.node.account.ssh("rm -rf " + processor.PERSISTENT_ROOT, allow_fail=False)
-
-    def do_stop_start_bounce(self, processor, upgrade_from, from_version, to_version, counter):
-        kafka_version_str = self.get_version_string(to_version)
-
-        first_other_processor = None
-        second_other_processor = None
-        for p in self.processors:
-            if p != processor:
-                if first_other_processor is None:
-                    first_other_processor = p
-                else:
-                    second_other_processor = p
-
-        node = processor.node
-        first_other_node = first_other_processor.node
-        second_other_node = second_other_processor.node
-
-        # stop processor and wait for rebalance of others
-        with first_other_node.account.monitor_log(first_other_processor.STDOUT_FILE) as first_other_monitor:
-            with second_other_node.account.monitor_log(second_other_processor.STDOUT_FILE) as second_other_monitor:
-                processor.stop_node(processor.node)
-                first_other_monitor.wait_until(self.processed_msg,
-                                               timeout_sec=60,
-                                               err_msg="Never saw output '%s' on " % self.processed_msg + str(first_other_node.account))
-                second_other_monitor.wait_until(self.processed_msg,
-                                                timeout_sec=60,
-                                                err_msg="Never saw output '%s' on " % self.processed_msg + str(second_other_node.account))
-
-        if from_version.startswith("2."):
-            # some older versions crash on shutdown, so we allow crashes here.
-            node.account.ssh_capture("grep -E 'SMOKE-TEST-CLIENT-(EXCEPTION|CLOSED)' %s" % processor.STDOUT_FILE, allow_fail=False)
-        else:
-            node.account.ssh_capture("grep -E 'SMOKE-TEST-CLIENT-CLOSED' %s" % processor.STDOUT_FILE, allow_fail=False)
-
-        if upgrade_from is None:  # upgrade disabled -- second round of rolling bounces
-            roll_counter = ".1-"  # second round of rolling bounces
-        else:
-            roll_counter = ".0-"  # first  round of rolling bounces
-
-        self.roll_logs(processor, roll_counter + str(counter))
-
-        self.set_version(processor, to_version)
-        processor.set_upgrade_from(upgrade_from)
-
-        grep_metadata_error = "grep \"org.apache.kafka.streams.errors.TaskAssignmentException: unable to decode subscription data: version=2\" "
-        with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
-                with first_other_node.account.monitor_log(first_other_processor.STDOUT_FILE) as first_other_monitor:
-                    with second_other_node.account.monitor_log(second_other_processor.STDOUT_FILE) as second_other_monitor:
-                        processor.start_node(processor.node)
-
-                        log_monitor.wait_until(kafka_version_str,
-                                               timeout_sec=60,
-                                               err_msg="Could not detect Kafka Streams version " + to_version + " on " + str(node.account))
-                        first_other_monitor.wait_until(self.processed_msg,
-                                                       timeout_sec=60,
-                                                       err_msg="Never saw output '%s' on " % self.processed_msg + str(first_other_node.account))
-                        found = list(first_other_node.account.ssh_capture(grep_metadata_error + first_other_processor.STDERR_FILE, allow_fail=True))
-                        if len(found) > 0:
-                            raise Exception("Kafka Streams failed with 'unable to decode subscription data: version=2'")
-
-                        second_other_monitor.wait_until(self.processed_msg,
-                                                        timeout_sec=60,
-                                                        err_msg="Never saw output '%s' on " % self.processed_msg + str(second_other_node.account))
-                        found = list(second_other_node.account.ssh_capture(grep_metadata_error + second_other_processor.STDERR_FILE, allow_fail=True))
-                        if len(found) > 0:
-                            raise Exception("Kafka Streams failed with 'unable to decode subscription data: version=2'")
-
-                        monitor.wait_until(self.processed_msg,
-                                           timeout_sec=60,
-                                           err_msg="Never saw output '%s' on " % self.processed_msg + str(node.account))
 
     def roll_logs(self, processor, roll_suffix):
         processor.node.account.ssh("mv " + processor.STDOUT_FILE + " " + processor.STDOUT_FILE + roll_suffix,

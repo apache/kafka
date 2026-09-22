@@ -68,7 +68,8 @@ public class CommonClientConfigs {
         " value, DNS is resolved asynchronously and this is the maximum amount of time the client will spend" +
         " retrying resolution before failing with an unrecoverable <code>BootstrapResolutionException</code> from" +
         " subsequent API calls (the client must then be closed and re-created after fixing the underlying DNS or" +
-        " <code>bootstrap.servers</code> configuration issue).";
+        " <code>bootstrap.servers</code> configuration issue)." +
+        " Setting this config to a positive value enables an evolving feature whose compatibility may be broken in a minor release.";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";

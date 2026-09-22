@@ -54,8 +54,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 @Timeout(600)
@@ -112,11 +111,11 @@ public class TaskMetadataIntegrationTest {
     }
 
     @Test
-    public void shouldReportCorrectCommittedOffsetInformation() {
+    public void shouldReportCorrectCommittedOffsetInformation() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
-            assertThat(taskMetadata.committedOffsets().size(), equalTo(1));
+            assertEquals(1, taskMetadata.committedOffsets().size());
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
 
             produceMessages(0L, inputTopic, "test");
@@ -132,17 +131,15 @@ public class TaskMetadataIntegrationTest {
             produceMessages(0L, inputTopic, "test1");
             TestUtils.waitForCondition(() -> !process.get(), "The record was not processed");
             TestUtils.waitForCondition(() -> taskMetadata.committedOffsets().get(topicPartition) == 3L, "the record was processed");
-        } catch (final Exception e) {
-            e.printStackTrace();
         }
     }
 
     @Test
-    public void shouldReportCorrectEndOffsetInformation() {
+    public void shouldReportCorrectEndOffsetInformation() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
             final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
-            assertThat(taskMetadata.endOffsets().size(), equalTo(1));
+            assertEquals(1, taskMetadata.endOffsets().size());
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
             commit.set(false);
 
@@ -151,10 +148,7 @@ public class TaskMetadataIntegrationTest {
                 TestUtils.waitForCondition(() -> !process.get(), "The record was not processed");
                 process.set(true);
             }
-            assertThat(taskMetadata.endOffsets().get(topicPartition), equalTo(9L));
-
-        } catch (final Exception e) {
-            e.printStackTrace();
+            assertEquals(9L, taskMetadata.endOffsets().get(topicPartition));
         }
     }
 

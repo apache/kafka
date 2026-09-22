@@ -59,7 +59,6 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -111,12 +110,12 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.sessionStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -285,9 +284,9 @@ public class QueryableStateIntegrationTest {
         for (int i = 0; i < streamsList.size(); i++) {
             final Map<String, Map<Integer, LagInfo>> localLags = streamsList.get(i).allLocalStorePartitionLags();
             final int expectedPartitions = partitionsPerStreamsInstance.get(i);
-            assertThat(localLags.values().stream().mapToInt(Map::size).sum(), equalTo(expectedPartitions));
+            assertEquals(expectedPartitions, localLags.values().stream().mapToInt(Map::size).sum());
             if (expectedPartitions > 0) {
-                assertThat(localLags.keySet(), equalTo(stores));
+                assertEquals(stores, localLags.keySet());
             }
         }
     }
@@ -314,7 +313,7 @@ public class QueryableStateIntegrationTest {
                         continue;
                     }
                     if (!pickInstanceByPort) {
-                        assertThat("Should have standbys to query from", !queryMetadata.standbyHosts().isEmpty());
+                        assertFalse(queryMetadata.standbyHosts().isEmpty(), "Should have standbys to query from");
                     }
 
                     final int index = queryMetadata.activeHost().port();
@@ -368,9 +367,9 @@ public class QueryableStateIntegrationTest {
                         continue;
                     }
                     if (pickInstanceByPort) {
-                        assertThat(queryMetadata.standbyHosts().size(), equalTo(0));
+                        assertEquals(0, queryMetadata.standbyHosts().size());
                     } else {
-                        assertThat("Should have standbys to query from", !queryMetadata.standbyHosts().isEmpty());
+                        assertFalse(queryMetadata.standbyHosts().isEmpty(), "Should have standbys to query from");
                     }
 
                     final int index = queryMetadata.activeHost().port();
@@ -437,8 +436,9 @@ public class QueryableStateIntegrationTest {
             }
         }
 
-        assertThat(reason.toString(),
-            noMetadataKeys.isEmpty() && nullStoreKeys.isEmpty() && nullValueKeys.isEmpty() && exceptionalKeys.isEmpty());
+        assertTrue(
+            noMetadataKeys.isEmpty() && nullStoreKeys.isEmpty() && nullValueKeys.isEmpty() && exceptionalKeys.isEmpty(),
+            reason.toString());
     }
 
     @Test
@@ -466,15 +466,15 @@ public class QueryableStateIntegrationTest {
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
             final ReadOnlyKeyValueStore<String, String> store =
                 streams.store(fromNameAndType(storeName, keyValueStore()));
-            assertThat(store, Matchers.notNullValue());
+            assertNotNull(store);
 
             final UnknownStateStoreException exception = assertThrows(
                 UnknownStateStoreException.class,
                 () -> streams.store(fromNameAndType("no-table", keyValueStore()))
             );
-            assertThat(
-                exception.getMessage(),
-                is("Cannot get state store no-table because no such store is registered in the topology.")
+            assertEquals(
+                "Cannot get state store no-table because no such store is registered in the topology.",
+                exception.getMessage()
             );
         }
     }
@@ -504,7 +504,7 @@ public class QueryableStateIntegrationTest {
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
             final ReadOnlyKeyValueStore<String, String> store =
                 streams.store(fromNameAndType(storeName, keyValueStore()));
-            assertThat(store, Matchers.notNullValue());
+            assertNotNull(store);
 
             // Note that to check the type we actually need a store reference,
             // so we can't check when you get the IQ store, only when you
@@ -515,14 +515,12 @@ public class QueryableStateIntegrationTest {
                 InvalidStateStoreException.class,
                 () -> sessionStore.fetch("a")
             );
-            assertThat(
-                exception.getMessage(),
-                is(
-                    "Cannot get state store " + storeName + " because the queryable store type" +
-                        " [class org.apache.kafka.streams.state.QueryableStoreTypes$SessionStoreType]" +
-                        " does not accept the actual store type" +
-                        " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore]."
-                )
+            assertEquals(
+                "Cannot get state store " + storeName + " because the queryable store type" +
+                    " [class org.apache.kafka.streams.state.QueryableStoreTypes$SessionStoreType]" +
+                    " does not accept the actual store type" +
+                    " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore].",
+                exception.getMessage()
             );
         }
     }
@@ -585,8 +583,8 @@ public class QueryableStateIntegrationTest {
             // kill N-1 threads
             for (int i = 1; i < streamsList.size(); i++) {
                 final Duration closeTimeout = Duration.ofSeconds(60);
-                assertThat(String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()),
-                    streamsList.get(i).close(closeTimeout));
+                assertTrue(streamsList.get(i).close(closeTimeout),
+                    String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()));
             }
 
             waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
@@ -687,8 +685,8 @@ public class QueryableStateIntegrationTest {
             // kill N-1 threads
             for (int i = 1; i < streamsList.size(); i++) {
                 final Duration closeTimeout = Duration.ofSeconds(60);
-                assertThat(String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()),
-                    streamsList.get(i).close(closeTimeout));
+                assertTrue(streamsList.get(i).close(closeTimeout),
+                    String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()));
             }
 
             waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
@@ -1189,8 +1187,8 @@ public class QueryableStateIntegrationTest {
             }
         }
 
-        assertThat(countRangeResults, equalTo(expectedRangeResults));
-        assertThat(countAllResults, equalTo(expectedCount));
+        assertEquals(expectedRangeResults, countRangeResults);
+        assertEquals(expectedCount, countAllResults);
     }
 
     private void verifyCanGetByKey(final String[] keys,
@@ -1214,8 +1212,8 @@ public class QueryableStateIntegrationTest {
                 }
             }
         }
-        assertThat(windowState, equalTo(expectedWindowState));
-        assertThat(countState, equalTo(expectedCount));
+        assertEquals(expectedWindowState, windowState);
+        assertEquals(expectedCount, countState);
     }
 
     private void waitUntilAtLeastNumRecordProcessed(final String topic,

@@ -30,23 +30,19 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-
 /**
  * A Kafka ACLs which is identified by a UUID and stored in the metadata log.
  */
 public record StandardAcl(ResourceType resourceType, String resourceName, PatternType patternType, String principal,
                           String host, AclOperation operation,
                           AclPermissionType permissionType) implements Comparable<StandardAcl> {
-    /**
-     * Caches the parsed KafkaPrincipal for each distinct principal string seen across all
-     * StandardAcl instances in this JVM. The cache is capped so that a cluster with
-     * long-running ACL churn across many distinct principal strings cannot grow this shared,
-     * never-evicted map without bound; once the cap is reached, principals are parsed directly
-     * instead of being cached.
-     */
+    // Cache of parsed KafkaPrincipal per unique principal string. The cache is bounded:
+    // once MAX_CACHED_PRINCIPALS is reached, additional distinct principals are parsed
+    // directly without being inserted, while already-cached principals are still
+    // served from the cache. Bounded to ~10K entries; under concurrent inserts the
+    // size may overshoot the bound slightly (ConcurrentHashMap.size() is approximate).
     private static final int MAX_CACHED_PRINCIPALS = 10_000;
     private static final Map<String, KafkaPrincipal> PRINCIPAL_CACHE = new ConcurrentHashMap<>();
-    private static final Object PRINCIPAL_CACHE_LOCK = new Object();
 
     public static StandardAcl fromRecord(AccessControlEntryRecord record) {
         return new StandardAcl(
@@ -72,24 +68,11 @@ public record StandardAcl(ResourceType resourceType, String resourceName, Patter
 
     public KafkaPrincipal kafkaPrincipal() {
         KafkaPrincipal cached = PRINCIPAL_CACHE.get(principal);
-        if (cached != null) {
-            return cached;
-        }
+        if (cached != null) return cached;
         if (PRINCIPAL_CACHE.size() >= MAX_CACHED_PRINCIPALS) {
             return parsePrincipal(principal);
         }
-        synchronized (PRINCIPAL_CACHE_LOCK) {
-            cached = PRINCIPAL_CACHE.get(principal);
-            if (cached != null) {
-                return cached;
-            }
-            if (PRINCIPAL_CACHE.size() >= MAX_CACHED_PRINCIPALS) {
-                return parsePrincipal(principal);
-            }
-            KafkaPrincipal parsed = parsePrincipal(principal);
-            PRINCIPAL_CACHE.put(principal, parsed);
-            return parsed;
-        }
+        return PRINCIPAL_CACHE.computeIfAbsent(principal, StandardAcl::parsePrincipal);
     }
 
     private static KafkaPrincipal parsePrincipal(String principalStr) {
@@ -99,6 +82,15 @@ public record StandardAcl(ResourceType resourceType, String resourceName, Patter
                 "(no colon is present separating the principal type from the principal name)");
         }
         return new KafkaPrincipal(principalStr.substring(0, colonIndex), principalStr.substring(colonIndex + 1));
+    }
+
+    // Package-private access for tests; avoids reflection on the private cache.
+    static int principalCacheSize() {
+        return PRINCIPAL_CACHE.size();
+    }
+
+    static int principalCacheBound() {
+        return MAX_CACHED_PRINCIPALS;
     }
 
     public AclBinding toBinding() {

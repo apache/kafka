@@ -43,9 +43,9 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -121,7 +121,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic) {
-        return stream(Collections.singleton(topic));
+        return stream(Set.of(topic));
     }
 
     /**
@@ -139,7 +139,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic,
                                                     final Consumed<K, V> consumed) {
-        return stream(Collections.singleton(topic), consumed);
+        return stream(Set.of(topic), consumed);
     }
 
     /**

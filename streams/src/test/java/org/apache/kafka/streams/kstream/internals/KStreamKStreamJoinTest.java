@@ -85,11 +85,8 @@ import java.util.stream.StreamSupport;
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -127,10 +124,9 @@ public class KStreamKStreamJoinTest {
                 driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer());
             inputTopic.pipeInput("A", null);
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key or value. topic=[left] partition=[0] offset=[0]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Skipping record due to null key or value. topic=[left] partition=[0] offset=[0]"
+            ));
         }
     }
 
@@ -193,8 +189,8 @@ public class KStreamKStreamJoinTest {
         final Topology topology = builder.build();
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
 
-        assertThat(internalTopologyBuilder.stateStores().get("store-this-join-store").loggingEnabled(), equalTo(false));
-        assertThat(internalTopologyBuilder.stateStores().get("store-other-join-store").loggingEnabled(), equalTo(false));
+        assertFalse(internalTopologyBuilder.stateStores().get("store-this-join-store").loggingEnabled());
+        assertFalse(internalTopologyBuilder.stateStores().get("store-other-join-store").loggingEnabled());
     }
 
     @ParameterizedTest
@@ -223,14 +219,11 @@ public class KStreamKStreamJoinTest {
 
         internalTopologyBuilder.buildSubtopology(0);
 
-        assertThat(internalTopologyBuilder.stateStores().get("store-this-join-store").loggingEnabled(), equalTo(true));
-        assertThat(internalTopologyBuilder.stateStores().get("store-other-join-store").loggingEnabled(), equalTo(true));
-        assertThat(internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.size(), equalTo(2));
+        assertTrue(internalTopologyBuilder.stateStores().get("store-this-join-store").loggingEnabled());
+        assertTrue(internalTopologyBuilder.stateStores().get("store-other-join-store").loggingEnabled());
+        assertEquals(2, internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.size());
         for (final InternalTopicConfig config : internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.values()) {
-            assertThat(
-                config.properties(Collections.emptyMap(), 0).get("test"),
-                equalTo("property")
-            );
+            assertEquals("property", config.properties(Collections.emptyMap(), 0).get("test"));
         }
     }
 
@@ -426,16 +419,16 @@ public class KStreamKStreamJoinTest {
 
         // neither side is supplied explicitly
         runJoin(streamJoined.withDslStoreSuppliers(dslStoreSuppliers), joinWindows);
-        assertThat(TrackingDslStoreSuppliers.NUM_CALLS.get(), is(2));
+        assertEquals(2, TrackingDslStoreSuppliers.NUM_CALLS.get());
 
         // one side is supplied explicitly, so we only increment once
         runJoin(streamJoined.withDslStoreSuppliers(dslStoreSuppliers).withThisStoreSupplier(thisStoreSupplier), joinWindows);
-        assertThat(TrackingDslStoreSuppliers.NUM_CALLS.get(), is(3));
+        assertEquals(3, TrackingDslStoreSuppliers.NUM_CALLS.get());
 
         // both sides are supplied explicitly, so we don't increment further
         runJoin(streamJoined.withDslStoreSuppliers(dslStoreSuppliers)
                 .withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier), joinWindows);
-        assertThat(TrackingDslStoreSuppliers.NUM_CALLS.get(), is(3));
+        assertEquals(3, TrackingDslStoreSuppliers.NUM_CALLS.get());
 
     }
 
@@ -452,7 +445,7 @@ public class KStreamKStreamJoinTest {
 
         // neither side is supplied explicitly, so we call the dsl supplier twice
         runJoin(streamJoined, joinWindows);
-        assertThat(TrackingDslStoreSuppliers.NUM_CALLS.get(), is(2));
+        assertEquals(2, TrackingDslStoreSuppliers.NUM_CALLS.get());
     }
 
     public static class CapturingStoreSuppliers extends BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers {
@@ -480,11 +473,15 @@ public class KStreamKStreamJoinTest {
 
         runJoin(streamJoined, joinWindows);
         if (withHeaders) {
-            assertThat("Expected stream joined to supply builders that create headers stores",
-                WrappedStateStore.isHeadersAware(storeSuppliers.capture.get().get()));
+            assertTrue(
+                WrappedStateStore.isHeadersAware(storeSuppliers.capture.get().get()),
+                "Expected stream joined to supply builders that create headers stores"
+            );
         } else {
-            assertThat("Expected stream joined to supply builders that create non-timestamped stores",
-                !WrappedStateStore.isTimestamped(storeSuppliers.capture.get().get()));
+            assertFalse(
+                WrappedStateStore.isTimestamped(storeSuppliers.capture.get().get()),
+                "Expected stream joined to supply builders that create non-timestamped stores"
+            );
         }
     }
 

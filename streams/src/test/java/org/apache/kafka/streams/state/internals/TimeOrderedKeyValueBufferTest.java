@@ -71,10 +71,10 @@ import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyVal
 import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.OLD_VALUE_HEADERS_KEY;
 import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.PRIOR_VALUE_HEADERS_KEY;
 import static org.apache.kafka.streams.state.internals.Utils.rawValueTimestampHeaders;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<String, String, Change<String>>> {
@@ -199,9 +199,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final MockInternalProcessorContext<?, ?> context = makeContext();
         buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "qwer");
-        assertThat(buffer.numRecords(), is(1));
+        assertEquals(1, buffer.numRecords());
         buffer.evictWhile(() -> true, kv -> { });
-        assertThat(buffer.numRecords(), is(0));
+        assertEquals(0, buffer.numRecords());
         cleanup(context, buffer);
     }
 
@@ -214,13 +214,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "eyt");
         putRecord(buffer, context, 1L, 0L, "zxcv", "rtg");
-        assertThat(buffer.numRecords(), is(2));
+        assertEquals(2, buffer.numRecords());
         final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
         buffer.evictWhile(() -> buffer.numRecords() > 1, evicted::add);
-        assertThat(buffer.numRecords(), is(1));
-        assertThat(evicted, is(singletonList(
-            new Eviction<>("asdf", new Change<>("eyt", null), getContext(0L))
-        )));
+        assertEquals(1, buffer.numRecords());
+        assertEquals(List.of(new Eviction<>("asdf", new Change<>("eyt", null), getContext(0L))), evicted);
         cleanup(context, buffer);
     }
 
@@ -232,11 +230,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final MockInternalProcessorContext<?, ?> context = makeContext();
         buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "oin");
-        assertThat(buffer.numRecords(), is(1));
+        assertEquals(1, buffer.numRecords());
         putRecord(buffer, context, 1L, 0L, "asdf", "wekjn");
-        assertThat(buffer.numRecords(), is(1));
+        assertEquals(1, buffer.numRecords());
         putRecord(buffer, context, 0L, 0L, "zxcv", "24inf");
-        assertThat(buffer.numRecords(), is(2));
+        assertEquals(2, buffer.numRecords());
         cleanup(context, buffer);
     }
 
@@ -248,11 +246,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final MockInternalProcessorContext<?, ?> context = makeContext();
         buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "23roni");
-        assertThat(buffer.bufferSize(), is(43L));
+        assertEquals(43L, buffer.bufferSize());
         putRecord(buffer, context, 1L, 0L, "asdf", "3l");
-        assertThat(buffer.bufferSize(), is(39L));
+        assertEquals(39L, buffer.bufferSize());
         putRecord(buffer, context, 0L, 0L, "zxcv", "qfowin");
-        assertThat(buffer.bufferSize(), is(82L));
+        assertEquals(82L, buffer.bufferSize());
         cleanup(context, buffer);
     }
 
@@ -264,9 +262,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final MockInternalProcessorContext<?, ?> context = makeContext();
         buffer.init(context, buffer);
         putRecord(buffer, context, 1L, 0L, "asdf", "2093j");
-        assertThat(buffer.minTimestamp(), is(1L));
+        assertEquals(1L, buffer.minTimestamp());
         putRecord(buffer, context, 0L, 0L, "zxcv", "3gon4i");
-        assertThat(buffer.minTimestamp(), is(0L));
+        assertEquals(0L, buffer.minTimestamp());
         cleanup(context, buffer);
     }
 
@@ -279,30 +277,30 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.init(context, buffer);
 
         putRecord(buffer, context, 1L, 0L, "zxcv", "o23i4");
-        assertThat(buffer.numRecords(), is(1));
-        assertThat(buffer.bufferSize(), is(42L));
-        assertThat(buffer.minTimestamp(), is(1L));
+        assertEquals(1, buffer.numRecords());
+        assertEquals(42L, buffer.bufferSize());
+        assertEquals(1L, buffer.minTimestamp());
 
         putRecord(buffer, context, 0L, 0L, "asdf", "3ng");
-        assertThat(buffer.numRecords(), is(2));
-        assertThat(buffer.bufferSize(), is(82L));
-        assertThat(buffer.minTimestamp(), is(0L));
+        assertEquals(2, buffer.numRecords());
+        assertEquals(82L, buffer.bufferSize());
+        assertEquals(0L, buffer.minTimestamp());
 
         final AtomicInteger callbackCount = new AtomicInteger(0);
         buffer.evictWhile(() -> true, kv -> {
             switch (callbackCount.incrementAndGet()) {
                 case 1: {
-                    assertThat(kv.key(), is("asdf"));
-                    assertThat(buffer.numRecords(), is(2));
-                    assertThat(buffer.bufferSize(), is(82L));
-                    assertThat(buffer.minTimestamp(), is(0L));
+                    assertEquals("asdf", kv.key());
+                    assertEquals(2, buffer.numRecords());
+                    assertEquals(82L, buffer.bufferSize());
+                    assertEquals(0L, buffer.minTimestamp());
                     break;
                 }
                 case 2: {
-                    assertThat(kv.key(), is("zxcv"));
-                    assertThat(buffer.numRecords(), is(1));
-                    assertThat(buffer.bufferSize(), is(42L));
-                    assertThat(buffer.minTimestamp(), is(1L));
+                    assertEquals("zxcv", kv.key());
+                    assertEquals(1, buffer.numRecords());
+                    assertEquals(42L, buffer.bufferSize());
+                    assertEquals(1L, buffer.minTimestamp());
                     break;
                 }
                 default: {
@@ -311,10 +309,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                 }
             }
         });
-        assertThat(callbackCount.get(), is(2));
-        assertThat(buffer.numRecords(), is(0));
-        assertThat(buffer.bufferSize(), is(0L));
-        assertThat(buffer.minTimestamp(), is(Long.MAX_VALUE));
+        assertEquals(2, callbackCount.get());
+        assertEquals(0, buffer.numRecords());
+        assertEquals(0L, buffer.bufferSize());
+        assertEquals(Long.MAX_VALUE, buffer.minTimestamp());
         cleanup(context, buffer);
     }
 
@@ -326,7 +324,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final MockInternalProcessorContext<?, ?> context = makeContext();
         buffer.init(context, buffer);
 
-        assertThat(buffer.priorValueForBuffered("ASDF"), is(Maybe.undefined()));
+        assertEquals(Maybe.undefined(), buffer.priorValueForBuffered("ASDF"));
     }
 
     @ParameterizedTest
@@ -341,8 +339,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         context.setRecordContext(recordContext);
         buffer.put(1L, new Record<>("A", new Change<>("new-value", "old-value"), 0L), recordContext);
         buffer.put(1L, new Record<>("B", new Change<>("new-value", null), 0L), recordContext);
-        assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueTimestampHeaders.make("old-value", -1, new RecordHeaders()))));
-        assertThat(buffer.priorValueForBuffered("B"), is(Maybe.defined(null)));
+        assertEquals(Maybe.defined(ValueTimestampHeaders.make("old-value", -1, new RecordHeaders())), buffer.priorValueForBuffered("A"));
+        assertEquals(Maybe.defined(null), buffer.priorValueForBuffered("B"));
     }
 
     @ParameterizedTest
@@ -363,8 +361,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
         buffer.evictWhile(() -> true, evicted::add);
 
-        assertThat(evicted.size(), is(1));
-        assertThat(evicted.get(0).recordContext().headers(), is(headers));
+        assertEquals(1, evicted.size());
+        assertEquals(headers, evicted.get(0).recordContext().headers());
         cleanup(context, buffer);
     }
 
@@ -416,13 +414,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
         buffer.evictWhile(() -> true, evicted::add);
 
-        assertThat(evicted.size(), is(1));
-        assertThat(evicted.get(0).value(), is(new Change<>("v2", "v1")));
+        assertEquals(1, evicted.size());
+        assertEquals(new Change<>("v2", "v1"), evicted.get(0).value());
         // New value first with its own headers (B), then the old value with the headers of the record
         // it originally arrived on (A) -- not with B, and not with whatever triggered the eviction.
-        assertThat(headerSeenByDeserializer, is(List.of("B", "A")));
+        assertEquals(List.of("B", "A"), headerSeenByDeserializer);
         // The emitted record carries the new value's headers.
-        assertThat(evicted.get(0).recordContext().headers(), is(headersB));
+        assertEquals(headersB, evicted.get(0).recordContext().headers());
         cleanup(context, buffer);
     }
 
@@ -466,10 +464,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
         buffer.evictWhile(() -> true, evicted::add);
 
-        assertThat(evicted.size(), is(1));
+        assertEquals(1, evicted.size());
         // The buffered value must be deserialized with its own headers ("A"), not the headers of the
         // record that triggered the eviction ("B").
-        assertThat(headerSeenByDeserializer, is(singletonList("A")));
+        assertEquals(List.of("A"), headerSeenByDeserializer);
         cleanup(context, buffer);
     }
 
@@ -508,7 +506,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         context.setRecordContext(recordContext);
         buffer.put(0L, record, recordContext);
 
-        assertThat(new String(record.headers().lastHeader("serialized").value(), UTF_8), is("new"));
+        assertEquals("new", new String(record.headers().lastHeader("serialized").value(), UTF_8));
 
         // A tombstone has no new value to serialize, so the old value's header is the one that stands.
         final Record<String, Change<String>> tombstone =
@@ -517,7 +515,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         context.setRecordContext(tombstoneContext);
         buffer.put(0L, tombstone, tombstoneContext);
 
-        assertThat(new String(tombstone.headers().lastHeader("serialized").value(), UTF_8), is("old"));
+        assertEquals("old", new String(tombstone.headers().lastHeader("serialized").value(), UTF_8));
         cleanup(context, buffer);
     }
 
@@ -548,23 +546,23 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.commit(Map.of());
 
         final List<ProducerRecord<Object, Object>> collected = ((MockRecordCollector) context.recordCollector()).collected();
-        assertThat(collected.size(), is(1));
+        assertEquals(1, collected.size());
         final ProducerRecord<Object, Object> changelogRecord = collected.get(0);
 
         // The version marker stays at V3, so an older version restores this record fine...
-        assertThat(changelogRecord.headers().lastHeader("v").value(), is(new byte[] {(byte) 3}));
+        assertArrayEquals(new byte[] {(byte) 3}, changelogRecord.headers().lastHeader("v").value());
 
         // ...because the value bytes are plain values, exactly as the V3 format prescribes.
         final BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap((byte[]) changelogRecord.value()));
         final StringDeserializer plainDeserializer = new StringDeserializer();
-        assertThat(plainDeserializer.deserialize("topic", bufferValue.newValue()), is("v2"));
-        assertThat(plainDeserializer.deserialize("topic", bufferValue.oldValue()), is("v1"));
+        assertEquals("v2", plainDeserializer.deserialize("topic", bufferValue.newValue()));
+        assertEquals("v1", plainDeserializer.deserialize("topic", bufferValue.oldValue()));
 
         // The new value's headers and timestamp need no Kafka header of their own: the record context
         // encoded in the V3 value already describes that part, since it is the context of the very
         // record the new value came from.
-        assertThat(bufferValue.context().headers(), is(headersB));
-        assertThat(bufferValue.context().timestamp(), is(20L));
+        assertEquals(headersB, bufferValue.context().headers());
+        assertEquals(20L, bufferValue.context().timestamp());
 
         // The prior and old parts have no such carrier, so their headers and timestamps ride in the
         // record's Kafka headers, and recombine with the plain value bytes into the in-memory encoding.
@@ -573,9 +571,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final ValueTimestampHeaders<String> oldValue = deserializer.deserialize("topic",
             rawValueTimestampHeaders(changelogRecord.headers().lastHeader(OLD_VALUE_HEADERS_KEY).value(), bufferValue.oldValue()));
-        assertThat(oldValue.value(), is("v1"));
-        assertThat(oldValue.timestamp(), is(10L));     // carried forward from the first record
-        assertThat(oldValue.headers(), is(headersA));  // carried forward from the first record
+        assertEquals("v1", oldValue.value());
+        assertEquals(10L, oldValue.timestamp());     // carried forward from the first record
+        assertEquals(headersA, oldValue.headers());  // carried forward from the first record
 
         cleanup(context, buffer);
     }
@@ -598,8 +596,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final ProducerRecord<Object, Object> changelogRecord =
             ((MockRecordCollector) context.recordCollector()).collected().get(0);
-        assertThat(changelogRecord.headers().lastHeader(OLD_VALUE_HEADERS_KEY), is(not(nullValue())));
-        assertThat(changelogRecord.headers().lastHeader(PRIOR_VALUE_HEADERS_KEY), is(nullValue()));
+        assertNotNull(changelogRecord.headers().lastHeader(OLD_VALUE_HEADERS_KEY));
+        assertNull(changelogRecord.headers().lastHeader(PRIOR_VALUE_HEADERS_KEY));
 
         // The prior value must still come back, recovered from the old part rather than from the
         // header the writer deliberately left out.
@@ -609,8 +607,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         restored.init(restoreContext, restored);
         restoreInto(restoreContext, context, STORE_NAME);
 
-        assertThat(restored.priorValueForBuffered("k"),
-            is(Maybe.defined(ValueTimestampHeaders.make("p", RecordQueue.UNKNOWN, new RecordHeaders()))));
+        assertEquals(
+            Maybe.defined(ValueTimestampHeaders.make("p", RecordQueue.UNKNOWN, new RecordHeaders())),
+            restored.priorValueForBuffered("k"));
         cleanup(restoreContext, restored);
         cleanup(context, buffer);
     }
@@ -643,7 +642,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         // The parts differ, so this time the prefix must be written under its own key.
         final ProducerRecord<Object, Object> changelogRecord =
             ((MockRecordCollector) context.recordCollector()).collected().get(0);
-        assertThat(changelogRecord.headers().lastHeader(PRIOR_VALUE_HEADERS_KEY), is(not(nullValue())));
+        assertNotNull(changelogRecord.headers().lastHeader(PRIOR_VALUE_HEADERS_KEY));
 
         final InMemoryTimeOrderedKeyValueChangeBuffer<String, String, Change<String>> restored =
             new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(STORE_NAME, Serdes.String(), Serdes.String()).build();
@@ -652,8 +651,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         restoreInto(restoreContext, context, STORE_NAME);
 
         // Not (p, 10, A) -- that is the OLD part, and taking it here would be the dedup misfiring.
-        assertThat(restored.priorValueForBuffered("k"),
-            is(Maybe.defined(ValueTimestampHeaders.make("p", RecordQueue.UNKNOWN, new RecordHeaders()))));
+        assertEquals(
+            Maybe.defined(ValueTimestampHeaders.make("p", RecordQueue.UNKNOWN, new RecordHeaders())),
+            restored.priorValueForBuffered("k"));
         cleanup(restoreContext, restored);
         cleanup(context, buffer);
     }
@@ -674,8 +674,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         // The prior value's original timestamp/headers are unknown when a key is first buffered, so
         // they round-trip through the ValueTimestampHeaders encoding as UNKNOWN/empty.
-        assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueTimestampHeaders.make("old-value", -1, new RecordHeaders()))));
-        assertThat(buffer.priorValueForBuffered("B"), is(Maybe.defined(null)));
+        assertEquals(Maybe.defined(ValueTimestampHeaders.make("old-value", -1, new RecordHeaders())), buffer.priorValueForBuffered("A"));
+        assertEquals(Maybe.defined(null), buffer.priorValueForBuffered("B"));
         cleanup(context, buffer);
     }
 
@@ -696,7 +696,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.commit(Map.of());
 
         final List<ProducerRecord<Object, Object>> collected = ((MockRecordCollector) context.recordCollector()).collected();
-        assertThat(collected.size(), is(1));
+        assertEquals(1, collected.size());
 
         // Restore the changelog into a fresh buffer and confirm the value, record timestamp and
         // headers all survived the serialization round-trip.
@@ -717,11 +717,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
         restored.evictWhile(() -> true, evicted::add);
 
-        assertThat(evicted.size(), is(1));
-        assertThat(evicted.get(0).key(), is("k"));
-        assertThat(evicted.get(0).value(), is(new Change<>("new", "old")));
-        assertThat(evicted.get(0).recordContext().timestamp(), is(5L));
-        assertThat(evicted.get(0).recordContext().headers(), is(headers));
+        assertEquals(1, evicted.size());
+        assertEquals("k", evicted.get(0).key());
+        assertEquals(new Change<>("new", "old"), evicted.get(0).value());
+        assertEquals(5L, evicted.get(0).recordContext().timestamp());
+        assertEquals(headers, evicted.get(0).recordContext().headers());
         cleanup(restoreContext, restored);
         cleanup(context, buffer);
     }
@@ -777,12 +777,12 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
         restored.evictWhile(() -> true, evicted::add);
 
-        assertThat(evicted.size(), is(1));
-        assertThat(evicted.get(0).value(), is(new Change<>("v2", "v1")));
+        assertEquals(1, evicted.size());
+        assertEquals(new Change<>("v2", "v1"), evicted.get(0).value());
         // New value with its own headers (B), then the old value with the headers of the record it
         // originally arrived on (A) -- both recovered from the changelog, not just the latest one.
-        assertThat(headerSeenByDeserializer, is(List.of("B", "A")));
-        assertThat(evicted.get(0).recordContext().headers(), is(headersB));
+        assertEquals(List.of("B", "A"), headerSeenByDeserializer);
+        assertEquals(headersB, evicted.get(0).recordContext().headers());
         cleanup(restoreContext, restored);
         cleanup(context, buffer);
     }
@@ -813,15 +813,15 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         // The prior value has no per-part headers to recover, so it falls back to empty headers and
         // the record-context timestamp rather than the UNKNOWN it would carry in a headers changelog.
-        assertThat(restored.priorValueForBuffered("k"), is(Maybe.defined(ValueTimestampHeaders.make("old", 5L, new RecordHeaders()))));
+        assertEquals(Maybe.defined(ValueTimestampHeaders.make("old", 5L, new RecordHeaders())), restored.priorValueForBuffered("k"));
 
         final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
         restored.evictWhile(() -> true, evicted::add);
 
-        assertThat(evicted.size(), is(1));
-        assertThat(evicted.get(0).key(), is("k"));
-        assertThat(evicted.get(0).value(), is(new Change<>("new", "old")));
-        assertThat(evicted.get(0).recordContext().timestamp(), is(5L));
+        assertEquals(1, evicted.size());
+        assertEquals("k", evicted.get(0).key());
+        assertEquals(new Change<>("new", "old"), evicted.get(0).value());
+        assertEquals(5L, evicted.get(0).recordContext().timestamp());
         cleanup(restoreContext, restored);
         cleanup(context, buffer);
     }
@@ -844,16 +844,18 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.put(0L, new Record<>("k", new Change<>("new", "old"), 5L, headers), context.recordContext());
         buffer.commit(Map.of());
 
-        assertThat(buffer.priorValueForBuffered("k"),
-            is(Maybe.defined(ValueTimestampHeaders.make("old", RecordQueue.UNKNOWN, new RecordHeaders()))));
+        assertEquals(
+            Maybe.defined(ValueTimestampHeaders.make("old", RecordQueue.UNKNOWN, new RecordHeaders())),
+            buffer.priorValueForBuffered("k"));
 
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> restored = bufferSupplier.apply(testName);
         final MockInternalProcessorContext<?, ?> restoreContext = makeContext(true);
         restored.init(restoreContext, restored);
         restoreInto(restoreContext, context, testName);
 
-        assertThat(restored.priorValueForBuffered("k"),
-            is(Maybe.defined(ValueTimestampHeaders.make("old", RecordQueue.UNKNOWN, new RecordHeaders()))));
+        assertEquals(
+            Maybe.defined(ValueTimestampHeaders.make("old", RecordQueue.UNKNOWN, new RecordHeaders())),
+            restored.priorValueForBuffered("k"));
         cleanup(restoreContext, restored);
         cleanup(context, buffer);
     }
@@ -877,7 +879,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.commit(Map.of());
 
         final List<ProducerRecord<Object, Object>> collected = ((MockRecordCollector) context.recordCollector()).collected();
-        assertThat(collected.size(), is(1));
+        assertEquals(1, collected.size());
 
         // Restore into a buffer configured WITHOUT header stores.
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> restored = bufferSupplier.apply(testName);
@@ -899,10 +901,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         // The values come back intact; only the per-part headers are absent, which is exactly what
         // running without a headers store format means.
-        assertThat(evicted.size(), is(1));
-        assertThat(evicted.get(0).key(), is("k"));
-        assertThat(evicted.get(0).value(), is(new Change<>("new", "old")));
-        assertThat(evicted.get(0).recordContext().timestamp(), is(5L));
+        assertEquals(1, evicted.size());
+        assertEquals("k", evicted.get(0).key());
+        assertEquals(new Change<>("new", "old"), evicted.get(0).value());
+        assertEquals(5L, evicted.get(0).recordContext().timestamp());
         cleanup(restoreContext, restored);
         cleanup(context, buffer);
     }
@@ -953,29 +955,27 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                 })
                 .collect(Collectors.toList());
 
-        assertThat(collected, is(asList(
-            new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
-                                 0,   // Producer will assign
-                                 null,
-                                 "deleteme",
-                                 null,
-                                 new RecordHeaders()
-            ),
-            new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
-                                 0,
-                                 null,
-                                 "zxcv",
-                                 new KeyValue<>(1L, getBufferValue("3gon4i", 1)),
-                                 CHANGELOG_HEADERS
-            ),
-            new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
-                                 0,
-                                 null,
-                                 "asdf",
-                                 new KeyValue<>(2L, getBufferValue("2093j", 0)),
-                                 CHANGELOG_HEADERS
-            )
-        )));
+        assertEquals(
+            List.of(
+                new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
+                                     0,   // Producer will assign
+                                     null,
+                                     "deleteme",
+                                     null,
+                                     new RecordHeaders()),
+                new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
+                                     0,
+                                     null,
+                                     "zxcv",
+                                     new KeyValue<>(1L, getBufferValue("3gon4i", 1)),
+                                     CHANGELOG_HEADERS),
+                new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
+                                     0,
+                                     null,
+                                     "asdf",
+                                     new KeyValue<>(2L, getBufferValue("2093j", 0)),
+                                     CHANGELOG_HEADERS)),
+            collected);
 
         cleanup(context, buffer);
     }
@@ -1048,9 +1048,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(3));
-        assertThat(buffer.minTimestamp(), is(0L));
-        assertThat(buffer.bufferSize(), is(172L));
+        assertEquals(3, buffer.numRecords());
+        assertEquals(0L, buffer.minTimestamp());
+        assertEquals(172L, buffer.bufferSize());
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
@@ -1066,13 +1066,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(2));
-        assertThat(buffer.minTimestamp(), is(1L));
-        assertThat(buffer.bufferSize(), is(115L));
+        assertEquals(2, buffer.numRecords());
+        assertEquals(1L, buffer.minTimestamp());
+        assertEquals(115L, buffer.bufferSize());
 
-        assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
-        assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertEquals(Maybe.undefined(), buffer.priorValueForBuffered("todelete"));
+        assertEquals(Maybe.defined(null), buffer.priorValueForBuffered("asdf"));
+        assertEquals(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders())), buffer.priorValueForBuffered("zxcv"));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -1087,16 +1087,17 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         //   which is fixed in changelog format v1. But upgraded applications still need to be able to handle the
         //   original format.
 
-        assertThat(evicted, is(asList(
-            new Eviction<>(
-                "zxcv",
-                new Change<>("next", "eo4im"),
-                new ProcessorRecordContext(3L, 3, 0, "changelog-topic", new RecordHeaders())),
-            new Eviction<>(
-                "asdf",
-                new Change<>("qwer", null),
-                new ProcessorRecordContext(1L, 1, 0, "changelog-topic", new RecordHeaders()))
-        )));
+        assertEquals(
+            List.of(
+                new Eviction<>(
+                    "zxcv",
+                    new Change<>("next", "eo4im"),
+                    new ProcessorRecordContext(3L, 3, 0, "changelog-topic", new RecordHeaders())),
+                new Eviction<>(
+                    "asdf",
+                    new Change<>("qwer", null),
+                    new ProcessorRecordContext(1L, 1, 0, "changelog-topic", new RecordHeaders()))),
+            evicted);
 
         cleanup(context, buffer);
     }
@@ -1171,9 +1172,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(3));
-        assertThat(buffer.minTimestamp(), is(0L));
-        assertThat(buffer.bufferSize(), is(142L));
+        assertEquals(3, buffer.numRecords());
+        assertEquals(0L, buffer.minTimestamp());
+        assertEquals(142L, buffer.bufferSize());
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
@@ -1189,13 +1190,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(2));
-        assertThat(buffer.minTimestamp(), is(1L));
-        assertThat(buffer.bufferSize(), is(95L));
+        assertEquals(2, buffer.numRecords());
+        assertEquals(1L, buffer.minTimestamp());
+        assertEquals(95L, buffer.bufferSize());
 
-        assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
-        assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertEquals(Maybe.undefined(), buffer.priorValueForBuffered("todelete"));
+        assertEquals(Maybe.defined(null), buffer.priorValueForBuffered("asdf"));
+        assertEquals(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders())), buffer.priorValueForBuffered("zxcv"));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -1210,16 +1211,17 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         // * The record offset preserves the original input record's offset, *not* the offset of the changelog record
 
 
-        assertThat(evicted, is(asList(
-            new Eviction<>(
-                "zxcv",
-                new Change<>("next", "3o4im"),
-                getContext(3L)),
-            new Eviction<>(
-                "asdf",
-                new Change<>("qwer", null),
-                getContext(1L)
-            ))));
+        assertEquals(
+            List.of(
+                new Eviction<>(
+                    "zxcv",
+                    new Change<>("next", "3o4im"),
+                    getContext(3L)),
+                new Eviction<>(
+                    "asdf",
+                    new Change<>("qwer", null),
+                    getContext(1L))),
+            evicted);
 
         cleanup(context, buffer);
     }
@@ -1295,9 +1297,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(3));
-        assertThat(buffer.minTimestamp(), is(0L));
-        assertThat(buffer.bufferSize(), is(142L));
+        assertEquals(3, buffer.numRecords());
+        assertEquals(0L, buffer.minTimestamp());
+        assertEquals(142L, buffer.bufferSize());
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
@@ -1313,13 +1315,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(2));
-        assertThat(buffer.minTimestamp(), is(1L));
-        assertThat(buffer.bufferSize(), is(95L));
+        assertEquals(2, buffer.numRecords());
+        assertEquals(1L, buffer.minTimestamp());
+        assertEquals(95L, buffer.bufferSize());
 
-        assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
-        assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertEquals(Maybe.undefined(), buffer.priorValueForBuffered("todelete"));
+        assertEquals(Maybe.defined(null), buffer.priorValueForBuffered("asdf"));
+        assertEquals(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders())), buffer.priorValueForBuffered("zxcv"));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -1334,16 +1336,17 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         // * The record offset preserves the original input record's offset, *not* the offset of the changelog record
 
 
-        assertThat(evicted, is(asList(
-            new Eviction<>(
-                "zxcv",
-                new Change<>("next", "3o4im"),
-                getContext(3L)),
-            new Eviction<>(
-                "asdf",
-                new Change<>("qwer", null),
-                getContext(1L)
-            ))));
+        assertEquals(
+            List.of(
+                new Eviction<>(
+                    "zxcv",
+                    new Change<>("next", "3o4im"),
+                    getContext(3L)),
+                new Eviction<>(
+                    "asdf",
+                    new Change<>("qwer", null),
+                    getContext(1L))),
+            evicted);
 
         cleanup(context, buffer);
     }
@@ -1421,9 +1424,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(3));
-        assertThat(buffer.minTimestamp(), is(0L));
-        assertThat(buffer.bufferSize(), is(142L));
+        assertEquals(3, buffer.numRecords());
+        assertEquals(0L, buffer.minTimestamp());
+        assertEquals(142L, buffer.bufferSize());
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
@@ -1439,13 +1442,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(2));
-        assertThat(buffer.minTimestamp(), is(1L));
-        assertThat(buffer.bufferSize(), is(95L));
+        assertEquals(2, buffer.numRecords());
+        assertEquals(1L, buffer.minTimestamp());
+        assertEquals(95L, buffer.bufferSize());
 
-        assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
-        assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertEquals(Maybe.undefined(), buffer.priorValueForBuffered("todelete"));
+        assertEquals(Maybe.defined(null), buffer.priorValueForBuffered("asdf"));
+        assertEquals(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders())), buffer.priorValueForBuffered("zxcv"));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -1460,16 +1463,17 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         // * The record offset preserves the original input record's offset, *not* the offset of the changelog record
 
 
-        assertThat(evicted, is(asList(
-            new Eviction<>(
-                "zxcv",
-                new Change<>("next", "3o4im"),
-                getContext(3L)),
-            new Eviction<>(
-                "asdf",
-                new Change<>("qwer", null),
-                getContext(1L)
-            ))));
+        assertEquals(
+            List.of(
+                new Eviction<>(
+                    "zxcv",
+                    new Change<>("next", "3o4im"),
+                    getContext(3L)),
+                new Eviction<>(
+                    "asdf",
+                    new Change<>("qwer", null),
+                    getContext(1L))),
+            evicted);
 
         cleanup(context, buffer);
     }
@@ -1544,9 +1548,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(3));
-        assertThat(buffer.minTimestamp(), is(0L));
-        assertThat(buffer.bufferSize(), is(142L));
+        assertEquals(3, buffer.numRecords());
+        assertEquals(0L, buffer.minTimestamp());
+        assertEquals(142L, buffer.bufferSize());
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
@@ -1562,13 +1566,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  Optional.empty())
         ));
 
-        assertThat(buffer.numRecords(), is(2));
-        assertThat(buffer.minTimestamp(), is(1L));
-        assertThat(buffer.bufferSize(), is(95L));
+        assertEquals(2, buffer.numRecords());
+        assertEquals(1L, buffer.minTimestamp());
+        assertEquals(95L, buffer.bufferSize());
 
-        assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
-        assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertEquals(Maybe.undefined(), buffer.priorValueForBuffered("todelete"));
+        assertEquals(Maybe.defined(null), buffer.priorValueForBuffered("asdf"));
+        assertEquals(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders())), buffer.priorValueForBuffered("zxcv"));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -1583,16 +1587,17 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         // * The record offset preserves the original input record's offset, *not* the offset of the changelog record
 
 
-        assertThat(evicted, is(asList(
-            new Eviction<>(
-                "zxcv",
-                new Change<>("next", "3o4im"),
-                getContext(3L)),
-            new Eviction<>(
-                "asdf",
-                new Change<>("qwer", null),
-                getContext(1L)
-            ))));
+        assertEquals(
+            List.of(
+                new Eviction<>(
+                    "zxcv",
+                    new Change<>("next", "3o4im"),
+                    getContext(3L)),
+                new Eviction<>(
+                    "asdf",
+                    new Change<>("qwer", null),
+                    getContext(1L))),
+            evicted);
 
         cleanup(context, buffer);
     }

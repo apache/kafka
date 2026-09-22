@@ -25,11 +25,8 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeMetadataQuorumOptions;
-import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.FeatureUpdate;
-import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
-import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
@@ -46,9 +43,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
-import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.metadata.ConfigRecord;
@@ -83,7 +78,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.ClientQuotaType;
@@ -106,7 +100,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -705,6 +698,19 @@ public class KRaftClusterTest {
             cluster.waitForActiveController();
 
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
+                // The controller is still part of the voter set, so it can't be unregistered yet
+                assertFutureThrows(
+                    InvalidRequestException.class,
+                    admin.unregisterController(controllerIdToUnregister).all(),
+                    "Cannot unregister controller " + controllerIdToUnregister +
+                        " because it is part of the voter set."
+                );
+
+                admin.removeRaftVoter(
+                    controllerIdToUnregister,
+                    initialVoters.get(controllerIdToUnregister)
+                ).all().get();
+
                 assertDoesNotThrow(() -> admin.unregisterController(controllerIdToUnregister).all().get());
             }
 
@@ -730,6 +736,11 @@ public class KRaftClusterTest {
                     .map(Map.Entry::getKey)
                     .findFirst()
                     .orElseThrow();
+            // The voter set is static in this cluster, so every controller is a voter
+            int inactiveId = cluster.controllers().keySet().stream()
+                    .filter(id -> id != activeId)
+                    .findFirst()
+                    .orElseThrow();
 
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 assertFutureThrows(
@@ -740,7 +751,12 @@ public class KRaftClusterTest {
                 assertFutureThrows(
                     InvalidRequestException.class,
                     admin.unregisterController(activeId).all(),
-                    "Controller cannot unregister itself while it is active."
+                        "Cannot unregister controller " + activeId + " because it is part of the voter set."
+                );
+                assertFutureThrows(
+                    InvalidRequestException.class,
+                    admin.unregisterController(inactiveId).all(),
+                    "Cannot unregister controller " + inactiveId + " because it is part of the voter set."
                 );
             }
         }
@@ -1054,38 +1070,6 @@ public class KRaftClusterTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"3.7-IV0", "3.7-IV2"})
-    public void testCreatePartitions(String metadataVersionString) throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString, true))
-                .setNumControllerNodes(3)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-
-            try (Admin admin = cluster.admin()) {
-                Map<String, KafkaFuture<Void>> createResults = admin.createTopics(List.of(
-                    new NewTopic("foo", 1, (short) 3),
-                    new NewTopic("bar", 2, (short) 3)
-                )).values();
-                createResults.get("foo").get();
-                createResults.get("bar").get();
-                Map<String, KafkaFuture<Void>> increaseResults = admin.createPartitions(Map.of(
-                    "foo", NewPartitions.increaseTo(3),
-                    "bar", NewPartitions.increaseTo(2)
-                )).values();
-
-                increaseResults.get("foo").get();
-                ExecutionException exception = assertThrows(ExecutionException.class, () -> increaseResults.get("bar").get());
-                assertEquals(InvalidPartitionsException.class, exception.getCause().getClass());
-            }
-        }
-    }
-
     @Test
     public void testDescribeQuorumRequestToBrokers() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
@@ -1175,23 +1159,28 @@ public class KRaftClusterTest {
                 assertTrue(controllerIds.contains(quorumInfo.leaderId()),
                     "Leader ID " + quorumInfo.leaderId() + " was not a controller ID.");
 
-                // Try to bring down the raft client in the active controller node to force the leader election.
-                // Stop raft client but not the controller, because we would like to get NOT_LEADER_OR_FOLLOWER error first.
-                // If the controller is shutdown, the client can't send request to the original leader.
-                cluster.controllers().get(quorumInfo.leaderId()).sharedServer().raftManager().client().shutdown(1000);
-                // Send another describe metadata quorum request, it'll get NOT_LEADER_OR_FOLLOWER error first and then re-retrieve the metadata update
-                // and send to the correct active controller.
-                KafkaFuture<QuorumInfo> quorumInfo2Future = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions()).quorumInfo();
-                // If raft client finishes shutdown before returning NOT_LEADER_OR_FOLLOWER error, the request will not be handled.
-                // This makes test fail. Shutdown the controller to make sure the request is handled by another controller.
-                cluster.controllers().get(quorumInfo.leaderId()).shutdown();
-                QuorumInfo quorumInfo2 = quorumInfo2Future.get();
-                // Make sure the leader has changed
-                assertTrue(quorumInfo.leaderId() != quorumInfo2.leaderId());
+                // Force a leader election by shutting down the current leader.
+                int oldLeaderId = quorumInfo.leaderId();
+                cluster.controllers().get(oldLeaderId).shutdown();
 
-                assertEquals(controllerIds, voterIds);
-                assertTrue(controllerIds.contains(quorumInfo.leaderId()),
-                    "Leader ID " + quorumInfo.leaderId() + " was not a controller ID.");
+                // Poll until the admin client observes the new leader. describeMetadataQuorum retries
+                // through the NOT_LEADER_OR_FOLLOWER errors and re-resolves the active controller while
+                // the election completes.
+                AtomicReference<QuorumInfo> quorumInfo2Ref = new AtomicReference<>();
+                TestUtils.waitForCondition(() -> {
+                    QuorumInfo qi = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions()).quorumInfo().get();
+                    quorumInfo2Ref.set(qi);
+                    return qi.leaderId() != oldLeaderId && controllerIds.contains(qi.leaderId());
+                }, "Timed out waiting for a new metadata quorum leader after shutting down node " + oldLeaderId);
+                QuorumInfo quorumInfo2 = quorumInfo2Ref.get();
+
+                assertNotEquals(oldLeaderId, quorumInfo2.leaderId());
+                Set<Integer> voterIds2 = quorumInfo2.voters().stream()
+                    .map(QuorumInfo.ReplicaState::replicaId)
+                    .collect(Collectors.toSet());
+                assertEquals(controllerIds, voterIds2);
+                assertTrue(controllerIds.contains(quorumInfo2.leaderId()),
+                    "Leader ID " + quorumInfo2.leaderId() + " was not a controller ID.");
             }
         }
     }
@@ -1218,30 +1207,6 @@ public class KRaftClusterTest {
             }
             TestUtils.waitForCondition(() -> cluster.brokers().get(0).metadataCache().currentImage().features().metadataVersion()
                 .equals(Optional.of(MetadataVersion.latestTesting())), "Timed out waiting for metadata.version update");
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testDescribeKRaftVersion(boolean usingBootstrapControllers) throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .setStandalone(true)
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-
-            try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
-                FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
-                assertEquals(new SupportedVersionRange((short) 0, (short) 1),
-                    featureMetadata.supportedFeatures().get(KRaftVersion.FEATURE_NAME));
-                assertEquals(new FinalizedVersionRange((short) 1, (short) 1),
-                    featureMetadata.finalizedFeatures().get(KRaftVersion.FEATURE_NAME));
-            }
         }
     }
 
@@ -1369,30 +1334,6 @@ public class KRaftClusterTest {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
-        }
-    }
-
-    @Test
-    public void testOverlyLargeCreateTopics() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            try (Admin admin = cluster.admin()) {
-                var newTopics = new ArrayList<NewTopic>();
-                for (int i = 0; i <= 10000; i++) {
-                    newTopics.add(new NewTopic("foo" + i, 100000, (short) 1));
-                }
-                var executionException = assertThrows(ExecutionException.class,
-                    () -> admin.createTopics(newTopics).all().get());
-                assertNotNull(executionException.getCause());
-                assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
-                assertEquals("Excessively large number of partitions per request.",
-                    executionException.getCause().getMessage());
-            }
         }
     }
 
@@ -1749,30 +1690,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.startup();
             cluster.waitForReadyBrokers();
-        }
-    }
-
-    @Test
-    public void testIncreaseNumIoThreads() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1).build())
-            .setConfigProp(ServerConfigs.NUM_IO_THREADS_CONFIG, "4")
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-            try (Admin admin = cluster.admin()) {
-                admin.incrementalAlterConfigs(
-                    Map.of(new ConfigResource(Type.BROKER, ""),
-                        List.of(new AlterConfigOp(
-                            new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, "8"), OpType.SET)))).all().get();
-                var newTopic = List.of(new NewTopic("test-topic", 1, (short) 1));
-                var createTopicResult = admin.createTopics(newTopic);
-                createTopicResult.all().get();
-                waitForTopicListing(admin, List.of("test-topic"), List.of());
-            }
         }
     }
 

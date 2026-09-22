@@ -26,6 +26,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.AuthorizerNotReadyException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.resource.PatternType;
@@ -726,6 +727,23 @@ public class StandardAuthorizerTest {
                 List.of(newAction(READ, TOPIC, "green"))));
         // StandardAuthorizer has 4 metrics
         assertEquals(5, metrics.metrics().size());
+    }
+
+    @Test
+    public void testAclsTotalCountMetric() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+        KafkaMetric aclsTotalCount = metrics.metric(metrics.metricName("acls-total-count", "plugins", "", Map.of()));
+        assertEquals(0, aclsTotalCount.metricValue());
+
+        List<StandardAclWithId> acls = List.of(
+                withId(new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", "*", READ, ALLOW)),
+                withId(new StandardAcl(TOPIC, "bar", LITERAL, "User:bob", "*", READ, ALLOW)),
+                withId(new StandardAcl(TOPIC, "baz", LITERAL, "User:alice", "*", WRITE, ALLOW)));
+        acls.forEach(acl -> authorizer.addAcl(acl.id(), acl.acl()));
+        assertEquals(3, aclsTotalCount.metricValue());
+
+        authorizer.removeAcl(acls.get(0).id());
+        assertEquals(2, aclsTotalCount.metricValue());
     }
 
     @Test

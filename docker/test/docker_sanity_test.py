@@ -15,16 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
-import subprocess
-from HTMLTestRunner import HTMLTestRunner
-import test.constants as constants
 import os
+import subprocess
+import unittest
+
+import pytest
+import test.constants as constants
 
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
     FIXTURES_DIR="."
-    MODE="jvm"
     CONTAINER_RUNTIME="docker"
 
     def compose_command(self):
@@ -194,13 +194,11 @@ class DockerSanityTest(unittest.TestCase):
         except Exception as e:
             print(constants.FILE_INPUT_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
-        # SASL is not supported on native image due to missing reflection config (KAFKA-19584)
-        if self.MODE == "jvm":
-            try:
-                total_errors.extend(self.secure_flow('localhost:9095', constants.SASL_CLIENT_CONFIG, constants.SASL_FLOW_TESTS, constants.SASL_ERROR_PREFIX, constants.SASL_TOPIC))
-            except Exception as e:
-                print(constants.SASL_ERROR_PREFIX, str(e))
-                total_errors.append(str(e))
+        try:
+            total_errors.extend(self.secure_flow('localhost:9095', constants.SASL_CLIENT_CONFIG, constants.SASL_FLOW_TESTS, constants.SASL_ERROR_PREFIX, constants.SASL_TOPIC))
+        except Exception as e:
+            print(constants.SASL_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
         try:
             total_errors.extend(self.broker_restart_flow())
         except Exception as e:
@@ -228,25 +226,22 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
 def run_tests(image, mode, fixtures_dir, container_runtime="docker"):
     DockerSanityTest.IMAGE = image
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
-    DockerSanityTest.MODE = mode
     DockerSanityTest.CONTAINER_RUNTIME = container_runtime
 
-    test_classes_to_run = []
-    if mode == "jvm" or mode == "native":
-        test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
-    
-    loader = unittest.TestLoader()
-    suites_list = []
-    for test_class in test_classes_to_run:
-        suite = loader.loadTestsFromTestCase(test_class)
-        suites_list.append(suite)
-    combined_suite = unittest.TestSuite(suites_list)
     cur_directory = os.path.dirname(os.path.realpath(__file__))
-    outfile = open(f"{cur_directory}/report_{mode}.html", "w")
-    runner = HTMLTestRunner.HTMLTestRunner(
-                stream=outfile,
-                title=f'Test Report: Apache Kafka {mode.capitalize()} Docker Image',
-                description='This demonstrates the report output.'
-                )
-    result = runner.run(combined_suite)
-    return (result.failure_count, result.error_count)
+    report_path = f"{cur_directory}/report_{mode}.html"
+
+    class ReportTitlePlugin:
+        @pytest.hookimpl(optionalhook=True)
+        def pytest_html_report_title(self, report):
+            report.title = f"Test Report: Apache Kafka {mode.capitalize()} Docker Image"
+
+    return pytest.main([
+        "--pyargs",
+        __name__,
+        f"--html={report_path}",
+        "--self-contained-html",
+        "--capture=tee-sys",
+        "-p",
+        "no:cacheprovider",
+    ], plugins=[ReportTitlePlugin()])

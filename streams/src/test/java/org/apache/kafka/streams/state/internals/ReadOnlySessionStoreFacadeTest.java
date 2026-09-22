@@ -32,8 +32,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
@@ -57,7 +56,7 @@ public class ReadOnlySessionStoreFacadeTest {
         when(mockedSessionStoreWithHeaders.fetchSession("key", 10L, 20L))
             .thenReturn(AggregationWithHeaders.make("value", new RecordHeaders()));
 
-        assertThat(readOnlySessionStoreFacade.fetchSession("key", 10L, 20L), is("value"));
+        assertEquals("value", readOnlySessionStoreFacade.fetchSession("key", 10L, 20L));
     }
 
     @Test
@@ -83,8 +82,8 @@ public class ReadOnlySessionStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlySessionStoreFacade.findSessions("key1", 10L, 40L);
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new SessionWindow(10L, 20L)), "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new SessionWindow(30L, 40L)), "value2")));
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new SessionWindow(10L, 20L)), "value1"), iterator.next());
+        assertEquals(KeyValue.pair(new Windowed<>("key2", new SessionWindow(30L, 40L)), "value2"), iterator.next());
     }
 
     @Test
@@ -99,7 +98,7 @@ public class ReadOnlySessionStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlySessionStoreFacade.backwardFindSessions("key1", 10L, 40L);
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new SessionWindow(30L, 40L)), "value1")));
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new SessionWindow(30L, 40L)), "value1"), iterator.next());
     }
 
     @Test
@@ -114,7 +113,7 @@ public class ReadOnlySessionStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlySessionStoreFacade.findSessions("key1", "key2", 10L, 40L);
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new SessionWindow(10L, 20L)), "value1")));
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new SessionWindow(10L, 20L)), "value1"), iterator.next());
     }
 
     @Test
@@ -129,7 +128,7 @@ public class ReadOnlySessionStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlySessionStoreFacade.backwardFindSessions("key1", "key2", 10L, 40L);
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new SessionWindow(30L, 40L)), "value2")));
+        assertEquals(KeyValue.pair(new Windowed<>("key2", new SessionWindow(30L, 40L)), "value2"), iterator.next());
     }
 
     @Test
@@ -146,8 +145,8 @@ public class ReadOnlySessionStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlySessionStoreFacade.fetch("key1");
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new SessionWindow(10L, 20L)), "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new SessionWindow(30L, 40L)), "value2")));
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new SessionWindow(10L, 20L)), "value1"), iterator.next());
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new SessionWindow(30L, 40L)), "value2"), iterator.next());
     }
 
     @Test
@@ -161,7 +160,7 @@ public class ReadOnlySessionStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlySessionStoreFacade.backwardFetch("key1");
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new SessionWindow(30L, 40L)), "value1")));
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new SessionWindow(30L, 40L)), "value1"), iterator.next());
     }
 
     @Test
@@ -175,7 +174,7 @@ public class ReadOnlySessionStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlySessionStoreFacade.fetch("key1", "key2");
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new SessionWindow(10L, 20L)), "value1")));
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new SessionWindow(10L, 20L)), "value1"), iterator.next());
     }
 
     @Test
@@ -189,6 +188,6 @@ public class ReadOnlySessionStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlySessionStoreFacade.backwardFetch("key1", "key2");
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new SessionWindow(30L, 40L)), "value2")));
+        assertEquals(KeyValue.pair(new Windowed<>("key2", new SessionWindow(30L, 40L)), "value2"), iterator.next());
     }
 }

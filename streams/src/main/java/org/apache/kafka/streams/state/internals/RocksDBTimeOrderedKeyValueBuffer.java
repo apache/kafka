@@ -135,7 +135,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
 
         @Override
         public Map<String, String> logConfig() {
-            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Collections.emptyMap();
+            return loggingEnabled() ? Collections.unmodifiableMap(logConfig) : Map.of();
         }
 
         @Override

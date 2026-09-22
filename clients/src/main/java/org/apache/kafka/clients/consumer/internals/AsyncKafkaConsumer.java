@@ -1985,28 +1985,29 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
-        long pollTimeout = isCommittedOffsetsManagementEnabled()
-                ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
-                : timer.remainingMs();
-        // With the non-blocking poll design, it's possible that at this point the background thread is
-        // concurrently working to update positions. Therefore, a _copy_ of the current assignment is retrieved
-        // and iterated looking for any partitions with invalid positions. This is done to avoid being stuck
-        // in poll for an unnecessarily long amount of time if we are missing some positions since the offset
-        // lookup may be backing off after a failure.
-        if (pollTimeout > retryBackoffMs) {
-            Set<TopicPartition> partitions = subscriptions.assignedPartitions();
+        long pollTimeout = Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs());
 
-            if (partitions.isEmpty()) {
-                // If there aren't any assigned partitions, this could mean that this consumer's group membership
-                // has not been established or assignments have been removed and not yet reassigned. In either case,
-                // reduce the poll time for the fetch buffer wait.
+        // Bound the wait when background progress may make fetching possible soon.
+        // Use the current application-thread state to avoid relying on stale state from the network thread.
+        if (pollTimeout > retryBackoffMs) {
+            if (subscriptions.numAssignedPartitions() == 0) {
+                // If there are no assigned partitions, reduce the fetch buffer wait time. This may happen when
+                // group membership has not been established yet, assignments have been revoked but not reassigned,
+                // bootstrap DNS resolution is still in progress, or manual assignment has not happened yet.
+                pollTimeout = retryBackoffMs;
+            } else if (!subscriptions.hasAllFetchPositions()) {
+                // If some partitions do not have valid positions, the background thread may still be resolving them,
+                // for example by fetching committed offsets, looking up offsets by timestamp, or backing off after a
+                // failure. Reduce the wait time so the application thread can consume data promptly once positions are
+                // resolved.
                 pollTimeout = retryBackoffMs;
             } else {
-                for (TopicPartition tp : partitions) {
-                    if (!subscriptions.hasValidPosition(tp)) {
-                        pollTimeout = retryBackoffMs;
-                        break;
-                    }
+                Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
+                if (subscriptions.hasFetchablePartitions(tp -> !buffered.contains(tp))) {
+                    // If any fetchable partition has no buffered data, it may have been skipped due to reconnect
+                    // backoff, an in-flight request, or a missing leader. Bound the wait so the application thread
+                    // can retry once the condition clears.
+                    pollTimeout = retryBackoffMs;
                 }
             }
         }
@@ -2101,15 +2102,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             wakeupTrigger.clearTask();
         }
         return true;
-    }
-
-    /**
-     *
-     * Indicates if the consumer is using the Kafka-based offset management strategy,
-     * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
-     */
-    private boolean isCommittedOffsetsManagementEnabled() {
-        return groupMetadata.get().isPresent();
     }
 
     /**
