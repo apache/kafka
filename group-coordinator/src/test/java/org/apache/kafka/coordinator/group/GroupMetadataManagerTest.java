@@ -12625,8 +12625,8 @@ public class GroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(groupId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId)
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId)
         );
         assertEquals(expectedRecords, records);
     }
@@ -23621,8 +23621,8 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(streamsGroupId),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(streamsGroupId),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(streamsGroupId)
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(streamsGroupId),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(streamsGroupId)
         );
 
         assertEquals(Errors.MEMBER_ID_REQUIRED.code(), joinResult.joinFuture.get().errorCode());
@@ -24859,6 +24859,29 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo"));
 
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupEpochTombstoneUnsubscribesTopologyTopics() {
+        String subtopologyId = "subtopology-1";
+        StreamsTopology topology = new StreamsTopology(1, Map.of(subtopologyId,
+            new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId(subtopologyId)
+                .setSourceTopics(List.of("bar"))));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder("foo", 10).withTopology(topology))
+            .build();
+
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+
+        // The topology tombstone must be written before the group epoch tombstone: once the group
+        // is gone, replaying the topology tombstone can no longer unsubscribe the group.
+        List<CoordinatorRecord> records = new ArrayList<>();
+        context.groupMetadataManager.streamsGroup("foo").createGroupTombstoneRecords(records);
+        records.forEach(context::replay);
+
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
     }
 
     @Test
