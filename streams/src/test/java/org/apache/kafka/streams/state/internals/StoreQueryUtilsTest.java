@@ -119,8 +119,8 @@ public class StoreQueryUtilsTest {
         final ValueAndTimestamp<String> result =
             deserializer.apply(serdes.rawValue(ValueAndTimestamp.make("value", 42L)));
 
-        assertThat(result.value(), is("value"));
-        assertThat(result.timestamp(), is(42L));
+        assertEquals("value", result.value());
+        assertEquals(42L, result.timestamp());
     }
 
     @Test
