@@ -1329,24 +1329,8 @@ public class RecordAccumulatorTest {
         RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(true, 100, false, "");
         long totalSize = 1024 * 1024;
         int batchSize = 128;
-        BufferPool pool = createTestBufferPool(allocationStrategy, totalSize, batchSize, "producer-internal-metrics");
-        RecordAccumulator accum = allocationStrategy.equals(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL)
-            ? new ChunkedRecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-                    3200, config, metrics, "producer-metrics", time, null, pool) {
-                @Override
-                BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
-                                                            int stickyBatchSize, boolean rackAware, String rack) {
-                    return new SequentialPartitioner(logContext, topic, stickyBatchSize, rackAware, rack);
-                }
-            }
-            : new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-                    3200, config, metrics, "producer-metrics", time, null, pool) {
-                @Override
-                BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
-                                                            int stickyBatchSize, boolean rackAware, String rack) {
-                    return new SequentialPartitioner(logContext, topic, stickyBatchSize, rackAware, rack);
-                }
-            };
+        RecordAccumulator accum = createTestRecordAccumulator(allocationStrategy, null, 3200, batchSize, totalSize,
+            Compression.NONE, 0, config);
 
         byte[] largeValue = new byte[batchSize];
         int[] queueSizes = {1, 7, 2};
@@ -1465,9 +1449,7 @@ public class RecordAccumulatorTest {
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()),  Optional.of(part1LeaderEpoch), null, null, null);
         MetadataSnapshot metadataCache = new MetadataSnapshot(null, nodes, Collections.singletonList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
 
-        // Comfortably above the chunk size, so a chunked batch here spans several chunks. Readiness
-        // comes from linger below, not from the batch filling up, so the exact value doesn't matter.
-        int batchSize = 1024;
+        int batchSize = 10;
         int lingerMs = 10;
         int retryBackoffMs = 100;
         int retryBackoffMaxMs = 1000;
@@ -1576,8 +1558,7 @@ public class RecordAccumulatorTest {
     @ParameterizedTest
     @MethodSource("allocationStrategies")
     public void testDrainWithANodeThatDoesntHostAnyPartitions(String allocationStrategy) {
-        // Nothing is ever appended here, so batch.size only has to stay above the chunk size.
-        int batchSize = 1024;
+        int batchSize = 10;
         int lingerMs = 10;
         long totalSize = 10 * 1024;
         RecordAccumulator accum = createTestRecordAccumulator(allocationStrategy, batchSize, totalSize, Compression.NONE, lingerMs);
@@ -1594,7 +1575,7 @@ public class RecordAccumulatorTest {
 
     @Test
     public void testRetryPolicy() {
-        RecordAccumulator accum = createTestRecordAccumulator(1024, 10 * 1024, Compression.NONE, 0);
+        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, 1024, 10 * 1024, Compression.NONE, 0);
         try {
             long spent = time.milliseconds();            // a deadline that is up: reached, so no time is left
             long open = time.milliseconds() + 1000;      // and one that is not
@@ -1766,6 +1747,20 @@ public class RecordAccumulatorTest {
         Compression compression,
         int lingerMs
     ) {
+        return createTestRecordAccumulator(allocationStrategy, txnManager, deliveryTimeoutMs, batchSize, totalSize,
+            compression, lingerMs, new RecordAccumulator.PartitionerConfig());
+    }
+
+    private RecordAccumulator createTestRecordAccumulator(
+        String allocationStrategy,
+        TransactionManager txnManager,
+        int deliveryTimeoutMs,
+        int batchSize,
+        long totalSize,
+        Compression compression,
+        int lingerMs,
+        RecordAccumulator.PartitionerConfig partitionerConfig
+    ) {
         long retryBackoffMs = 100L;
         long retryBackoffMaxMs = 1000L;
         String metricGrpName = "producer-metrics";
@@ -1780,6 +1775,7 @@ public class RecordAccumulatorTest {
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 deliveryTimeoutMs,
+                partitionerConfig,
                 metrics,
                 metricGrpName,
                 time,
@@ -1801,6 +1797,7 @@ public class RecordAccumulatorTest {
             retryBackoffMs,
             retryBackoffMaxMs,
             deliveryTimeoutMs,
+            partitionerConfig,
             metrics,
             metricGrpName,
             time,
