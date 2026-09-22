@@ -3121,7 +3121,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStaticMemberCannotRejoinWithSameMemberIdAndDifferentInstanceId() {
+    public void testStaticMemberCannotRejoinWithDifferentInstanceId() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
         String instanceId1 = "instance-1";
@@ -3245,7 +3245,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testExistingMemberCannotTakeReleasedInstanceId() {
+    public void testStaticMemberCannotRejoinWithReleasedInstanceId() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
@@ -3327,7 +3327,89 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testDynamicMemberCannotTakeReleasedInstanceId() {
+    public void testStaticMemberCannotRejoinWithUnreleasedInstanceId() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId1 = "instance-1";
+        String instanceId2 = "instance-2";
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        // Consumer group with two active static members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
+                    .setInstanceId(instanceId1)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2)), 10))
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
+                    .setInstanceId(instanceId2)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5)), 10))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage))
+                )))
+            .build();
+
+        assertEquals(
+            Map.of(instanceId1, memberId1, instanceId2, memberId2),
+            context.groupMetadataManager.consumerGroup(groupId).staticMembers()
+        );
+
+        // Member 1 rejoins with its own member id and instance id 2, which is owned by an active
+        // member. The join is rejected because member 1 changes its instance id, before the
+        // ownership of the instance id is even considered.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setInstanceId(instanceId2)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of("foo", "bar"))
+                .setTopicPartitions(List.of())));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a static member with instance id %s.", memberId1, instanceId2, instanceId1), e.getMessage());
+
+        assertEquals(
+            Map.of(instanceId1, memberId1, instanceId2, memberId2),
+            context.groupMetadataManager.consumerGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
+    public void testDynamicMemberCannotRejoinWithReleasedInstanceId() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
@@ -3383,6 +3465,81 @@ public class GroupMetadataManagerTest {
 
         // Member 1 rejoins with its own member id and the released instance id 2. The released
         // instance id may only be taken by a new member id.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setInstanceId(instanceId2)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of("foo", "bar"))
+                .setTopicPartitions(List.of())));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a dynamic member.", memberId1, instanceId2), e.getMessage());
+
+        assertEquals(
+            Map.of(instanceId2, memberId2),
+            context.groupMetadataManager.consumerGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
+    public void testDynamicMemberCannotRejoinWithUnreleasedInstanceId() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId2 = "instance-2";
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        // Consumer group with a dynamic member and an active static member using instance id 2.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2)), 10))
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
+                    .setInstanceId(instanceId2)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5)), 10))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage))
+                )))
+            .build();
+
+        // Member 1 rejoins with its own member id and instance id 2, which is owned by an active
+        // member. The join is rejected because member 1 changes its instance id, before the
+        // ownership of the instance id is even considered.
         InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -3513,7 +3670,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStaticMemberJoinsAgainWhileActive() {
+    public void testStaticMemberRejoinsWithSameMemberIdWhileActive() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
         String instanceId1 = "instance-1";
@@ -3584,6 +3741,12 @@ public class GroupMetadataManagerTest {
 
         // Nothing changed, so nothing is written.
         assertRecordsEquals(List.of(), result.records());
+
+        // The member keeps its epoch and its assignment.
+        ConsumerGroupMember member = context.groupMetadataManager.consumerGroup(groupId).getOrMaybeCreateMember(memberId1, false);
+        assertEquals(10, member.memberEpoch());
+        assertEquals(toAssignmentWithEpochs(mkAssignment(
+            mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 10), member.assignedPartitions());
 
         assertEquals(
             Map.of(instanceId1, memberId1),

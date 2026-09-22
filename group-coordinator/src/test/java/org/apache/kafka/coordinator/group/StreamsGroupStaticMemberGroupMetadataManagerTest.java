@@ -1597,7 +1597,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
     @Test
-    public void testStaticMemberCannotRejoinWithSameMemberIdAndDifferentInstanceId() {
+    public void testStaticMemberCannotRejoinWithDifferentInstanceId() {
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 
         String groupId = "fooup";
@@ -1692,7 +1692,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
     @Test
-    public void testExistingMemberCannotTakeReleasedInstanceId() {
+    public void testStaticMemberCannotRejoinWithReleasedInstanceId() {
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 
         String groupId = "fooup";
@@ -1749,7 +1749,64 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
     @Test
-    public void testDynamicMemberCannotTakeReleasedInstanceId() {
+    public void testStaticMemberCannotRejoinWithUnreleasedInstanceId() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId1 = "instance-1";
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+
+        // Streams group with two active static members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1, instanceId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, topic.targetAssignment(0, 1))
+                .withTargetAssignment(memberId2, topic.targetAssignment(2, 3))
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        assertEquals(
+            Map.of(instanceId1, memberId1, instanceId2, memberId2),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+
+        // Member 1 rejoins with its own member id and instance id 2, which is owned by an active
+        // member. The join is rejected because member 1 changes its instance id, before the
+        // ownership of the instance id is even considered.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId1, instanceId2, topic)
+        ));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a static member with instance id %s.", memberId1, instanceId2, instanceId1), e.getMessage());
+
+        assertEquals(
+            Map.of(instanceId1, memberId1, instanceId2, memberId2),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
+    public void testDynamicMemberCannotRejoinWithReleasedInstanceId() {
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 
         String groupId = "fooup";
@@ -1800,7 +1857,58 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
     @Test
-    public void testStaticMemberJoinsAgainWhileActive() {
+    public void testDynamicMemberCannotRejoinWithUnreleasedInstanceId() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+
+        // Streams group with a dynamic member and an active static member using instance id 2.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, topic.targetAssignment(0, 1))
+                .withTargetAssignment(memberId2, topic.targetAssignment(2, 3))
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // Member 1 rejoins with its own member id and instance id 2, which is owned by an active
+        // member. The join is rejected because member 1 changes its instance id, before the
+        // ownership of the instance id is even considered.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId1, instanceId2, topic)
+        ));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a dynamic member.", memberId1, instanceId2), e.getMessage());
+
+        assertEquals(
+            Map.of(instanceId2, memberId2),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
+    public void testStaticMemberRejoinsWithSameMemberIdWhileActive() {
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 
         String groupId = "fooup";
@@ -1843,16 +1951,8 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(memberId, result.response().data().memberId());
         assertEquals(groupEpoch, result.response().data().memberEpoch());
 
-        // No tombstones and no replacement records.
-        assertFalse(result.records().contains(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId)
-        ));
-        assertFalse(result.records().contains(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId)
-        ));
-        assertFalse(result.records().contains(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId)
-        ));
+        // Nothing changed, so nothing is written.
+        assertRecordsEquals(List.of(), result.records());
 
         // The member keeps its epoch and its assignment.
         StreamsGroupMember member = context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(memberId);
