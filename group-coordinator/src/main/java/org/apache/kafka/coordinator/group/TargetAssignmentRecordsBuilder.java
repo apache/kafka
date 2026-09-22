@@ -195,9 +195,10 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
         // We want to act as if concurrent member operations such as leaves and static member
         // replacements happened *after* the target assignment was computed.
         //
-        //  * When members leave the group, we tombstone their target assignment.
-        //  * When static members are replaced, we move the assignment from the old member id to the
-        //    new member id.
+        //  * When members leave the group, the group coordinator tombstones their target
+        //    assignment.
+        //  * When static members are replaced, the group coordinator moves the assignment from the
+        //    old member id to the new member id.
         //  * When members rejoin with the same member id but a different instance id, they keep
         //    their existing assignment. This operation will never happen when using the official
         //    Java client and may be forbidden in the future.
@@ -222,9 +223,10 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
 
             if (newMemberId != null) {
                 if (newTargetAssignment.containsKey(newMemberId)) {
-                    // The new member id has been in the group the whole time. Avoid creating a
-                    // remapping entry. Note that this is best effort, since newTargetAssignment may not
-                    // contain entries for every member that used to be in the group.
+                    // The new member id has been in the group since before the assignment was
+                    // computed. We want to prioritize matching assignments up by member id, so
+                    // avoid creating a remapping entry. Note that we can't detect this if the
+                    // assignor omits an entry for the member but nothing bad happens in that case.
                     continue;
                 }
 
