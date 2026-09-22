@@ -1251,6 +1251,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     futures.foreach(_.get)
   }
 
+  private def produceRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                             topicName: String,
+                             numRecords: Int): Unit = {
+    val futures = (1 to numRecords).map { i =>
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](
+        topicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
+    }
+
+    futures.foreach(_.get)
+  }
+
   @Test
   def testInvalidAlterConfigs(): Unit = {
     client = createAdminClient
@@ -4194,14 +4205,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // Producer sends messages
     val numRecords = 20
 
-    for (i <- 1 to numRecords) {
-      TestUtils.waitUntilTrue(() => {
-        val producerRecord = producer.send(
-            new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
-          .get()
-        producerRecord != null && producerRecord.topic() == testTopicName
-      }, "Fail to produce record to topic")
-    }
+    produceRecords(producer, testTopicName, numRecords)
 
     val consumerConfig = new Properties();
     consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -4268,14 +4272,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // Producer sends messages
     val numRecords = 20
 
-    for (i <- 1 to numRecords) {
-      TestUtils.waitUntilTrue(() => {
-        val producerRecord = producer.send(
-            new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
-          .get()
-        producerRecord != null && producerRecord.topic() == testTopicName
-      }, "Fail to produce record to topic")
-    }
+    produceRecords(producer, testTopicName, numRecords)
 
     val consumerConfig = new Properties();
     consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -4358,14 +4355,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // Producer sends messages
     val numRecords = 20
 
-    for (i <- 1 to numRecords) {
-      TestUtils.waitUntilTrue(() => {
-        val producerRecord = producer.send(
-            new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
-          .get()
-        producerRecord != null && producerRecord.topic() == testTopicName
-      }, "Fail to produce record to topic")
-    }
+    produceRecords(producer, testTopicName, numRecords)
 
     val consumerConfig = new Properties();
     consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
