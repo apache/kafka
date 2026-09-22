@@ -25425,6 +25425,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
 
         assertFalse(context.groupMetadataManager.consumerGroup("foo").hasMember("m1"));
+        assertFalse(context.groupMetadataManager.consumerGroup("foo").targetAssignment().containsKey("m1"));
         assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
 
         // The sibling tombstones arriving afterwards are no-ops.
@@ -25597,6 +25598,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
 
         assertFalse(context.groupMetadataManager.shareGroup("foo").hasMember("m1"));
+        assertFalse(context.groupMetadataManager.shareGroup("foo").targetAssignment().containsKey("m1"));
         assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
 
         // The sibling tombstones arriving afterwards are no-ops.
@@ -25761,6 +25763,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
 
         assertFalse(context.groupMetadataManager.streamsGroup("foo").hasMember("m1"));
+        assertTrue(context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).isEmpty());
 
         // The sibling tombstones arriving afterwards are no-ops.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));

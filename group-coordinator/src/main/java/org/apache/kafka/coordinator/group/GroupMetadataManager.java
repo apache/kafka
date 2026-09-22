@@ -6076,6 +6076,7 @@ public class GroupMetadataManager {
                     memberId, String.join(" and ", reasons));
             }
 
+            consumerGroup.removeTargetAssignment(memberId);
             consumerGroup.removeMember(memberId);
         }
 
@@ -6498,6 +6499,7 @@ public class GroupMetadataManager {
                     memberId, String.join(" and ", reasons));
             }
 
+            shareGroup.removeTargetAssignment(memberId);
             shareGroup.removeMember(memberId);
         }
 
@@ -6605,6 +6607,7 @@ public class GroupMetadataManager {
                     memberId, String.join(" and ", reasons));
             }
 
+            streamsGroup.removeTargetAssignment(memberId);
             streamsGroup.removeMember(memberId);
         }
     }
