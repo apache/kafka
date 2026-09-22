@@ -47,6 +47,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
@@ -273,6 +274,41 @@ public class TransactionsCommandTest {
 
     @Test
     public void testDescribeTransaction() throws Exception {
+        long transactionStartTime = time.milliseconds();
+        testDescribeTransaction(TransactionState.ONGOING, OptionalLong.of(transactionStartTime),
+            OptionalLong.of(transactionStartTime + 1000), "5000");
+    }
+
+    @Test
+    public void testDescribeTransactionWithoutLastUpdateTime() throws Exception {
+        testDescribeTransaction(TransactionState.ONGOING, OptionalLong.of(time.milliseconds()), OptionalLong.empty(), "5000");
+    }
+
+    @Test
+    public void testDescribeEmptyTransaction() throws Exception {
+        testDescribeTransaction(TransactionState.EMPTY, OptionalLong.empty(), OptionalLong.of(time.milliseconds()), "None");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransactionState.class, names = {"COMPLETE_COMMIT", "COMPLETE_ABORT"})
+    public void testDescribeCompletedTransaction(TransactionState state) throws Exception {
+        long transactionStartTime = time.milliseconds();
+        testDescribeTransaction(state, OptionalLong.of(transactionStartTime),
+            OptionalLong.of(transactionStartTime + 1000), "1000");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransactionState.class, names = {"COMPLETE_COMMIT", "COMPLETE_ABORT"})
+    public void testDescribeCompletedTransactionWithoutLastUpdateTime(TransactionState state) throws Exception {
+        testDescribeTransaction(state, OptionalLong.of(time.milliseconds()), OptionalLong.empty(), "-1");
+    }
+
+    private void testDescribeTransaction(
+        TransactionState state,
+        OptionalLong transactionStartTime,
+        OptionalLong transactionLastUpdateTime,
+        String expectedDurationMs
+    ) throws Exception {
         String transactionalId = "foo";
         String[] args = new String[] {
             "--bootstrap-server",
@@ -285,23 +321,23 @@ public class TransactionsCommandTest {
         DescribeTransactionsResult describeResult = Mockito.mock(DescribeTransactionsResult.class);
 
         int coordinatorId = 5;
-        long transactionStartTime = time.milliseconds();
 
         KafkaFuture<TransactionDescription> describeFuture = completedFuture(
             new TransactionDescription(
                 coordinatorId,
-                TransactionState.ONGOING,
+                state,
                 12345L,
                 15,
                 10000,
-                OptionalLong.of(transactionStartTime),
+                transactionStartTime,
+                transactionLastUpdateTime,
                 Set.of(new TopicPartition("bar", 0))
         ));
 
         Mockito.when(describeResult.description(transactionalId)).thenReturn(describeFuture);
         Mockito.when(admin.describeTransactions(Set.of(transactionalId))).thenReturn(describeResult);
 
-        // Add a little time so that we can see a positive transaction duration in the output
+        // Advance the clock to distinguish ongoing and completed transaction durations.
         time.sleep(5000);
 
         execute(args);
@@ -313,15 +349,21 @@ public class TransactionsCommandTest {
         List<String> expectedHeaders = TransactionsCommand.DescribeTransactionsCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
 
+        String expectedStartTimeMsColumnValue = transactionStartTime.isPresent() ?
+            String.valueOf(transactionStartTime.getAsLong()) : "None";
+        String expectedLastUpdateTimeMsColumnValue = transactionLastUpdateTime.isPresent() ?
+            String.valueOf(transactionLastUpdateTime.getAsLong()) : "None";
+
         List<String> expectedRow = List.of(
             String.valueOf(coordinatorId),
             transactionalId,
             "12345",
             "15",
-            "Ongoing",
+            state.toString(),
             "10000",
-            String.valueOf(transactionStartTime),
-            "5000",
+            expectedStartTimeMsColumnValue,
+            expectedLastUpdateTimeMsColumnValue,
+            expectedDurationMs,
             "bar-0"
         );
         assertEquals(expectedRow, table.get(1));

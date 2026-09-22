@@ -10785,12 +10785,13 @@ class KafkaApisTest extends Logging {
     assertPartitionError(tp4, Errors.INVALID_TOPIC_EXCEPTION)
   }
 
-  @Test
-  def testDescribeTransactions(): Unit = {
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.DESCRIBE_TRANSACTIONS)
+  def testDescribeTransactions(version: Short): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val data = new DescribeTransactionsRequestData()
       .setTransactionalIds(util.List.of("foo", "bar"))
-    val describeTransactionsRequest = new DescribeTransactionsRequest.Builder(data).build()
+    val describeTransactionsRequest = new DescribeTransactionsRequest.Builder(data).build(version)
     val request = buildRequest(describeTransactionsRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
@@ -10808,6 +10809,7 @@ class KafkaApisTest extends Logging {
         .setProducerId(12345L)
         .setProducerEpoch(15)
         .setTransactionStartTimeMs(time.milliseconds())
+        .setTransactionLastUpdateTimeMs(time.milliseconds() + 100)
         .setTransactionState("CompleteCommit")
         .setTransactionTimeoutMs(10000))
 
@@ -10823,10 +10825,12 @@ class KafkaApisTest extends Logging {
     assertEquals(2, response.data.transactionStates.size)
 
     val fooState = response.data.transactionStates.asScala.find(_.transactionalId == "foo").get
+    val expectedLastUpdateTimeMs = if (version >= 1) time.milliseconds() + 100 else 0L
     assertEquals(Errors.NONE.code, fooState.errorCode)
     assertEquals(12345L, fooState.producerId)
     assertEquals(15, fooState.producerEpoch)
     assertEquals(time.milliseconds(), fooState.transactionStartTimeMs)
+    assertEquals(expectedLastUpdateTimeMs, fooState.transactionLastUpdateTimeMs)
     assertEquals("CompleteCommit", fooState.transactionState)
     assertEquals(10000, fooState.transactionTimeoutMs)
     assertEquals(List.empty, fooState.topics.asScala.toList)
@@ -10880,6 +10884,7 @@ class KafkaApisTest extends Logging {
       .setProducerId(12345L)
       .setProducerEpoch(15)
       .setTransactionStartTimeMs(time.milliseconds())
+      .setTransactionLastUpdateTimeMs(time.milliseconds() + 100)
       .setTransactionState("Ongoing")
       .setTransactionTimeoutMs(10000)
 
@@ -10899,6 +10904,7 @@ class KafkaApisTest extends Logging {
     assertEquals(12345L, fooState.producerId)
     assertEquals(15, fooState.producerEpoch)
     assertEquals(time.milliseconds(), fooState.transactionStartTimeMs)
+    assertEquals(time.milliseconds() + 100, fooState.transactionLastUpdateTimeMs)
     assertEquals("Ongoing", fooState.transactionState)
     assertEquals(10000, fooState.transactionTimeoutMs)
     assertEquals(List(mkTopicData(topic = "foo", Seq(1, 2))), fooState.topics.asScala.toList)

@@ -22,6 +22,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -29,6 +30,8 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -72,7 +75,7 @@ public class DescribeTransactionsHandlerTest {
 
         Set<CoordinatorKey> keys = coordinatorKeys(transactionalIds);
         DescribeTransactionsResponse response = new DescribeTransactionsResponse(new DescribeTransactionsResponseData()
-            .setTransactionStates(asList(transactionState1, transactionState2)));
+            .setTransactionStates(asList(transactionState1, transactionState2)), (short) 1);
 
         ApiResult<CoordinatorKey, TransactionDescription> result = handler.handleResponse(
             node, keys, response);
@@ -82,6 +85,45 @@ public class DescribeTransactionsHandlerTest {
             result.completedKeys.get(CoordinatorKey.byTransactionalId(transactionalId1)));
         assertMatchingTransactionState(node.id(), transactionState2,
             result.completedKeys.get(CoordinatorKey.byTransactionalId(transactionalId2)));
+    }
+
+    @Test
+    public void testHandleV0ResponseWithoutLastUpdateTime() {
+        short version = 0;
+        String transactionalId = "foo";
+        CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
+        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
+
+        DescribeTransactionsResponseData.TransactionState transactionState = sampleTransactionState1(transactionalId)
+            .setTransactionLastUpdateTimeMs(0L);
+        DescribeTransactionsResponseData responseData = new DescribeTransactionsResponseData()
+            .setTransactionStates(List.of(transactionState));
+        DescribeTransactionsResponse response = DescribeTransactionsResponse.parse(
+            MessageUtil.toByteBufferAccessor(responseData, version), version);
+
+        TransactionDescription description = handler.handleResponse(node, Set.of(key), response).completedKeys.get(key);
+
+        assertEquals(OptionalLong.empty(), description.transactionLastUpdateTimeMs());
+    }
+
+    @Test
+    public void testHandleResponseWithLastUpdateTime() {
+        short version = 1;
+        long lastUpdateTimeMs = 1599151792L;
+        String transactionalId = "foo";
+        CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
+        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
+
+        DescribeTransactionsResponseData.TransactionState transactionState = sampleTransactionState1(transactionalId)
+            .setTransactionLastUpdateTimeMs(lastUpdateTimeMs);
+        DescribeTransactionsResponseData responseData = new DescribeTransactionsResponseData()
+            .setTransactionStates(List.of(transactionState));
+        DescribeTransactionsResponse response = DescribeTransactionsResponse.parse(
+            MessageUtil.toByteBufferAccessor(responseData, version), version);
+
+        TransactionDescription description = handler.handleResponse(node, Set.of(key), response).completedKeys.get(key);
+
+        assertEquals(OptionalLong.of(lastUpdateTimeMs), description.transactionLastUpdateTimeMs());
     }
 
     @Test
@@ -144,7 +186,7 @@ public class DescribeTransactionsHandlerTest {
             .setTransactionalId(transactionalId);
 
         DescribeTransactionsResponse response = new DescribeTransactionsResponse(new DescribeTransactionsResponseData()
-            .setTransactionStates(singletonList(transactionState)));
+            .setTransactionStates(singletonList(transactionState)), (short) 1);
 
         ApiResult<CoordinatorKey, TransactionDescription> result = handler.handleResponse(node, keys, response);
         assertEquals(emptyMap(), result.completedKeys);
@@ -176,6 +218,7 @@ public class DescribeTransactionsHandlerTest {
             .setProducerId(12345L)
             .setProducerEpoch((short) 15)
             .setTransactionStartTimeMs(1599151791L)
+            .setTransactionLastUpdateTimeMs(1599151792L)
             .setTransactionTimeoutMs(10000)
             .setTopics(new DescribeTransactionsResponseData.TopicDataCollection(asList(
                 new DescribeTransactionsResponseData.TopicData()
@@ -196,7 +239,8 @@ public class DescribeTransactionsHandlerTest {
             .setTransactionalId(transactionalId)
             .setProducerId(98765L)
             .setProducerEpoch((short) 30)
-            .setTransactionStartTimeMs(-1);
+            .setTransactionStartTimeMs(-1)
+            .setTransactionLastUpdateTimeMs(1599151793L);
     }
 
     private void assertMatchingTransactionState(
@@ -209,6 +253,7 @@ public class DescribeTransactionsHandlerTest {
         assertEquals(expected.producerEpoch(), actual.producerEpoch());
         assertEquals(expected.transactionTimeoutMs(), actual.transactionTimeoutMs());
         assertEquals(expected.transactionStartTimeMs(), actual.transactionStartTimeMs().orElse(-1));
+        assertEquals(expected.transactionLastUpdateTimeMs(), actual.transactionLastUpdateTimeMs().orElse(-1));
         assertEquals(collectTransactionPartitions(expected), actual.topicPartitions());
     }
 

@@ -33,6 +33,7 @@ type: docs
 ### Notable changes in 4.5.0
 
   * `ssl.principal.mapping.rules` now builds the principal name from the same full match that is used to check the rule. Previously, a rule that is not anchored with both `^` and `$`, or that uses alternation, could build the name from a shorter match or apply the replacement twice. For example, `RULE:CN=(.*?),OU=(.*?)/$1/` mapped `CN=bob,OU=eng` to `bobeng` instead of `bob`. Rules anchored with `^` and `$`, such as the documented examples, are not affected. If you use such rules, check that ACLs, quotas and `super.users` refer to the corrected principal names before upgrading.
+  * `DescribeTransactions` is bumped to version 1 to return the time the transaction coordinator last updated the transaction, which is exposed through the new `TransactionDescription#transactionLastUpdateTimeMs()` Admin API. The `kafka-transactions.sh describe` subcommand displays it in a new `TransactionLastUpdateTimeMs` column and uses it to report the `TransactionDurationMs` of transactions in the `CompleteCommit` and `CompleteAbort` states, instead of the time elapsed since the transaction started. Against brokers that do not support the new version, the new column is reported as `None`, and `TransactionDurationMs` is reported as `-1` for these states. For further details, please refer to [KIP-994](https://cwiki.apache.org/confluence/display/KAFKA/KIP-994%3A+Minor+Enhancements+to+ListTransactions+and+DescribeTransactions+APIs).
 
 ## Upgrading to 4.4.0
 
