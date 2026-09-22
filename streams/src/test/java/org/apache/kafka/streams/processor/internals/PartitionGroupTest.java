@@ -706,7 +706,7 @@ public class PartitionGroupTest {
             final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
             assertTrue(result.isReady());
             assertTrue(result.getLogMessage().isEmpty());
-            assertTrue(appender.getMessages("TRACE").contains(
+            assertTrue(appender.getMessages(Level.TRACE).contains(
                 "[test] Ready for processing because max.task.idle.ms is disabled.\n" +
                     "\tThere may be out-of-order processing for this task as a result.\n" +
                     "\tBuffered partitions: [topic-1]\n" +
@@ -745,7 +745,7 @@ public class PartitionGroupTest {
             final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
             assertTrue(result.isReady());
             assertTrue(result.getLogMessage().isEmpty());
-            assertTrue(appender.getMessages("TRACE").contains(
+            assertTrue(appender.getMessages(Level.TRACE).contains(
                 "[test] All partitions were buffered locally, so this task is ready for processing."));
         }
     }
@@ -843,7 +843,7 @@ public class PartitionGroupTest {
             final AbstractPartitionGroup.ReadyToProcessResult result2 = group.readyToProcess(1L);
             assertTrue(result2.isReady());
             assertTrue(result2.getLogMessage().isEmpty());
-            assertTrue(appender.getMessages("TRACE").contains(
+            assertTrue(appender.getMessages(Level.TRACE).contains(
                 "[test] Continuing to process although some partitions are empty on the broker.\n" +
                     "\tThere may be out-of-order processing for this task as a result.\n" +
                     "\tPartitions with local data: [topic-1].\n" +
@@ -857,7 +857,7 @@ public class PartitionGroupTest {
             final AbstractPartitionGroup.ReadyToProcessResult result3 = group.readyToProcess(2L);
             assertTrue(result3.isReady());
             assertTrue(result3.getLogMessage().isEmpty());
-            assertTrue(appender.getMessages("TRACE").contains(
+            assertTrue(appender.getMessages(Level.TRACE).contains(
                 "[test] Continuing to process although some partitions are empty on the broker.\n" +
                     "\tThere may be out-of-order processing for this task as a result.\n" +
                     "\tPartitions with local data: [topic-1].\n" +
