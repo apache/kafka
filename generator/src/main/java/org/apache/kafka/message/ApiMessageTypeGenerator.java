@@ -27,7 +27,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -360,33 +359,14 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
 
             buffer.printf("case %d: // %s%n", apiKey, MessageGenerator.capitalizeFirst(name));
             buffer.incrementIndent();
-            Optional<HeaderVersions> headerVersions = spec.headerVersions();
-            if (type.equals("response") && apiKey == 18) {
+            if (type.equals("response") && apiKey == MessageSpec.API_VERSIONS_API_KEY) {
                 buffer.printf("// ApiVersionsResponse always includes a v0 header.%n");
                 buffer.printf("// See KIP-511 for details.%n");
             }
-            if (headerVersions.isPresent()) {
-                generateHeaderVersionFromMap(headerVersions.get(), spec.validVersions());
-            } else if (type.equals("response") && apiKey == 18) {
-                buffer.printf("return (short) 0;%n");
-            } else {
-                VersionConditional.forVersions(spec.flexibleVersions(),
-                    spec.validVersions()).
-                    ifMember(__ -> {
-                        if (type.equals("request")) {
-                            buffer.printf("return (short) 2;%n");
-                        } else {
-                            buffer.printf("return (short) 1;%n");
-                        }
-                    }).
-                    ifNotMember(__ -> {
-                        if (type.equals("request")) {
-                            buffer.printf("return (short) 1;%n");
-                        } else {
-                            buffer.printf("return (short) 0;%n");
-                        }
-                    }).generate(buffer);
-            }
+            // MessageSpec guarantees a map for every request/response with valid versions.
+            HeaderVersions headerVersions = spec.headerVersions().orElseThrow(() ->
+                new RuntimeException("Message " + spec.name() + " has valid versions but no headerVersions."));
+            generateHeaderVersionFromMap(headerVersions, spec.validVersions());
             buffer.decrementIndent();
         }
         buffer.printf("default:%n");
