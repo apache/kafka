@@ -55,7 +55,12 @@ public class DelegationTokenCommand {
         try {
             execute(args);
             return 0;
-        } catch (TerseException e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException | TerseException e) {
             System.err.println(e.getMessage());
             return 1;
         } catch (Throwable e) {
@@ -72,7 +77,7 @@ public class DelegationTokenCommand {
         // should have exactly one action
         long numberOfActions = Stream.of(opts.hasCreateOpt(), opts.hasRenewOpt(), opts.hasExpireOpt(), opts.hasDescribeOpt()).filter(b -> b).count();
         if (numberOfActions != 1) {
-            CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --create, --renew, --expire or --describe");
+            CommandLineUtils.printUsageAndThrow(opts.parser, "Command must include exactly one action: --create, --renew, --expire or --describe");
         }
 
         opts.checkArgs();

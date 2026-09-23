@@ -30,7 +30,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -185,9 +184,6 @@ public class LeaderElectionCommandTest {
         Path adminConfigPath = tempAdminConfig(defaultApiTimeoutMs, requestTimeoutMs);
 
         try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class)) {
-            // Mock Exit because CommandLineUtils.checkInvalidArgs calls exit
-            Exit.setExitProcedure(new ToolsTestUtils.MockExitProcedure());
-
             String output = ToolsTestUtils.captureStandardErr(() ->
                 LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", "localhost:9092",
@@ -199,8 +195,6 @@ public class LeaderElectionCommandTest {
 
             assertTrue(output.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
                 "[admin.config]", "[command-config]")));
-        } finally {
-            Exit.resetExitProcedure();
         }
     }
 

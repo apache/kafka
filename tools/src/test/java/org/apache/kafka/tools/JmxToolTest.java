@@ -17,10 +17,8 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.common.utils.internals.AppInfoParser;
-import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,10 +42,11 @@ import javax.management.remote.JMXServiceURL;
 import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JmxToolTest {
-    private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+    private int lastExitCode;
     private static JMXConnectorServer jmxAgent;
     private static String jmxUrl;
 
@@ -78,12 +77,7 @@ public class JmxToolTest {
 
     @BeforeEach
     public void beforeEach() {
-        Exit.setExitProcedure(exitProcedure);
-    }
-
-    @AfterEach
-    public void afterEach() {
-        Exit.resetExitProcedure();
+        lastExitCode = -1;
     }
 
     @Test
@@ -95,18 +89,16 @@ public class JmxToolTest {
 
     @Test
     public void unrecognizedOption() {
-        String err = executeAndGetErr("--foo");
-        assertCommandFailure();
-        assertTrue(err.contains("UnrecognizedOptionException"));
-        assertTrue(err.contains("foo"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> JmxTool.execute(new String[]{"--foo"}));
+        assertTrue(e.getMessage().contains("foo"), e.getMessage());
     }
 
     @Test
     public void missingRequired() {
-        String err = executeAndGetErr("--reporting-interval");
-        assertCommandFailure();
-        assertTrue(err.contains("OptionMissingRequiredArgumentException"));
-        assertTrue(err.contains("reporting-interval"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> JmxTool.execute(new String[]{"--reporting-interval"}));
+        assertTrue(e.getMessage().contains("reporting-interval"), e.getMessage());
     }
 
     @Test
@@ -123,10 +115,10 @@ public class JmxToolTest {
             "--jmx-ssl-enable", "--jmx-url", "--object-name", "--one-time",
             "--report-format", "--reporting-interval", "--version", "--wait"
         };
-        String err = executeAndGetErr("--help");
-        assertCommandFailure();
+        String out = executeAndGetOut("--help");
+        assertNormalExit();
         for (String option : expectedOptions) {
-            assertTrue(err.contains(option), option);
+            assertTrue(out.contains(option), option);
         }
     }
 
@@ -139,6 +131,7 @@ public class JmxToolTest {
             "--one-time"
         };
         String out = executeAndGetOut(args);
+        assertNormalExit();
         Arrays.stream(out.split("\\r?\\n")).forEach(line ->
             assertTrue(line.matches("([a-zA-Z0-9=:,.]+),\"([ -~]+)\""), line)
         );
@@ -153,6 +146,7 @@ public class JmxToolTest {
             "--one-time"
         };
         String out = executeAndGetOut(args);
+        assertNormalExit();
         Arrays.stream(out.split("\\r?\\n")).forEach(line ->
             assertTrue(line.matches("([a-zA-Z0-9=:,.]+)\\t([ -~]+)"), line)
         );
@@ -367,25 +361,17 @@ public class JmxToolTest {
     }
 
     private String execute(String[] args, boolean err) {
-        Runnable runnable = () -> {
-            try {
-                JmxTool.main(args);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        };
+        Runnable runnable = () -> lastExitCode = JmxTool.mainNoExit(args);
         return err ? ToolsTestUtils.captureStandardErr(runnable)
                     : ToolsTestUtils.captureStandardOut(runnable);
     }
 
     private void assertNormalExit() {
-        assertTrue(exitProcedure.hasExited());
-        assertEquals(0, exitProcedure.statusCode());
+        assertEquals(0, lastExitCode);
     }
 
     private void assertCommandFailure() {
-        assertTrue(exitProcedure.hasExited());
-        assertEquals(1, exitProcedure.statusCode());
+        assertEquals(1, lastExitCode);
     }
 
     private Map<String, String> parseCsv(String value) {

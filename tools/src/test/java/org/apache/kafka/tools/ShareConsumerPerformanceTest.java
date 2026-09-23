@@ -37,6 +37,7 @@ import java.util.Properties;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareConsumerPerformanceTest {
@@ -84,9 +85,9 @@ public class ShareConsumerPerformanceTest {
             "--topic", "test"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() ->
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
-        assertTrue(err.contains("Missing required argument \"[bootstrap-server]\""));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("Missing required argument \"[bootstrap-server]\""));
     }
 
     @Test
@@ -96,9 +97,9 @@ public class ShareConsumerPerformanceTest {
             "--topic", "test"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() ->
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
-        assertTrue(err.contains("Exactly one of the following arguments is required:"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("Exactly one of the following arguments is required:"));
     }
 
     @Test
@@ -123,9 +124,9 @@ public class ShareConsumerPerformanceTest {
             "--num-records", "20"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() ->
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
-        assertTrue(err.contains("Exactly one of the following arguments is required"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("Exactly one of the following arguments is required"));
     }
 
     @Test
@@ -137,9 +138,9 @@ public class ShareConsumerPerformanceTest {
             "--new-share-consumer"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() -> new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
-
-        assertTrue(err.contains("new-share-consumer is not a recognized option"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains("new-share-consumer is not a recognized option"));
     }
 
     @Test
@@ -222,9 +223,9 @@ public class ShareConsumerPerformanceTest {
             "--command-config", "some-path"
         };
 
-        String err = ToolsTestUtils.captureStandardErr(() ->
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
-        assertTrue(err.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+        assertTrue(e.getMessage().contains(String.format("Option \"%s\" can't be used with option \"%s\"",
                 "[consumer.config]", "[command-config]")));
     }
 
