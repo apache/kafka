@@ -63,9 +63,11 @@ import static org.apache.kafka.common.requests.StreamsGroupDescribeResponse.TOPO
  * plugin → metadata write → back-off mutation, see {@link #pushTopology}) and the periodic
  * cleanup cycle's body (list eligible groups → mark uncertain → plugin delete → finalize, see
  * {@link #runCleanupCycle}) both live here now, reading and writing group state through
- * {@link TopologyDescriptionRuntime}. {@code GroupCoordinatorService} still owns the broker
+ * {@link TopologyDescriptionRuntime} so the same chains run unchanged on any host that supplies
+ * an implementation of that interface. {@code GroupCoordinatorService} still owns the broker
  * timer and starts the cycle via {@link #startCleanupCycle}, which wraps the supplied cycle body
- * with single-flight scheduling.
+ * with single-flight scheduling; it also keeps a thin same-named delegate to
+ * {@link #runCleanupCycle} so existing tests that invoke it directly keep working.
  *
  * <p>This class is broker-level (one instance per {@code GroupCoordinatorService}); the
  * back-off map is keyed by {@code groupId} and shared across all partitions hosted on the
@@ -78,8 +80,9 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     private final Logger log;
     private final Optional<StreamsGroupTopologyDescriptionPlugin> plugin;
     private final StreamsGroupTopologyDescriptionBackoff backoff;
-    // Get sensors are recorded here, not in GroupCoordinatorService like set/delete:
-    // the get outcome is only finally classified inside applyGetTopologyOutcome, so the metric lives next to that single source of truth.
+    // All three plugin-outcome sensor groups (get/set/delete) are recorded here, next to the
+    // single source of truth that classifies each outcome (applyGetTopologyOutcome, pushTopology,
+    // and the delete call sites respectively).
     private final GroupCoordinatorMetrics metrics;
     private final TopologyDescriptionRuntime runtime;
 
@@ -97,6 +100,13 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * {@code whenComplete} attached to the future the supplier returns.
      */
     private final AtomicBoolean cycleInFlight = new AtomicBoolean(false);
+
+    /**
+     * Guards {@link #close}'s plugin close so a repeated {@code close} call does not invoke the
+     * user-supplied plugin's {@code close} more than once; {@code AutoCloseable} does not
+     * require {@code close} to be idempotent.
+     */
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     /**
      * The currently-scheduled cleanup tick on the broker-level {@link Timer}.
@@ -184,11 +194,10 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
 
     /**
      * Arm the periodic cleanup cycle. The manager owns the scheduling harness — timer task,
-     * single-flight guard, running flag — and fires the service-supplied {@code cycleSupplier}
-     * on every tick; the cycle body (which operations to schedule on the runtime in what
-     * order) lives entirely on the service side. No-op when no plugin is configured. Must
-     * be called before {@link #close}; a second call while already running logs and is
-     * otherwise a no-op.
+     * single-flight guard, running flag — and fires the supplied {@code cycleSupplier} on
+     * every tick; callers pass {@link #runCleanupCycle} itself, or (for existing tests) a
+     * delegate to it. No-op when no plugin is configured. Must be called before
+     * {@link #close}; a second call while already running logs and is otherwise a no-op.
      */
     public void startCleanupCycle(
         Timer timer,
@@ -203,22 +212,25 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         scheduleNextTick(timer, cleanupCheckIntervalMs, cycleSupplier);
     }
 
-    /**
-     * Stop the cleanup cycle and release plugin-side resources. Flips {@code running}
-     * false (so the next timer tick refuses to fire) and cancels the currently-scheduled
-     * tick, then closes the plugin. Called by {@code GroupCoordinatorService.shutdown}
-     * before the runtime is closed, so writes already scheduled by the previous tick
-     * drain through their own futures rather than racing the runtime tear-down.
-     */
-    @Override
-    public void close() throws Exception {
+    /** Stops the cleanup cycle without touching the plugin; see {@link #close}. */
+    public void stopCleanupCycle() {
         if (running.compareAndSet(true, false)) {
             TimerTask snapshot = scheduledTask;
             if (snapshot != null) {
                 snapshot.cancel();
             }
         }
-        if (plugin.isPresent()) {
+    }
+
+    /**
+     * Stops the cleanup cycle and closes the plugin. Called by
+     * {@code GroupCoordinatorService.shutdown} after {@code isActive} flips false, since request
+     * handlers gate on {@code isActive} once and don't re-check it before reaching the plugin.
+     */
+    @Override
+    public void close() throws Exception {
+        stopCleanupCycle();
+        if (closed.compareAndSet(false, true) && plugin.isPresent()) {
             plugin.get().close();
         }
     }
@@ -298,7 +310,9 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * scan across; (2) writes a durable UNCERTAIN barrier for each batch, re-checking live state
      * and dropping any candidate revived since the scan; (3) calls {@code plugin.deleteTopology}
      * for the still-eligible subset; and (4) smart-finalizes the groups whose delete succeeded.
-     * This is the cycle body {@link #startCleanupCycle} invokes on a timer.
+     * This is the cycle body {@link #startCleanupCycle} invokes on a timer. A direct call still
+     * reads eligible batches but drops them at the {@code running} check below unless
+     * {@link #startCleanupCycle} already flipped it true.
      */
     public CompletableFuture<?> runCleanupCycle() {
         if (plugin.isEmpty()) {

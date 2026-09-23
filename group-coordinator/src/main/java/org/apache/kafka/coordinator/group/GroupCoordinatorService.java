@@ -2691,11 +2691,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     @Override
     public void shutdown() {
-        // Close the topology-description manager before flipping isActive: the manager's own
-        // cycle body now reads its running flag (rather than this class's isActive) to decide
-        // whether to keep dispatching plugin work, so running must flip false no later than
-        // isActive does, not after.
-        Utils.closeQuietly(streamsGroupTopologyDescriptionManager, "streams group topology description manager");
+        streamsGroupTopologyDescriptionManager.stopCleanupCycle();
         if (!isActive.compareAndSet(true, false)) {
             log.warn("Group coordinator is already shutting down.");
             return;
@@ -2703,6 +2699,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         log.info("Shutting down.");
         isActive.set(false);
+        Utils.closeQuietly(streamsGroupTopologyDescriptionManager, "streams group topology description manager");
         Utils.closeQuietly(runtime, "coordinator runtime");
         Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
         Utils.closeQuietly(groupConfigManager, "group config manager");
