@@ -49,6 +49,10 @@ def replace_arg_with_env(filedata, arg_name, value):
 def remove_args_and_hardcode_values(file_path, kafka_version, kafka_url):
     with open(file_path, 'r') as file:
         filedata = file.read()
+    # Docker Official Images require literal FROM lines, so inline the default base image
+    # and drop the ARG together with the comment explaining how to override it.
+    base_image = re.search(r"^(?:#.*\n)*ARG base_image=(\S+)\n\n", filedata, re.MULTILINE)
+    filedata = filedata.replace(base_image.group(0), "").replace("${base_image}", base_image.group(1))
     filedata = replace_arg_with_env(filedata, "kafka_url", kafka_url)
     filedata = replace_arg_with_env(filedata, "build_date", str(date.today()))
     original_comment = re.compile(r"# Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments")

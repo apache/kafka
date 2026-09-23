@@ -16,7 +16,11 @@
 # limitations under the License.
 ###############################################################################
 
-FROM docker.io/library/eclipse-temurin:25-jre-alpine AS build-jsa
+# Any Alpine-based image carrying a JRE works here, e.g. to build on a different JDK version.
+# Override with `docker_build_test.py --base-image <ref>` or `--build-arg base_image=<ref>`.
+ARG base_image=docker.io/library/eclipse-temurin:25-jre-alpine
+
+FROM ${base_image} AS build-jsa
 
 USER root
 
@@ -49,7 +53,7 @@ RUN set -eux ; \
 RUN /etc/kafka/docker/jsa_launch
 
 
-FROM docker.io/library/eclipse-temurin:25-jre-alpine
+FROM ${base_image}
 
 # exposed ports
 EXPOSE 9092
