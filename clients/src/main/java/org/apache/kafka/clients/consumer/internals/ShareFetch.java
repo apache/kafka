@@ -78,7 +78,7 @@ public class ShareFetch<K, V> {
      * in-flight records (such as those whose acquired offsets were all control records) are omitted.
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> records() {
-        final LinkedHashMap<TopicPartition, List<ConsumerRecord<K, V>>> result = new LinkedHashMap<>();
+        final HashMap<TopicPartition, List<ConsumerRecord<K, V>>> result = new HashMap<>(batches.size());
         batches.forEach((tip, batchList) -> {
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
             for (ShareInFlightBatch<K, V> batch : batchList) {
