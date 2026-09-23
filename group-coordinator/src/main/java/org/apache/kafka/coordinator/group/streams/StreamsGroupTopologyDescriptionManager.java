@@ -375,6 +375,11 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
                 // revived or converted since the committed scan. Nothing to do for a batch
                 // whose every candidate dropped out.
                 if (stillEligible.isEmpty()) return CompletableFuture.completedFuture(null);
+                // Shutdown can have started while the mark write was in flight.
+                if (!running.get()) {
+                    log.debug("Skipping plugin delete for groups {}: cycle not running.", stillEligible);
+                    return CompletableFuture.completedFuture(null);
+                }
                 return invokeDeleteTopologies(stillEligible)
                     .thenCompose(failures -> finalizeCleanupAfterDelete(stillEligible, failures));
             });
