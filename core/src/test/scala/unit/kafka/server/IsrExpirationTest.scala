@@ -19,7 +19,8 @@ package kafka.server
 import java.util
 import java.util.Properties
 import kafka.cluster.Partition
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics

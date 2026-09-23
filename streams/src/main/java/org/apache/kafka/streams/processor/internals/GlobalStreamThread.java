@@ -198,6 +198,7 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
+    @SuppressWarnings("this-escape")
     public GlobalStreamThread(final ProcessorTopology topology,
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
@@ -210,6 +211,8 @@ public class GlobalStreamThread extends Thread {
                               final StateRestoreListener stateRestoreListener,
                               final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         super(threadClientId);
+        // explicitly non-daemon so the JVM doesn't exit while this thread is still restoring/serving global state
+        setDaemon(false);
         this.time = time;
         this.config = config;
         this.topology = topology;

@@ -82,11 +82,6 @@ public class DeleteAclsResponse extends AbstractResponse {
         return data.toString();
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
-
     private void validate(short version) {
         if (version == 0) {
             final boolean unsupported = filterResults().stream()

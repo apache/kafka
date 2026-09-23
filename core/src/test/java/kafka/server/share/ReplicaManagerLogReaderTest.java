@@ -382,6 +382,23 @@ public class ReplicaManagerLogReaderTest {
     }
 
     @Test
+    public void testReadAsyncCompletesExceptionallyWhenLocalReadThrows() {
+        ReplicaManager replicaManager = mockReplicaManager();
+        RuntimeException readError = new RuntimeException("read failed");
+        when(replicaManager.readFromLog(any(), any(), any(), anyBoolean())).thenThrow(readError);
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> future =
+            logReader.readAsync(fetchParams(), Set.of(TOPIC_ID_PARTITION),
+                offsets(TOPIC_ID_PARTITION), maxBytes(TOPIC_ID_PARTITION), true);
+
+        // readAsync must surface the failure via the returned future rather than throwing synchronously.
+        assertTrue(future.isCompletedExceptionally());
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> future.get(10, TimeUnit.SECONDS));
+        assertSame(readError, exception.getCause());
+    }
+
+    @Test
     public void testReadAsyncReturnsNoneErrorWhenRemoteReadFailsButLocalSucceeds() throws Exception {
         ReplicaManager replicaManager = mockReplicaManager();
         RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);

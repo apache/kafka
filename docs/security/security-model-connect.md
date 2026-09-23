@@ -26,11 +26,11 @@ type: docs
 -->
 
 
-This page extends the [Apache Kafka security model](security-model) to Kafka Connect. A worker authenticates to the Kafka cluster over a configured `SASL_SSL`/`SSL` listener exactly like any other client, so everything the core model says about authentication, authorization, and transport encryption to the brokers applies unchanged. What follows covers only what Connect adds on top — chiefly its own control plane, the REST API, and the fact that it runs user-supplied code.
+This page extends the [Apache Kafka security model](../security-model) to Kafka Connect. A worker authenticates to the Kafka cluster over a configured `SASL_SSL`/`SSL` listener exactly like any other client, so everything the core model says about authentication, authorization, and transport encryption to the brokers applies unchanged. What follows covers only what Connect adds on top — chiefly its own control plane, the REST API, and the fact that it runs user-supplied code.
 
 ## Things You Need To Know
 
-- **Connect inherits the broker's client security model.** Authentication to the brokers, broker-side authorization, and transport encryption are exactly as described in the [core security model](security-model). This page only describes what Connect layers on top.
+- **Connect inherits the broker's client security model.** Authentication to the brokers, broker-side authorization, and transport encryption are exactly as described in the [core security model](../security-model). This page only describes what Connect layers on top.
 - **The REST API is unauthenticated by default.** Out of the box, anyone who can reach the REST port can create, reconfigure, stop, or delete any connector. Because connectors and plugins run arbitrary code, REST access lets a caller run anything the worker's installed plugins allow.
 - **Connect plugins run arbitrary code.** Connectors, converters, transformations, predicates, and REST extensions loaded from `plugin.path` execute in the worker JVM with its privileges. Install only plugins you trust.
 - **The REST API is a shared control plane with no per-connector isolation.** There is no notion of connector ownership: any caller allowed onto the API can act on every connector and read its configuration.
@@ -54,7 +54,7 @@ Connect enables no authentication on the REST API by default. There are two comm
 - **Reverse proxy.** Terminate authentication (mTLS, OIDC, basic auth, etc.) in a proxy in front of the workers and allow only the proxy to reach the REST port.
 - **REST extension.** Register an authentication extension via `rest.extension.classes`. The built-in `BasicAuthSecurityRestExtension` performs JAAS-based HTTP basic authentication against a configured `LoginModule`. The reference `PropertyFileLoginModule` is **not** intended for production, as it stores credentials in cleartext; production deployments should configure a `LoginModule` that authenticates against a real credential store.
 
-REST authentication only establishes *who is calling*; it does not, on its own, authorize that caller on a per-connector basis (see Authorization below). Separately, the worker's authentication *to the Kafka brokers* uses the standard `ssl.*`/`sasl.*` client configs described in the [core model](security-model).
+REST authentication only establishes *who is calling*; it does not, on its own, authorize that caller on a per-connector basis (see Authorization below). Separately, the worker's authentication *to the Kafka brokers* uses the standard `ssl.*`/`sasl.*` client configs described in the [core model](../security-model).
 
 ## Authorization
 
@@ -70,12 +70,12 @@ The practical consequences are that you cannot grant Connect REST API access to 
 
 Two independent channels need TLS:
 
-- **Worker-to-Kafka.** Configured with the standard `ssl.*` client properties, exactly as in the [core model](security-model).
+- **Worker-to-Kafka.** Configured with the standard `ssl.*` client properties, exactly as in the [core model](../security-model).
 - **REST API (and inter-worker).** Enable an `https` listener. By default the REST server reuses the worker's `ssl.*` settings; to configure the REST endpoint independently of the Kafka client, use the `listeners.https.*` prefixed properties (when the prefix is used, the unprefixed `ssl.*` settings are ignored for the REST server). The same settings secure inter-worker forwarding in distributed mode.
 
 ## Secrets in Configuration
 
-Connector configurations frequently contain credentials for external systems. As in the [core model](security-model), reference them indirectly through a `ConfigProvider` rather than inlining them, and set `allowed.paths` on the file-based providers to constrain which directories they can read. Two Connect-specific caveats:
+Connector configurations frequently contain credentials for external systems. As in the [core model](../security-model), reference them indirectly through a `ConfigProvider` rather than inlining them, and set `allowed.paths` on the file-based providers to constrain which directories they can read. Two Connect-specific caveats:
 
 - **Config providers are resolved through the shared REST API.** A caller who can guess or enumerate a provider alias can resolve its full value, so a provider is only as isolated as the REST API in front of it.
 - **What goes in the config topic depends on how secrets are supplied.** A secret placed directly in a connector configuration is written to `config.storage.topic` as an ordinary Kafka record, and is therefore only as protected as that topic's ACLs and the brokers' at-rest story. A `ConfigProvider` reference keeps the secret itself out of the topic — only the template string (`${alias:fields}`) is stored, not the resolved value. Note, however, that this does not hide the secret from REST API callers: anyone who knows a valid template string can usually retrieve the resolved value through the REST API.
@@ -86,7 +86,7 @@ Connect loads connectors, converters, single-message transforms, predicates, `Co
 
 ## Known Non-Findings
 
-In line with the [core model's classification](security-model), the following follow from Connect's design and are not, on their own, security vulnerabilities:
+In line with the [core model's classification](../security-model), the following follow from Connect's design and are not, on their own, security vulnerabilities:
 
 - **File-based connectors granting disk access.** Adding the file connectors to a worker effectively grants read/write access to the worker's local disk. This is the connector's intended function, not a flaw.
 - **Local-disk-only weaknesses in the file-based config providers.** Issues that require an attacker to already have local disk access on a Connect worker — for example the ability to create arbitrary files or symlinks — are not security issues, because such access is outside Connect's trust boundary. Path-validation robustness in these providers may still be hardened independently.

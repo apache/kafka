@@ -18,6 +18,7 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
@@ -112,6 +113,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 channelBuilder,
                 logContext
         );
+
         return new NetworkClient(
                 selector,
                 manualMetadataUpdater,
@@ -129,6 +131,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 apiVersions,
                 logContext,
                 MetadataRecoveryStrategy.NONE,
+                BootstrapConfiguration.DISABLED,
                 false
         );
     }

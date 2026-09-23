@@ -19,20 +19,13 @@ package org.apache.kafka.server;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.network.Request;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
-public interface ForwardingManager {
-
-    /**
-     * Close the forwarding manager
-     */
-    void close();
+public interface ForwardingManager extends AutoCloseable {
 
     /**
      * Forward given request to the active controller.
@@ -49,12 +42,7 @@ public interface ForwardingManager {
     ) {
         ByteBuffer buffer = originalRequest.buffer().duplicate();
         buffer.flip();
-        forwardRequest(originalRequest.context(),
-                buffer,
-                originalRequest.startTimeNanos(),
-                originalRequest.body(AbstractRequest.class),
-                originalRequest::toString,
-                responseCallback);
+        forwardRequest(originalRequest, buffer, originalRequest.body(), responseCallback);
     }
 
     /**
@@ -72,36 +60,26 @@ public interface ForwardingManager {
             AbstractRequest newRequestBody,
             Consumer<Optional<AbstractResponse>> responseCallback) {
         ByteBuffer buffer = newRequestBody.serializeWithHeader(originalRequest.header());
-        forwardRequest(originalRequest.context(),
-                buffer,
-                originalRequest.startTimeNanos(),
-                newRequestBody,
-                originalRequest::toString,
-                responseCallback);
+        forwardRequest(originalRequest, buffer, newRequestBody, responseCallback);
     }
 
     /**
      * Forward given request to the active controller.
      *
-     * @param requestContext      The request context of the original envelope request.
+     * @param originalRequest     The request to forward.
      * @param requestBufferCopy   The request buffer we want to send. This should not be the original
      *                            byte buffer from the envelope request, since we will be mutating
      *                            the position and limit fields. It should be a copy.
-     * @param requestCreationNs   The request creation timestamp in nanoseconds.
      * @param requestBody         The AbstractRequest we are sending.
-     * @param requestToString     A callback which can be invoked to produce a human-readable description
-     *                            of the request.
      * @param responseCallback    A callback which takes in an `Optional&lt;AbstractResponse&gt;`.
      *                            We will call this function with Optional.of(x) after the controller responds with x.
      *                            Or, if the controller doesn't support the request version, we will complete
      *                            the callback with Optional.empty().
      */
     void forwardRequest(
-            RequestContext requestContext,
+            Request originalRequest,
             ByteBuffer requestBufferCopy,
-            long requestCreationNs,
             AbstractRequest requestBody,
-            Supplier<String> requestToString,
             Consumer<Optional<AbstractResponse>> responseCallback);
 
     /**

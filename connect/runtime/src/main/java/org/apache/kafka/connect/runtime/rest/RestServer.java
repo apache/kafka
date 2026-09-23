@@ -21,6 +21,7 @@ import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterDetails;
+import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.Herder;
@@ -252,6 +253,8 @@ public abstract class RestServer {
             configureAdminResources(adminResourceConfig);
         }
 
+        configureExtensions(resourceConfig, adminResourceConfig);
+
         ServletContainer servletContainer = new ServletContainer(resourceConfig);
         ServletHolder servletHolder = new ServletHolder(servletContainer);
         List<Handler> contextHandlers = new ArrayList<>();
@@ -332,7 +335,6 @@ public abstract class RestServer {
     /**
      * Pluggable hook to customize the regular (i.e., non-admin) resources on this server
      * after they have been instantiated and registered with the given {@link ResourceConfig}.
-     * This may be used to, for example, add REST extensions via {@link #registerRestExtensions(Herder, ResourceConfig)}.
      * <p>
      * <em>N.B.: Classes do <b>not</b> need to register the resources provided in {@link #regularResources()} with
      * the {@link ResourceConfig} parameter in this method; they are automatically registered by the parent class.</em>
@@ -344,14 +346,22 @@ public abstract class RestServer {
 
     /**
      * Pluggable hook to customize the admin resources on this server after they have been instantiated and registered
-     * with the given {@link ResourceConfig}. This may be used to, for example, add REST extensions via
-     * {@link #registerRestExtensions(Herder, ResourceConfig)}.
+     * with the given {@link ResourceConfig}.
      * <p>
      * <em>N.B.: Classes do <b>not</b> need to register the resources provided in {@link #adminResources()} with
      * the {@link ResourceConfig} parameter in this method; they are automatically registered by the parent class.</em>
      * @param adminResourceConfig the {@link ResourceConfig} that the server's admin listeners are registered with; never null
      */
     protected void configureAdminResources(ResourceConfig adminResourceConfig) {
+        // No-op by default
+    }
+
+    /**
+     * Pluggable hook to register REST extensions.
+     * @param resourceConfig the regular listener's {@link ResourceConfig}; never null
+     * @param adminResourceConfig the admin listener's {@link ResourceConfig}; never null
+     */
+    protected void configureExtensions(ResourceConfig resourceConfig, ResourceConfig adminResourceConfig) {
         // No-op by default
     }
 
@@ -503,7 +513,7 @@ public abstract class RestServer {
         return null;
     }
 
-    protected final void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
+    protected final void registerRestExtensions(Herder herder, ResourceConfig resourceConfig, ResourceConfig adminResourceConfig) {
         connectRestExtensionPlugins = Plugin.wrapInstances(
                 herder.plugins().newPlugins(
                     config.restExtensions(),
@@ -525,15 +535,23 @@ public abstract class RestServer {
             herder.kafkaClusterId()
         );
 
-        ConnectRestExtensionContext connectRestExtensionContext =
+        ConnectClusterState connectClusterState = new ConnectClusterStateImpl(herderRequestTimeoutMs, connectClusterDetails, herder);
+
+        registerExtensionsWithConfig(resourceConfig, connectClusterState);
+        if (adminResourceConfig != resourceConfig) {
+            registerExtensionsWithConfig(adminResourceConfig, connectClusterState);
+        }
+    }
+
+    private void registerExtensionsWithConfig(ResourceConfig resourceConfig, ConnectClusterState connectClusterState) {
+        ConnectRestExtensionContext context =
             new ConnectRestExtensionContextImpl(
                 new ConnectRestConfigurable(resourceConfig),
-                new ConnectClusterStateImpl(herderRequestTimeoutMs, connectClusterDetails, herder)
+                connectClusterState
             );
         for (Plugin<ConnectRestExtension> connectRestExtensionPlugin : connectRestExtensionPlugins) {
-            connectRestExtensionPlugin.get().register(connectRestExtensionContext);
+            connectRestExtensionPlugin.get().register(context);
         }
-
     }
 
     /**

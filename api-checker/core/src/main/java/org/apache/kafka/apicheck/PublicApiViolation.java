@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.apicheck;
 
+import java.util.Objects;
+
 /**
  * Represents a violation of the public API rules.
  */
@@ -86,7 +88,7 @@ public class PublicApiViolation {
         if (!className.equals(that.className)) return false;
         if (!violationType.equals(that.violationType)) return false;
         if (!description.equals(that.description)) return false;
-        return memberName != null ? memberName.equals(that.memberName) : that.memberName == null;
+        return Objects.equals(memberName, that.memberName);
     }
 
     /**

@@ -25,8 +25,8 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.EnvelopeRequest;
 import org.apache.kafka.common.requests.EnvelopeResponse;
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.network.Request;
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.metrics.ForwardingManagerMetrics;
@@ -38,9 +38,8 @@ import java.nio.ByteBuffer;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
-public class ForwardingManagerImpl implements ForwardingManager, AutoCloseable {
+public class ForwardingManagerImpl implements ForwardingManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(ForwardingManagerImpl.class);
 
@@ -58,14 +57,12 @@ public class ForwardingManagerImpl implements ForwardingManager, AutoCloseable {
 
     @Override
     public void forwardRequest(
-            RequestContext requestContext,
+            Request originalRequest,
             ByteBuffer requestBufferCopy,
-            long requestCreationNs,
             AbstractRequest requestBody,
-            Supplier<String> requestToString,
             Consumer<Optional<AbstractResponse>> responseCallback) {
-        EnvelopeRequest.Builder envelopeRequest = ForwardingManagerUtil.buildEnvelopeRequest(requestContext, requestBufferCopy);
-        long requestCreationTimeMs = TimeUnit.NANOSECONDS.toMillis(requestCreationNs);
+        EnvelopeRequest.Builder envelopeRequest = ForwardingManagerUtil.buildEnvelopeRequest(originalRequest.context(), requestBufferCopy);
+        long requestCreationTimeMs = TimeUnit.NANOSECONDS.toMillis(originalRequest.startTimeNanos());
 
         class ForwardingResponseHandler implements ControllerRequestCompletionHandler {
 
@@ -77,11 +74,11 @@ public class ForwardingManagerImpl implements ForwardingManager, AutoCloseable {
 
                 if (clientResponse.versionMismatch() != null) {
                     LOG.debug("Returning `UNKNOWN_SERVER_ERROR` in response to {} due to unexpected version error",
-                            requestToString.get(), clientResponse.versionMismatch());
+                            originalRequest, clientResponse.versionMismatch());
                     responseCallback.accept(Optional.of(requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception())));
                 } else if (clientResponse.authenticationException() != null) {
                     LOG.debug("Returning `UNKNOWN_SERVER_ERROR` in response to {} due to authentication error",
-                            requestToString.get(), clientResponse.authenticationException());
+                            originalRequest, clientResponse.authenticationException());
                     responseCallback.accept(Optional.of(requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception())));
                 } else {
                     EnvelopeResponse envelopeResponse = (EnvelopeResponse) clientResponse.responseBody();
@@ -102,10 +99,10 @@ public class ForwardingManagerImpl implements ForwardingManager, AutoCloseable {
                             // return `UNKNOWN_SERVER_ERROR` so that the user knows that there is a problem
                             // on the broker.
                             LOG.debug("Forwarded request {} failed with an error in the envelope response {}",
-                                    requestToString.get(), envelopeError);
+                                    originalRequest, envelopeError);
                             response = requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception());
                         } else {
-                            response = parseResponse(envelopeResponse.responseData(), requestBody, requestContext.header);
+                            response = parseResponse(envelopeResponse.responseData(), requestBody, originalRequest.context().header);
                         }
                         responseCallback.accept(Optional.of(response));
                     }
@@ -114,7 +111,7 @@ public class ForwardingManagerImpl implements ForwardingManager, AutoCloseable {
 
             @Override
             public void onTimeout() {
-                LOG.debug("Forwarding of the request {} failed due to timeout exception", requestToString.get());
+                LOG.debug("Forwarding of the request {} failed due to timeout exception", originalRequest);
                 forwardingManagerMetrics.decrementQueueLength();
                 forwardingManagerMetrics.queueTimeMsHist().record(channelManager.getTimeoutMs());
                 AbstractResponse response = requestBody.getErrorResponse(new TimeoutException());
@@ -136,7 +133,7 @@ public class ForwardingManagerImpl implements ForwardingManager, AutoCloseable {
         return channelManager.controllerApiVersions();
     }
 
-    private AbstractResponse parseResponse(ByteBuffer buffer, AbstractRequest request, RequestHeader header) {
+    private static AbstractResponse parseResponse(ByteBuffer buffer, AbstractRequest request, RequestHeader header) {
         try {
             return AbstractResponse.parseResponse(buffer, header);
         } catch (Exception e) {

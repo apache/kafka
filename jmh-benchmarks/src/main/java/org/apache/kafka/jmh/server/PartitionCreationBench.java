@@ -18,7 +18,6 @@ package org.apache.kafka.jmh.server;
 
 import kafka.cluster.Partition;
 import kafka.server.KafkaConfig;
-import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
@@ -36,6 +35,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.partition.AlterPartitionManager;
+import org.apache.kafka.server.quota.QuotaFactory;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;

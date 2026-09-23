@@ -36,10 +36,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FallbackPriorTaskAssignorTest {
 
@@ -59,10 +57,10 @@ public class FallbackPriorTaskAssignorTest {
             null,
             new AssignmentConfigs(0L, 1, 0, 60_000L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
-        assertThat(probingRebalanceNeeded, is(true));
+        assertTrue(probingRebalanceNeeded);
 
-        assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
-        assertThat(c2.activeTasks(), empty());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2), c1.activeTasks());
+        assertTrue(c2.activeTasks().isEmpty());
     }
 
     private ClientState createClient(final ProcessId processId, final int capacity) {

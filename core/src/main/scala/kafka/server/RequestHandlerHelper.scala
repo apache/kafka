@@ -18,9 +18,9 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import org.apache.kafka.common.errors.ClusterAuthorizationException
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
+import org.apache.kafka.common.requests.AbstractResponse
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.Request
 import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ThrottleCallback}
@@ -56,7 +56,7 @@ class RequestHandlerHelper(
     error: Throwable,
     throttleMs: Int
   ): Unit = {
-    val requestBody = request.body(classOf[AbstractRequest])
+    val requestBody = request.body
     val response = requestBody.getErrorResponse(throttleMs, error)
     if (response == null)
       requestChannel.closeConnection(request, requestBody.errorCounts(error))

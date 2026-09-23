@@ -23,7 +23,7 @@ import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.cluster.Partition
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
@@ -34,7 +34,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.purgatory.DelayedProduce.ProducePartitionStatus
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, TopicPartitionOperationKey}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedFetch, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, TopicPartitionOperationKey}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -41,9 +42,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * This is code sample in docs/streams/developer-guide/testing.html
@@ -75,7 +75,7 @@ public class DeveloperGuideTesting {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
-        testDriver = new TopologyTestDriver(topology, props);
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
 
         // setup test topics
         inputTopic = testDriver.createInputTopic("input-topic", stringSerde.serializer(), longSerde.serializer());
@@ -95,54 +95,54 @@ public class DeveloperGuideTesting {
     @Test
     public void shouldFlushStoreForFirstInput() {
         inputTopic.pipeInput("a", 1L);
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
 
     @Test
     public void shouldNotUpdateStoreForSmallerValue() {
         inputTopic.pipeInput("a", 1L);
-        assertThat(store.get("a"), equalTo(21L));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(21L, store.get("a"));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
 
     @Test
     public void shouldNotUpdateStoreForLargerValue() {
         inputTopic.pipeInput("a", 42L);
-        assertThat(store.get("a"), equalTo(42L));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 42L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(42L, store.get("a"));
+        assertEquals(new KeyValue<>("a", 42L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
 
     @Test
     public void shouldUpdateStoreForNewKey() {
         inputTopic.pipeInput("b", 21L);
-        assertThat(store.get("b"), equalTo(21L));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("b", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(21L, store.get("b"));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertEquals(new KeyValue<>("b", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
 
     @Test
     public void shouldPunctuateIfEvenTimeAdvances() {
         final Instant recordTime = Instant.now();
         inputTopic.pipeInput("a", 1L,  recordTime);
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
 
         inputTopic.pipeInput("a", 1L,  recordTime);
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertTrue(outputTopic.isEmpty());
 
         inputTopic.pipeInput("a", 1L, recordTime.plusSeconds(10L));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
 
     @Test
     public void shouldPunctuateIfWallClockTimeAdvances() {
         testDriver.advanceWallClockTime(Duration.ofSeconds(60));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
 
     public static class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long, String, Long> {

@@ -414,15 +414,17 @@ public class StreamsGroupCommand {
 
             final int coordinatorLen = Math.max(25, coordinator.length());
             final int stateLen = 25;
+            String assignor = description.assignorName().orElse("");
+            final int assignorLen = Math.max(15, assignor.length());
             if (!verbose) {
-                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -stateLen + "s %s\n";
-                System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
-                System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.members().size());
+                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -assignorLen + "s %" + -stateLen + "s %s\n";
+                System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "ASSIGNOR", "STATE", "#MEMBERS");
+                System.out.printf(fmt, description.groupId(), coordinator, assignor, description.groupState().toString(), description.members().size());
             } else {
                 final int groupEpochLen = 15, targetAssignmentEpochLen = 25;
-                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -stateLen + "s %" + -groupEpochLen + "s %" + -targetAssignmentEpochLen + "s %s\n";
-                System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-                System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
+                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -assignorLen + "s %" + -stateLen + "s %" + -groupEpochLen + "s %" + -targetAssignmentEpochLen + "s %s\n";
+                System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "ASSIGNOR", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
+                System.out.printf(fmt, description.groupId(), coordinator, assignor, description.groupState().toString(), description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
             }
         }
 

@@ -17,6 +17,8 @@
 package org.apache.kafka.server.log.remote;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
+import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 
 import java.util.Optional;
@@ -31,6 +33,35 @@ public interface TopicPartitionLog {
      * @return A TopicPartition of the partition
      */
     TopicPartition topicPartition();
+
+    /**
+     * Fetch the offset snapshot for this topic partition.
+     *
+     * @param currentLeaderEpoch The expected epoch of the current leader, if known
+     * @param fetchOnlyLeader Whether to require fetching only from the leader
+     * @return The offset snapshot
+     */
+    LogOffsetSnapshot fetchOffsetSnapshot(Optional<Integer> currentLeaderEpoch, boolean fetchOnlyLeader);
+
+    /**
+     * Fetch the last offset for the given leader epoch.
+     *
+     * @param currentLeaderEpoch The expected epoch of the current leader, if known
+     * @param fetchEpoch Requested leader epoch
+     * @param fetchOnlyFromLeader Whether to require fetching only from the leader
+     * @return The epoch end offset
+     */
+    EpochEndOffset lastOffsetForLeaderEpoch(Optional<Integer> currentLeaderEpoch,
+                                            int fetchEpoch,
+                                            boolean fetchOnlyFromLeader);
+
+    /**
+     * Whether the replica is in-sync for this topic partition.
+     *
+     * @param replicaId The replica ID
+     * @return Whether the replica is in-sync
+     */
+    boolean isReplicaInSync(int replicaId);
 
     /**
      * The log of the topic partition if present

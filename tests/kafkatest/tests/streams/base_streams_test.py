@@ -18,6 +18,7 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.kafka import KafkaService
+from kafkatest.services.streams import INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS
 
 
 class BaseStreamsTest(Test):
@@ -33,23 +34,20 @@ class BaseStreamsTest(Test):
         self.num_controllers = num_controllers
         self.num_brokers = num_brokers
         self.topics = topics
-        self.use_streams_groups = True
 
         self.kafka = KafkaService(
             test_context, self.num_brokers,
             None, topics=self.topics,
             controller_num_nodes_override=self.num_controllers,
-            use_streams_groups=True,
             server_prop_overrides=[
                 [ "group.streams.min.session.timeout.ms", "10000" ], # Need to up the lower bound
-                [ "group.streams.session.timeout.ms", "10000" ] # As in classic groups, set this to 10s
+                [ "group.streams.session.timeout.ms", "10000" ], # As in classic groups, set this to 10s
+                [ "group.streams.topology.description.plugin.class", INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS ]
             ]
         )
 
     def setUp(self):
         self.kafka.start()
-        if self.use_streams_groups:
-            self.kafka.run_features_command("upgrade", "streams.version", 1)
 
     def get_consumer(self, client_id, topic, num_messages):
         return VerifiableConsumer(self.test_context,

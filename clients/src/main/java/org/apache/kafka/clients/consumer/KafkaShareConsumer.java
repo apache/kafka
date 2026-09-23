@@ -30,6 +30,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -305,10 +306,10 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
  *
  *         // Get the acquisition lock timeout and prepare to wait half that time before renewing again
- *         int timeToWaitMs = consumer.acquisitionLockTimeoutMs().getOrElse(10000) / 2;
+ *         int timeToWaitMs = consumer.acquisitionLockTimeoutMs().orElse(10000) / 2;
  *
  *         for (ConsumerRecord<String, String> record : records) {
- *             if (processing.put(rec.offset(), rec) == null) {
+ *             if (processing.put(record.offset(), record) == null) {
  *                 // Start the processing on another thread
  *             }
  *
@@ -560,6 +561,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      *             topic (per {@link org.apache.kafka.common.internals.Topic#validate(String)})
      * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
      * @throws InterruptException if the calling thread is interrupted before or while this method is called
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws KafkaException for any other unrecoverable errors
      */
     @Override
@@ -638,6 +640,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      *
      * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
      * @throws InterruptException if the thread is interrupted while blocked
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws KafkaException for any other unrecoverable errors
      */
     @Override

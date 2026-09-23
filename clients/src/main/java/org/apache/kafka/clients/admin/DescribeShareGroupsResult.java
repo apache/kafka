@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 /**
- * The result of the {@link KafkaAdminClient#describeShareGroups(Collection, DescribeShareGroupsOptions)}} call.
+ * The result of the {@link KafkaAdminClient#describeShareGroups(Collection, DescribeShareGroupsOptions)} call.
  */
 @InterfaceAudience.Public
 public class DescribeShareGroupsResult {

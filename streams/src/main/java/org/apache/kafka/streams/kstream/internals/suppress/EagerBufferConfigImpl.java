@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
@@ -78,7 +77,7 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
 
     @Override
     public Map<String, String> logConfig() {
-        return isLoggingEnabled() ? logConfig : Collections.emptyMap();
+        return isLoggingEnabled() ? logConfig : Map.of();
     }
 
     @Override

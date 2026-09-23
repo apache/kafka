@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -51,10 +52,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Properties;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("unchecked")
 public class KTableFilterTest {
@@ -81,7 +82,7 @@ public class KTableFilterTest {
         table2.toStream().process(supplier);
         table3.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, Integer> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("A", 1, 10L);
@@ -247,7 +248,7 @@ public class KTableFilterTest {
         builder.build().addProcessor("proc1", supplier, table1.name);
         builder.build().addProcessor("proc2", supplier, table2.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, Integer> inputTopic =
                     driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -344,7 +345,7 @@ public class KTableFilterTest {
 
         final boolean parentSendOldVals = table1.sendingOldValueEnabled();
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, Integer> inputTopic =
                     driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -411,8 +412,8 @@ public class KTableFilterTest {
 
         table2.enableSendingOldValues(true);
 
-        assertThat(table1.sendingOldValueEnabled(), is(true));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertTrue(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -431,8 +432,8 @@ public class KTableFilterTest {
 
         table2.enableSendingOldValues(true);
 
-        assertThat(table1.sendingOldValueEnabled(), is(false));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertFalse(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -451,8 +452,8 @@ public class KTableFilterTest {
 
         table2.enableSendingOldValues(false);
 
-        assertThat(table1.sendingOldValueEnabled(), is(true));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertTrue(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -468,7 +469,7 @@ public class KTableFilterTest {
         topology.addProcessor("proc1", supplier, table1.name);
         topology.addProcessor("proc2", supplier, table2.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> stringinputTopic =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 

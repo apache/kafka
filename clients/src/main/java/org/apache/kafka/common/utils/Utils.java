@@ -595,6 +595,9 @@ public final class Utils {
         if (bytes < 0) {
             return String.valueOf(bytes);
         }
+        if (bytes == 0) {
+            return "0 " + BYTE_SCALE_SUFFIXES[0];
+        }
         double asDouble = (double) bytes;
         int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
         double scale = Math.pow(1024.0, ordinal);

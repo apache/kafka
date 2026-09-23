@@ -138,6 +138,8 @@ The protocol is built out of the following primitive types.
 
 {{< include-html file="/static/{version}/generated/protocol_types.html" >}} 
 
+Message versions marked as flexible use the compact encoding for variable-length fields. In particular, arrays use `COMPACT_ARRAY` rather than `ARRAY`; strings and byte arrays similarly use their corresponding `COMPACT_*` types. Compact encodings store their length as an unsigned variable-length integer instead of a fixed-width integer. Flexible versions also include a tagged-fields section at the end of every request and response component.
+
 ### Notes on reading the request format grammars
 
 The [BNF](https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_Form)s below give an exact context free grammar for the request and response binary format. The BNF is intentionally not compact in order to give human-readable name. As always in a BNF a sequence of productions indicates concatenation. When there are multiple possible productions these are separated with '|' and may be enclosed in parenthesis for grouping. The top-level definition is always given first and subsequent sub-parts are indented.

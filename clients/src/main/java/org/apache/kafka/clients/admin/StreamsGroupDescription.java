@@ -47,7 +47,12 @@ public class StreamsGroupDescription {
     private final Set<AclOperation> authorizedOperations;
     private final Optional<StreamsGroupTopologyDescription> topologyDescription;
     private final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus;
+    private final Optional<String> assignorName;
 
+    /**
+     * @deprecated Since 4.4. Use {@link #StreamsGroupDescription(String, int, int, int, Collection, Collection, GroupState, Node, Set, Optional, StreamsGroupTopologyDescriptionStatus, Optional)} instead.
+     */
+    @Deprecated(since = "4.4", forRemoval = true)
     public StreamsGroupDescription(
             final String groupId,
             final int groupEpoch,
@@ -70,7 +75,8 @@ public class StreamsGroupDescription {
             coordinator,
             authorizedOperations,
             Optional.empty(),
-            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            Optional.empty()
         );
     }
 
@@ -85,7 +91,8 @@ public class StreamsGroupDescription {
             final Node coordinator,
             final Set<AclOperation> authorizedOperations,
             final Optional<StreamsGroupTopologyDescription> topologyDescription,
-            final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus
+            final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus,
+            final Optional<String> assignorName
     ) {
         this.groupId = Objects.requireNonNull(groupId, "groupId must be non-null");
         this.groupEpoch = groupEpoch;
@@ -98,6 +105,7 @@ public class StreamsGroupDescription {
         this.authorizedOperations = authorizedOperations;
         this.topologyDescription = Objects.requireNonNull(topologyDescription, "topologyDescription must be non-null");
         this.topologyDescriptionStatus = Objects.requireNonNull(topologyDescriptionStatus, "topologyDescriptionStatus must be non-null");
+        this.assignorName = Objects.requireNonNull(assignorName, "assignorName must be non-null");
     }
 
     /**
@@ -179,6 +187,14 @@ public class StreamsGroupDescription {
         return topologyDescriptionStatus;
     }
 
+    /**
+     * The task assignor the coordinator will use for the next assignment computation. May differ from the assignor
+     * that computed the current assignment. Empty if the broker is too old to report it.
+     */
+    public Optional<String> assignorName() {
+        return assignorName;
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -198,7 +214,8 @@ public class StreamsGroupDescription {
             && Objects.equals(coordinator, that.coordinator)
             && Objects.equals(authorizedOperations, that.authorizedOperations)
             && Objects.equals(topologyDescription, that.topologyDescription)
-            && topologyDescriptionStatus == that.topologyDescriptionStatus;
+            && topologyDescriptionStatus == that.topologyDescriptionStatus
+            && Objects.equals(assignorName, that.assignorName);
     }
 
     @Override
@@ -214,7 +231,8 @@ public class StreamsGroupDescription {
             coordinator,
             authorizedOperations,
             topologyDescription,
-            topologyDescriptionStatus
+            topologyDescriptionStatus,
+            assignorName
         );
     }
 
@@ -229,9 +247,12 @@ public class StreamsGroupDescription {
             ", members=" + members.stream().map(StreamsGroupMemberDescription::toString).collect(Collectors.joining(",")) +
             ", groupState=" + groupState +
             ", coordinator=" + coordinator +
-            ", authorizedOperations=" + authorizedOperations.stream().map(AclOperation::toString).collect(Collectors.joining(",")) +
+            ", authorizedOperations=" + (authorizedOperations == null ?
+                "null" :
+                authorizedOperations.stream().map(AclOperation::toString).collect(Collectors.joining(","))) +
             ", topologyDescription=" + topologyDescription.map(Object::toString).orElse("") +
             ", topologyDescriptionStatus=" + topologyDescriptionStatus +
+            ", assignorName=" + assignorName.orElse("") +
             ')';
     }
 }

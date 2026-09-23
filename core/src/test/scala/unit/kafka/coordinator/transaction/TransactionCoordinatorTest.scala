@@ -21,9 +21,10 @@ import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartiti
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
-import org.apache.kafka.common.utils.{MockTime, ProducerIdAndEpoch}
+import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.utils.internals.LogContext
-import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, InitProducerIdResult, ProducerIdManager, TransactionConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
+import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, InitProducerIdResult, ProducerIdManager, TransactionLog, TransactionConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.server.util.MockScheduler
@@ -667,8 +668,52 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    // A commit at the current epoch is the next EndTxnRequest, not a retry, so the state transition is invalid.
+    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
     assertEquals(Errors.INVALID_TXN_STATE, error)
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @Test
+  def shouldReturnProducerFencedOnEndTxnWhenStatusIsCompleteAbortAndCommitAtPreAbortEpochInV2(): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, (producerEpoch - 1).toShort, 1, TransactionState.COMPLETE_ABORT, util.Set.of, 0, time.milliseconds(), clientTransactionVersion)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    // The coordinator aborted the transaction (e.g. on timeout) and bumped the epoch while the commit was in
+    // flight, so the commit arrives with the pre-abort epoch. This must not be the fatal INVALID_TXN_STATE:
+    // the commit did not take effect, and the producer can recover by aborting. PRODUCER_FENCED follows the
+    // transactional-request convention and matches what V1's strict epoch check returns for this race (KAFKA-20785).
+    coordinator.handleEndTransaction(transactionalId, producerId, (producerEpoch - 1).toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    assertEquals(Errors.PRODUCER_FENCED, error)
+    verify(transactionManager, never()).appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any()
+    )
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @Test
+  def shouldReturnProducerFencedOnEndTxnWhenStatusIsCompleteAbortAndCommitOnRetryOverflowInV2(): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
+    // The coordinator-side abort exhausted the epoch, rotating to a new producer ID with epoch 0 and recording
+    // the old producer ID in prevProducerId.
+    val newProducerId = producerId + 1
+    val txnMetadata = new TransactionMetadata(transactionalId, newProducerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      0.toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, TransactionState.COMPLETE_ABORT, util.Set.of, 0, time.milliseconds(), clientTransactionVersion)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    // Same race as above, but the pre-abort epoch was Short.MaxValue - 1, so the stale commit matches the
+    // retry-on-overflow condition instead of the epoch-bump one.
+    coordinator.handleEndTransaction(transactionalId, producerId, (Short.MaxValue - 1).toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    assertEquals(Errors.PRODUCER_FENCED, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -1876,6 +1921,80 @@ class TransactionCoordinatorTest {
     val expectedResult = new InitProducerIdResult(rotatedProducerId, rotatedEpoch, Errors.NONE) 
     assertEquals(expectedResult, result)
   }
+
+  @Test
+  def testRetryInitProducerIdAfterFailoverDuringProducerIdRotation(): Unit = {
+    // GIVEN
+    val exhaustedEpoch = (Short.MaxValue - 1).toShort
+    val originalMetadata = new TransactionMetadata(
+      transactionalId,
+      producerId,
+      RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID,
+      exhaustedEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs,
+      TransactionState.EMPTY,
+      util.Set.of[TopicPartition](),
+      time.milliseconds(),
+      time.milliseconds(),
+      TV_2
+    )
+
+    // First coordinator rotates the producer id and writes the updated state to the log.
+    val rotatedMetadata = originalMetadata.prepareProducerIdRotation(
+      producerId + 1,
+      txnTimeoutMs,
+      time.milliseconds(),
+      true
+    )
+
+    // WHEN1 - Simulate coordinator failover and recovery from the transaction log before the client
+    //         receives a response.
+    val recoveredMetadata = TransactionLog.read(
+      java.nio.ByteBuffer.wrap(TransactionLog.keyToBytes(transactionalId)),
+      java.nio.ByteBuffer.wrap(TransactionLog.valueToBytes(rotatedMetadata, TV_2))
+    ).asInstanceOf[TransactionLog.TxnRecord].metadata()
+
+    // THEN1
+    assertEquals(producerId + 1, recoveredMetadata.producerId)
+    assertEquals(producerId, recoveredMetadata.prevProducerId)
+    assertEquals(0.toShort, recoveredMetadata.producerEpoch)
+    assertEquals(exhaustedEpoch, recoveredMetadata.lastProducerEpoch)
+
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, recoveredMetadata))))
+
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      capturedTxnTransitMetadata.capture(),
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => {
+      recoveredMetadata.completeTransitionTo(capturedTxnTransitMetadata.getValue)
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
+    })
+
+    // WHEN2 : The client retries InitProducerId because it did not receive the response 
+    //         for the epoch exhaustion rotation.
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, exhaustedEpoch)),
+      initProducerIdMockCallback
+    )
+
+    // THEN2 :  The retry should succeed. Without persisting lastProducerEpoch, PRODUCER_FENCED would
+    //          be returned.
+    assertEquals(new InitProducerIdResult(producerId + 1, 0, Errors.NONE), result)
+  }
+
 
   @Test
   def testInitProducerIdWithNoLastProducerData(): Unit = {

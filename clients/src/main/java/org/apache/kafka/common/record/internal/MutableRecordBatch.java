@@ -17,8 +17,8 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 /**
@@ -66,4 +66,13 @@ public interface MutableRecordBatch extends RecordBatch {
      * @return The closeable iterator
      */
     CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier);
+
+    /**
+     * Variant of {@link #skipKeyValueIterator(BufferSupplier)} that rejects any record whose declared
+     * (decompressed) body size exceeds {@code maxRecordBodySize}; see
+     * {@link RecordBatch#streamingIterator(BufferSupplier, int)}.
+     *
+     * @return The closeable iterator
+     */
+    CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize);
 }

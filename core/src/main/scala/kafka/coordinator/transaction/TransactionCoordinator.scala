@@ -27,8 +27,9 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.internals.LogContext
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.transaction.{InitProducerIdResult, ProducerIdManager, TransactionConfig, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
@@ -737,10 +738,18 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     +----------------+-------+---------+-------+---------+
     | Empty          | PF    | EB      | PF    | ITS     |
     +----------------+-------+---------+-------+---------+
-    | CompleteAbort  | NONE  | EB      | ITS   | ITS     |
+    | CompleteAbort  | NONE  | EB      | PF    | ITS     |
     +----------------+-------+---------+-------+---------+
     | CompleteCommit | ITS   | EB      | NONE  | ITS     |
     +----------------+-------+---------+-------+---------+
+
+    CompleteAbort + Commit + Retry returns PF rather than ITS because the coordinator may abort an open
+    transaction on its own (e.g. when it exceeds transaction.timeout.ms), bumping the epoch without the
+    producer's knowledge. A commit that was already in flight when such an abort completed arrives with the
+    pre-abort epoch and is indistinguishable from a retry. The commit is guaranteed not to have taken effect.
+    Under transaction V1 this race fails the strict epoch check above and returns the recoverable
+    PRODUCER_FENCED; V2's retry-tolerant epoch check accepts the request instead, so the recoverable outcome
+    is restored here at the state check (KAFKA-20785).
    */
 
   /**
@@ -879,7 +888,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     generateTxnTransitMetadataForTxnCompletion(TransactionState.PREPARE_ABORT, true)
                 } else {
                   // Commit.
-                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  if (isRetry) {
+                    // The commit raced with a coordinator-side abort (e.g. on transaction.timeout.ms) and is guaranteed
+                    // not to have taken effect; see the CompleteAbort + Commit + Retry note under the state table above (KAFKA-20785).
+                    info(s"TransactionalId: $transactionalId's state is ${txnMetadata.state}, but received a COMMIT at " +
+                      s"the pre-abort epoch $producerEpoch. The transaction was likely aborted by the coordinator on " +
+                      s"timeout while the commit was in flight. Returning ${Errors.PRODUCER_FENCED}.")
+                    Left(Errors.PRODUCER_FENCED)
+                  } else {
+                    logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  }
                 }
               case TransactionState.PREPARE_COMMIT =>
                 if (txnMarkerResult == TransactionResult.COMMIT)

@@ -25,8 +25,9 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
-import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
+import org.apache.kafka.clients.{ApiVersions, BootstrapConfiguration, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
 import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
@@ -177,7 +178,7 @@ class KafkaRaftManager[T](
       clusterId,
       bootstrapServers,
       localListeners,
-      Feature.KRAFT_VERSION.supportedVersionRange(),
+      Feature.KRAFT_VERSION.supportedVersionRange(config.unstableFeatureVersionsEnabled),
       raftConfig
     )
   }
@@ -218,6 +219,12 @@ class KafkaRaftManager[T](
       logContext
     )
 
+    channelBuilder match {
+      case reconfigurable: Reconfigurable =>
+        config.addReconfigurable(reconfigurable)
+      case _ =>
+    }
+
     val metricGroupPrefix = "raft-channel"
     val collectPerConnectionMetrics = false
 
@@ -238,7 +245,6 @@ class KafkaRaftManager[T](
     val reconnectBackoffMs = 50
     val reconnectBackoffMsMs = 500
     val discoverBrokerVersions = true
-
     val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
@@ -256,6 +262,7 @@ class KafkaRaftManager[T](
       apiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
+      BootstrapConfiguration.DISABLED,
       false
     )
 

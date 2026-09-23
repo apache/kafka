@@ -147,6 +147,6 @@ public class TokenInformation {
 
     @Override
     public int hashCode() {
-        return Objects.hash(owner, tokenRequester, renewers, issueTimestamp, maxTimestamp, expiryTimestamp, tokenId);
+        return Objects.hash(owner, tokenRequester, renewers, issueTimestamp, maxTimestamp, tokenId);
     }
 }
