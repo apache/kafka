@@ -255,7 +255,7 @@ Since each of the source stream's record is a `String` typed key-value pair, let
     KStream<String, String> words = source.flatMapValues(new ValueMapper<String, Iterable<String>>() {
                 @Override
                 public Iterable<String> apply(String value) {
-                    return Arrays.asList(value.split("\W+"));
+                    return Arrays.asList(value.split("\\W+"));
                 }
             });
 
@@ -263,13 +263,13 @@ The operator will take the `source` stream as its input, and generate a new stre
     
     
     KStream<String, String> source = builder.stream("streams-plaintext-input");
-    KStream<String, String> words = source.flatMapValues(value -> Arrays.asList(value.split("\W+")));
+    KStream<String, String> words = source.flatMapValues(value -> Arrays.asList(value.split("\\W+")));
 
 And finally we can write the word stream back into another Kafka topic, say `streams-linesplit-output`. Again, these two steps can be concatenated as the following (assuming lambda expression is used): 
     
     
     KStream<String, String> source = builder.stream("streams-plaintext-input");
-    source.flatMapValues(value -> Arrays.asList(value.split("\W+")))
+    source.flatMapValues(value -> Arrays.asList(value.split("\\W+")))
           .to("streams-linesplit-output");
 
 If we now describe this augmented topology as `System.out.println(topology.describe())`, we will get the following: 
@@ -315,7 +315,7 @@ The complete code looks like this (assuming lambda expression is used):
             final StreamsBuilder builder = new StreamsBuilder();
     
             KStream<String, String> source = builder.stream("streams-plaintext-input");
-            source.flatMapValues(value -> Arrays.asList(value.split("\W+")))
+            source.flatMapValues(value -> Arrays.asList(value.split("\\W+")))
                   .to("streams-linesplit-output");
     
             final Topology topology = builder.build();
@@ -346,7 +346,7 @@ In order to count the words we can first modify the `flatMapValues` operator to 
     source.flatMapValues(new ValueMapper<String, Iterable<String>>() {
         @Override
         public Iterable<String> apply(String value) {
-            return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\W+"));
+            return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
         }
     });
 
@@ -357,7 +357,7 @@ In order to do the counting aggregation we have to first specify that we want to
     source.flatMapValues(new ValueMapper<String, Iterable<String>>() {
                 @Override
                 public Iterable<String> apply(String value) {
-                    return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\W+"));
+                    return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                 }
             })
           .groupBy(new KeyValueMapper<String, String, String>() {
@@ -381,7 +381,7 @@ Note that in order to read the changelog stream from topic `streams-wordcount-ou
     
     
     KStream<String, String> source = builder.stream("streams-plaintext-input");
-    source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\W+")))
+    source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
           .groupBy((key, value) -> value)
           .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"))
           .toStream()
@@ -444,7 +444,7 @@ The complete code looks like this (assuming lambda expression is used):
             final StreamsBuilder builder = new StreamsBuilder();
     
             KStream<String, String> source = builder.stream("streams-plaintext-input");
-            source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\W+")))
+            source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                   .groupBy((key, value) -> value)
                   .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"))
                   .toStream()
@@ -460,5 +460,4 @@ The complete code looks like this (assuming lambda expression is used):
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
-
 

@@ -49,7 +49,7 @@ This quickstart example will demonstrate how to run a streaming application code
     
     KTable<String, Long> wordCounts = textLines
         // Split each text line, by whitespace, into words.
-        .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\W+")))
+        .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
     
         // Group the text words as message keys
         .groupBy((key, value) -> value)
@@ -257,5 +257,4 @@ You can now stop the console consumer, the console producer, the Wordcount appli
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
-
 
