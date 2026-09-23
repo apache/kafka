@@ -38,12 +38,19 @@ import shutil
 import re
 
 
+def replace_arg_with_env(filedata, arg_name, value):
+    # Replace the whole line so a default like `ARG kafka_url=""` does not leak into the ENV value.
+    filedata, count = re.subn(rf"^ARG {re.escape(arg_name)}\b.*$", f"ENV {arg_name} {value}", filedata, flags=re.MULTILINE)
+    if count == 0:
+        raise ValueError(f"'ARG {arg_name}' not found in the Dockerfile, cannot hardcode its value")
+    return filedata
+
+
 def remove_args_and_hardcode_values(file_path, kafka_version, kafka_url):
     with open(file_path, 'r') as file:
         filedata = file.read()
-    filedata = filedata.replace("ARG kafka_url", f"ENV kafka_url {kafka_url}")
-    filedata = filedata.replace(
-        "ARG build_date", f"ENV build_date {str(date.today())}")
+    filedata = replace_arg_with_env(filedata, "kafka_url", kafka_url)
+    filedata = replace_arg_with_env(filedata, "build_date", str(date.today()))
     original_comment = re.compile(r"# Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments")
     updated_comment = f"# Get Kafka from https://archive.apache.org/dist/kafka, url passed as env var, for version {kafka_version}"
     filedata = original_comment.sub(updated_comment, filedata)
