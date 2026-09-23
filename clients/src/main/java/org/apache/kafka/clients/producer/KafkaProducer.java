@@ -577,6 +577,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
         KafkaClient client = kafkaClient != null ? kafkaClient : ClientUtils.createNetworkClient(producerConfig,
                 producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                clientInstanceId,
                 this.metrics,
                 "producer",
                 logContext,
@@ -585,8 +586,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 maxInflightRequests,
                 metadata,
                 throttleTimeSensor,
-                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                clientInstanceId);
+                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
 
         short acks = Short.parseShort(producerConfig.getString(ProducerConfig.ACKS_CONFIG));
         return new Sender(logContext,

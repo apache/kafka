@@ -81,6 +81,7 @@ public final class ConsumerUtils {
     private static final Logger log = LoggerFactory.getLogger(ConsumerUtils.class);
 
     public static ConsumerNetworkClient createConsumerNetworkClient(ConsumerConfig config,
+                                                                    Uuid clientInstanceId,
                                                                     Metrics metrics,
                                                                     LogContext logContext,
                                                                     ApiVersions apiVersions,
@@ -88,10 +89,10 @@ public final class ConsumerUtils {
                                                                     Metadata metadata,
                                                                     Sensor throttleTimeSensor,
                                                                     long retryBackoffMs,
-                                                                    ClientTelemetrySender clientTelemetrySender,
-                                                                    Uuid clientInstanceId) {
+                                                                    ClientTelemetrySender clientTelemetrySender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
                 config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                clientInstanceId,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX,
                 logContext,
@@ -100,8 +101,7 @@ public final class ConsumerUtils {
                 CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                 metadata,
                 throttleTimeSensor,
-                clientTelemetrySender,
-                clientInstanceId);
+                clientTelemetrySender);
 
         // Will avoid blocking an extended period of time to prevent heartbeat thread starvation
         int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);

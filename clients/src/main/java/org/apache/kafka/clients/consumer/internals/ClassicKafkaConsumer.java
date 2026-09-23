@@ -201,6 +201,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // KIP-1313: the client instance ID is generated in the constructor, before the client connects.
             Uuid clientInstanceId = Uuid.randomUuid();
             this.client = createConsumerNetworkClient(config,
+                    clientInstanceId,
                     metrics,
                     logContext,
                     apiVersions,
@@ -208,8 +209,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metadata,
                     fetchMetricsManager.throttleTimeSensor(),
                     retryBackoffMs,
-                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                    clientInstanceId);
+                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
 
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),

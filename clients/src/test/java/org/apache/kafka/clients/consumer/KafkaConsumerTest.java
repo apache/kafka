@@ -4513,8 +4513,8 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
     public void testAsyncConsumerPassesTheClientInstanceIdToTheNetworkClient() {
         Map<String, Object> configs = clientInstanceIdConfigs(GroupProtocol.CONSUMER);
         ClientInstanceIdCapture.assertGenerated(NetworkClientDelegate.class,
-            captor -> () -> NetworkClientDelegate.supplier(any(), any(), any(), any(), any(), any(), any(),
-                any(), captor.capture(), any(), anyBoolean(), any()),
+            captor -> () -> NetworkClientDelegate.supplier(any(), any(), any(), any(), any(), captor.capture(), any(),
+                any(), any(), any(), anyBoolean(), any()),
             () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 }

@@ -292,10 +292,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metadata,
                     config,
                     apiVersions,
+                    clientInstanceId,
                     metrics,
                     shareFetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                    clientInstanceId,
                     backgroundEventHandler,
                     true,
                     asyncConsumerMetrics

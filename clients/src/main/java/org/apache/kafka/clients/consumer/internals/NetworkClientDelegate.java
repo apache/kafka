@@ -480,10 +480,10 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final Metadata metadata,
                                                            final ConsumerConfig config,
                                                            final ApiVersions apiVersions,
+                                                           final Uuid clientInstanceId,
                                                            final Metrics metrics,
                                                            final Sensor throttleTimeSensor,
                                                            final ClientTelemetrySender clientTelemetrySender,
-                                                           final Uuid clientInstanceId,
                                                            final BackgroundEventHandler backgroundEventHandler,
                                                            final boolean notifyMetadataErrorsViaErrorQueue,
                                                            final AsyncConsumerMetrics asyncConsumerMetrics) {
@@ -492,6 +492,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             protected NetworkClientDelegate create() {
                 KafkaClient client = ClientUtils.createNetworkClient(config,
                         config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                        clientInstanceId,
                         metrics,
                         CONSUMER_METRIC_GROUP_PREFIX,
                         logContext,
@@ -500,8 +501,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                         CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                         metadata,
                         throttleTimeSensor,
-                        clientTelemetrySender,
-                        clientInstanceId);
+                        clientTelemetrySender);
                 return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
             }
         };

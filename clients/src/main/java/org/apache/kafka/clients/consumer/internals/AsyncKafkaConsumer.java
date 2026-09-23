@@ -525,10 +525,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metadata,
                     config,
                     apiVersions,
+                    clientInstanceId,
                     metrics,
                     fetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                    clientInstanceId,
                     backgroundEventHandler,
                     false,
                     asyncConsumerMetrics

@@ -231,6 +231,7 @@ public final class ClientUtils {
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
                                                     List<String> bootstrapServers,
+                                                    Uuid clientInstanceId,
                                                     Metrics metrics,
                                                     String metricsGroupPrefix,
                                                     LogContext logContext,
@@ -239,11 +240,11 @@ public final class ClientUtils {
                                                     int maxInFlightRequestsPerConnection,
                                                     Metadata metadata,
                                                     Sensor throttleTimeSensor,
-                                                    ClientTelemetrySender clientTelemetrySender,
-                                                    Uuid clientInstanceId) {
+                                                    ClientTelemetrySender clientTelemetrySender) {
         return createNetworkClient(config,
                 bootstrapServers,
                 config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
+                clientInstanceId,
                 metrics,
                 metricsGroupPrefix,
                 logContext,
@@ -255,13 +256,13 @@ public final class ClientUtils {
                 null,
                 new DefaultHostResolver(),
                 throttleTimeSensor,
-                clientTelemetrySender,
-                clientInstanceId);
+                clientTelemetrySender);
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
                                                     List<String> bootstrapServers,
                                                     String clientId,
+                                                    Uuid clientInstanceId,
                                                     Metrics metrics,
                                                     String metricsGroupPrefix,
                                                     LogContext logContext,
@@ -273,8 +274,7 @@ public final class ClientUtils {
                                                     MetadataUpdater metadataUpdater,
                                                     HostResolver hostResolver,
                                                     Sensor throttleTimeSensor,
-                                                    ClientTelemetrySender clientTelemetrySender,
-                                                    Uuid clientInstanceId) {
+                                                    ClientTelemetrySender clientTelemetrySender) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
 

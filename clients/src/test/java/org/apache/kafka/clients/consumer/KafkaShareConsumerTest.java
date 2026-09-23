@@ -488,8 +488,8 @@ public class KafkaShareConsumerTest {
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group");
         ClientInstanceIdCapture.assertGenerated(NetworkClientDelegate.class,
-            captor -> () -> NetworkClientDelegate.supplier(any(), any(), any(), any(), any(), any(), any(),
-                any(), captor.capture(), any(), anyBoolean(), any()),
+            captor -> () -> NetworkClientDelegate.supplier(any(), any(), any(), any(), any(), captor.capture(), any(),
+                any(), any(), any(), anyBoolean(), any()),
             () -> new KafkaShareConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 }
