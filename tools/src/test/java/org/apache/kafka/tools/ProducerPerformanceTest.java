@@ -80,7 +80,7 @@ public class ProducerPerformanceTest {
     private Path tempDir;
 
     private File createTempFile(String contents) throws IOException {
-        File file = Files.createFile(tempDir.resolve("ProducerPerformanceTest-" + System.nanoTime() + ".tmp")).toFile();
+        File file = Files.createTempFile(tempDir, "ProducerPerformanceTest", ".tmp").toFile();
         Files.write(file.toPath(), contents.getBytes());
         return file;
     }
