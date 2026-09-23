@@ -255,6 +255,6 @@ public final class MetaPropertiesTest {
         testV2Serialization(Optional.of("my@cluster@id"),
                 2,
                 Optional.empty(),
-                "MetaProperties(version=1, clusterId=my@cluster@id, nodeId=2)");
+                "MetaProperties(version=2, clusterId=my@cluster@id, nodeId=2)");
     }
 }

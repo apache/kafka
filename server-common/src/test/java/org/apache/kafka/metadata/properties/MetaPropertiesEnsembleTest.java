@@ -21,6 +21,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -57,13 +59,13 @@ public final class MetaPropertiesEnsembleTest {
             Stream.of(
                 new SimpleImmutableEntry<>("/tmp/dir4",
                     new MetaProperties.Builder().
-                        setVersion(MetaPropertiesVersion.V1).
+                        setVersion(MetaPropertiesVersion.V2).
                         setClusterId("fooClusterId").
                         setNodeId(2).
                         build()),
                 new SimpleImmutableEntry<>("/tmp/dir5",
                     new MetaProperties.Builder().
-                        setVersion(MetaPropertiesVersion.V1).
+                        setVersion(MetaPropertiesVersion.V2).
                         setClusterId("fooClusterId").
                         setNodeId(2).
                         build())).collect(Collectors.
@@ -133,12 +135,12 @@ public final class MetaPropertiesEnsembleTest {
         assertEquals(Optional.empty(), results.get("/tmp/empty2"));
         assertNull(results.get("/tmp/error3"));
         assertEquals(Optional.of(new MetaProperties.Builder().
-            setVersion(MetaPropertiesVersion.V1).
+            setVersion(MetaPropertiesVersion.V2).
             setClusterId("fooClusterId").
             setNodeId(2).
             build()), results.get("/tmp/dir4"));
         assertEquals(Optional.of(new MetaProperties.Builder().
-            setVersion(MetaPropertiesVersion.V1).
+            setVersion(MetaPropertiesVersion.V2).
             setClusterId("fooClusterId").
             setNodeId(2).
             build()), results.get("/tmp/dir5"));
@@ -251,11 +253,12 @@ public final class MetaPropertiesEnsembleTest {
                         getMessage());
     }
 
-    @Test
-    public void testMetaPropertiesEnsembleLoad() throws IOException {
+    @ParameterizedTest
+    @EnumSource(value = MetaPropertiesVersion.class, names = { "V1", "V2" })
+    public void testMetaPropertiesEnsembleLoad(MetaPropertiesVersion version) throws IOException {
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         MetaProperties metaProps = new MetaProperties.Builder().
-            setVersion(MetaPropertiesVersion.V1).
+            setVersion(version).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
             setNodeId(1).
             build();
@@ -279,12 +282,13 @@ public final class MetaPropertiesEnsembleTest {
         assertEquals(1, metaPropertiesEnsemble.emptyLogDirs().size());
     }
 
-    @Test
-    public void testMetaPropertiesEnsembleLoadError() throws IOException {
+    @ParameterizedTest
+    @EnumSource(value = MetaPropertiesVersion.class, names = { "V1", "V2" })
+    public void testMetaPropertiesEnsembleLoadError(MetaPropertiesVersion version) throws IOException {
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         loader.addMetadataLogDir(createErrorLogDir());
         loader.addLogDirs(List.of(createLogDir(new MetaProperties.Builder().
-            setVersion(MetaPropertiesVersion.V1).
+            setVersion(version).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
             setNodeId(1).
             build())));
@@ -339,21 +343,22 @@ public final class MetaPropertiesEnsembleTest {
         }
     }
 
-    @Test
-    public void testCopierGenerateValidDirectoryId() {
+    @ParameterizedTest
+    @EnumSource(value = MetaPropertiesVersion.class, names = { "V1", "V2" })
+    public void testCopierGenerateValidDirectoryId(MetaPropertiesVersion version) {
         MetaPropertiesMockRandom random = new MetaPropertiesMockRandom();
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(EMPTY);
         copier.setRandom(random);
         copier.logDirProps().put("/tmp/dir1",
             new MetaProperties.Builder().
-                setVersion(MetaPropertiesVersion.V1).
+                setVersion(version).
                 setClusterId("PpYMbsoRQV-589isZzNzEw").
                 setNodeId(0).
                 setDirectoryId(new Uuid(2336837413447398698L, 1758400403264101670L)).
                 build());
         copier.logDirProps().put("/tmp/dir2",
             new MetaProperties.Builder().
-                setVersion(MetaPropertiesVersion.V1).
+                setVersion(version).
                 setClusterId("PpYMbsoRQV-589isZzNzEw").
                 setNodeId(0).
                 setDirectoryId(new Uuid(4341931186263415792L, 6389410885970711333L)).
@@ -480,62 +485,21 @@ public final class MetaPropertiesEnsembleTest {
                         getMessage());
     }
 
-    @Test
-    public void testVerifyV2MixedWithV1() {
-        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
-            Set.of(),
-            Set.of(),
-            Map.of("/tmp/dir1", new MetaProperties.Builder().
-                    setVersion(MetaPropertiesVersion.V1).
-                    setClusterId("sharedClusterId").
-                    setNodeId(3).
-                    build(),
-                "/tmp/dir2", new MetaProperties.Builder().
-                    setVersion(MetaPropertiesVersion.V2).
-                    setClusterId("sharedClusterId").
-                    setNodeId(3).
-                    build()),
-            Optional.of("/tmp/dir1"));
-        ensemble.verify(Optional.empty(),
-            OptionalInt.empty(),
-            EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR));
-    }
-
-    @Test
-    public void testVerifyV2WithoutClusterIdMixedWithV1() {
-        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
-            Set.of(),
-            Set.of(),
-            Map.of("/tmp/dir1", new MetaProperties.Builder().
-                    setVersion(MetaPropertiesVersion.V1).
-                    setClusterId("sharedClusterId").
-                    setNodeId(3).
-                    build(),
-                "/tmp/dir2", new MetaProperties.Builder().
-                    setVersion(MetaPropertiesVersion.V2).
-                    setNodeId(3).
-                    build()),
-            Optional.of("/tmp/dir1"));
-        ensemble.verify(Optional.empty(),
-            OptionalInt.empty(),
-            EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR));
-    }
-
     private static final List<MetaProperties> SAMPLE_META_PROPS_LIST = List.of(
         new MetaProperties.Builder().
-            setVersion(MetaPropertiesVersion.V1).
+            setVersion(MetaPropertiesVersion.V2).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
             setNodeId(1).
             setDirectoryId(Uuid.fromString("s33AdXtkR8Gf_xRO-R_dpA")).
             build(),
         new MetaProperties.Builder().
-            setVersion(MetaPropertiesVersion.V1).
+            setVersion(MetaPropertiesVersion.V2).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
             setNodeId(1).
             setDirectoryId(Uuid.fromString("oTM53yT_SbSfzlvkh_PfVA")).
             build(),
         new MetaProperties.Builder().
-            setVersion(MetaPropertiesVersion.V1).
+            setVersion(MetaPropertiesVersion.V2).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
             setNodeId(1).
             setDirectoryId(Uuid.fromString("FcUhIv2mTzmLqGkVEabyag")).
