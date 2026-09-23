@@ -134,4 +134,14 @@ public interface ShareConsumer<K, V> extends Closeable {
      * @see KafkaShareConsumer#wakeup()
      */
     void wakeup();
+
+    /**
+     * @see KafkaShareConsumer#shareGroupMetadata()
+     */
+    ShareGroupMetadata shareGroupMetadata();
+
+    /**
+     * @see KafkaShareConsumer#acknowledgementsForTransaction()
+     */
+    ShareAcknowledgements acknowledgementsForTransaction();
 }
