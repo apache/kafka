@@ -122,6 +122,8 @@ class LogConfigTest {
     assertTrue(isValid("100:10,12:10,15:1"))
     assertTrue(isValid("100:10,12:10,15:1  "))
     assertTrue(isValid("100:0,"))
+    assertTrue(isValid("100:0,,"))
+    assertTrue(isValid(s"${Int.MaxValue}:${Int.MaxValue}"))
 
     assertFalse(isValid("100"))
     assertFalse(isValid("100:"))
@@ -133,6 +135,12 @@ class LogConfigTest {
     assertFalse(isValid("100:0,10 :   "))
     assertFalse(isValid("*,100:10"))
     assertFalse(isValid("* ,100:10"))
+    assertFalse(isValid(",0:1"))
+    assertFalse(isValid("100:0,,10:1"))
+    assertFalse(isValid("*,"))
+    assertFalse(isValid(",*"))
+    assertFalse(isValid(s"${Int.MaxValue.toLong + 1}:1"))
+    assertFalse(isValid(s"1:${Int.MaxValue.toLong + 1}"))
   }
 
   /* Sanity check that toHtmlTable produces one of the expected configs */
