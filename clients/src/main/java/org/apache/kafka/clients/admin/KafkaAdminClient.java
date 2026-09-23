@@ -614,7 +614,6 @@ public class KafkaAdminClient extends AdminClient {
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
 
-            // KIP-1313: the client instance ID is generated in the constructor, before the client connects.
             Uuid clientInstanceId = Uuid.randomUuid();
             networkClient = ClientUtils.createNetworkClient(config,
                 bootstrapAddressesToUse,

@@ -518,7 +518,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
             this.positionsValidator = new PositionsValidator(logContext, time, subscriptions, metadata);
-            // KIP-1313: the client instance ID is generated in the constructor, before the client connects.
             Uuid clientInstanceId = Uuid.randomUuid();
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
                     logContext,

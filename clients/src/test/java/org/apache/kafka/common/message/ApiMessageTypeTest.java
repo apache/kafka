@@ -95,7 +95,7 @@ public class ApiMessageTypeTest {
         assertEquals((short) 1, ApiMessageType.SASL_HANDSHAKE.requestHeaderVersion((short) 1));
         assertEquals((short) 0, ApiMessageType.SASL_HANDSHAKE.responseHeaderVersion((short) 1));
 
-        // OffsetDelete v0 is non-flexible; v1 is flexible and skips the v2 request header (KIP-1313).
+        // OffsetDelete v0 is non-flexible; v1 is flexible: header v3 request / v1 response (KIP-1313).
         assertEquals((short) 1, ApiMessageType.OFFSET_DELETE.requestHeaderVersion((short) 0));
         assertEquals((short) 0, ApiMessageType.OFFSET_DELETE.responseHeaderVersion((short) 0));
         assertEquals((short) 3, ApiMessageType.OFFSET_DELETE.requestHeaderVersion((short) 1));

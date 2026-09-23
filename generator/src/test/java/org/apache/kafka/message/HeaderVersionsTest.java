@@ -42,8 +42,7 @@ public class HeaderVersionsTest {
             "', 'flexibleVersions': '" + flexibleVersions + "'}");
     }
 
-    // Synthetic header shapes. The request header stops at v2, below the real schema, so that
-    // v3 is available as an out-of-range probe.
+    // Request header versions 1-2 (flexible from 2), response header versions 0-1 (flexible from 1).
     private static MessageSpec requestHeader() throws Exception {
         return headerSpec("RequestHeader", "1-2", "2+");
     }

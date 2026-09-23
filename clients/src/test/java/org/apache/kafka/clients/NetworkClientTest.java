@@ -215,7 +215,7 @@ public class NetworkClientTest {
         Uuid clientInstanceId = Uuid.randomUuid();
         NetworkClient clientWithInstanceId = createNetworkClientWithClientInstanceId(clientInstanceId);
 
-        // OffsetDelete v1 is the only request version currently mapped to the v3 request header.
+        // OffsetDelete v1 uses the v3 request header, while v0 does not.
         ClientRequest request = clientWithInstanceId.newClientRequest(node.idString(),
                 new OffsetDeleteRequest.Builder(new OffsetDeleteRequestData()), time.milliseconds(), true);
         assertEquals(clientInstanceId, request.makeHeader((short) 1).clientInstanceId());

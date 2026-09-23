@@ -512,7 +512,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
 
             this.errors = this.metrics.sensor("errors");
-            // KIP-1313: the client instance ID is generated in the constructor, before the client connects.
             Uuid clientInstanceId = Uuid.randomUuid();
             this.sender = newSender(logContext, kafkaClient, this.metadata, clientInstanceId);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
