@@ -505,6 +505,11 @@ org.apache.kafka.image.ProducerIdsImageTest:
 - testEmptyImageRoundTrip
 - testImage1RoundTrip
 - testImage2RoundTrip
+org.apache.kafka.image.ScramDeltaTest:
+- testAbsentRemovesBeforeUpsertPreservesUsers
+- testAbsentRemovesOnlyLeaveImageEmpty
+- testApplyWithNoChangesReturnsBaseImage
+- testRemoveLastExistingUserClearsImage
 org.apache.kafka.image.ScramImageTest:
 - testApplyDelta1
 - testEmptyImageRoundTrip
