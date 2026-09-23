@@ -92,8 +92,6 @@ import java.util.stream.Stream;
  * {@code full-lz4} appends a zero-filled value, so it measures the compressed path on a highly
  * compressible payload.
  * <p>
- * TODO: extend to support compression under {@code incremental}.
- * <p>
  * Some examples of how to run it:
  * <pre>
  * # everything
@@ -125,6 +123,7 @@ public class ProducerAppendPathBenchmark {
     private static final String FULL_LZ4 = "full-lz4";
     private static final String INCREMENTAL = "incremental";
 
+    // TODO: extend to support compression + incremental.
     @Param({FULL, FULL_LZ4, INCREMENTAL})
     private String strategy;
 
@@ -272,6 +271,7 @@ public class ProducerAppendPathBenchmark {
                 pool
             );
         }
+        // TODO: extend to support compression + incremental.
         Compression compression = FULL_LZ4.equals(strategy) ? Compression.lz4().build() : Compression.NONE;
         BufferPool pool = new BufferPool(TOTAL_MEMORY, batchSize, metrics, time, "producer-metrics",
                 BufferPool.AllocationMode.FULL);
