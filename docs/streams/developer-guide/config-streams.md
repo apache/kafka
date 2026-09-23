@@ -1927,7 +1927,7 @@ Producer
  
  ### Parameters controlled by Kafka Streams
  
- Some parameters are not configurable by the user. If you supply a value that is different from the default value, your value is ignored. Below is a list of some of these parameters.  
+ Some parameters are not configurable by the user. If you supply a value that is different from the default value, your value is ignored and Kafka Streams logs a warning. Below is a list of some of these parameters.  
    
  <table>  
  <tr>  
@@ -1994,7 +1994,35 @@ Consumer
  <td>
 
 `StreamsPartitionAssignor`
+</td> </tr>  
+ <tr>  
+ <td>
+
+group.protocol
+</td>  
+ <td>
+
+Consumer
+</td>  
+ <td>
+
+`classic`
+</td> </tr>  
+ <tr>  
+ <td>
+
+bootstrap.resolve.timeout.ms
+</td>  
+ <td>
+
+Consumer, Producer, Admin
+</td>  
+ <td>
+
+`0`
 </td> </tr> </table>
+ 
+ The consumer `group.protocol` above is set, for example, as `consumer.group.protocol`. It is distinct from the Kafka Streams `group.protocol` config, which selects the rebalance protocol and can be set to `streams`.  
  
  If EOS is enabled, other parameters are set with the following values.  
    
@@ -2037,6 +2065,19 @@ Producer
  <td>
 
 `true`
+</td> </tr>  
+ <tr>  
+ <td>
+
+transactional.id
+</td>  
+ <td>
+
+Producer
+</td>  
+ <td>
+
+`<application.id>-<processId>-<threadIdx>`
 </td> </tr> </table>
  
  ### client.id

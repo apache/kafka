@@ -37,12 +37,12 @@ public class UnifierTest {
     @Test
     public void testAddNewField() throws Exception {
         new Unifier(toMessage("{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
-                "'validVersions': '0', 'flexibleVersions': '0+', " +
+                "'validVersions': '0', 'flexibleVersions': '0+', 'headerVersions': {'0+': '2'}, " +
                 "'fields': [" +
                 "{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}" +
                 "]}"),
             toMessage("{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
-                "'validVersions': '0-1', 'flexibleVersions': '0+', " +
+                "'validVersions': '0-1', 'flexibleVersions': '0+', 'headerVersions': {'0+': '2'}, " +
                 "'fields': [" +
                 "{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
                 "{'name': 'ControllerId', 'type': 'int32', 'versions': '1+'}" +
