@@ -103,7 +103,6 @@ org.apache.kafka.controller.ConfigurationControlManagerTest:
 - testIncrementalAlterConfigsWithPolicy
 - testIncrementalAlterConfigsWithoutExistence
 - testIncrementalAlterMultipleConfigValues
-- testIncrementalDeletePolicyIncludesUnsetConfigs
 - testIsCordonedLogDirsDisabled
 - testIsCordonedLogDirsInvalid
 - testLegacyAlterConfigs
