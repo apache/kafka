@@ -42,8 +42,8 @@ public class ClientInstanceIdCapture {
     }
 
     /**
-     * Asserts that the client passes a usable client instance ID to {@link ClientUtils}. The shorter
-     * createNetworkClient overload delegates to the longer, so verifying the longer covers every caller.
+     * Asserts that the client passes a usable client instance ID to {@link ClientUtils}. Verifying the
+     * longer createNetworkClient overload also covers the shorter overload.
      */
     public static void assertGenerated(Supplier<? extends AutoCloseable> clientFactory) {
         assertGenerated(ClientUtils.class,
