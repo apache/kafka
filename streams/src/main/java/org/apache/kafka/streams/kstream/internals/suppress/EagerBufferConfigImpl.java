@@ -26,23 +26,32 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
     private final long maxRecords;
     private final long maxBytes;
     private final Map<String, String> logConfig;
+    private final Boolean headersEnabled;
 
     public EagerBufferConfigImpl(final long maxRecords,
                                  final long maxBytes,
                                  final Map<String, String> logConfig) {
+        this(maxRecords, maxBytes, logConfig, null);
+    }
+
+    public EagerBufferConfigImpl(final long maxRecords,
+                                 final long maxBytes,
+                                 final Map<String, String> logConfig,
+                                 final Boolean headersEnabled) {
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.logConfig = logConfig;
+        this.headersEnabled = headersEnabled;
     }
 
     @Override
     public Suppressed.EagerBufferConfig withMaxRecords(final long recordLimit) {
-        return new EagerBufferConfigImpl(recordLimit, maxBytes, logConfig);
+        return new EagerBufferConfigImpl(recordLimit, maxBytes, logConfig, headersEnabled);
     }
 
     @Override
     public Suppressed.EagerBufferConfig withMaxBytes(final long byteLimit) {
-        return new EagerBufferConfigImpl(maxRecords, byteLimit, logConfig);
+        return new EagerBufferConfigImpl(maxRecords, byteLimit, logConfig, headersEnabled);
     }
 
     @Override
@@ -62,12 +71,27 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
 
     @Override
     public Suppressed.EagerBufferConfig withLoggingDisabled() {
-        return new EagerBufferConfigImpl(maxRecords, maxBytes, null);
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, null, headersEnabled);
     }
 
     @Override
     public Suppressed.EagerBufferConfig withLoggingEnabled(final Map<String, String> config) {
-        return new EagerBufferConfigImpl(maxRecords, maxBytes, config);
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, config, headersEnabled);
+    }
+
+    @Override
+    public Suppressed.EagerBufferConfig withHeadersEnabled() {
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, logConfig, true);
+    }
+
+    @Override
+    public Suppressed.EagerBufferConfig withHeadersDisabled() {
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, logConfig, false);
+    }
+
+    @Override
+    public Boolean headersEnabled() {
+        return headersEnabled;
     }
 
     @Override
@@ -91,12 +115,13 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
         final EagerBufferConfigImpl that = (EagerBufferConfigImpl) o;
         return maxRecords == that.maxRecords &&
             maxBytes == that.maxBytes &&
+            Objects.equals(headersEnabled, that.headersEnabled) &&
             Objects.equals(logConfig(), that.logConfig());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxRecords, maxBytes, logConfig());
+        return Objects.hash(maxRecords, maxBytes, logConfig(), headersEnabled);
     }
 
     @Override
@@ -104,6 +129,7 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
         return "EagerBufferConfigImpl{maxRecords=" + maxRecords +
                 ", maxBytes=" + maxBytes +
                 ", logConfig=" + logConfig() +
+                ", headersEnabled=" + headersEnabled +
                 "}";
     }
 }
