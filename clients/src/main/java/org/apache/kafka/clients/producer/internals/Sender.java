@@ -510,9 +510,9 @@ public class Sender implements Runnable {
             client.poll(retryBackoffMs, time.milliseconds());
             return true;
         } catch (AuthenticationException e) {
-            // The handler has already been removed from the pending queue, so fail it before
-            // propagating the exception to fail the remaining pending requests.
-            nextRequestHandler.fatalError(e);
+            // The handler has already been removed from the pending queue. Put it back so that
+            // TransactionManager#authenticationFailed handles it along with any other pending requests.
+            transactionManager.retry(nextRequestHandler);
             throw e;
         } catch (IOException e) {
             log.debug("Disconnect from {} while trying to send request {}. Going " +
@@ -520,6 +520,11 @@ public class Sender implements Runnable {
             // We break here so that we pick up the FindCoordinator request immediately.
             maybeFindCoordinatorAndRetry(nextRequestHandler);
             return true;
+        } catch (RuntimeException e) {
+            // Fail the dequeued handler rather than dropping it, which would leave the transaction
+            // manager stuck and any caller blocked on its result until it times out.
+            nextRequestHandler.fatalError(e);
+            throw e;
         }
     }
 

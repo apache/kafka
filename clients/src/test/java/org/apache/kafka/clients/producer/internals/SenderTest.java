@@ -633,6 +633,7 @@ public class SenderTest {
 
     @Test
     public void testIdempotentInitProducerIdAuthenticationFailure() throws Exception {
+        final long producerId = 424242L;
         client = spy(client);
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
@@ -645,22 +646,25 @@ public class SenderTest {
 
         sender.runOnce();
 
+        // The authentication failure is not fatal for an idempotent producer: InitProducerId remains
+        // pending so that it can be retried.
+        assertFalse(transactionManager.hasFatalError());
         assertFalse(transactionManager.hasProducerId());
-        assertFalse(transactionManager.hasPendingRequests());
-        assertTrue(transactionManager.hasFatalError());
-        assertSame(exception, transactionManager.lastError());
+        assertTrue(transactionManager.hasPendingRequests());
+        assertFalse(future.isDone());
 
-        sender.runOnce();
-        assertTrue(future.isDone());
-        assertSame(exception, assertThrows(ExecutionException.class, future::get).getCause());
-        assertFalse(accumulator.hasIncomplete());
-
-        // Authentication errors remain fatal even if the connection subsequently recovers.
+        // Once the connection recovers, InitProducerId is retried and the batch is sent.
         client.delayReady(node, 0);
         when(client.authenticationException(node)).thenReturn(null);
-        client.ready(node, time.milliseconds());
-        assertSendFailure(SslAuthenticationException.class);
-        assertFalse(client.hasInFlightRequests());
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+        assertFalse(transactionManager.hasPendingRequests());
+
+        sender.runOnce();
+        client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
+        sender.runOnce();
+        assertTrue(future.isDone());
+        assertEquals(0, future.get().offset());
     }
 
     @ParameterizedTest
@@ -690,10 +694,45 @@ public class SenderTest {
 
         assertTrue(transactionManager.hasFatalError());
         assertSame(exception, transactionManager.lastError());
+        assertFalse(transactionManager.hasPendingRequests());
         assertTrue(result.isCompleted());
         assertSame(exception, assertThrows(SslAuthenticationException.class,
                 () -> result.await(0, TimeUnit.MILLISECONDS, "Initialization should have failed")));
         assertFalse(transactionManager.hasProducerId());
+        assertFalse(client.hasInFlightRequests());
+    }
+
+    @Test
+    public void testTransactionalEndTxnAuthenticationFailure() {
+        client = spy(client);
+        TransactionManager transactionManager = new TransactionManager(new LogContext(), "testAuthenticationFailure",
+                60000, 100L, new ApiVersions(), metadata, false);
+        setupWithTransactionState(transactionManager);
+        doInitTransactions(transactionManager, new ProducerIdAndEpoch(123456L, (short) 0));
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
+        sender.runOnce();
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+
+        // EndTxn is the only pending request, so nothing else would fail the commit if the
+        // dequeued handler were dropped.
+        TransactionalRequestResult result = transactionManager.beginCommit();
+        Node node = metadata.fetch().nodes().get(0);
+        client.disconnect(node.idString());
+        client.delayReady(node, REQUEST_TIMEOUT);
+        SslAuthenticationException exception = new SslAuthenticationException("SSL handshake failed");
+        when(client.authenticationException(node)).thenReturn(exception);
+
+        sender.runOnce();
+
+        assertTrue(transactionManager.hasFatalError());
+        assertSame(exception, transactionManager.lastError());
+        assertFalse(transactionManager.hasPendingRequests());
+        assertTrue(result.isCompleted());
+        assertSame(exception, assertThrows(SslAuthenticationException.class,
+                () -> result.await(0, TimeUnit.MILLISECONDS, "Commit should have failed")));
         assertFalse(client.hasInFlightRequests());
     }
 

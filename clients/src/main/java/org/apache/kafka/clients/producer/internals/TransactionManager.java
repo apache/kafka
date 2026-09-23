@@ -965,8 +965,16 @@ public class TransactionManager {
     }
 
     synchronized void authenticationFailed(AuthenticationException e) {
+        // An idempotent producer only sends InitProducerId, which is left pending so that it is retried
+        // once the connection recovers or against another node. This matches the produce path, where an
+        // authentication failure only fails the affected batches.
+        if (!isTransactional() || pendingRequests.isEmpty())
+            return;
+
         for (TxnRequestHandler request : pendingRequests)
-            request.fatalError(e);
+            request.fail(e);
+        pendingRequests.clear();
+        transitionToFatalError(e);
     }
 
     synchronized void failPendingRequests(RuntimeException exception) {
