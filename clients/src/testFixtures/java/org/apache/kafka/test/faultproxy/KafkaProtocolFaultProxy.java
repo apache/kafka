@@ -417,8 +417,13 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
             ((MetadataResponse) response).data().brokers().forEach(b -> b.setHost(proxyHost).setPort(proxyPort));
         } else if (response instanceof FindCoordinatorResponse) {
             final FindCoordinatorResponse fc = (FindCoordinatorResponse) response;
-            fc.data().setHost(proxyHost).setPort(proxyPort);
-            fc.data().coordinators().forEach(c -> c.setHost(proxyHost).setPort(proxyPort));
+            // v0-3 carry a single top-level host/port and v4+ only the coordinators list; setting the
+            // top-level fields on a v4+ response makes re-serialization fail and the frame go out unrewritten
+            if (fc.data().coordinators().isEmpty()) {
+                fc.data().setHost(proxyHost).setPort(proxyPort);
+            } else {
+                fc.data().coordinators().forEach(c -> c.setHost(proxyHost).setPort(proxyPort));
+            }
         }
     }
 
