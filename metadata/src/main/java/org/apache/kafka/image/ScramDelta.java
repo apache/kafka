@@ -30,7 +30,7 @@ import java.util.Optional;
 
 
 /**
- * Represents changes to a topic in the metadata image.
+ * Represents changes to SCRAM credentials in the metadata image.
  */
 public final class ScramDelta {
     private final ScramImage image;
