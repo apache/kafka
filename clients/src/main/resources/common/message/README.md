@@ -160,10 +160,11 @@ efficient form of STRING.
 Header Versions
 ---------------
 Every request and response is preceded by a versioned header (carrying fields
-like the API key, version, and correlation ID).  A message's top-level
-"headerVersions" property maps its versions to header versions -- for example,
-{"0-1": "1", "2+": "2"} means versions 0-1 use header version 1, and version 2
-and up use header version 2.
+like the API key, version, and correlation ID).  Every request and response
+schema with valid versions must have a top-level "headerVersions" property that
+maps its versions to header versions -- for example, {"0-1": "1", "2+": "2"}
+means versions 0-1 use header version 1, and version 2 and up use header
+version 2.
 
 The ranges must start at 0, stay contiguous and non-overlapping, and end with
 an open-ended range; header versions must never decrease as the message version
