@@ -336,7 +336,10 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
                 // Shutdown started after this read was scheduled. Skip the plugin dispatch so we
                 // do not issue plugin.deleteTopology calls into a manager whose plugin is about
                 // to be closed.
-                if (!running.get()) return null;
+                if (!running.get()) {
+                    log.debug("Skipping topology-description cleanup batch: cycle not running.");
+                    return null;
+                }
                 metrics.recordSensor(
                     GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME,
                     eligible.size()
