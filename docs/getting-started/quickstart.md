@@ -177,7 +177,7 @@ echo foo > test.txt
 echo bar >> test.txt
 ```
 
-Next, we'll start two connectors running in _standalone_ mode, which means they run in a single, local, dedicated process. We provide three configuration files as parameters. The first is always the configuration for the Kafka Connect process, containing common configuration such as the Kafka brokers to connect to and the serialization format for data. The remaining configuration files each specify a connector to create. These files include a unique connector name, the connector class to instantiate, and any other configuration required by the connector. 
+Next, we'll start two connectors running in _standalone_ mode, which means they run in a single, local, dedicated process. In this example, we provide three configuration files as parameters: one worker configuration followed by two connector configurations. The worker configuration contains common settings for the Kafka Connect process, such as the Kafka brokers to connect to and the serialization format for data. Each connector configuration specifies a connector to create, including a unique connector name, the connector class to instantiate, and any other configuration required by the connector.
 
 ```bash
 bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties
