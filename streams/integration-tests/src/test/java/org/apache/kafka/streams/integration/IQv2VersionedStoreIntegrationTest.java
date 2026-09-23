@@ -89,7 +89,6 @@ public class IQv2VersionedStoreIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "true")));
 
     private KafkaStreams kafkaStreams;
-    private String groupProtocol;
 
     @BeforeAll
     public static void beforeAll() throws Exception {
@@ -117,7 +116,6 @@ public class IQv2VersionedStoreIntegrationTest {
     }
 
     private void setup(final String groupProtocol, final TestInfo testInfo) {
-        this.groupProtocol = groupProtocol;
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(INPUT_TOPIC_NAME,
             Materialized.as(Stores.persistentVersionedKeyValueStore(STORE_NAME, HISTORY_RETENTION, SEGMENT_INTERVAL)));
