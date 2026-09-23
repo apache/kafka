@@ -691,26 +691,6 @@ class StaticMemberTestService(StreamsTestBaseService):
         cfg = KafkaConfig(**properties)
         return cfg.render()
 
-    def start_cmd(self, node):
-        args = self.args.copy()
-        args['config_file'] = self.CONFIG_FILE
-        args['stdout'] = self.STDOUT_FILE
-        args['stderr'] = self.STDERR_FILE
-        args['pidfile'] = self.PID_FILE
-        args['log4j_param'] = get_log4j_config_param(node)
-        args['log4j'] = get_log4j_config_for_tools(node)
-        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
-
-        cmd = "( export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j)s\"; " \
-              "INCLUDE_TEST_JARS=true " \
-              "%(kafka_run_class)s %(streams_class_name)s " \
-              " %(config_file)s %(user_test_args1)s %(user_test_args2)s %(user_test_args3)s" \
-              " %(user_test_args4)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
-
-        self.logger.info("Executing streams cmd: " + cmd)
-
-        return cmd
-
 
 class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
     def __init__(self, test_context, kafka):
