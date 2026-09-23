@@ -234,31 +234,17 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
                     continue;
                 }
 
+                log.debug("[GroupId {}] Previous static member {} with instance id {} has been replaced by {}, transferring target assignment.",
+                    groupId, oldMemberId, instanceId, newMemberId);
+
                 staticMemberIdRemapping.put(newMemberId, oldMemberId);
+            } else {
+                log.debug("[GroupId {}] Previous static member {} with instance id {} has no replacement, discarding their target assignment.",
+                    groupId, oldMemberId, instanceId);
             }
         }
 
         if (log.isDebugEnabled()) {
-            for (Map.Entry<String, String> entry : previousStaticMembers.entrySet()) {
-                String instanceId = entry.getKey();
-                String oldMemberId = entry.getValue();
-                String newMemberId = currentStaticMembers.get(instanceId);
-
-                if (currentMemberIds.contains(oldMemberId) ||
-                    newTargetAssignment.containsKey(newMemberId)) {
-                    // The member id has been in the group the whole time.
-                    continue;
-                }
-
-                if (newMemberId == null) {
-                    log.debug("[GroupId {}] Previous static member {} with instance id {} has no replacement, discarding their target assignment.",
-                        groupId, oldMemberId, instanceId);
-                } else {
-                    log.debug("[GroupId {}] Previous static member {} with instance id {} has been replaced by {}, transferring target assignment.",
-                        groupId, oldMemberId, instanceId, newMemberId);
-                }
-            }
-
             for (Map.Entry<String, String> entry : currentStaticMembers.entrySet()) {
                 String instanceId = entry.getKey();
                 String newMemberId = entry.getValue();
@@ -283,18 +269,6 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
                 log.debug("[GroupId {}] Member {} has left the group, discarding their target assignment unless they were static and a corresponding static member exists.",
                     groupId, memberId);
             }
-
-            for (String memberId : currentMemberIds) {
-                if (newTargetAssignment.containsKey(memberId)) {
-                    // The member id has been in the group the whole time.
-                    continue;
-                }
-
-                if (!staticMemberIdRemapping.containsKey(memberId)) {
-                    log.debug("[GroupId {}] Member {} is new and will receive an empty target assignment or has no target assignment.",
-                        groupId, memberId);
-                }
-            }
         }
 
         // Generate target assignment records for all current members.
@@ -307,6 +281,11 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
             A oldMemberAssignment = currentTargetAssignment.get(memberId);
             A newMemberAssignment = newTargetAssignment.get(previousMemberId);
             if (newMemberAssignment == null) {
+                if (!staticMemberIdRemapping.containsKey(memberId)) {
+                    log.debug("[GroupId {}] Member {} is new or has no target assignment. The member will receive an empty target assignment.",
+                        groupId, memberId);
+                }
+
                 newMemberAssignment = emptyMemberAssignment();
             }
 
