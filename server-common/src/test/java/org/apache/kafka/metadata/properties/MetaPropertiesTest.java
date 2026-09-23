@@ -249,4 +249,12 @@ public final class MetaPropertiesTest {
             build();
         assertEquals(Optional.empty(), metaProperties.clusterId());
     }
+
+    @Test
+    public void testV2SerializationWithNonUuidClusterId() {
+        testV2Serialization(Optional.of("my@cluster@id"),
+                2,
+                Optional.empty(),
+                "MetaProperties(version=1, clusterId=my@cluster@id, nodeId=2)");
+    }
 }

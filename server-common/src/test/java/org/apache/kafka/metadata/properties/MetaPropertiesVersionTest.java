@@ -119,5 +119,4 @@ public final class MetaPropertiesVersionTest {
         assertTrue(MetaPropertiesVersion.V1.alwaysHasClusterId());
         assertFalse(MetaPropertiesVersion.V2.alwaysHasClusterId());
     }
-
 }
