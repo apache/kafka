@@ -24689,14 +24689,13 @@ public class GroupMetadataManagerTest {
 
         // The target assignment still has a member, i.e. the ConsumerGroupTargetAssignmentMember
         // tombstone has not been seen. This can happen when the coordinator loads while compaction
-        // removed it. The metadata tombstone still resets the assignment epoch; the member's
-        // target assignment is owned by its own record and is left untouched.
+        // removed it. The metadata tombstone is authoritative: it replays the missing member
+        // target assignment tombstone and resets the assignment epoch.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord("foo"));
 
         assertEquals(-1, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2)),
-            context.groupMetadataManager.consumerGroup("foo").targetAssignment().get("m1").partitions());
+        assertFalse(context.groupMetadataManager.consumerGroup("foo").targetAssignment().containsKey("m1"));
     }
 
     @Test
@@ -24842,14 +24841,13 @@ public class GroupMetadataManagerTest {
 
         // The target assignment still has a member, i.e. the ShareGroupTargetAssignmentMember
         // tombstone has not been seen. This can happen when the coordinator loads while compaction
-        // removed it. The metadata tombstone still resets the assignment epoch; the member's
-        // target assignment is owned by its own record and is left untouched.
+        // removed it. The metadata tombstone is authoritative: it replays the missing member
+        // target assignment tombstone and resets the assignment epoch.
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataTombstoneRecord("foo"));
 
         assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2)),
-            context.groupMetadataManager.shareGroup("foo").targetAssignment().get("m1").partitions());
+        assertFalse(context.groupMetadataManager.shareGroup("foo").targetAssignment().containsKey("m1"));
     }
 
     @Test
@@ -25094,13 +25092,13 @@ public class GroupMetadataManagerTest {
 
         // The target assignment still has a member, i.e. the StreamsGroupTargetAssignmentMember
         // tombstone has not been seen. This can happen when the coordinator loads while compaction
-        // removed it. The metadata tombstone still resets the assignment epoch; the member's
-        // target assignment is owned by its own record and is left untouched.
+        // removed it. The metadata tombstone is authoritative: it replays the missing member
+        // target assignment tombstone and resets the assignment epoch.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
 
         assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
-        assertEquals(tasks.activeTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).activeTasks());
+        assertTrue(context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).isEmpty());
     }
 
     @Test
