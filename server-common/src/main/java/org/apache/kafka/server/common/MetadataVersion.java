@@ -26,23 +26,23 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * This class contains the different Kafka versions.
- * Right now, we use them for upgrades - users can configure the version of the API brokers will use to communicate between themselves.
- * This is only for inter-broker communications - when communicating with clients, the client decides on the API version.
+ * This enum contains the different Kafka metadata versions.
+ * These versions are used during upgrades - users can configure which API version brokers use when communicating with each other.
+ * This setting only affects inter-broker communication.
+ * For client-broker communication, the client determines the API version to use.
  * <br>
- * Note that the ID we initialize for each version is important.
- * We consider a version newer than another if it is lower in the enum list (to avoid depending on lexicographic order)
+ * Note that the order of the versions in this enum is important.
+ * Versions are compared by their position in the enum rather than lexicographically.
  * <br>
- * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
- * trunk, we have the concept of internal versions (first introduced during the 1.0 development cycle). For example,
- * the first time we introduce a version change in a release, say 1.0, we will add a config value "1.0-IV0" and a
- * corresponding enum constant IBP_1_0-IV0. We will also add a config value "1.0" that will be mapped to the
- * latest internal version object, which is IBP_1_0-IV0. When we change the protocol a second time while developing
- * 1.0, we will add a new config value "1.0-IV1" and a corresponding enum constant IBP_1_0-IV1. We will change
- * the config value "1.0" to map to the latest internal version IBP_1_0-IV1. The config value of
- * "1.0-IV0" is still mapped to IBP_1_0-IV0. This way, if people are deploying from trunk, they can use
- * "1.0-IV0" and "1.0-IV1" to upgrade one internal version at a time. For most people who just want to use
- * released version, they can use "1.0" when upgrading to the 1.0 release.
+ * Since the API protocol may change multiple times during the development of a single release, we use internal versions to
+ * represent each protocol change.
+ * For example, when the first protocol change is introduced during the development of 1.0, we add the config value `1.0-IV0`
+ * and the corresponding enum constant `IBP_1_0_IV0`.
+ * The config value `1.0` also maps to `IBP_1_0_IV0`, which is the latest internal version at that point.
+ * If the protocol changes again during the development of 1.0, we add `1.0-IV1` and `IBP_1_0_IV1`.
+ * This way, users deploying builds from trunk can use `1.0-IV0`, `1.0-IV1`, and later internal versions to upgrade incrementally.
+ * Once 1.0 becomes production-ready, the release version `1.0` maps to the latest production internal version for that release.
+ * For most people who just want to use released versions, they can simply specify `1.0` when upgrading to the 1.0 release.
  */
 public enum MetadataVersion {
 
@@ -135,21 +135,22 @@ public enum MetadataVersion {
 
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
-    //
-    // Keep at least one unstable MetadataVersion after LATEST_PRODUCTION.
     // The latest unstable version serves as the development and testing version.
-    // If LATEST_PRODUCTION becomes the last version, add a new unstable
-    // MetadataVersion for the next release.
+    // Attempts to use an unstable MetadataVersion will fail unless
+    // unstable.feature.versions.enable=true.
     //
-    // If users attempt to use an unstable MetadataVersion, they will get an error unless
-    // they have set the configuration unstable.feature.versions.enable=true.
-    // Please move this comment when updating the LATEST_PRODUCTION constant.
+    // NOTES when updating MetadataVersion:
+    // 1. Keep the default MetadataVersion in @ClusterTest aligned with
+    //    MetadataVersion.latestTesting().
+    // 2. Keep at least one unstable MetadataVersion after LATEST_PRODUCTION.
+    // 3. When updating LATEST_PRODUCTION, keep LATEST_STABLE_METADATA_VERSION in
+    //    tests/kafkatest/version.py aligned with it and move this entire comment
+    //    block below the new LATEST_PRODUCTION constant.
+    //
 
     // New version for the Kafka 4.5.0 release.
     IBP_4_5_IV0(34, "4.5", "IV0", false);
 
-    // NOTES when adding a new version:
-    //   Update the default version in @ClusterTest annotation to point to the latest version
     public static final String FEATURE_NAME = "metadata.version";
 
     /**
@@ -166,8 +167,6 @@ public enum MetadataVersion {
      * IT CANNOT BE CHANGED.</strong>
      */
     public static final MetadataVersion LATEST_PRODUCTION = IBP_4_4_IV2;
-    // If you change the value above please also update
-    // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
     /**
      * An array containing all the MetadataVersion entries.
