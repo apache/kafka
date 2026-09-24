@@ -29,6 +29,7 @@ import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.SupportedConfigChecker;
@@ -44,7 +45,6 @@ import org.apache.kafka.timeline.TimelineHashSet;
 
 import org.slf4j.Logger;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -379,8 +379,9 @@ public class ConfigurationControlManager {
                 return INVALID_CORDONED_LOG_DIRS_ERROR;
             } else if (configRecord.value() == null) {
                 allConfigs.remove(configRecord.name());
-            } else if (configRecord.value().getBytes(StandardCharsets.UTF_8).length > Short.MAX_VALUE) {
-                // The ConfigRecord value cannot exceed Short.MAX_VALUE UTF-8 bytes.
+            } else if (Utils.utf8Length(configRecord.value()) > Short.MAX_VALUE) {
+                // In KRaft mode, large config values cannot be created by appending.
+                // If the size exceeds `Short.MAX_VALUE` UTF-8 bytes, an error will be thrown to notify the user.
                 return DISALLOWED_CONFIG_VALUE_SIZE_ERROR;
             } else {
                 allConfigs.put(configRecord.name(), configRecord.value());
