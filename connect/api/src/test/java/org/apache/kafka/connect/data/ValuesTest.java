@@ -168,7 +168,17 @@ public class ValuesTest {
 
     @Test
     public void shouldParseTemporalStringsWithTrailingTokensAsStrings() {
-        for (String value : List.of("2020-01-01:foo", "2020-01-01,x")) {
+        for (String value : List.of("2020-01-01:foo", "2020-01-01,x",
+                "2020-02-03T11:12:13.145Z}", "15:16:17.189Z,")) {
+            SchemaAndValue schemaAndValue = Values.parseString(value);
+            assertEquals(Type.STRING, schemaAndValue.schema().type(), value);
+            assertEquals(value, schemaAndValue.value(), value);
+        }
+    }
+
+    @Test
+    public void shouldParseArraysAndMapsWithTrailingTokensAsStrings() {
+        for (String value : List.of("[1,2]foo", "{1:2}foo")) {
             SchemaAndValue schemaAndValue = Values.parseString(value);
             assertEquals(Type.STRING, schemaAndValue.schema().type(), value);
             assertEquals(value, schemaAndValue.value(), value);

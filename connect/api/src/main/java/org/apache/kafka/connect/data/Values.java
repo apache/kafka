@@ -840,9 +840,19 @@ public class Values {
 
             try {
                 if (parser.canConsume(ARRAY_BEGIN_DELIMITER)) {
-                    return parseArray();
+                    SchemaAndValue array = parseArray();
+                    // Only accept the array if it's embedded or nothing but whitespace is left
+                    // over, so a value like "[1,2]foo" is not misread as the array [1, 2].
+                    if (embedded || remainingIsBlank()) {
+                        return array;
+                    }
+                    parser.rewindTo(startPosition);
                 } else if (parser.canConsume(MAP_BEGIN_DELIMITER)) {
-                    return parseMap();
+                    SchemaAndValue map = parseMap();
+                    if (embedded || remainingIsBlank()) {
+                        return map;
+                    }
+                    parser.rewindTo(startPosition);
                 }
             } catch (DataException e) {
                 log.trace("Unable to parse the value as a map or an array; reverting to string", e);
@@ -855,6 +865,11 @@ public class Values {
             } else {
                 return parseNextToken(embedded, token.trim());
             }
+        }
+
+        // Whether only whitespace (if anything) remains to be parsed.
+        private boolean remainingIsBlank() {
+            return Utils.isBlank(parser.original().substring(parser.mark()));
         }
 
         private SchemaAndValue parseNextToken(boolean embedded, String token) {
