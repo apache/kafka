@@ -429,6 +429,8 @@ org.apache.kafka.streams.integration.SmokeTestDriverIntegrationTest:
 - shouldWorkWithRebalance
 org.apache.kafka.streams.integration.SmokeTestDriverIntegrationTest$WithAssignmentBatchingDisabledTest:
 - shouldWorkWithRebalance
+org.apache.kafka.streams.integration.SourceTopicChangelogRestoreIntegrationTest:
+- shouldFullyRestoreSourceTopicChangelogStoreAfterTaskCorruptionWithStandbyReplica
 org.apache.kafka.streams.integration.StandbyTaskCreationIntegrationTest:
 - shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables
 - shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled

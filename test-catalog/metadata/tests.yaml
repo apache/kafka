@@ -95,6 +95,10 @@ org.apache.kafka.controller.ClusterControlManagerTest:
 - testUnregisterControllerWithUnsupportedMetadataVersion
 - testUnregisterUnknownController
 org.apache.kafka.controller.ConfigurationControlManagerTest:
+- ASCII
+- Hangul
+- emoji
+- testAppendChecksFinalUtf8Size
 - testBuilderRequiresPositiveMaxRecordsPerBatch
 - testCordonedLogDirsFeature
 - testElrUpgrade
