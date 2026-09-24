@@ -24735,6 +24735,23 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testReplayShareGroupMemberMetadataTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group still exists but the member is already gone. Replaying the
+        // ShareGroupMemberMetadata tombstone should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
+
+        // The group may not exist at all. Replaying the ShareGroupMemberMetadata tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("bar"));
+    }
+
+    @Test
     public void testReplayShareGroupMemberMetadataTombstoneWithMissingSiblingTombstones() {
         Uuid topicId = Uuid.randomUuid();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -24764,6 +24781,17 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testReplayShareGroupMetadataTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the ShareGroupMetadata tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
+    }
+
+    @Test
     public void testReplayShareGroupMetadataTombstoneWithMissingSiblingTombstones() {
         Uuid topicId = Uuid.randomUuid();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -24789,6 +24817,17 @@ public class GroupMetadataManagerTest {
 
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
         assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+    }
+
+    @Test
+    public void testReplayShareGroupTargetAssignmentMemberTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the ShareGroupTargetAssignmentMember tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord("foo", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
     }
 
     @Test
@@ -24848,6 +24887,23 @@ public class GroupMetadataManagerTest {
         assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
         assertFalse(context.groupMetadataManager.shareGroup("foo").targetAssignment().containsKey("m1"));
+    }
+
+    @Test
+    public void testReplayShareGroupCurrentMemberAssignmentTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group still exists but the member is already gone. Replaying the
+        // ShareGroupCurrentMemberAssignment tombstone should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
+
+        // The group may not exist at all. Replaying the ShareGroupCurrentMemberAssignment tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("bar"));
     }
 
     @Test
