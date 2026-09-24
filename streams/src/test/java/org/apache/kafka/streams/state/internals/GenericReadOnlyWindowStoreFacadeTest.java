@@ -36,8 +36,7 @@ import org.mockito.quality.Strictness;
 import java.time.Instant;
 import java.util.function.Function;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
@@ -69,7 +68,7 @@ public class GenericReadOnlyWindowStoreFacadeTest {
         when(mockedTimestampedStore.fetch("unknownKey", 21L))
             .thenReturn(null);
 
-        assertThat(facade.fetch("key1", 21L), is("value1"));
+        assertEquals("value1", facade.fetch("key1", 21L));
         assertNull(facade.fetch("unknownKey", 21L));
     }
 
@@ -84,7 +83,7 @@ public class GenericReadOnlyWindowStoreFacadeTest {
         when(mockedHeadersStore.fetch("unknownKey", 21L))
             .thenReturn(null);
 
-        assertThat(facade.fetch("key1", 21L), is("value1"));
+        assertEquals("value1", facade.fetch("key1", 21L));
         assertNull(facade.fetch("unknownKey", 21L));
     }
 
@@ -99,8 +98,8 @@ public class GenericReadOnlyWindowStoreFacadeTest {
             .thenReturn(ValueTimestampHeaders.make("value1", 42L, new RecordHeaders()));
 
         final ValueAndTimestamp<String> result = facade.fetch("key1", 21L);
-        assertThat(result.value(), is("value1"));
-        assertThat(result.timestamp(), is(42L));
+        assertEquals("value1", result.value());
+        assertEquals(42L, result.timestamp());
     }
 
     @Test
@@ -118,8 +117,8 @@ public class GenericReadOnlyWindowStoreFacadeTest {
         final WindowStoreIterator<String> iterator =
             facade.fetch("key1", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
-        assertThat(iterator.next(), is(KeyValue.pair(21L, "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair(42L, "value2")));
+        assertEquals(KeyValue.pair(21L, "value1"), iterator.next());
+        assertEquals(KeyValue.pair(42L, "value2"), iterator.next());
     }
 
     @Test
@@ -137,8 +136,8 @@ public class GenericReadOnlyWindowStoreFacadeTest {
         final WindowStoreIterator<String> iterator =
             facade.backwardFetch("key1", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
-        assertThat(iterator.next(), is(KeyValue.pair(42L, "value2")));
-        assertThat(iterator.next(), is(KeyValue.pair(21L, "value1")));
+        assertEquals(KeyValue.pair(42L, "value2"), iterator.next());
+        assertEquals(KeyValue.pair(21L, "value1"), iterator.next());
     }
 
     @Test
@@ -160,8 +159,8 @@ public class GenericReadOnlyWindowStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             facade.fetch("key1", "key2", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1"), iterator.next());
+        assertEquals(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2"), iterator.next());
     }
 
     @Test
@@ -183,8 +182,8 @@ public class GenericReadOnlyWindowStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             facade.backwardFetch("key1", "key2", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
+        assertEquals(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2"), iterator.next());
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1"), iterator.next());
     }
 
     @Test
@@ -206,8 +205,8 @@ public class GenericReadOnlyWindowStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             facade.fetchAll(Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1"), iterator.next());
+        assertEquals(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2"), iterator.next());
     }
 
     @Test
@@ -229,8 +228,8 @@ public class GenericReadOnlyWindowStoreFacadeTest {
         final KeyValueIterator<Windowed<String>, String> iterator =
             facade.backwardFetchAll(Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
+        assertEquals(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2"), iterator.next());
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1"), iterator.next());
     }
 
     @Test
@@ -250,8 +249,8 @@ public class GenericReadOnlyWindowStoreFacadeTest {
 
         final KeyValueIterator<Windowed<String>, String> iterator = facade.all();
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1"), iterator.next());
+        assertEquals(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2"), iterator.next());
     }
 
     @Test
@@ -271,8 +270,8 @@ public class GenericReadOnlyWindowStoreFacadeTest {
 
         final KeyValueIterator<Windowed<String>, String> iterator = facade.backwardAll();
 
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
-        assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
+        assertEquals(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2"), iterator.next());
+        assertEquals(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1"), iterator.next());
     }
 
     @Test
@@ -290,7 +289,7 @@ public class GenericReadOnlyWindowStoreFacadeTest {
         final WindowStoreIterator<String> iterator =
             facade.fetch("key1", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
-        assertThat(iterator.next(), is(KeyValue.pair(21L, null)));
-        assertThat(iterator.next(), is(KeyValue.pair(42L, "value2")));
+        assertEquals(KeyValue.pair(21L, null), iterator.next());
+        assertEquals(KeyValue.pair(42L, "value2"), iterator.next());
     }
 }

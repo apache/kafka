@@ -229,9 +229,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         // If the coordinator is unavailable (e.g. bootstrap DNS resolution is still in progress),
         // falling through to the timer-based remainingMs() would return 0 once the auto-commit interval
         // elapses, since the auto-commit timer remains permanently expired. This would cause both the
-        // application and network threads to busy-spin.
+        // application and network threads to busy-spin. Wait a retry backoff instead of the auto-commit
+        // interval, which may be configured to zero and is consistent with the other request managers.
         if (coordinatorRequestManager.coordinator().isEmpty()) {
-            return autoCommit.autoCommitIntervalMs();
+            return retryBackoffMs;
         }
         return autoCommit.remainingMs(currentTimeMs);
     }
@@ -1575,10 +1576,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         public void setInflightCommitStatus(final boolean inflightCommitStatus) {
             this.hasInflightCommit = inflightCommitStatus;
-        }
-
-        public long autoCommitIntervalMs() {
-            return autoCommitInterval;
         }
     }
 

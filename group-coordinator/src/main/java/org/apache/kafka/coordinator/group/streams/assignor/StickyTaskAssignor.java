@@ -47,8 +47,8 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
 
     /**
-     * Standbys from the target assignment rank ahead of members only known to hold state through their reported
-     * offsets; within each group, the most caught-up state comes first.
+     * Members that currently hold the task as a standby or warm-up rank ahead of members only known to hold state
+     * through their reported offsets; within each group, the most caught-up state comes first.
      */
     private static final Comparator<StandbyCandidate> STANDBY_CANDIDATE_ORDER =
         Comparator.comparingInt((StandbyCandidate candidate) -> candidate.isPrevStandby() ? 0 : 1)
@@ -163,6 +163,20 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
         }
 
+        // prev warm-up tasks: a warm-up task is a member restoring the state of a task whose active task is being
+        // migrated to it, so for stickiness it counts as a prev standby -- the member that has already restored the
+        // state gets the task, instead of the restore work being thrown away. Its reported offset sum ranks it among
+        // the standbys, most caught-up first.
+        for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.warmupTasks().entrySet()) {
+            final String subtopologyId = entry.getKey();
+            final Set<Integer> partitionNoSet = entry.getValue();
+            for (final int partitionNo : partitionNoSet) {
+                standbyCandidates
+                    .computeIfAbsent(new TaskId(subtopologyId, partitionNo), task -> new ArrayList<>())
+                    .add(new StandbyCandidate(member, true, reportedOffsetSum(memberAssignmentState, subtopologyId, partitionNo)));
+            }
+        }
+
         // A member that rejoins after a restart gets a fresh member ID and an empty target assignment, so the maps
         // above cannot capture what it owned before. Offsets reported for tasks with state on local disk make it a
         // weaker standby candidate, so stickiness can still hand those tasks back to the local state.
@@ -170,7 +184,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             final String subtopologyId = entry.getKey();
             for (final Map.Entry<Integer, Long> partitionOffset : entry.getValue().entrySet()) {
                 final int partitionNo = partitionOffset.getKey();
-                if (isCurrentlyAssignedStandbyTask(memberAssignmentState, subtopologyId, partitionNo)) {
+                if (isCurrentlyAssignedStandbyOrWarmupTask(memberAssignmentState, subtopologyId, partitionNo)) {
                     continue;
                 }
                 standbyCandidates
@@ -202,11 +216,17 @@ public class StickyTaskAssignor implements TaskAssignor {
             .getOrDefault(partitionNo, 0L);
     }
 
-    private static boolean isCurrentlyAssignedStandbyTask(final MemberAssignmentState memberAssignmentState,
-                                                          final String subtopologyId,
-                                                          final int partitionNo) {
-        final Set<Integer> partitionNoSet = memberAssignmentState.standbyTasks().get(subtopologyId);
-        return partitionNoSet != null && partitionNoSet.contains(partitionNo);
+    private static boolean isCurrentlyAssignedStandbyOrWarmupTask(
+        final MemberAssignmentState memberAssignmentState,
+        final String subtopologyId,
+        final int partitionNo
+    ) {
+        final Set<Integer> standbyPartitionNoSet = memberAssignmentState.standbyTasks().get(subtopologyId);
+        if (standbyPartitionNoSet != null && standbyPartitionNoSet.contains(partitionNo)) {
+            return true;
+        }
+        final Set<Integer> warmupPartitionNoSet = memberAssignmentState.warmupTasks().get(subtopologyId);
+        return warmupPartitionNoSet != null && warmupPartitionNoSet.contains(partitionNo);
     }
 
     private static GroupAssignment buildGroupAssignment(final LocalState localState, final Collection<String> members) {

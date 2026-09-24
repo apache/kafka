@@ -73,8 +73,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings({"unchecked"})
 @Tag("integration")
@@ -220,7 +219,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
@@ -299,7 +298,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
@@ -392,7 +391,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
 
         kafkaStreams.close();
         kafkaStreams.cleanUp(); // Purge store to force restoration
@@ -431,7 +430,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     private void produceMessages(final String topic, final KeyValueTimestamp<String, String>... records) {
