@@ -72,7 +72,6 @@ final class RackAwareStandbyPicker<P> {
         for (int i = 0; i < tagKeys.size(); i++) {
             usedTagValues.add(new HashSet<>());
         }
-        candidates = allProcesses;
     }
 
     void startTask() {

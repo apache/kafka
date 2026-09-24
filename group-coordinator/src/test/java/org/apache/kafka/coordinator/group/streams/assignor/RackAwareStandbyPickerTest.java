@@ -143,7 +143,9 @@ public class RackAwareStandbyPickerTest {
 
     private static RackAwareStandbyPicker<String> picker(final List<String> tagKeys, final Map<String, Map<String, String>> clientTags) {
         final Map<String, Map<String, String>> processes = new TreeMap<>(clientTags);
-        return new RackAwareStandbyPicker<>(tagKeys, processes.keySet(), processes::get);
+        final RackAwareStandbyPicker<String> picker = new RackAwareStandbyPicker<>(tagKeys, processes.keySet(), processes::get);
+        picker.startTask();
+        return picker;
     }
 
     private void hold(final RackAwareStandbyPicker<String> picker, final String process) {
