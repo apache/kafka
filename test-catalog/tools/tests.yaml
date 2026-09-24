@@ -791,6 +791,11 @@ org.apache.kafka.tools.consumer.group.ConsumerGroupCommandSaslAuthenticationTest
 - testConsumerGroupServiceWithAuthenticationSuccessWithClassicGroupProtocol
 - testConsumerGroupServiceWithAuthenticationSuccessWithConsumerGroupProtocol
 org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTest:
+- testConsumerGroupStatesFromInvalidString
+- testConsumerGroupStatesFromString
+- testConsumerGroupTypesFromInvalidString
+- testConsumerGroupTypesFromString
+- testListWithUnrecognizedNewConsumerOption
 - testValidateRegexCommandWithInvalidRegex
 - testValidateRegexCommandWithValidRegex
 org.apache.kafka.tools.consumer.group.ConsumerGroupServiceTest:
@@ -862,10 +867,6 @@ org.apache.kafka.tools.consumer.group.ListConsumerGroupTest:
 - testListConsumerGroupsWithoutFilters
 - testListGroupCommandClassicProtocol
 - testListGroupCommandConsumerProtocol
-- testListWithUnrecognizedNewConsumerOption
-org.apache.kafka.tools.consumer.group.ListConsumerGroupUnitTest:
-- testConsumerGroupStatesFromString
-- testConsumerGroupTypesFromString
 org.apache.kafka.tools.consumer.group.ResetConsumerGroupOffsetTest:
 - testResetOffsetsAllTopicsAllGroups
 - testResetOffsetsByDuration
