@@ -2464,8 +2464,8 @@ public class StreamTaskTest {
     public void shouldCommitWhileUpdateSnapshotWithTheConsumedOffsetsForSuspendedRunningTask() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        final Map<TopicPartition, Long> checkpointableOffsets = singletonMap(partition1, 1L);
-        when(recordCollector.offsets()).thenReturn(checkpointableOffsets);
+        final Map<TopicPartition, Long> producedOffsets = singletonMap(partition1, 1L);
+        when(recordCollector.offsets()).thenReturn(producedOffsets);
 
         task = createStatefulTask(createConfig(), true);
         task.initializeIfNeeded();
@@ -2479,8 +2479,57 @@ public class StreamTaskTest {
         task.postCommit(true); // should checkpoint
 
         verify(stateManager, times(2)).commit();
-        verify(stateManager, times(2)).updateChangelogOffsets(checkpointableOffsets);
+        // restoration checkpoint: nothing consumed yet, so the produced offset is used
+        verify(stateManager).updateChangelogOffsets(singletonMap(partition1, 1L));
+        // post-commit checkpoint: partition1 was consumed at 10, and the consumed offset wins over the produced offset
+        verify(stateManager).updateChangelogOffsets(singletonMap(partition1, 10L));
         verify(recordCollector, times(2)).offsets();
+    }
+
+    @Test
+    public void shouldCheckpointConsumedOffsetNotProducedOffsetForSourceChangelogPartition() {
+        // A source-topic changelog partition is both consumed and produced to by the task. Its store is
+        // filled by consuming, so the checkpoint must use the consumed offset, not the (higher) produced offset.
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        when(recordCollector.offsets()).thenReturn(singletonMap(partition1, 20L)); // last offset produced to partition1
+
+        task = createStatefulTask(createConfig(), true);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 10)));
+        task.addRecords(partition2, singleton(getConsumerRecordWithOffsetAsTimestamp(partition2, 10)));
+        task.process(100L); // consumes partition1 at offset 10
+        assertTrue(task.commitNeeded());
+
+        task.suspend();
+        task.postCommit(true); // should checkpoint
+
+        // the consumed offset (10) wins over the produced offset (20) for the source-changelog partition
+        verify(stateManager).updateChangelogOffsets(singletonMap(partition1, 10L));
+    }
+
+    @Test
+    public void shouldCheckpointProducedOffsetForDedicatedChangelogPartition() {
+        // A dedicated changelog partition is produced to but never consumed, so it is not in consumedOffsets:
+        // its produced offset must be preserved even while a consumed source partition uses its consumed offset.
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, 20L)); // produced to the changelog
+
+        task = createStatefulTask(createConfig(), true);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 10)));
+        task.addRecords(partition2, singleton(getConsumerRecordWithOffsetAsTimestamp(partition2, 10)));
+        task.process(100L); // consumes partition1 at offset 10
+        assertTrue(task.commitNeeded());
+
+        task.suspend();
+        task.postCommit(true); // should checkpoint
+
+        // dedicated changelog keeps its produced offset (20); the consumed source partition adds its consumed offset (10)
+        verify(stateManager).updateChangelogOffsets(mkMap(mkEntry(changelogPartition, 20L), mkEntry(partition1, 10L)));
     }
 
     @Test
