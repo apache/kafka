@@ -369,6 +369,23 @@ public class MirrorMakerConfigTest {
             "connector properties should not be transformed");
     }
 
+    @Test
+    public void testTransformClosesConfigProvidersWhenGetFails() {
+        try {
+            MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "a, b",
+                "config.providers", "fake",
+                "config.providers.fake.class", FailingGetConfigProvider.class.getName()));
+
+            assertThrows(RuntimeException.class,
+                () -> mirrorConfig.transform(Map.of("ssl.key.password", "${fake:secret:password}")));
+
+            assertTrue(FailingGetConfigProvider.closed);
+        } finally {
+            FailingGetConfigProvider.closed = false;
+        }
+    }
+
     public static class FakeConfigProvider implements ConfigProvider {
 
         Map<String, String> secrets = Map.of("password", "secret2");
@@ -384,6 +401,29 @@ public class MirrorMakerConfigTest {
         @Override
         public ConfigData get(String path) {
             return new ConfigData(secrets);
+        }
+
+        @Override
+        public ConfigData get(String path, Set<String> keys) {
+            return get(path);
+        }
+    }
+
+    public static class FailingGetConfigProvider implements ConfigProvider {
+        static volatile boolean closed;
+
+        @Override
+        public void configure(Map<String, ?> props) {
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+
+        @Override
+        public ConfigData get(String path) {
+            throw new RuntimeException("get failed");
         }
 
         @Override
