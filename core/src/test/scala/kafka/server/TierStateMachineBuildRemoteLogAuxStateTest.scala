@@ -31,6 +31,7 @@ import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.partition.AlterPartitionManager
 import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
@@ -39,12 +40,15 @@ import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.log.{EpochEntry, LogConfig, LogDirFailureChannel, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.function.Executable
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong}
 import org.mockito.Mockito.{mock, when}
 
-import java.io.File
+import java.io.{ByteArrayInputStream, File}
+import java.nio.charset.StandardCharsets
 import java.util.{Optional, Properties}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
@@ -68,6 +72,8 @@ class TierStateMachineBuildRemoteLogAuxStateTest extends Logging {
   private val leaderLogStartOffset = 10L
   private val leaderLocalLogStartOffset = 100L
   private val remoteEndOffset = leaderLocalLogStartOffset - 1
+  // Leader epoch checkpoint of the last remote segment: version 0, one entry, epoch 0 starting at leaderLogStartOffset.
+  private val remoteLeaderEpochCheckpoint = s"0\n1\n0 $leaderLogStartOffset\n".getBytes(StandardCharsets.UTF_8)
 
   private var replicaManager: ReplicaManager = _
   private var quotaManager: QuotaManagers = _
@@ -135,9 +141,13 @@ class TierStateMachineBuildRemoteLogAuxStateTest extends Logging {
     Utils.swallow(this.logger.underlying, () => quotaManager.shutdown())
   }
 
-  /** A failure to read the leader epoch checkpoint from remote storage must leave the local log unchanged. */
-  @Test
-  def testLocalStateIsUnchangedWhenLeaderEpochCheckpointCannotBeReadFromRemote(): Unit = {
+  /**
+   * A failure to read the leader epoch checkpoint or the producer snapshot from remote storage must leave the local
+   * log unchanged.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[IndexType], names = Array("LEADER_EPOCH", "PRODUCER_SNAPSHOT"))
+  def testLocalStateIsUnchangedWhenRemoteIndexCannotBeRead(failingIndex: IndexType): Unit = {
     val log = seedFollowerLog()
     val epochEntriesBefore = log.leaderEpochCache.epochEntries()
     val logStartOffsetBefore = log.logStartOffset
@@ -148,8 +158,13 @@ class TierStateMachineBuildRemoteLogAuxStateTest extends Logging {
     when(segmentMetadata.endOffset()).thenReturn(remoteEndOffset)
     when(remoteLogManager.fetchRemoteLogSegmentMetadata(any(), anyInt(), anyLong()))
       .thenReturn(Optional.of(segmentMetadata))
-    when(remoteStorageManager.fetchIndex(any(), any()))
-      .thenThrow(new RemoteStorageException("Simulated failure while fetching the leader epoch index"))
+    when(remoteStorageManager.fetchIndex(any(), any())).thenAnswer { invocation =>
+      invocation.getArgument[IndexType](1) match {
+        case `failingIndex` => throw new RemoteStorageException(s"Simulated failure while fetching the $failingIndex index")
+        case IndexType.LEADER_EPOCH => new ByteArrayInputStream(remoteLeaderEpochCheckpoint)
+        case other => throw new IllegalArgumentException(s"Unexpected remote index fetch: $other")
+      }
+    }
 
     // Epoch 0 lets the tier state machine skip asking the leader for the end offset of the previous epoch.
     assertThrows(classOf[RemoteStorageException], () => tierStateMachine.start(
@@ -165,9 +180,9 @@ class TierStateMachineBuildRemoteLogAuxStateTest extends Logging {
       () => assertEquals(localLogStartOffsetBefore, log.localLogStartOffset(),
         "localLogStartOffset must not move when the remote log aux state could not be built"),
       () => assertEquals(epochEntriesBefore, log.leaderEpochCache.epochEntries(),
-        "the leader epoch cache must not be cleared when the remote log aux state could not be built"),
+        "the leader epoch cache must not change when the remote log aux state could not be built"),
       () => assertEquals(epochEntriesBefore, readLeaderEpochCheckpointFromDisk(log),
-        "the leader epoch checkpoint on disk must not be cleared when the remote log aux state could not be built")
+        "the leader epoch checkpoint on disk must not change when the remote log aux state could not be built")
     ).asJava)
   }
 
