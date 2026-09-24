@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class StickyTaskAssignor implements TaskAssignor {
@@ -476,9 +477,13 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     private static void assignStandby(final LocalState localState, final LinkedList<TaskId> standbyTasks) {
         final ArrayList<StandbyToAssign> toLeastLoaded = new ArrayList<>(standbyTasks.size() * localState.numStandbyReplicas);
-        final RackAwareStandbyPicker rackAwarePicker = localState.rackAwareAssignmentTags.isEmpty()
+        final RackAwareStandbyPicker<ProcessState> rackAwarePicker = localState.rackAwareAssignmentTags.isEmpty()
             ? null
-            : new RackAwareStandbyPicker(localState);
+            : new RackAwareStandbyPicker<>(
+                localState.rackAwareAssignmentTags,
+                localState.processIdToState.values(),
+                process -> localState.processIdToClientTags.get(process.processId())
+            );
 
         // Assuming our current assignment is range-based, we want to sort by partition first.
         standbyTasks.sort(Comparator.comparing(TaskId::partition).thenComparing(TaskId::subtopologyId).reversed());
@@ -486,7 +491,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         for (TaskId task : standbyTasks) {
             // Rack diversity ranks above stickiness for standbys: the rack-aware pick places every standby that can
             // still make the task more diverse, using stickiness only to break its ties. The rest go to the sticky pass.
-            final int rackAwareStandbys = rackAwarePicker == null ? 0 : rackAwarePicker.assign(localState, task);
+            final int rackAwareStandbys = rackAwarePicker == null ? 0 : assignRackAwareStandbys(localState, rackAwarePicker, task);
             assignStickyStandbys(localState, task, rackAwareStandbys, toLeastLoaded);
         }
 
@@ -506,6 +511,64 @@ public class StickyTaskAssignor implements TaskAssignor {
                 }
             }
         }
+    }
+
+    /**
+     * Assigns the standbys of {@code task} that still make it more rack-diverse to processes with room, each to the
+     * least-loaded member, and returns how many were placed. Equally diverse processes are ordered by being a previous
+     * holder of the task, then by load.
+     */
+    private static int assignRackAwareStandbys(
+        final LocalState localState,
+        final RackAwareStandbyPicker<ProcessState> picker,
+        final TaskId task
+    ) {
+        picker.startTask();
+        // The active owner is the only holder of the task so far.
+        for (final ProcessState process : localState.processIdToState.values()) {
+            if (process.hasTask(task)) {
+                picker.markUsed(process);
+            }
+        }
+
+        final Set<String> prevHolderProcessIds = prevHolderProcessIds(localState, task);
+        final Predicate<ProcessState> eligible = process -> !process.hasTask(task) && hasRoom(localState, process);
+        final Comparator<ProcessState> tieBreak = (process1, process2) -> {
+            final int byPrevHolder = Boolean.compare(
+                prevHolderProcessIds.contains(process2.processId()),
+                prevHolderProcessIds.contains(process1.processId())
+            );
+            return byPrevHolder != 0 ? byPrevHolder : Double.compare(process1.load(), process2.load());
+        };
+
+        int placed = 0;
+        while (placed < localState.numStandbyReplicas) {
+            final ProcessState winner = picker.pickNext(eligible, tieBreak);
+            if (winner == null) {
+                break;
+            }
+            final int newTaskCount = winner.addTaskToLeastLoadedMember(task, false, true);
+            maybeUpdateTotalTasksPerMember(localState, newTaskCount);
+            picker.markUsed(winner);
+            placed++;
+        }
+        return placed;
+    }
+
+    /** The processes whose members held {@code task}, active or standby, before this assignment. */
+    private static Set<String> prevHolderProcessIds(final LocalState localState, final TaskId task) {
+        final Set<String> prevHolderProcessIds = new HashSet<>();
+        final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
+        if (prevActiveMember != null) {
+            prevHolderProcessIds.add(prevActiveMember.processId);
+        }
+        final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
+        if (prevStandbyMembers != null) {
+            for (final Member prevStandbyMember : prevStandbyMembers) {
+                prevHolderProcessIds.add(prevStandbyMember.processId);
+            }
+        }
+        return prevHolderProcessIds;
     }
 
     /**
@@ -598,168 +661,6 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     private record StandbyCandidate(Member member, boolean isPrevStandby, long offsetSum) {
-    }
-
-    private record TaggedProcess(ProcessState process, Map<String, String> clientTags) {
-    }
-
-    /**
-     * Picks standby processes over the keys of {@code rack.aware.assignment.tags}, whose list order is the priority.
-     * A standby goes to a process with room whose value for the highest-priority key is not yet carried by a holder
-     * of the task; among those, the one whose values are new on the most lower-priority keys wins, then a previous
-     * holder of the task, then the least loaded process. Keys are given up lowest priority first, and once every key
-     * is given up the task's remaining standbys are left to the tag-blind sticky pass.
-     */
-    private static final class RackAwareStandbyPicker {
-        private final List<String> tagKeys;
-        private final List<TaggedProcess> allProcesses;
-
-        // State of the task being placed, reset by startTask.
-        private final List<Set<String>> usedTagValues;      // per key, the values already carried by a holder of the task
-        private final Set<String> prevHolderProcessIds;
-        private int priorityIndex;                          // position in tagKeys of the key the filter enforces
-        private List<TaggedProcess> candidates;             // the pool the next pick filters
-
-        RackAwareStandbyPicker(final LocalState localState) {
-            tagKeys = localState.rackAwareAssignmentTags;
-            allProcesses = new ArrayList<>(localState.processIdToState.size());
-            for (final ProcessState process : localState.processIdToState.values()) {
-                allProcesses.add(new TaggedProcess(process, localState.processIdToClientTags.get(process.processId())));
-            }
-            usedTagValues = new ArrayList<>(tagKeys.size());
-            for (int i = 0; i < tagKeys.size(); i++) {
-                usedTagValues.add(new HashSet<>());
-            }
-            prevHolderProcessIds = new HashSet<>();
-        }
-
-        /** Places the standbys of {@code task} that still make it more rack-diverse and returns how many were placed. */
-        int assign(final LocalState localState, final TaskId task) {
-            startTask(localState, task);
-            int placed = 0;
-            while (placed < localState.numStandbyReplicas) {
-                final TaggedProcess winner = pickNext(localState, task);
-                if (winner == null) {
-                    break;
-                }
-                final int newTaskCount = winner.process.addTaskToLeastLoadedMember(task, false, true);
-                maybeUpdateTotalTasksPerMember(localState, newTaskCount);
-                markUsed(winner);
-                placed++;
-            }
-            return placed;
-        }
-
-        private void startTask(final LocalState localState, final TaskId task) {
-            for (final Set<String> values : usedTagValues) {
-                values.clear();
-            }
-            priorityIndex = 0;
-            candidates = allProcesses;
-
-            // The active owner is the only holder of the task so far.
-            for (final TaggedProcess candidate : allProcesses) {
-                if (candidate.process.hasTask(task)) {
-                    markUsed(candidate);
-                }
-            }
-
-            prevHolderProcessIds.clear();
-            final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
-            if (prevActiveMember != null) {
-                prevHolderProcessIds.add(prevActiveMember.processId);
-            }
-            final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
-            if (prevStandbyMembers != null) {
-                for (final Member prevStandbyMember : prevStandbyMembers) {
-                    prevHolderProcessIds.add(prevStandbyMember.processId);
-                }
-            }
-        }
-
-        private void markUsed(final TaggedProcess holder) {
-            for (int i = 0; i < tagKeys.size(); i++) {
-                final String value = holder.clientTags.get(tagKeys.get(i));
-                if (value != null) {
-                    usedTagValues.get(i).add(value);
-                }
-            }
-        }
-
-        /** Returns the process for the next standby, or null once no process can make the task more diverse. */
-        private TaggedProcess pickNext(final LocalState localState, final TaskId task) {
-            while (priorityIndex < tagKeys.size()) {
-                final String priorityKey = tagKeys.get(priorityIndex);
-                final Set<String> usedPriorityValues = usedTagValues.get(priorityIndex);
-
-                final List<TaggedProcess> survivors = new ArrayList<>();
-                for (final TaggedProcess candidate : candidates) {
-                    final String value = candidate.clientTags.get(priorityKey);
-                    if (value == null || usedPriorityValues.contains(value)) {
-                        continue;
-                    }
-                    if (candidate.process.hasTask(task) || !hasRoom(localState, candidate.process)) {
-                        continue;
-                    }
-                    survivors.add(candidate);
-                }
-
-                if (survivors.isEmpty()) {
-                    // Give up the key: it can no longer be diversified, so the next key becomes the priority.
-                    priorityIndex++;
-                    candidates = allProcesses;
-                    continue;
-                }
-
-                final TaggedProcess winner = choose(survivors);
-                // Every survivor has an unused value for the priority key and is not a holder; a process dropped in
-                // the filter stays out while the key is the priority, since usedTagValues only grows.
-                survivors.remove(winner);
-                candidates = survivors;
-                return winner;
-            }
-            return null;
-        }
-
-        private TaggedProcess choose(final List<TaggedProcess> survivors) {
-            TaggedProcess best = survivors.get(0);
-            for (int i = 1; i < survivors.size(); i++) {
-                final TaggedProcess candidate = survivors.get(i);
-                int comparison = compareDiversity(candidate, best);
-                if (comparison == 0) {
-                    comparison = Boolean.compare(
-                        prevHolderProcessIds.contains(candidate.process.processId()),
-                        prevHolderProcessIds.contains(best.process.processId())
-                    );
-                }
-                if (comparison == 0) {
-                    comparison = Double.compare(best.process.load(), candidate.process.load());
-                }
-                if (comparison > 0) {
-                    best = candidate;
-                }
-            }
-            return best;
-        }
-
-        /**
-         * Compares the diversity vectors of two survivors, one bit per key in priority order: 1 where the process
-         * carries a value for the key that no holder carries yet. Both share the bits up to the priority key.
-         */
-        private int compareDiversity(final TaggedProcess process1, final TaggedProcess process2) {
-            for (int i = priorityIndex + 1; i < tagKeys.size(); i++) {
-                final int comparison = Boolean.compare(hasUnusedValue(process1, i), hasUnusedValue(process2, i));
-                if (comparison != 0) {
-                    return comparison;
-                }
-            }
-            return 0;
-        }
-
-        private boolean hasUnusedValue(final TaggedProcess process, final int keyIndex) {
-            final String value = process.clientTags.get(tagKeys.get(keyIndex));
-            return value != null && !usedTagValues.get(keyIndex).contains(value);
-        }
     }
 
     private static class LocalState {
