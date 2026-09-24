@@ -54,6 +54,8 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     static final AtomicLong TAINTED_NEXT_OFFSETS_LAST_LOG_NS = new AtomicLong(System.nanoTime() - TAINT_LOG_INTERVAL_NS);
 
     /**
+     * @param records The records for each partition. Must not contain empty lists;
+     *                partitions with no records must be omitted from the map.
      * @deprecated Since 4.0. Use {@link #ConsumerRecords(Map, Map)} instead.
      */
     @Deprecated(since = "4.0", forRemoval = true)
@@ -64,7 +66,8 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     /**
      * Constructs a new ConsumerRecords with the given records and next offsets.
      *
-     * @param records The records for each partition
+     * @param records The records for each partition. Must not contain empty lists;
+     *                partitions with no records must be omitted from the map.
      * @param nextOffsets The next offset and metadata for each partition whose position was advanced
      *                    during the poll call. These represent the offsets that the consumer will
      *                    start reading from on the next poll.
