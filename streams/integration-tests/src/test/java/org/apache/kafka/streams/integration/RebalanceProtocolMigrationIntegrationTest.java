@@ -51,8 +51,7 @@ import java.util.Properties;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 public class RebalanceProtocolMigrationIntegrationTest {
@@ -219,7 +218,7 @@ public class RebalanceProtocolMigrationIntegrationTest {
                 expected.size(),
                 60 * 1000);
 
-        assertThat(actual, is(expected));
+        assertEquals(expected, actual);
 
     }
 }

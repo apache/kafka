@@ -47,7 +47,6 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -80,15 +79,10 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.st
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.anyOf;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(600)
@@ -153,7 +147,7 @@ public class StoreQueryIntegrationTest {
         produceValueRange(key, 0, batch1NumMessages);
 
         // Assert that all messages in the first batch were processed in a timely manner
-        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+        assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
         until(() -> {
 
             final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new FixedPartitionPartitioner<>(0));
@@ -166,11 +160,11 @@ public class StoreQueryIntegrationTest {
 
             try {
                 if (kafkaStreams1IsActive) {
-                    assertThat(store1.get(key), is(notNullValue()));
-                    assertThat(store2.get(key), is(nullValue()));
+                    assertNotNull(store1.get(key));
+                    assertNull(store2.get(key));
                 } else {
-                    assertThat(store1.get(key), is(nullValue()));
-                    assertThat(store2.get(key), is(notNullValue()));
+                    assertNull(store1.get(key));
+                    assertNotNull(store2.get(key));
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
@@ -201,7 +195,7 @@ public class StoreQueryIntegrationTest {
         produceValueRange(key, 0, batch1NumMessages);
 
         // Assert that all messages in the first batch were processed in a timely manner
-        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+        assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
         until(() -> {
             final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
                     .queryMetadataForKey(TABLE_NAME, key, new FixedPartitionPartitioner<>(0));
@@ -225,11 +219,11 @@ public class StoreQueryIntegrationTest {
             }
 
             if (kafkaStreams1IsActive) {
-                assertThat(store1, is(notNullValue()));
-                assertThat(store2, is(nullValue()));
+                assertNotNull(store1);
+                assertNull(store2);
             } else {
-                assertThat(store2, is(notNullValue()));
-                assertThat(store1, is(nullValue()));
+                assertNotNull(store2);
+                assertNull(store1);
             }
 
             final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> storeQueryParam2 =
@@ -241,23 +235,17 @@ public class StoreQueryIntegrationTest {
                 // If kafkaStreams1 is active for keyPartition, kafkaStreams2 would be active for keyDontBelongPartition
                 // So, in that case, store3 would be null and the store4 would not return the value for key as wrong partition was requested
                 if (kafkaStreams1IsActive) {
-                    assertThat(store1.get(key), is(notNullValue()));
-                    assertThat(getStore(kafkaStreams2, storeQueryParam2).get(key), is(nullValue()));
+                    assertNotNull(store1.get(key));
+                    assertNull(getStore(kafkaStreams2, storeQueryParam2).get(key));
                     final InvalidStateStoreException exception =
                         assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams1, storeQueryParam2).get(key));
-                    assertThat(
-                        exception.getMessage(),
-                        containsString("The specified partition 1 for store source-table does not exist.")
-                    );
+                    assertTrue(exception.getMessage().contains("The specified partition 1 for store source-table does not exist."));
                 } else {
-                    assertThat(store2.get(key), is(notNullValue()));
-                    assertThat(getStore(kafkaStreams1, storeQueryParam2).get(key), is(nullValue()));
+                    assertNotNull(store2.get(key));
+                    assertNull(getStore(kafkaStreams1, storeQueryParam2).get(key));
                     final InvalidStateStoreException exception =
                         assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams2, storeQueryParam2).get(key));
-                    assertThat(
-                        exception.getMessage(),
-                        containsString("The specified partition 1 for store source-table does not exist.")
-                    );
+                    assertTrue(exception.getMessage().contains("The specified partition 1 for store source-table does not exist."));
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
@@ -287,7 +275,7 @@ public class StoreQueryIntegrationTest {
         produceValueRange(key, 0, batch1NumMessages);
 
         // Assert that all messages in the first batch were processed in a timely manner
-        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+        assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
 
         final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
 
@@ -321,7 +309,7 @@ public class StoreQueryIntegrationTest {
         produceValueRange(key, 0, batch1NumMessages);
 
         // Assert that all messages in the first batch were processed in a timely manner
-        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+        assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
                 .queryMetadataForKey(TABLE_NAME, key, new FixedPartitionPartitioner<>(0));
 
@@ -354,8 +342,8 @@ public class StoreQueryIntegrationTest {
         final ReadOnlyKeyValueStore<Integer, Integer> store4 = getStore(kafkaStreams2, otherParam);
 
         // Assert that
-        assertThat(store3.get(key), is(nullValue()));
-        assertThat(store4.get(key), is(nullValue()));
+        assertNull(store3.get(key));
+        assertNull(store4.get(key));
     }
 
     @ParameterizedTest
@@ -381,13 +369,13 @@ public class StoreQueryIntegrationTest {
 
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
-        assertThat(kafkaStreams1.metadataForLocalThreads().size(), greaterThan(1));
-        assertThat(kafkaStreams2.metadataForLocalThreads().size(), greaterThan(1));
+        assertTrue(kafkaStreams1.metadataForLocalThreads().size() > 1);
+        assertTrue(kafkaStreams2.metadataForLocalThreads().size() > 1);
 
         produceValueRange(key, 0, batch1NumMessages);
 
         // Assert that all messages in the first batch were processed in a timely manner
-        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+        assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new IntegerSerializer());
 
         //key belongs to this partition
@@ -419,8 +407,8 @@ public class StoreQueryIntegrationTest {
         final ReadOnlyKeyValueStore<Integer, Integer> store4 = getStore(kafkaStreams2, otherParam);
 
         // Assert that
-        assertThat(store3.get(key), is(nullValue()));
-        assertThat(store4.get(key), is(nullValue()));
+        assertNull(store3.get(key));
+        assertNull(store4.get(key));
     }
 
     @ParameterizedTest
@@ -454,13 +442,13 @@ public class StoreQueryIntegrationTest {
         kafkaStreams2.start(builder2A.build());
         waitForApplicationState(kafkaStreamsList, State.RUNNING, Duration.ofSeconds(60));
 
-        assertThat(kafkaStreams1.metadataForLocalThreads().size(), greaterThan(1));
-        assertThat(kafkaStreams2.metadataForLocalThreads().size(), greaterThan(1));
+        assertTrue(kafkaStreams1.metadataForLocalThreads().size() > 1);
+        assertTrue(kafkaStreams2.metadataForLocalThreads().size() > 1);
 
         produceValueRange(key, 0, batch1NumMessages);
 
         // Assert that all messages in the first batch were processed in a timely manner
-        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+        assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new IntegerSerializer(), topologyA);
 
         //key belongs to this partition
@@ -492,8 +480,8 @@ public class StoreQueryIntegrationTest {
         final ReadOnlyKeyValueStore<Integer, Integer> store4 = getStore(kafkaStreams2, otherParam);
 
         // Assert that
-        assertThat(store3.get(key), is(nullValue()));
-        assertThat(store4.get(key), is(nullValue()));
+        assertNull(store3.get(key));
+        assertNull(store4.get(key));
     }
 
     @ParameterizedTest
@@ -516,7 +504,7 @@ public class StoreQueryIntegrationTest {
         startApplicationAndWaitUntilRunning(singletonList(kafkaStreams1), Duration.ofSeconds(60));
         //Add thread
         final Optional<String> streamThread = kafkaStreams1.addStreamThread();
-        assertThat(streamThread.isPresent(), is(true));
+        assertTrue(streamThread.isPresent());
         until(() -> kafkaStreams1.state().isRunningOrRebalancing());
 
         produceValueRange(key, 0, batch1NumMessages);
@@ -524,7 +512,7 @@ public class StoreQueryIntegrationTest {
         produceValueRange(key3, 0, batch1NumMessages);
 
         // Assert that all messages in the batches were processed in a timely manner
-        assertThat(semaphore.tryAcquire(3 * batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+        assertTrue(semaphore.tryAcquire(3 * batch1NumMessages, 60, TimeUnit.SECONDS));
 
         until(() -> KafkaStreams.State.RUNNING.equals(kafkaStreams1.state()));
         until(() -> {
@@ -532,9 +520,9 @@ public class StoreQueryIntegrationTest {
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
 
             try {
-                assertThat(store1.get(key), is(notNullValue()));
-                assertThat(store1.get(key2), is(notNullValue()));
-                assertThat(store1.get(key3), is(notNullValue()));
+                assertNotNull(store1.get(key));
+                assertNotNull(store1.get(key2));
+                assertNotNull(store1.get(key3));
                 return true;
             } catch (final InvalidStateStoreException exception) {
                 verifyRetriableException(exception);
@@ -544,7 +532,7 @@ public class StoreQueryIntegrationTest {
         });
 
         final Optional<String> removedThreadName = kafkaStreams1.removeStreamThread();
-        assertThat(removedThreadName.isPresent(), is(true));
+        assertTrue(removedThreadName.isPresent());
         until(() -> kafkaStreams1.state().isRunningOrRebalancing());
 
         until(() -> KafkaStreams.State.RUNNING.equals(kafkaStreams1.state()));
@@ -553,9 +541,9 @@ public class StoreQueryIntegrationTest {
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
 
             try {
-                assertThat(store1.get(key), is(notNullValue()));
-                assertThat(store1.get(key2), is(notNullValue()));
-                assertThat(store1.get(key3), is(notNullValue()));
+                assertNotNull(store1.get(key));
+                assertNotNull(store1.get(key2));
+                assertNotNull(store1.get(key3));
                 return true;
             } catch (final InvalidStateStoreException exception) {
                 verifyRetriableException(exception);
@@ -594,28 +582,20 @@ public class StoreQueryIntegrationTest {
         startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams1), Duration.ofSeconds(60));
         produceValueRange(key, 0, batch1NumMessages);
 
-        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+        assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
 
         assertThrows(IllegalArgumentException.class, () -> kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new BroadcastingPartitioner()));
     }
 
 
-    private Matcher<String> retriableException() {
-        return is(
-            anyOf(
-                containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                containsString("The state store, source-table, may have migrated to another instance"),
-                containsString("Cannot get state store source-table because the stream thread is STARTING, not RUNNING"),
-                containsString("The specified partition 1 for store source-table does not exist.")
-            )
-        );
-    }
-
     private void verifyRetriableException(final Exception exception) {
-        assertThat(
-            "Unexpected exception thrown while getting the value from store.",
-            exception.getMessage(),
-            retriableException()
+        final String message = exception.getMessage();
+        assertTrue(
+            message.contains("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING")
+                || message.contains("The state store, source-table, may have migrated to another instance")
+                || message.contains("Cannot get state store source-table because the stream thread is STARTING, not RUNNING")
+                || message.contains("The specified partition 1 for store source-table does not exist."),
+            "Unexpected exception thrown while getting the value from store."
         );
     }
 

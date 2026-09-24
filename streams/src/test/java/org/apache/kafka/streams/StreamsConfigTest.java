@@ -65,6 +65,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.nCopies;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
@@ -293,6 +294,82 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldEnforceSynchronousBootstrapResolutionForAllClientsByDefault() {
+        assertBootstrapResolveTimeoutIsZeroForAllClients(streamsConfig);
+    }
+
+    private void assertBootstrapResolveTimeoutIsZeroForAllClients(final StreamsConfig streamsConfig) {
+        assertEquals("0", streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals("0", streamsConfig.getRestoreConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals("0", streamsConfig.getGlobalConsumerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals("0", streamsConfig.getProducerConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals("0", streamsConfig.getAdminConfigs(clientId).get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
+    public void shouldIgnoreUserSpecifiedBootstrapResolveTimeout() {
+        props.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "120000");
+        props.put(StreamsConfig.consumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.mainConsumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.restoreConsumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.globalConsumerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.producerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        props.put(StreamsConfig.adminClientPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "120000");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertBootstrapResolveTimeoutIsZeroForAllClients(streamsConfig);
+    }
+
+    @Test
+    public void shouldLogWarningWhenIgnoringUserSpecifiedBootstrapResolveTimeout() {
+        props.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "120000");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            streamsConfig.getRestoreConsumerConfigs(clientId);
+            streamsConfig.getGlobalConsumerConfigs(clientId);
+            streamsConfig.getProducerConfigs(clientId);
+            streamsConfig.getAdminConfigs(clientId);
+
+            final List<String> warnings = appender.getMessages().stream()
+                .filter(msg -> msg.contains("config 'bootstrap.resolve.timeout.ms' found")
+                    && msg.contains("User setting (120000) will be ignored and the value set by Kafka Streams (0) will be used"))
+                .collect(Collectors.toList());
+            assertEquals(5, warnings.size(), "Should log exactly one warning per client, got: " + warnings);
+            // main, restore, and global consumer
+            assertEquals(3, warnings.stream().filter(msg -> msg.contains("Unexpected user-specified consumer config")).count());
+            assertEquals(1, warnings.stream().filter(msg -> msg.contains("Unexpected user-specified producer config")).count());
+            assertEquals(1, warnings.stream().filter(msg -> msg.contains("Unexpected user-specified admin config")).count());
+        }
+    }
+
+    @Test
+    public void shouldNotLogWarningWhenUserSpecifiedBootstrapResolveTimeoutMatchesStreamsDefault() {
+        // typed and String forms of the default must both be accepted silently
+        props.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, 0L);
+        props.put(StreamsConfig.producerPrefix(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG), "0");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            streamsConfig.getRestoreConsumerConfigs(clientId);
+            streamsConfig.getGlobalConsumerConfigs(clientId);
+            streamsConfig.getProducerConfigs(clientId);
+            streamsConfig.getAdminConfigs(clientId);
+
+            assertTrue(
+                appender.getMessages().stream().noneMatch(msg -> msg.contains("config 'bootstrap.resolve.timeout.ms' found")),
+                "Unexpected warning(s): " + appender.getMessages()
+            );
+        }
+    }
+
+    @Test
     public void testGetRestoreConsumerConfigs() {
         final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId);
@@ -461,7 +538,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
 
             final StreamsConfig streamsConfig = new StreamsConfig(props);
 
@@ -480,13 +557,13 @@ public class StreamsConfigTest {
             assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
                     "Global consumer should not allow auto topic creation with consumer.* override");
 
-            // Verify exactly 1 error is logged (consumer.* prefix is validated once in getCommonConsumerConfigs for each type of consumer)
-            final List<String> errorMessages = appender.getMessages();
-            final long errorCount = errorMessages.stream()
+            // Verify a warning is logged once per consumer (getCommonConsumerConfigs feeds all three consumer types)
+            final List<String> warnMessages = appender.getMessages();
+            final long warnCount = warnMessages.stream()
                     .filter(msg -> msg.contains("Unexpected user-specified consumer config 'allow.auto.create.topics' found"))
                     .count();
-            assertEquals(3, errorCount,
-                    "Should log exactly 3 error for consumer.* prefix");
+            assertEquals(3, warnCount,
+                    "Should log exactly 3 warnings for consumer.* prefix");
         }
     }
 
@@ -498,7 +575,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
 
             final StreamsConfig streamsConfig = new StreamsConfig(props);
 
@@ -517,16 +594,78 @@ public class StreamsConfigTest {
             assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
                     "Global consumer should not allow auto topic creation with global.consumer.* override");
 
-            // Verify exactly 3 errors are logged (one for each specific prefix)
-            final List<String> errorMessages = appender.getMessages();
-            final long errorCount = errorMessages.stream()
+            // Verify exactly 3 warnings are logged (one for each specific prefix)
+            final List<String> warnMessages = appender.getMessages();
+            final long warnCount = warnMessages.stream()
                     .filter(msg -> msg.contains("Unexpected user-specified consumer config 'allow.auto.create.topics' found"))
                     .count();
-            assertEquals(3, errorCount,
-                    "Should log exactly 3 errors: one for main.consumer.*, one for restore.consumer.*, one for global.consumer.*");
+            assertEquals(3, warnCount,
+                    "Should log exactly 3 warnings: one for main.consumer.*, one for restore.consumer.*, one for global.consumer.*");
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"example-application", "dummy", "dummyGroupId"})
+    public void shouldLogWarningAndUseApplicationIdAsGroupIdRegardlessOfRequestedGroupId(final String requestedGroupId) {
+        props.put(consumerPrefix(ConsumerConfig.GROUP_ID_CONFIG), "user-group-id");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            final Map<String, Object> mainConfigs =
+                streamsConfig.getMainConsumerConfigs(requestedGroupId, clientId, threadIdx);
+
+            assertEquals(groupId, mainConfigs.get(ConsumerConfig.GROUP_ID_CONFIG),
+                    "Streams should force group.id to the application id and ignore the user override");
+            assertEquals(1, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'group.id' found")
+                            && msg.contains(groupId))
+                    .count(),
+                "Should log exactly one warning naming the application id as the value Streams will use");
+        }
+    }
+
+    @Test
+    public void shouldLogWarningAndIgnoreUserOverrideOfPartitionAssignmentStrategy() {
+        props.put(consumerPrefix(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG), "com.example.MyAssignor");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+
+            assertEquals(StreamsPartitionAssignor.class.getName(),
+                    mainConfigs.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                    "Streams should force its own partition assignor and ignore the user override");
+
+            final long warnCount = appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'partition.assignment.strategy' found"))
+                    .count();
+            assertEquals(1, warnCount, "Should log exactly one warning for the partition.assignment.strategy override");
+        }
+    }
+
+    @Test
+    public void shouldNotLogWarningWhenUserDoesNotOverrideControlledConfigs() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            // Building each client's configs must not warn about configs the user never set. This guards
+            // against comparing a Streams-seeded default (e.g. auto.offset.reset="earliest") against the
+            // value Streams forces on the restore/global consumers.
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            streamsConfig.getRestoreConsumerConfigs(clientId);
+            streamsConfig.getGlobalConsumerConfigs(clientId);
+
+            final long warnCount = appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified"))
+                    .count();
+            assertEquals(0, warnCount, "Should not log a controlled-config warning when the user overrides nothing");
+        }
+    }
 
     @Test
     public void shouldSupportNonPrefixedAdminConfigs() {
@@ -675,6 +814,46 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldLogWarningWhenUserSetsConsumerPrefixedGroupProtocol() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), "consumer");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            streamsConfig.getRestoreConsumerConfigs(clientId);
+            streamsConfig.getGlobalConsumerConfigs(clientId);
+
+            assertEquals(3, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'group.protocol' found")
+                            && msg.contains("User setting (consumer) will be ignored"))
+                    .count(),
+                "Should log one warning per consumer for the consumer-prefixed group.protocol");
+        }
+    }
+
+    @Test
+    public void shouldNotLogConsumerGroupProtocolWarningForStreamsGroupProtocol() {
+        // The unprefixed group.protocol is the Streams config, not the consumer config of the same name.
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            assertEquals("classic", streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+            assertEquals("classic", streamsConfig.getRestoreConsumerConfigs(clientId).get(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+            assertEquals("classic", streamsConfig.getGlobalConsumerConfigs(clientId).get(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+
+            assertTrue(
+                appender.getMessages().stream().noneMatch(msg -> msg.contains("config 'group.protocol' found")),
+                "Unexpected group.protocol warning(s): " + appender.getMessages()
+            );
+        }
+    }
+
+    @Test
     public void testGetGlobalConsumerConfigsWithGlobalConsumerOverriddenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
@@ -751,6 +930,62 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenUnderClientPrefixIfEosV2Enabled() {
+        // Controlled configs are enforced on the assembled config map, so an override supplied under a
+        // per-client prefix is caught for every consumer, not just the ones using the generic prefix.
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ISOLATION_LEVEL_CONFIG), READ_UNCOMMITTED.toString());
+        props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.ISOLATION_LEVEL_CONFIG), READ_UNCOMMITTED.toString());
+        props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.ISOLATION_LEVEL_CONFIG), READ_UNCOMMITTED.toString());
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+            assertEquals(
+                READ_COMMITTED.toString(),
+                streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(ConsumerConfig.ISOLATION_LEVEL_CONFIG)
+            );
+            assertEquals(
+                READ_COMMITTED.toString(),
+                streamsConfig.getRestoreConsumerConfigs(clientId).get(ConsumerConfig.ISOLATION_LEVEL_CONFIG)
+            );
+            assertEquals(
+                READ_COMMITTED.toString(),
+                streamsConfig.getGlobalConsumerConfigs(clientId).get(ConsumerConfig.ISOLATION_LEVEL_CONFIG)
+            );
+
+            assertEquals(3, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'isolation.level' found")
+                            && msg.contains("Streams controls this config when 'processing.guarantee' is set to \""
+                                + EXACTLY_ONCE_V2 + "\""))
+                    .count(),
+                "Should log exactly one warning per consumer, explaining that EOS is the reason");
+        }
+    }
+
+    @Test
+    public void shouldNotLogWarningWhenUserSetsControlledConfigToSameValueWithDifferentType() {
+        // A Boolean false and the "false" that Streams sets are the same setting; warning that the
+        // user's value is being ignored and replaced by an identical one would only confuse them.
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), false);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final Map<String, Object> consumerConfigs =
+                new StreamsConfig(props).getMainConsumerConfigs(groupId, clientId, threadIdx);
+
+            assertEquals("false", consumerConfigs.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+            assertEquals(0, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified"))
+                    .count(),
+                "Should not warn when the user-specified value only differs in type");
+        }
+    }
+
+    @Test
     public void shouldAllowSettingConsumerIsolationLevelIfEosDisabled() {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.toString());
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -802,6 +1037,56 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldLogWarningAndIgnoreUserOverridesOfControlledProducerConfigsIfEosV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "user-TxId");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final Map<String, Object> producerConfigs = new StreamsConfig(props).getProducerConfigs(clientId);
+
+            assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
+                    "Streams should force idempotence on under EOS and ignore the user override");
+            assertNull(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
+
+            final List<String> messages = appender.getMessages();
+            assertEquals(1, messages.stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified producer config 'enable.idempotence' found"))
+                    .count(), "Should warn once for the enable.idempotence override");
+            assertEquals(1, messages.stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified producer config 'transactional.id' found")
+                            && msg.contains("because Kafka Streams generates a unique transactional.id for the producer of each stream thread"))
+                    .count(), "Should warn once for the transactional.id override, explaining that Streams generates it");
+            assertEquals(2, messages.stream()
+                    .filter(msg -> msg.contains("Streams controls this config when 'processing.guarantee' is set to \""
+                            + EXACTLY_ONCE_V2 + "\""))
+                    .count(), "Both warnings should explain that the processing guarantee is the reason");
+        }
+    }
+
+    @Test
+    public void shouldNotExplainProcessingGuaranteeForConfigControlledRegardlessOfEosIfEosV2Enabled() {
+        // enable.auto.commit is controlled whether or not EOS is enabled, so the warning must not
+        // attribute it to the processing guarantee even when EOS happens to be on.
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            new StreamsConfig(props).getMainConsumerConfigs(groupId, clientId, threadIdx);
+
+            assertEquals(1, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'enable.auto.commit' found")
+                            && !msg.contains("processing.guarantee"))
+                    .count(),
+                "The warning must not name the processing guarantee as the reason");
+        }
+    }
+
+    @Test
     public void shouldNotOverrideUserConfigRetriesIfExactlyV2OnceEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         final int numberOfRetries = 42;
@@ -827,15 +1112,15 @@ public class StreamsConfigTest {
     public void shouldThrowExceptionIfCommitIntervalMsIsNegative() {
         final long commitIntervalMs = -1;
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
-        try {
-            new StreamsConfig(props);
-            fail("Should throw ConfigException when commitIntervalMs is set to a negative value");
-        } catch (final ConfigException e) {
-            assertEquals(
-                "Invalid value -1 for configuration commit.interval.ms: Value must be at least 0",
-                e.getMessage()
-            );
-        }
+        final ConfigException e = assertThrows(
+            ConfigException.class,
+            () -> new StreamsConfig(props),
+            "should not accept a negative commit interval"
+        );
+        assertEquals(
+            "Invalid value -1 for configuration commit.interval.ms: Value must be at least 0",
+            e.getMessage()
+        );
     }
 
     @Test
@@ -866,15 +1151,15 @@ public class StreamsConfigTest {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
-        try {
-            config.defaultKeySerde();
-            fail("Test should throw a StreamsException");
-        } catch (final StreamsException e) {
-            assertEquals(
-                "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
-                e.getMessage()
-            );
-        }
+        final StreamsException e = assertThrows(
+            StreamsException.class,
+            config::defaultKeySerde,
+            "should not return a default key serde that fails to configure"
+        );
+        assertEquals(
+            "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+            e.getMessage()
+        );
     }
 
     @SuppressWarnings("resource")
@@ -883,15 +1168,15 @@ public class StreamsConfigTest {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
-        try {
-            config.defaultValueSerde();
-            fail("Test should throw a StreamsException");
-        } catch (final StreamsException e) {
-            assertEquals(
-                "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
-                e.getMessage()
-            );
-        }
+        final StreamsException e = assertThrows(
+            StreamsException.class,
+            config::defaultValueSerde,
+            "should not return a default value serde that fails to configure"
+        );
+        assertEquals(
+            "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+            e.getMessage()
+        );
     }
 
     @Test
@@ -899,16 +1184,16 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 7);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        try {
-            streamsConfig.getProducerConfigs(clientId);
-            fail("Should throw ConfigException when ESO is enabled and maxInFlight requests exceeds 5");
-        } catch (final ConfigException e) {
-            assertEquals(
-                "Invalid value 7 for configuration max.in.flight.requests.per.connection:" +
-                    " Can't exceed 5 when exactly-once processing is enabled",
-                e.getMessage()
-            );
-        }
+        final ConfigException e = assertThrows(
+            ConfigException.class,
+            () -> streamsConfig.getProducerConfigs(clientId),
+            "should not accept max in flight requests above 5 when exactly-once is enabled"
+        );
+        assertEquals(
+            "Invalid value 7 for configuration max.in.flight.requests.per.connection:" +
+                " Can't exceed 5 when exactly-once processing is enabled",
+            e.getMessage()
+        );
     }
 
     @Test
@@ -924,16 +1209,16 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "not-a-number");
 
-        try {
-            new StreamsConfig(props).getProducerConfigs(clientId);
-            fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be parsed into an integer");
-        } catch (final ConfigException e) {
-            assertEquals(
-                "Invalid value not-a-number for configuration max.in.flight.requests.per.connection:" +
-                " String value could not be parsed as 32-bit integer",
-                e.getMessage()
-            );
-        }
+        final ConfigException e = assertThrows(
+            ConfigException.class,
+            () -> new StreamsConfig(props).getProducerConfigs(clientId),
+            "should not accept a non-numeric max in flight requests when exactly-once is enabled"
+        );
+        assertEquals(
+            "Invalid value not-a-number for configuration max.in.flight.requests.per.connection:" +
+            " String value could not be parsed as 32-bit integer",
+            e.getMessage()
+        );
     }
 
     @Test
@@ -1861,7 +2146,7 @@ public class StreamsConfigTest {
 
             assertEquals(1, streamsConfigLogs.getMessages().size());
             assertTrue(streamsConfigLogs
-                .getMessages(Level.WARN.name())
+                .getMessages(Level.WARN)
                 .get(0)
                 .startsWith("Processing exception handler is not enabled for the GlobalThread.")
             );

@@ -19,13 +19,17 @@ package org.apache.kafka.server.requests;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
@@ -36,10 +40,12 @@ import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.server.IntegrationTestUtils;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.test.TestUtils;
 
 import com.yammer.metrics.core.Meter;
 
@@ -82,13 +88,13 @@ public class ProduceRequestTest {
         sendAndCheckProduceResponse(leaderId, partition,
             MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord(System.currentTimeMillis(), "key".getBytes(), "value".getBytes())),
-            0L);
+            0L, Errors.NONE);
 
         sendAndCheckProduceResponse(leaderId, partition,
             MemoryRecords.withRecords(Compression.gzip().build(),
                 new SimpleRecord(System.currentTimeMillis(), "key1".getBytes(), "value1".getBytes()),
                 new SimpleRecord(System.currentTimeMillis(), "key2".getBytes(), "value2".getBytes())),
-            1L);
+            1L, Errors.NONE);
     }
 
     @ClusterTest
@@ -224,6 +230,191 @@ public class ProduceRequestTest {
         assertEquals(-1L, partitionResponse.logAppendTimeMs());
     }
 
+    @ClusterTest
+    public void testIdempotentProduceWithNonZeroFirstSequenceOnNewPartition() throws Exception {
+        // KAFKA-15591: A producer with no state on a partition which has never contained any records
+        // must start at sequence 0. A non-zero first sequence means the requests were reordered
+        // (such as an earlier in-flight request failing with NOT_LEADER_OR_FOLLOWER while the partition
+        // creation was completing, and then being retried), and accepting the non-zero first sequence
+        // would permanently prevent the retried first request from being appended to the log.
+        cluster.createTopic(TOPIC, 1, (short) 1);
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+
+        long producerId = 1000L;
+        short producerEpoch = 0;
+
+        // The later in-flight request (sequences 17-18) arrives first and is rejected.
+        sendAndCheckProduceResponse(leaderId, 0,
+            idempotentRecords(producerId, producerEpoch, 17, 2),
+            -1L, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER);
+
+        // The retry of the earlier request (sequences 0-16) is accepted.
+        sendAndCheckProduceResponse(leaderId, 0,
+            idempotentRecords(producerId, producerEpoch, 0, 17),
+            0L, Errors.NONE);
+
+        // The retry of the later request is then accepted in order.
+        sendAndCheckProduceResponse(leaderId, 0,
+            idempotentRecords(producerId, producerEpoch, 17, 2),
+            17L, Errors.NONE);
+    }
+
+    private MemoryRecords idempotentRecords(long producerId, short producerEpoch, int baseSequence, int recordCount) {
+        SimpleRecord[] records = new SimpleRecord[recordCount];
+        for (int i = 0; i < recordCount; i++) {
+            records[i] = new SimpleRecord(System.currentTimeMillis(), ("key" + (baseSequence + i)).getBytes(),
+                ("value" + (baseSequence + i)).getBytes());
+        }
+        return MemoryRecords.withIdempotentRecords(Compression.NONE, producerId, producerEpoch, baseSequence, records);
+    }
+
+    // String so it can double as an @ClusterConfigProperty value (must be a compile-time constant).
+    private static final String SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES = "512";
+    // Above the limit but tiny gzip-compressed and below max.message.bytes, so the decompressed
+    // per-record limit -- not the wire bound -- is what rejects it.
+    private static final int OVERSIZED_VALUE_BYTES = 4096;
+    private static final int UNDERSIZED_VALUE_BYTES = 64;
+
+    /**
+     * A topic-level limit rejects a compressed record whose declared decompressed body exceeds it
+     * (INVALID_RECORD, before allocating the body). A small compressed record and an equally-large
+     * uncompressed record (bounded instead by max.message.bytes) are accepted.
+     */
+    @ClusterTest
+    public void testProduceRejectsCompressedRecordExceedingMaxDecompressedMessageBytes() throws Exception {
+        cluster.createTopic(TOPIC, 1, (short) 1,
+            Map.of(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES));
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        Uuid topicId = getTopicId();
+
+        var rejected = onlyPartitionResponse(sendProduceRequest(leaderId,
+            produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))));
+        assertEquals(Errors.INVALID_RECORD.code(), rejected.errorCode(),
+            "a compressed record exceeding the configured per-record limit must be rejected as invalid");
+        assertEquals(-1L, rejected.baseOffset(), "a rejected record must not be appended");
+
+        var acceptedSmall = onlyPartitionResponse(sendProduceRequest(leaderId,
+            produceRequest(topicId, singleRecord(Compression.gzip().build(), UNDERSIZED_VALUE_BYTES))));
+        assertEquals(Errors.NONE.code(), acceptedSmall.errorCode(),
+            "a compressed record under the configured per-record limit must be accepted");
+
+        var acceptedUncompressed = onlyPartitionResponse(sendProduceRequest(leaderId,
+            produceRequest(topicId, singleRecord(Compression.NONE, OVERSIZED_VALUE_BYTES))));
+        assertEquals(Errors.NONE.code(), acceptedUncompressed.errorCode(),
+            "an uncompressed record must not be subject to the decompressed per-record limit");
+    }
+
+    /**
+     * The topic-level limit is dynamically reconfigurable: a large compressed record is accepted at
+     * the default, then rejected after lowering it via incrementalAlterConfigs -- no restart.
+     */
+    @ClusterTest
+    public void testMaxDecompressedMessageBytesIsDynamicallyReconfigurable() throws Exception {
+        cluster.createTopic(TOPIC, 1, (short) 1);
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        Uuid topicId = getTopicId();
+
+        var before = onlyPartitionResponse(sendProduceRequest(leaderId,
+            produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))));
+        assertEquals(Errors.NONE.code(), before.errorCode(),
+            "with the default per-record limit the record must be accepted");
+
+        try (Admin admin = cluster.admin()) {
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, TOPIC);
+            admin.incrementalAlterConfigs(Map.of(resource, List.of(new AlterConfigOp(
+                new ConfigEntry(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES),
+                AlterConfigOp.OpType.SET)))).all().get();
+        }
+
+        // The topic-config change reaches the produce path asynchronously; poll until it takes effect.
+        TestUtils.waitForCondition(
+            () -> onlyPartitionResponse(sendProduceRequest(leaderId,
+                produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))))
+                .errorCode() == Errors.INVALID_RECORD.code(),
+            15000L,
+            "the lowered topic-level " + TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG
+                + " was not applied to the produce path");
+    }
+
+    /**
+     * A broker-level default is inherited by a topic without an override: an oversized compressed
+     * record is rejected.
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, value = SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES)
+    })
+    public void testBrokerDefaultMaxDecompressedMessageBytesAppliesToTopicWithoutOverride() throws Exception {
+        cluster.createTopic(TOPIC, 1, (short) 1);
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        Uuid topicId = getTopicId();
+
+        var rejected = onlyPartitionResponse(sendProduceRequest(leaderId,
+            produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))));
+        assertEquals(Errors.INVALID_RECORD.code(), rejected.errorCode(),
+            "the broker-level default per-record limit must apply to a topic without an override");
+    }
+
+    /**
+     * The broker-level default is dynamically reconfigurable and flows to a topic without an
+     * override: accepted at the default, rejected after lowering the cluster-wide default via a
+     * BROKER-resource alter (asserted dynamic in KafkaConfigTest#testDynamicLogConfigs) -- no restart.
+     */
+    @ClusterTest
+    public void testBrokerDefaultMaxDecompressedMessageBytesIsDynamicallyReconfigurable() throws Exception {
+        cluster.createTopic(TOPIC, 1, (short) 1);
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        Uuid topicId = getTopicId();
+
+        var before = onlyPartitionResponse(sendProduceRequest(leaderId,
+            produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))));
+        assertEquals(Errors.NONE.code(), before.errorCode(),
+            "with the default broker per-record limit and no topic override the record must be accepted");
+
+        try (Admin admin = cluster.admin()) {
+            // Empty resource name = cluster-wide broker default.
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, "");
+            admin.incrementalAlterConfigs(Map.of(resource, List.of(new AlterConfigOp(
+                new ConfigEntry(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES),
+                AlterConfigOp.OpType.SET)))).all().get();
+        }
+
+        // The broker-default change reaches the produce path asynchronously; poll until it takes effect.
+        TestUtils.waitForCondition(
+            () -> onlyPartitionResponse(sendProduceRequest(leaderId,
+                produceRequest(topicId, singleRecord(Compression.gzip().build(), OVERSIZED_VALUE_BYTES))))
+                .errorCode() == Errors.INVALID_RECORD.code(),
+            15000L,
+            "the lowered cluster-wide broker-default " + TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG
+                + " was not applied to the produce path");
+    }
+
+    private ProduceRequest produceRequest(Uuid topicId, MemoryRecords records) {
+        return ProduceRequest.builder(new ProduceRequestData()
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                new ProduceRequestData.TopicProduceData()
+                    .setTopicId(topicId)
+                    .setPartitionData(Collections.singletonList(
+                        new ProduceRequestData.PartitionProduceData()
+                            .setIndex(0)
+                            .setRecords(records))))
+                .iterator()))
+            .setAcks((short) -1)
+            .setTimeoutMs(3000)
+            .setTransactionalId(null)).build();
+    }
+
+    private static MemoryRecords singleRecord(Compression compression, int valueSize) {
+        return MemoryRecords.withRecords(compression,
+            new SimpleRecord(System.currentTimeMillis(), "key".getBytes(), new byte[valueSize]));
+    }
+
+    private ProduceResponseData.PartitionProduceResponse onlyPartitionResponse(ProduceResponse response) {
+        assertEquals(1, response.data().responses().size());
+        var topicResponse = response.data().responses().iterator().next();
+        assertEquals(1, topicResponse.partitionResponses().size());
+        return topicResponse.partitionResponses().get(0);
+    }
+
     private ProduceResponse sendProduceRequest(int brokerId, ProduceRequest request) throws IOException {
         KafkaBroker broker = cluster.brokers().get(brokerId);
         int port = broker.socketServer().boundPort(cluster.clientListener());
@@ -231,7 +422,7 @@ public class ProduceRequestTest {
     }
 
     private void sendAndCheckProduceResponse(int leaderId, int partition,
-                                             MemoryRecords records, long expectedOffset) throws IOException, ExecutionException, InterruptedException {
+                                             MemoryRecords records, long expectedOffset, Errors expectedError) throws IOException, ExecutionException, InterruptedException {
         Uuid topicId = getTopicId();
         ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
@@ -254,7 +445,7 @@ public class ProduceRequestTest {
         var partitionResponse = topicResponse.partitionResponses().get(0);
         assertEquals(topicId, topicResponse.topicId());
         assertEquals(partition, partitionResponse.index());
-        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(expectedError, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(expectedOffset, partitionResponse.baseOffset());
         assertEquals(-1L, partitionResponse.logAppendTimeMs());
         assertTrue(partitionResponse.recordErrors().isEmpty());

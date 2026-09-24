@@ -33,8 +33,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.function.Function;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
@@ -62,7 +61,7 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
         when(mockedTimestampedStore.get("unknownKey"))
             .thenReturn(null);
 
-        assertThat(facade.get("key"), is("value"));
+        assertEquals("value", facade.get("key"));
         assertNull(facade.get("unknownKey"));
     }
 
@@ -77,7 +76,7 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
         when(mockedHeadersStore.get("unknownKey"))
             .thenReturn(null);
 
-        assertThat(facade.get("key"), is("value"));
+        assertEquals("value", facade.get("key"));
         assertNull(facade.get("unknownKey"));
     }
 
@@ -94,8 +93,8 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
             .thenReturn(null);
 
         final ValueAndTimestamp<String> result = facade.get("key");
-        assertThat(result.value(), is("value"));
-        assertThat(result.timestamp(), is(42L));
+        assertEquals("value", result.value());
+        assertEquals(42L, result.timestamp());
         assertNull(facade.get("unknownKey"));
     }
 
@@ -111,8 +110,8 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
         when(mockedTimestampedStore.range("key1", "key2")).thenReturn(mockedTimestampedIterator);
 
         final KeyValueIterator<String, String> iterator = facade.range("key1", "key2");
-        assertThat(iterator.next(), is(KeyValue.pair("key1", "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair("key2", "value2")));
+        assertEquals(KeyValue.pair("key1", "value1"), iterator.next());
+        assertEquals(KeyValue.pair("key2", "value2"), iterator.next());
     }
 
     @Test
@@ -127,8 +126,8 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
         when(mockedTimestampedStore.reverseRange("key1", "key2")).thenReturn(mockedTimestampedIterator);
 
         final KeyValueIterator<String, String> iterator = facade.reverseRange("key1", "key2");
-        assertThat(iterator.next(), is(KeyValue.pair("key2", "value2")));
-        assertThat(iterator.next(), is(KeyValue.pair("key1", "value1")));
+        assertEquals(KeyValue.pair("key2", "value2"), iterator.next());
+        assertEquals(KeyValue.pair("key1", "value1"), iterator.next());
     }
 
     @Test
@@ -144,8 +143,8 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
         when(mockedTimestampedStore.prefixScan("key", stringSerializer)).thenReturn(mockedTimestampedIterator);
 
         final KeyValueIterator<String, String> iterator = facade.prefixScan("key", stringSerializer);
-        assertThat(iterator.next(), is(KeyValue.pair("key1", "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair("key2", "value2")));
+        assertEquals(KeyValue.pair("key1", "value1"), iterator.next());
+        assertEquals(KeyValue.pair("key2", "value2"), iterator.next());
     }
 
     @Test
@@ -160,8 +159,8 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
         when(mockedTimestampedStore.all()).thenReturn(mockedTimestampedIterator);
 
         final KeyValueIterator<String, String> iterator = facade.all();
-        assertThat(iterator.next(), is(KeyValue.pair("key1", "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair("key2", "value2")));
+        assertEquals(KeyValue.pair("key1", "value1"), iterator.next());
+        assertEquals(KeyValue.pair("key2", "value2"), iterator.next());
     }
 
     @Test
@@ -176,8 +175,8 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
         when(mockedTimestampedStore.reverseAll()).thenReturn(mockedTimestampedIterator);
 
         final KeyValueIterator<String, String> iterator = facade.reverseAll();
-        assertThat(iterator.next(), is(KeyValue.pair("key2", "value2")));
-        assertThat(iterator.next(), is(KeyValue.pair("key1", "value1")));
+        assertEquals(KeyValue.pair("key2", "value2"), iterator.next());
+        assertEquals(KeyValue.pair("key1", "value1"), iterator.next());
     }
 
     @Test
@@ -188,7 +187,7 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
 
         when(mockedTimestampedStore.approximateNumEntries()).thenReturn(42L);
 
-        assertThat(facade.approximateNumEntries(), is(42L));
+        assertEquals(42L, facade.approximateNumEntries());
     }
 
     @Test
@@ -203,7 +202,7 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
         when(mockedTimestampedStore.all()).thenReturn(mockedTimestampedIterator);
 
         final KeyValueIterator<String, String> iterator = facade.all();
-        assertThat(iterator.next(), is(KeyValue.pair("key1", null)));
-        assertThat(iterator.next(), is(KeyValue.pair("key2", "value2")));
+        assertEquals(KeyValue.pair("key1", null), iterator.next());
+        assertEquals(KeyValue.pair("key2", "value2"), iterator.next());
     }
 }
