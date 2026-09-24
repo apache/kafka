@@ -258,6 +258,7 @@ public class RestoreIntegrationTest {
                 consumerConfig, outputTopic, initialKeyValues);
 
         // wipe out state store to trigger restore process on restart
+        // Use LEAVE_GROUP consistently across both protocols.
         streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         streams.cleanUp();
 
