@@ -630,25 +630,23 @@ public class AbstractConfig {
         }
         // Instantiate Config Providers
         Map<String, ConfigProvider> configProviderInstances = new HashMap<>();
-        for (Map.Entry<String, String> entry : providerMap.entrySet()) {
-            ConfigProvider provider = null;
-            try {
+        try {
+            for (Map.Entry<String, String> entry : providerMap.entrySet()) {
                 String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + CONFIG_PROVIDERS_PARAM;
                 Map<String, ?> configProperties = configProviderProperties(prefix, providerConfigProperties);
-                provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
-                provider.configure(configProperties);
+                ConfigProvider provider;
+                try {
+                    provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
+                } catch (ClassNotFoundException e) {
+                    log.error("Could not load config provider class {}", entry.getValue(), e);
+                    throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
+                }
                 configProviderInstances.put(entry.getKey(), provider);
-            } catch (ClassNotFoundException e) {
-                log.error("Could not load config provider class {}", entry.getValue(), e);
-                // no need to close provider here, since it's thrown from loadClass() before provider is ever constructed
-                configProviderInstances.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
-                throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
-            } catch (RuntimeException e) {
-                // close provider explicitly: it's not in configProviderInstances, so the forEach below won't close it
-                Utils.closeQuietly(provider, "config provider");
-                configProviderInstances.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
-                throw e;
+                provider.configure(configProperties);
             }
+        } catch (RuntimeException e) {
+            configProviderInstances.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+            throw e;
         }
 
         return configProviderInstances;
