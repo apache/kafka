@@ -184,7 +184,11 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     /**
      * Returns whether this container has any records.
      *
-     * @return True if there are no records, false otherwise
+     * <p>This method checks whether the records map is empty. If the map contains
+     * partitions mapped to empty lists, this method returns {@code false} even if
+     * there are no records.
+     *
+     * @return {@code true} if the records map is empty, {@code false} otherwise
      */
     public boolean isEmpty() {
         return records.isEmpty();
