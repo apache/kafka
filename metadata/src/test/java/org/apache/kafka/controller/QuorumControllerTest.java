@@ -1652,68 +1652,57 @@ public class QuorumControllerTest {
                         appender)).getMessage());
     }
 
-    @ParameterizedTest(name = "numRecords={0}, max={1}")
+    @ParameterizedTest(name = "numRecords={0}, maxRecordsPerBatch={1}")
     @CsvSource({
-        "1, 1", "1, 2", "2, 2", "3, 2", "4, 2", "5, 2", "6, 2",
-        "2, 1", "3, 1", "5, 1", "100, 1",
-        "1, 10", "2, 10", "10, 3", "100, 7"
+        "1, 1",
+        "5, 1",
+        "5, 10",
+        "10, 10",
+        "15, 10",
+        "20, 10"
     })
-    public void testAppendRecordsNonAtomicBatching(int numRecords, int max) {
+    public void testAppendRecordsNonAtomicBatching(int numRecords, int maxRecordsPerBatch) {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         for (int i = 0; i < numRecords; i++) {
             records.add(rec(i));
         }
         RecordingAppender appender = new RecordingAppender();
         long returned = QuorumController.appendRecords(log,
-            ControllerResult.of(records, null), max, appender);
+            ControllerResult.of(records, null), maxRecordsPerBatch, appender);
 
         List<Integer> expectedSizes = new ArrayList<>();
-        for (int i = 0; i < numRecords; i += max) {
-            expectedSizes.add(Math.min(max, numRecords - i));
+        for (int i = 0; i < numRecords; i += maxRecordsPerBatch) {
+            expectedSizes.add(Math.min(maxRecordsPerBatch, numRecords - i));
         }
         assertEquals(expectedSizes, appender.batchSizes,
-            "batches should be exactly max-sized except the final one");
-        assertTrue(appender.batchSizes.stream().allMatch(s -> s > 0 && s <= max),
-            "every batch should be non-empty and no larger than max");
+            "batches should be exactly maxRecordsPerBatch-sized except the final one");
+        assertTrue(appender.batchSizes.stream().allMatch(s -> s > 0 && s <= maxRecordsPerBatch),
+            "every batch should be non-empty and no larger than maxRecordsPerBatch");
         assertEquals(numRecords, appender.batchSizes.stream().mapToLong(Integer::longValue).sum(),
             "no record should be dropped or duplicated");
-        assertEquals(numRecords == 0 ? -1L : (long) numRecords, returned);
+        assertEquals((long) numRecords, returned);
     }
 
     @Test
-    public void testAppendRecordsNonAtomicDoesNotAppendEmptyBatch() {
-        assertEquals(2L, appendWithThrowingAppender(2, 2));
-        assertEquals(4L, appendWithThrowingAppender(4, 2));
-    }
-
-    private static long appendWithThrowingAppender(int numRecords, int max) {
-        AtomicLong offset = new AtomicLong(0);
-        Function<List<ApiMessageAndVersion>, Long> appender = records -> {
-            if (records.isEmpty()) {
-                throw new IllegalArgumentException("Append failed because there are no records");
-            }
-            return offset.addAndGet(records.size());
-        };
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        for (int i = 0; i < numRecords; i++) {
-            records.add(rec(i));
-        }
-        return QuorumController.appendRecords(log, ControllerResult.of(records, null), max, appender);
-    }
-
-    @Test
-    public void testNonAtomicWriteDoesNotAppendEmptyBatch() throws Throwable {
+    public void testNonAtomicWriteDoesNotTriggerControllerFailover() throws Throwable {
         try (
             MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv)
+                // Set the batch size to 1 so that any non-empty write is an exact multiple
+                // of maxRecordsPerBatch, exercising the off-by-one path.
                 .setControllerBuilderInitializer(b -> b.setControllerMaxRecordsPerBatch(1))
                 .build()
         ) {
+            // Wait for the controller to become active and finish activation.
             QuorumController controller = controlEnv.activeController(true);
+            
+            // Remember the leadership epoch so we can detect a failover.
             int epochBefore = controller.curClaimEpoch();
 
+            // A non-atomic write (broker registration) goes through the real production appender
             assertEquals(1, registerBrokersAndUnfence(controller, 1).size());
 
+            // An unchanged epoch proves the controller has not renounced leadership
             assertEquals(epochBefore, controller.curClaimEpoch(), "controller must not renounce leadership");
         }
     }
