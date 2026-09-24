@@ -2491,7 +2491,7 @@ org.apache.kafka.clients.consumer.internals.ShareFetchCollectorTest:
 - testFetchWithTopicAuthorizationFailed
 - testFetchWithUnknownLeaderEpoch
 - testFetchWithUnknownServerError
-- testRepeatedFetchesForSamePartitionDoNoAccumulateRetainedFetches
+- testRepeatedFetchesForSamePartitionDoesNotAccumulateRetainedFetches
 - testSecondFetchForSamePartitionMergesWithoutLeaking
 - testWithRenew
 org.apache.kafka.clients.consumer.internals.ShareFetchMetricsManagerTest:
@@ -2501,6 +2501,16 @@ org.apache.kafka.clients.consumer.internals.ShareFetchMetricsManagerTest:
 - testLatency
 - testNodeLatency
 - testRecordsFetched
+org.apache.kafka.clients.consumer.internals.ShareFetchTest:
+- testAcquisitionLockTimeoutTakenFromLatestBatch
+- testEmptyFetch
+- testRecordsCombinesMultipleBatchesForPartition
+- testRecordsEmptyAfterAllAcknowledged
+- testRecordsGroupedByPartition
+- testRecordsIncludesPartitionWithGapsAndRecordsInSeparateBatches
+- testRecordsIsUnmodifiable
+- testRecordsOmitsPartitionWithOnlyGaps
+- testRecordsOnlyIncludesUnacknowledgedRecords
 org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManagerTest:
 - testDisconnect
 - testFailureOnFatalException
