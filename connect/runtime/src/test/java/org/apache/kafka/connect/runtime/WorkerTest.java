@@ -173,6 +173,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -1012,6 +1013,49 @@ public class WorkerTest {
         verify(taskKeyConverter).close();
         verify(taskValueConverter).close();
         verify(taskHeaderConverter).close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testStartTaskFailureDuringConverterCreationClosesAlreadyCreatedConverter(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
+        mockKafkaClusterId();
+        mockGenericIsolation();
+        when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
+        when(task.version()).thenReturn("unknown");
+        mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
+        when(plugins.newConverter(any(ConnectorConfig.class), eq(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG), eq(ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG)))
+                .thenThrow(new RuntimeException("Failed to create value converter"));
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                noneConnectorClientConfigOverridePolicy, null);
+        worker.herder = herder;
+        worker.start();
+
+        Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+        Map<String, String> connectorConfigs = anyConnectorConfigMap();
+
+        ClusterConfigState configState = new ClusterConfigState(
+                0,
+                null,
+                Map.of(CONNECTOR_ID, 1),
+                Map.of(CONNECTOR_ID, connectorConfigs),
+                Map.of(CONNECTOR_ID, TargetState.STARTED),
+                Map.of(TASK_ID, origProps),
+                Map.of(),
+                Map.of(),
+                Map.of(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
+                Set.of(),
+                Set.of()
+        );
+
+        assertFalse(worker.startSourceTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
+        assertEquals(Set.of(), worker.taskIds());
+
+        verify(taskStatusListener).onFailure(eq(TASK_ID), any(RuntimeException.class));
+        verify(taskKeyConverter).close();
+        verify(taskValueConverter, never()).close();
+        verify(taskHeaderConverter, never()).close();
     }
 
     @ParameterizedTest
