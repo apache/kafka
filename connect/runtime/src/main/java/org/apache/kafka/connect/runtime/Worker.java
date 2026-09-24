@@ -681,6 +681,9 @@ public final class Worker {
             connectorStatusMetricsGroup.recordTaskAdded(id);
 
             final ClassLoader connectorLoader;
+            Plugin<Converter> keyConverterPlugin = null;
+            Plugin<Converter> valueConverterPlugin = null;
+            Plugin<HeaderConverter> headerConverterPlugin = null;
             try {
                 connectorLoader = connectorClassLoader(connProps);
                 try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
@@ -723,18 +726,24 @@ public final class Worker {
                         log.info("Set up the header converter {} for task {} using the connector config", headerConverter.getClass(), id);
                     }
 
+                    keyConverterPlugin = metrics.wrap(keyConverter, id, true);
+                    valueConverterPlugin = metrics.wrap(valueConverter, id, false);
+                    headerConverterPlugin = metrics.wrap(headerConverter, id);
                     workerTask = taskBuilder
                         .withTask(task)
                         .withConnectorConfig(connConfig)
-                        .withKeyConverterPlugin(metrics.wrap(keyConverter, id, true))
-                        .withValueConverterPlugin(metrics.wrap(valueConverter, id, false))
-                        .withHeaderConverterPlugin(metrics.wrap(headerConverter, id))
+                        .withKeyConverterPlugin(keyConverterPlugin)
+                        .withValueConverterPlugin(valueConverterPlugin)
+                        .withHeaderConverterPlugin(headerConverterPlugin)
                         .withClassLoader(connectorLoader)
                         .build();
 
                     workerTask.initialize(taskConfig);
                 }
             } catch (Throwable t) {
+                Utils.closeQuietly(keyConverterPlugin, "key converter");
+                Utils.closeQuietly(valueConverterPlugin, "value converter");
+                Utils.closeQuietly(headerConverterPlugin, "header converter");
                 log.error("Failed to start task {}", id, t);
                 connectorStatusMetricsGroup.recordTaskRemoved(id);
                 taskStatusListener.onFailure(id, t);

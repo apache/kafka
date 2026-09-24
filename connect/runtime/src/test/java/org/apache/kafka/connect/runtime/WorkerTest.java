@@ -36,6 +36,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -84,6 +85,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
@@ -163,11 +165,13 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
@@ -957,6 +961,57 @@ public class WorkerTest {
         verify(taskStatusListener).onFailure(eq(TASK_ID), any(ConfigException.class));
         verifyKafkaClusterId();
         verifyGenericIsolation();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testStartTaskFailureAfterConverterWrappingClosesConverterPlugins(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
+        mockKafkaClusterId();
+        mockGenericIsolation();
+        doReturn(SampleSourceConnector.class).when(plugins).connectorClass(SampleSourceConnector.class.getName(), null);
+        when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
+        when(task.version()).thenReturn("unknown");
+        mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
+        mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
+        mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
+
+        Transformation<SourceRecord> brokenTransform = mock(Transformation.class);
+        when(brokenTransform.config()).thenReturn(new ConfigDef());
+        doThrow(new RuntimeException("Failed to configure transform")).when(brokenTransform).configure(any());
+        when(plugins.newPlugin(eq(SampleTransformation.class.getName()), nullable(VersionRange.class), any(ClassLoader.class))).thenReturn(brokenTransform);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                noneConnectorClientConfigOverridePolicy, null);
+        worker.herder = herder;
+        worker.start();
+
+        Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+        Map<String, String> connectorConfigs = anyConnectorConfigMap();
+        connectorConfigs.put(ConnectorConfig.TRANSFORMS_CONFIG, "broken");
+        connectorConfigs.put(ConnectorConfig.TRANSFORMS_CONFIG + ".broken.type", SampleTransformation.class.getName());
+
+        ClusterConfigState configState = new ClusterConfigState(
+                0,
+                null,
+                Map.of(CONNECTOR_ID, 1),
+                Map.of(CONNECTOR_ID, connectorConfigs),
+                Map.of(CONNECTOR_ID, TargetState.STARTED),
+                Map.of(TASK_ID, origProps),
+                Map.of(),
+                Map.of(),
+                Map.of(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
+                Set.of(),
+                Set.of()
+        );
+
+        assertFalse(worker.startSourceTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
+        assertEquals(Set.of(), worker.taskIds());
+
+        verify(taskStatusListener).onFailure(eq(TASK_ID), any(ConnectException.class));
+        verify(taskKeyConverter).close();
+        verify(taskValueConverter).close();
+        verify(taskHeaderConverter).close();
     }
 
     @ParameterizedTest
