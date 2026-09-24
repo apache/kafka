@@ -74,20 +74,14 @@ public class DeleteTopicTest {
             List<NewTopic> newTopics = List.of(new NewTopic(testTopic, 1, (short) 3));
             CreateTopicsResult createTopicResult = admin.createTopics(newTopics);
             createTopicResult.all().get();
-            TestUtils.waitForCondition(
-                () -> admin.listTopics().names().get().contains(testTopic),
-                "Failed to find topic " + testTopic
-            );
+            cluster.waitTopicCreation(testTopic, 1);
 
             // Delete topic
             DeleteTopicsResult deleteResult = admin.deleteTopics(List.of(testTopic));
             deleteResult.all().get();
 
-            // List again
-            TestUtils.waitForCondition(
-                () -> !admin.listTopics().names().get().contains(testTopic),
-                "Topic " + testTopic + " was not deleted"
-            );
+            // Wait for topic deletion
+            cluster.waitTopicDeletion(testTopic);
         }
     }
 

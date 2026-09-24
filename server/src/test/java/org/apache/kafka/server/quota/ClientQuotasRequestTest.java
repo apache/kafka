@@ -129,6 +129,20 @@ public class ClientQuotasRequestTest {
             QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 20000.0,
             QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 12.3
         ));
+
+        // Remove all but the last configuration entry.
+        alterEntityQuotas(entity, Map.of(
+            QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Optional.empty()
+        ), false);
+        verifyDescribeEntityQuotas(entity, Map.of(
+            QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 12.3
+        ));
+
+        // Removing the last entry should remove the entity.
+        alterEntityQuotas(entity, Map.of(
+            QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.empty()
+        ), false);
+        verifyDescribeEntityQuotas(entity, Map.of());
     }
 
     @ClusterTest

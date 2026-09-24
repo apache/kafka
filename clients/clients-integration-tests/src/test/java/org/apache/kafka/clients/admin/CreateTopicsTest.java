@@ -23,8 +23,8 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.raft.KRaftConfigs;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
 import java.util.List;
