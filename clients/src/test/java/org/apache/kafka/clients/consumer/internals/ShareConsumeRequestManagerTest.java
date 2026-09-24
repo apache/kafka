@@ -1333,7 +1333,7 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(fullFetchResponse(tip0, secondRecords, secondAcquiredRecords, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
-        // Draining both completed fetches for tip0 in one collect() call forces the merge in ShareFetch.add().
+        // Drain both completed fetches for tip0 in one collect() call.
         ShareFetch<byte[], byte[]> fetch = collectFetch();
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = fetch.records().get(tp0);
         assertEquals(5, fetchedRecords.size(), "records from both fetches should be visible after the merge");
