@@ -37,7 +37,6 @@ Usage:
 from datetime import date
 import argparse
 import shutil
-from test.docker_sanity_test import run_tests
 from common import (
     execute,
     build_docker_image_runner,
@@ -48,6 +47,10 @@ import tempfile
 import os
 
 def run_docker_tests(image, tag, kafka_url, kafka_archive, image_type, container_runtime="docker"):
+    # Imported here rather than at module scope so that building an image (-b) does not require the
+    # test dependencies (pytest, pytest-html). Only the test path needs them.
+    from test.docker_sanity_test import run_tests
+
     compose_command = detect_compose_command(container_runtime)
     temp_dir_path = tempfile.mkdtemp()
     try:
