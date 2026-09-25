@@ -3559,6 +3559,8 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderDelta, leaderMetadataImage)
 
       val mockLog = replicaManager.getPartitionOrException(tp0).log.get
+      // becoming the leader reads logStartOffset, so re-arm the stub that makes the 1st fetch hit OffsetOutOfRangeException
+      when(mockLog.logStartOffset).thenReturn(endOffset).thenReturn(startOffset)
       when(mockLog.endOffsetForEpoch(anyInt())).thenReturn(Optional.of(new OffsetAndEpoch(1, 1)))
       when(mockLog.read(anyLong(), anyInt(), any(), anyBoolean())).thenReturn(new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
