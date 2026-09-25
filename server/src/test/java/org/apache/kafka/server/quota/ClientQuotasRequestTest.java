@@ -143,6 +143,14 @@ public class ClientQuotasRequestTest {
             QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.empty()
         ), false);
         verifyDescribeEntityQuotas(entity, Map.of());
+
+        // Add a configuration entry after removing the entity.
+        alterEntityQuotas(entity, Map.of(
+            QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Optional.of(10000.0)
+        ), false);
+        verifyDescribeEntityQuotas(entity, Map.of(
+            QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0
+        ));
     }
 
     @ClusterTest
