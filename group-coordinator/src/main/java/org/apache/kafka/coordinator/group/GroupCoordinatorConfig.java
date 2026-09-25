@@ -820,16 +820,10 @@ public class GroupCoordinatorConfig {
      * @param props The full Kafka config containing properties to be clamped.
      */
     public static void clampDynamicConfigs(Map<String, String> props) {
-        // Parse configs but do not validate mins and maxes. Config providers referenced in `props`
-        // have already been vetted against org.apache.kafka.automatic.config.providers earlier in the
-        // reconfiguration pipeline (see DynamicBrokerConfig#validate), so they are passed explicitly
-        // as configProviderProps here to resolve any provider-backed values without re-applying that
-        // allowlist a second time.
+        // Parse configs but do not validate mins and maxes.
         AbstractConfig groupCoordinatorConfig = new AbstractConfig(
             GroupCoordinatorConfig.CONFIG_DEF,
-            props,
-            Utils.castToStringObjectMap(props),
-            false
+            props
         );
 
         clampDynamicIntConfig(groupCoordinatorConfig, props, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
