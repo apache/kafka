@@ -54,7 +54,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     static final AtomicLong TAINTED_NEXT_OFFSETS_LAST_LOG_NS = new AtomicLong(System.nanoTime() - TAINT_LOG_INTERVAL_NS);
 
     /**
-     * @param records The records for each partition. Must not contain empty lists;
+     * @param records The records for each partition. Each partition must be mapped to a non-empty list;
      *                partitions with no records must be omitted from the map.
      * @deprecated Since 4.0. Use {@link #ConsumerRecords(Map, Map)} instead.
      */
@@ -66,7 +66,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     /**
      * Constructs a new ConsumerRecords with the given records and next offsets.
      *
-     * @param records The records for each partition. Must not contain empty lists;
+     * @param records The records for each partition. Each partition must be mapped to a non-empty list;
      *                partitions with no records must be omitted from the map.
      * @param nextOffsets The next offset and metadata for each partition whose position was advanced
      *                    during the poll call. These represent the offsets that the consumer will
@@ -184,9 +184,9 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     /**
      * Returns whether this container has any records.
      *
-     * <p>This method checks whether the records map is empty. If the map contains
-     * partitions mapped to empty lists, this method returns {@code false} even if
-     * there are no records.
+     * <p>This method only checks whether the records map is empty. A partition with
+     * an empty record list still makes the map non-empty, so this method returns
+     * {@code false} even if there are no records.
      *
      * @return {@code true} if the records map is empty, {@code false} otherwise
      */
