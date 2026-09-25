@@ -1805,6 +1805,36 @@ public class GroupMetadataManager {
     }
     
     /**
+     * Validates that the member id received in a join request does not already belong to a member
+     * with a different instance id. An instance id may move to a new member id when a static member
+     * is replaced but a member id must never acquire a different instance id.
+     *
+     * @param groupId               The group id.
+     * @param receivedMemberId      The member id received in the request.
+     * @param existingInstanceId    The instance id of the existing member with the received
+     *                              member id, or null if the existing member is a dynamic member.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws InvalidRequestException if the received instance id differs from the instance id
+     *                                 of the existing member.
+     */
+    private void throwIfMemberIdHasDifferentInstanceId(
+        String groupId,
+        String receivedMemberId,
+        String existingInstanceId,
+        String receivedInstanceId
+    ) {
+        if (!receivedInstanceId.equals(existingInstanceId)) {
+            String existingMemberDescription = existingInstanceId == null ?
+                "a dynamic member" : "a static member with instance id " + existingInstanceId;
+            log.info("[GroupId {}] Member {} with instance id {} cannot join the group because the member id is already" +
+                " used by {}.", groupId, receivedMemberId, receivedInstanceId, existingMemberDescription);
+            throw Errors.INVALID_REQUEST.exception("Member " + receivedMemberId + " with instance id " + receivedInstanceId
+                + " cannot join the group because the member id is already used by " + existingMemberDescription + ".");
+        }
+    }
+
+    /**
      * Validates if the received instanceId has been released from the group
      *
      * @param staticMember          The static member in the group.
@@ -2134,13 +2164,6 @@ public class GroupMetadataManager {
             StreamsGroupMember maybeOldStaticMember = group.staticMember(instanceId);
             if (maybeOldStaticMember != null && !maybeOldStaticMember.memberId().equals(memberId)) {
                 replaceStaticOldMember = maybeOldStaticMember;
-                // Replacing a static member relabels its target assignment from the old to the new member ID without
-                // bumping the assignment epoch, so an intermediate assignment derived for this epoch no longer matches
-                // the members it was derived for. Re-key it rather than dropping it: the replacement copies the old
-                // member's state, so the decisions of this epoch still hold, and deriving a new one here would re-plan
-                // mid-epoch and could revise the slice of a member that already reconciled and is therefore not
-                // reconciled again within this epoch.
-                group.relabelRefinedAssignment(maybeOldStaticMember.memberId(), memberId);
             }
             member = getOrMaybeCreateStaticStreamsGroupMember(
                 group,
@@ -3402,8 +3425,24 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets or subscribes a static consumer group member. This method also replaces the
-     * previous static member if allowed.
+     * Gets or subscribes a static consumer group member.
+     *
+     * When the member joins (epoch 0), the following cases are handled:
+     * <ul>
+     *   <li>The member id is known and owns the instance id: the same member is back. If it had
+     *       left with epoch -2, its epoch is reset to 0 so that it is reconciled from scratch.
+     *       Otherwise, e.g. the join response was lost or the member was fenced, it gets its
+     *       current state back like a dynamic member would.</li>
+     *   <li>The member id is known but does not own the instance id: rejected, a member id must
+     *       never acquire a different instance id.</li>
+     *   <li>The member id is unknown and nobody owns the instance id: a new static member.</li>
+     *   <li>The member id is unknown and another member owns the instance id: the previous
+     *       member is replaced if it has left (or if either side uses the classic protocol),
+     *       otherwise the join is rejected.</li>
+     * </ul>
+     *
+     * When the member does not join, the static member owning the instance id must exist and
+     * have the received member id.
      *
      * @param group                 The consumer group.
      * @param memberId              The member id.
@@ -3427,58 +3466,92 @@ public class GroupMetadataManager {
         boolean useClassicProtocol,
         List<CoordinatorRecord> records
     ) {
-        ConsumerGroupMember existingStaticMemberOrNull = group.staticMember(instanceId);
+        String protocol = useClassicProtocol ? "classic" : "consumer";
 
-        if (createIfNotExists) {
-            // A new static member joins or the existing static member rejoins.
-            if (existingStaticMemberOrNull == null) {
-                // New static member.
-                ConsumerGroupMember newMember = group.getOrMaybeCreateMember(memberId, true);
-                log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group using the {} protocol.",
-                    group.groupId(), memberId, instanceId, useClassicProtocol ? "classic" : "consumer");
-                return newMember;
-            } else {
-                if (!useClassicProtocol && !existingStaticMemberOrNull.useClassicProtocol()) {
-                    // If both the rejoining static member and the existing static member use the consumer
-                    // protocol, replace the previous instance iff the previous member had sent a leave group.
-                    throwIfInstanceIdIsUnreleased(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
-                }
+        if (!createIfNotExists) {
+            ConsumerGroupMember staticMember = group.staticMember(instanceId);
+            throwIfStaticMemberIsUnknown(staticMember, instanceId);
+            throwIfInstanceIdIsFenced(staticMember, group.groupId(), memberId, instanceId);
+            if (!useClassicProtocol) {
+                throwIfConsumerGroupMemberEpochIsInvalid(staticMember, memberEpoch, ownedTopicPartitions);
+            }
+            return staticMember;
+        }
 
-                // Copy the member but with its new member id.
-                ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(existingStaticMemberOrNull, memberId)
+        ConsumerGroupMember existingMemberOrNull = group.members().get(memberId);
+        if (existingMemberOrNull != null) {
+            // The member id is known. A member id must never acquire a different instance id, so
+            // the member must be the static member owning the instance id.
+            throwIfMemberIdHasDifferentInstanceId(group.groupId(), memberId, existingMemberOrNull.instanceId(), instanceId);
+
+            if (existingMemberOrNull.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+                // The static member re-joins after leaving the group. Its epoch is reset so that
+                // it is reconciled from scratch, like a member replacing it would be.
+                log.info("[GroupId {}] Static member {} with instance id {} re-joins the consumer group " +
+                    "using the {} protocol after leaving it.", group.groupId(), memberId, instanceId, protocol);
+                return new ConsumerGroupMember.Builder(existingMemberOrNull)
                     .setMemberEpoch(0)
                     .setPreviousMemberEpoch(0)
                     .build();
-
-                // Generate the records to replace the member. We don't care about the regular expression
-                // here because it is taken care of later after the static membership replacement.
-                replaceMember(records, group, existingStaticMemberOrNull, newMember);
-
-                log.info("[GroupId {}] Static member with instance id {} re-joins the consumer group " +
-                    "using the {} protocol. Created a new member {} to replace the existing member {}.",
-                    group.groupId(), instanceId, useClassicProtocol ? "classic" : "consumer", memberId, existingStaticMemberOrNull.memberId());
-
-                return newMember;
+            } else {
+                // The static member joins again while it is still active, e.g. because the response
+                // to its join was lost or because it was fenced. Like a dynamic member, it gets its
+                // current state back.
+                log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group " +
+                    "using the {} protocol again.", group.groupId(), memberId, instanceId, protocol);
+                return existingMemberOrNull;
             }
-        } else {
-            throwIfStaticMemberIsUnknown(existingStaticMemberOrNull, instanceId);
-            throwIfInstanceIdIsFenced(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
-            if (!useClassicProtocol) {
-                throwIfConsumerGroupMemberEpochIsInvalid(existingStaticMemberOrNull, memberEpoch, ownedTopicPartitions);
-            }
-            return existingStaticMemberOrNull;
         }
+
+        ConsumerGroupMember previousStaticMemberOrNull = group.staticMember(instanceId);
+        if (previousStaticMemberOrNull == null) {
+            // New static member.
+            log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group using the {} protocol.",
+                group.groupId(), memberId, instanceId, protocol);
+            return new ConsumerGroupMember.Builder(memberId).build();
+        }
+
+        if (!useClassicProtocol && !previousStaticMemberOrNull.useClassicProtocol()) {
+            // If both the rejoining static member and the previous static member use the consumer
+            // protocol, replace the previous member iff it had sent a leave group.
+            throwIfInstanceIdIsUnreleased(previousStaticMemberOrNull, group.groupId(), memberId, instanceId);
+        }
+
+        // Copy the previous member but with the new member id.
+        ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(previousStaticMemberOrNull, memberId)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .build();
+
+        // Generate the records to replace the member. We don't care about the regular expression
+        // here because it is taken care of later after the static membership replacement.
+        replaceMember(records, group, previousStaticMemberOrNull, newMember);
+
+        log.info("[GroupId {}] Static member with instance id {} re-joins the consumer group " +
+            "using the {} protocol. Created a new member {} to replace the existing member {}.",
+            group.groupId(), instanceId, protocol, memberId, previousStaticMemberOrNull.memberId());
+
+        return newMember;
     }
 
     /**
      * Gets an existing static Streams group member or creates/replaces one for static membership.
      *
-     * If the member is joining:
-     * 1. Creates a new static member when no member exists for the instance ID.
-     * 2. Replaces the previous static member when the instance ID is released.
+     * When the member joins (epoch 0), the following cases are handled:
+     * <ul>
+     *   <li>The member id is known and owns the instance id: the same member is back. If it had
+     *       left with epoch -2, its epoch is reset to 0 so that it is reconciled from scratch.
+     *       Otherwise, e.g. the join response was lost or the member was fenced, it gets its
+     *       current state back like a dynamic member would.</li>
+     *   <li>The member id is known but does not own the instance id: rejected, a member id must
+     *       never acquire a different instance id.</li>
+     *   <li>The member id is unknown and nobody owns the instance id: a new static member.</li>
+     *   <li>The member id is unknown and another member owns the instance id: the previous
+     *       member is replaced if it has left, otherwise the join is rejected.</li>
+     * </ul>
      *
-     * If the member is not joining, validates static member identity and member epoch
-     * and returns the existing static member.
+     * When the member does not join, the static member owning the instance id must exist and
+     * have the received member id, and the member epoch is validated.
      *
      * @param group                 The streams group.
      * @param memberId              The member id from the request.
@@ -3503,44 +3576,79 @@ public class GroupMetadataManager {
         boolean memberIsJoining,
         List<CoordinatorRecord> records
     ) {
-        StreamsGroupMember existingStaticMemberOrNull = group.staticMember(instanceId);
-        if (memberIsJoining) {
-            // A new static member joins or the existing static member rejoins.
-            if (existingStaticMemberOrNull == null) {
-                // New static member.
-                StreamsGroupMember newMember = group.getOrCreateDefaultMember(memberId);
-                log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} joins the streams group.",
-                    group.groupId(), memberId, memberId, instanceId);
-                return newMember;
-            } else {
-                throwIfInstanceIdIsUnreleased(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
-
-                // Copy the member but with its new member id.
-                StreamsGroupMember newMember = new StreamsGroupMember.Builder(existingStaticMemberOrNull, memberId)
-                    .setMemberEpoch(0)
-                    .setPreviousMemberEpoch(0)
-                    .build();
-
-                replaceStreamsMember(records, group, existingStaticMemberOrNull, newMember);
-
-                log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the streams group " +
-                        "using the streams protocol. Created a new member {} to replace the existing member {}.",
-                    group.groupId(), memberId, instanceId, memberId, existingStaticMemberOrNull.memberId());
-
-                return newMember;
-            }
-        } else {
-            throwIfStaticMemberIsUnknown(existingStaticMemberOrNull, instanceId);
-            throwIfInstanceIdIsFenced(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
+        if (!memberIsJoining) {
+            StreamsGroupMember staticMember = group.staticMember(instanceId);
+            throwIfStaticMemberIsUnknown(staticMember, instanceId);
+            throwIfInstanceIdIsFenced(staticMember, group.groupId(), memberId, instanceId);
             throwIfStreamsGroupMemberEpochIsInvalid(
-                existingStaticMemberOrNull,
+                staticMember,
                 memberEpoch,
                 ownedActiveTasks,
                 ownedStandbyTasks,
                 ownedWarmupTasks
             );
-            return existingStaticMemberOrNull;
+            return staticMember;
         }
+
+        StreamsGroupMember existingMemberOrNull = group.members().get(memberId);
+        if (existingMemberOrNull != null) {
+            // The member id is known. A member id must never acquire a different instance id, so
+            // the member must be the static member owning the instance id.
+            String existingInstanceId = existingMemberOrNull.instanceId() == null ?
+                null : existingMemberOrNull.instanceId().orElse(null);
+            throwIfMemberIdHasDifferentInstanceId(group.groupId(), memberId, existingInstanceId, instanceId);
+
+            if (existingMemberOrNull.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+                // The static member re-joins after leaving the group. Its epoch is reset so that
+                // it is reconciled from scratch, like a member replacing it would be.
+                log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the streams group " +
+                    "after leaving it.", group.groupId(), memberId, instanceId);
+                return new StreamsGroupMember.Builder(existingMemberOrNull)
+                    .setMemberEpoch(0)
+                    .setPreviousMemberEpoch(0)
+                    .build();
+            } else {
+                // The static member joins again while it is still active, e.g. because the response
+                // to its join was lost or because it was fenced. Like a dynamic member, it gets its
+                // current state back.
+                log.info("[GroupId {}][MemberId {}] Static member with instance id {} joins the streams group again.",
+                    group.groupId(), memberId, instanceId);
+                return existingMemberOrNull;
+            }
+        }
+
+        StreamsGroupMember previousStaticMemberOrNull = group.staticMember(instanceId);
+        if (previousStaticMemberOrNull == null) {
+            // New static member.
+            log.info("[GroupId {}][MemberId {}] Static member with instance id {} joins the streams group.",
+                group.groupId(), memberId, instanceId);
+            return StreamsGroupMember.Builder.withDefaults(memberId).build();
+        }
+
+        throwIfInstanceIdIsUnreleased(previousStaticMemberOrNull, group.groupId(), memberId, instanceId);
+
+        // Copy the previous member but with the new member id.
+        StreamsGroupMember newMember = new StreamsGroupMember.Builder(previousStaticMemberOrNull, memberId)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .build();
+
+        replaceStreamsMember(records, group, previousStaticMemberOrNull, newMember);
+
+        // Replacing a static member relabels its target assignment from the old to the new member ID without
+        // bumping the assignment epoch, so an intermediate assignment derived for this epoch no longer matches
+        // the members it was derived for. Re-key it rather than dropping it: the replacement copies the old
+        // member's state, so the decisions of this epoch still hold, and deriving a new one here would re-plan
+        // mid-epoch and could revise the slice of a member that already reconciled and is therefore not
+        // reconciled again within this epoch. This must only happen once the replacement is certain, because
+        // the cache is mutated directly and is not rolled back if the request is rejected.
+        group.relabelRefinedAssignment(previousStaticMemberOrNull.memberId(), memberId);
+
+        log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the streams group " +
+                "using the streams protocol. Created a new member {} to replace the existing member {}.",
+            group.groupId(), memberId, instanceId, memberId, previousStaticMemberOrNull.memberId());
+
+        return newMember;
     }
 
     /**
@@ -8178,20 +8286,19 @@ public class GroupMetadataManager {
                             "group instance id {} due to {}. Reverting to old member id {}.",
                             group.groupId(), newMemberId, groupInstanceId, t.getMessage(), oldMemberId);
 
+                        group.completeJoinFuture(newMember, new JoinGroupResponseData()
+                            .setMemberId(UNKNOWN_MEMBER_ID)
+                            .setGenerationId(group.generationId())
+                            .setProtocolName(group.protocolName().orElse(null))
+                            .setProtocolType(group.protocolType().orElse(null))
+                            .setLeader(currentLeader)
+                            .setSkipAssignment(false)
+                            .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+
                         // Failed to persist the member id of the given static member, revert the update of the static member in the group.
                         group.updateMember(newMember, oldProtocols, oldRebalanceTimeoutMs, oldSessionTimeoutMs, null);
                         ClassicGroupMember oldMember = group.replaceStaticMember(groupInstanceId, newMemberId, oldMemberId);
                         rescheduleClassicGroupMemberHeartbeat(group, oldMember);
-
-                        responseFuture.complete(
-                            new JoinGroupResponseData()
-                                .setMemberId(UNKNOWN_MEMBER_ID)
-                                .setGenerationId(group.generationId())
-                                .setProtocolName(group.protocolName().orElse(null))
-                                .setProtocolType(group.protocolType().orElse(null))
-                                .setLeader(currentLeader)
-                                .setSkipAssignment(false)
-                                .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
 
                     } else if (JoinGroupRequest.supportsSkippingAssignment(context.requestVersion())) {
                         boolean isLeader = group.isLeader(newMemberId);

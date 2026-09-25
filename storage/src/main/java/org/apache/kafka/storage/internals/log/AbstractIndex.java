@@ -190,7 +190,7 @@ public abstract class AbstractIndex implements Closeable {
 
     /**
      * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
-     * trimToValidSize() which is called at closing the segment or new segment being rolled; (2) at
+     * trimToValidSize() which is called when a segment becomes inactive (e.g. rolled or prepared for shutdown); (2) at
      * loading segments from disk or truncating back to an old segment where a new log segment became active;
      * we want to reset the index size to maximum index size to avoid rolling new segment.
      *
@@ -198,15 +198,6 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
-        return resize(newSize, false);
-    }
-
-    /**
-     * @param newSize new size of the index file
-     * @param sync if true, fsync the file after resizing to ensure the size is durable
-     * @return true if the index was resized, false otherwise
-     */
-    public boolean resize(int newSize, boolean sync) throws IOException {
         return inLock(() ->
                 inRemapWriteLock(() -> {
                     int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
@@ -225,9 +216,6 @@ public abstract class AbstractIndex implements Closeable {
                             mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
                             this.maxEntries = mmap.limit() / entrySize();
                             mmap.position(position);
-                            if (sync) {
-                                raf.getChannel().force(true);
-                            }
                             log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
                                     mmap.position(), mmap.limit());
                             return true;
@@ -252,12 +240,13 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     /**
-     * Flush the data in the index to disk
+     * Flush the data in the index and its metadata to disk
      */
-    public void flush() {
+    public void flush() throws IOException {
         inLock(() -> {
             if (mmap != null) {
                 mmap.force();
+                Utils.flushFileIfExists(file.toPath());
             }
         });
     }
@@ -270,18 +259,17 @@ public abstract class AbstractIndex implements Closeable {
      *         not exist
      */
     public boolean deleteIfExists() throws IOException {
-        closeHandler();
+        close();
         return Files.deleteIfExists(file.toPath());
     }
 
     /**
      * Trim this index to fit just the valid entries, deleting all trailing unwritten bytes from the file.
-     * @param sync if true, fsync the file after resizing to ensure both content and size are durable
      */
-    public void trimToValidSize(boolean sync) throws IOException {
+    public void trimToValidSize() throws IOException {
         inLock(() -> {
             if (mmap != null) {
-                resize(entrySize() * entries, sync);
+                resize(entrySize() * entries);
             }
         });
     }
@@ -294,12 +282,6 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     public void close() throws IOException {
-        flush(); // Ensure the index content is flushed to disk as LogSegment.close may append an entry
-        trimToValidSize(true);
-        closeHandler();
-    }
-
-    public void closeHandler() {
         // On JVM, a memory mapping is typically unmapped by garbage collector.
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.

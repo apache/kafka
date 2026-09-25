@@ -54,10 +54,9 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class RocksDBVersionedStoreTest {
 
@@ -355,19 +354,19 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "vn2", SEGMENT_INTERVAL - 2, SEGMENT_INTERVAL + 10);
 
         VersionedRecord<String> deleted = deleteFromStore("k", SEGMENT_INTERVAL - 5); // delete from segment
-        assertThat(deleted.value(), equalTo("vn10"));
-        assertThat(deleted.timestamp(), equalTo(SEGMENT_INTERVAL - 10));
+        assertEquals("vn10", deleted.value());
+        assertEquals(SEGMENT_INTERVAL - 10, deleted.timestamp());
 
         deleted = deleteFromStore("k", SEGMENT_INTERVAL + 10); // delete existing timestamp
-        assertThat(deleted.value(), equalTo("vp10"));
-        assertThat(deleted.timestamp(), equalTo(SEGMENT_INTERVAL + 10));
+        assertEquals("vp10", deleted.value());
+        assertEquals(SEGMENT_INTERVAL + 10, deleted.timestamp());
 
         deleted = deleteFromStore("k", SEGMENT_INTERVAL + 10); // delete the same timestamp again
-        assertThat(deleted, nullValue());
+        assertNull(deleted);
 
         deleted = deleteFromStore("k", SEGMENT_INTERVAL + 25); // delete from latest value store
-        assertThat(deleted.value(), equalTo("vp20"));
-        assertThat(deleted.timestamp(), equalTo(SEGMENT_INTERVAL + 20));
+        assertEquals("vp20", deleted.value());
+        assertEquals(SEGMENT_INTERVAL + 20, deleted.timestamp());
     }
 
     @Test
@@ -393,13 +392,13 @@ public class RocksDBVersionedStoreTest {
 
         // grace period has not elapsed
         VersionedRecord<String> deleted = deleteFromStore("k1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
-        assertThat(deleted.value(), equalTo("v1"));
-        assertThat(deleted.timestamp(), equalTo(1L));
+        assertEquals("v1", deleted.value());
+        assertEquals(1L, deleted.timestamp());
         verifyGetNullFromStore("k1");
 
         // grace period has elapsed, so this delete does not take place
         deleted = deleteFromStore("k2", HISTORY_RETENTION + 9 - GRACE_PERIOD);
-        assertThat(deleted, nullValue()); // return value is null even though record exists because delete did not take place
+        assertNull(deleted); // return value is null even though record exists because delete did not take place
         verifyGetValueFromStore("k2", "v2", 1L);
 
         verifyExpiredRecordSensor(1);
@@ -848,12 +847,12 @@ public class RocksDBVersionedStoreTest {
 
         final Bytes key = new Bytes(STRING_SERIALIZER.serialize(null, "k"));
         final VersionedRecord<byte[]> uLatest = uncommitted.get(key);
-        assertThat(STRING_DESERIALIZER.deserialize(null, uLatest.value()), equalTo("v2"));
-        assertThat(uLatest.timestamp(), equalTo(BASE_TIMESTAMP + 1));
+        assertEquals("v2", STRING_DESERIALIZER.deserialize(null, uLatest.value()));
+        assertEquals(BASE_TIMESTAMP + 1, uLatest.timestamp());
 
         final VersionedRecord<byte[]> cLatest = committed.get(key);
-        assertThat(STRING_DESERIALIZER.deserialize(null, cLatest.value()), equalTo("v1"));
-        assertThat(cLatest.timestamp(), equalTo(BASE_TIMESTAMP));
+        assertEquals("v1", STRING_DESERIALIZER.deserialize(null, cLatest.value()));
+        assertEquals(BASE_TIMESTAMP, cLatest.timestamp());
     }
 
     @Test
@@ -867,10 +866,10 @@ public class RocksDBVersionedStoreTest {
         final Bytes key = new Bytes(STRING_SERIALIZER.serialize(null, "k"));
 
         final VersionedRecord<byte[]> uAtNew = store.readOnly(IsolationLevel.READ_UNCOMMITTED).get(key, BASE_TIMESTAMP + 2);
-        assertThat(STRING_DESERIALIZER.deserialize(null, uAtNew.value()), equalTo("v2"));
+        assertEquals("v2", STRING_DESERIALIZER.deserialize(null, uAtNew.value()));
 
         final VersionedRecord<byte[]> cAtNew = store.readOnly(IsolationLevel.READ_COMMITTED).get(key, BASE_TIMESTAMP + 2);
-        assertThat(STRING_DESERIALIZER.deserialize(null, cAtNew.value()), equalTo("v1"));
+        assertEquals("v1", STRING_DESERIALIZER.deserialize(null, cAtNew.value()));
     }
 
     @Test
@@ -897,8 +896,8 @@ public class RocksDBVersionedStoreTest {
                 committed.add(STRING_DESERIALIZER.deserialize(null, it.next().value()));
             }
         }
-        assertThat(uncommitted, equalTo(List.of("v1", "v2")));
-        assertThat(committed, equalTo(List.of("v1")));
+        assertEquals(List.of("v1", "v2"), uncommitted);
+        assertEquals(List.of("v1"), committed);
     }
 
     private void reopenWithTransactionalEOS() {
@@ -939,7 +938,7 @@ public class RocksDBVersionedStoreTest {
             STRING_SERIALIZER.serialize(null, value),
             timestamp
         );
-        assertThat(validTo, equalTo(expectedValidTo));
+        assertEquals(expectedValidTo, validTo);
     }
 
     private VersionedRecord<String> deleteFromStore(final String key, final long timestamp) {
@@ -971,24 +970,24 @@ public class RocksDBVersionedStoreTest {
 
     private void verifyGetValueFromStore(final String key, final String expectedValue, final long expectedTimestamp) {
         final VersionedRecord<String> latest = getFromStore(key);
-        assertThat(latest.value(), equalTo(expectedValue));
-        assertThat(latest.timestamp(), equalTo(expectedTimestamp));
-        assertThat(latest.validTo().isPresent(), equalTo(false));
+        assertEquals(expectedValue, latest.value());
+        assertEquals(expectedTimestamp, latest.timestamp());
+        assertFalse(latest.validTo().isPresent());
     }
 
     private void verifyGetNullFromStore(final String key) {
         final VersionedRecord<String> record = getFromStore(key);
-        assertThat(record, nullValue());
+        assertNull(record);
     }
 
     private void verifyTimestampedGetValueFromStore(final String key, final long timestamp, final String expectedValue, final long expectedTimestamp, final long expectedValidTo) {
         final VersionedRecord<String> latest = getFromStore(key, timestamp);
-        assertThat(latest.value(), equalTo(expectedValue));
-        assertThat(latest.timestamp(), equalTo(expectedTimestamp));
+        assertEquals(expectedValue, latest.value());
+        assertEquals(expectedTimestamp, latest.timestamp());
         if (expectedValidTo == PUT_RETURN_CODE_VALID_TO_UNDEFINED) {
-            assertThat(latest.validTo().isPresent(), equalTo(false));
+            assertFalse(latest.validTo().isPresent());
         } else {
-            assertThat(latest.validTo().get(), equalTo(expectedValidTo));
+            assertEquals(expectedValidTo, latest.validTo().get());
         }
     }
 
@@ -1000,27 +999,27 @@ public class RocksDBVersionedStoreTest {
                                                     final List<Long> expectedTimestamps,
                                                     final List<Long> expectedValidTos) {
         final List<VersionedRecord<String>> results = getFromStore(key, fromTime, toTime, order);
-        assertThat(results.size(), equalTo(expectedValues.size()));
+        assertEquals(expectedValues.size(), results.size());
         for (int i = 0; i < results.size(); i++) {
             final VersionedRecord<String> record = results.get(i);
-            assertThat(record.value(), equalTo(expectedValues.get(i)));
-            assertThat(record.timestamp(), equalTo(expectedTimestamps.get(i)));
+            assertEquals(expectedValues.get(i), record.value());
+            assertEquals(expectedTimestamps.get(i), record.timestamp());
             if (expectedValidTos.get(i) == PUT_RETURN_CODE_VALID_TO_UNDEFINED) {
-                assertThat(record.validTo().isPresent(), equalTo(false));
+                assertFalse(record.validTo().isPresent());
             } else {
-                assertThat(record.validTo().get(), equalTo(expectedValidTos.get(i)));
+                assertEquals(expectedValidTos.get(i), record.validTo().get());
             }
         }
     }
 
     private void verifyTimestampedGetNullFromStore(final String key, final long timestamp) {
         final VersionedRecord<String> record = getFromStore(key, timestamp);
-        assertThat(record, nullValue());
+        assertNull(record);
     }
 
     private void verifyTimestampedGetNullFromStore(final String key, final long fromTime, final long toTime) {
         final List<VersionedRecord<String>> results = getFromStore(key, fromTime, toTime, ResultOrder.ANY);
-        assertThat(results.size(), equalTo(0));
+        assertEquals(0, results.size());
     }
 
     private void verifyExpiredRecordSensor(final int expectedValue) {

@@ -22,6 +22,9 @@
   // Version 1 adds ResourceTypes field (KIP-1142). If there is no specified ResourceTypes, it should return all configuration resources.
   "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "ResourceTypes", "type": "[]int8", "versions": "1+",
       "about": "The list of resource type. If the list is empty, it uses default supported config resource types."
