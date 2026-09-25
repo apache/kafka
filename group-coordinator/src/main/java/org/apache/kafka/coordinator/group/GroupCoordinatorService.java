@@ -748,11 +748,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 markTopologyUncertainAsync(tp, groupId, true)
                     .thenCompose(marked -> {
                         if (!marked) {
-                            // The group vanished (or stopped being a streams group) between the
-                            // validate read and the barrier write, so no UNCERTAIN barrier exists.
-                            // Running the plugin op anyway would create an entry that no cleanup
-                            // path ever reclaims (the cleanup scan and DeleteGroups only iterate
-                            // live groups), so fail the push instead.
+                            // The group was deleted, or is no longer a streams group, since it was
+                            // validated above, so the epoch could not be set to UNCERTAIN. Storing
+                            // the topology anyway would leave a plugin entry that nothing ever
+                            // deletes, because cleanup only looks at existing groups. Fail the push.
                             return CompletableFuture.failedFuture(
                                 new GroupIdNotFoundException(String.format("Group %s not found.", groupId)));
                         }
@@ -824,8 +823,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * <ol>
      *   <li>Find groups eligible for plugin cleanup: empty, all offsets expired, and
      *       {@code storedEpoch} is a real epoch or UNCERTAIN ({@code -2}).</li>
-     *   <li>Write an UNCERTAIN ({@code -2}) barrier for them, skipping any group that became
-     *       active again after the scan.</li>
+     *   <li>Set their epoch to UNCERTAIN ({@code -2}), skipping any group that became active
+     *       again after the scan.</li>
      *   <li>Call {@code plugin.deleteTopology} for each group that is still eligible.</li>
      *   <li>For each delete that succeeds, set the epoch to NONE ({@code -1}) if it is still
      *       {@code -2}. If a concurrent {@code setTopology} changed the epoch, write {@code -2}
@@ -883,21 +882,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * Runs topology cleanup on one shard for the groups returned by the eligibility scan:
      * <ol>
-     *   <li>Write the UNCERTAIN ({@code -2}) barrier.</li>
-     *   <li>Call {@code plugin.deleteTopology} for each group the barrier write confirmed is
-     *       still eligible.</li>
+     *   <li>Set their epoch to UNCERTAIN ({@code -2}).</li>
+     *   <li>Call {@code plugin.deleteTopology} for each group that step 1 confirmed is still
+     *       eligible.</li>
      *   <li>Finalize the epoch of each group whose delete succeeded.</li>
      * </ol>
      * Every group in {@code eligible} comes from the same partition's scan, so they all map to
-     * the same {@code __consumer_offsets} partition. That means one write covers the barrier for
-     * this shard, and one write covers the finalize.
-     *
+     * the same {@code __consumer_offsets} partition. So step 1 and step 3 each take a single
+     * write for this shard.
+     */
     private CompletableFuture<Void> cleanupTopologyForPartition(Set<String> eligible) {
         TopicPartition tp = topicPartitionFor(eligible.iterator().next());
         return markTopologyUncertainBatchAsync(tp, eligible)
             .exceptionally(throwable -> {
-                log.warn("Failed to write the UNCERTAIN barrier for groups {} on partition {}; "
-                    + "skipping their plugin delete — the next cleanup cycle will retry.",
+                log.warn("Failed to mark the stored topology epoch as UNCERTAIN for groups {} on partition {}. "
+                    + "Skipping their topology deletion; the next cleanup cycle will retry.",
                     eligible, tp, throwable);
                 return Set.of();
             })
@@ -960,13 +959,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Writes the UNCERTAIN ({@code -2}) barrier for a batch of groups before the cleanup cycle
-     * calls the plugin delete. The shard checks each group's latest state and returns only the
+     * Sets the stored topology epoch to UNCERTAIN ({@code -2}) for a batch of groups before the
+     * plugin delete, from the cleanup cycle or DeleteGroups. The shard checks each group's latest state and returns only the
      * groups that are still streams groups and are now UNCERTAIN. Groups that became active
      * again or were converted are left out, so their data is not deleted.
      *
-     * <p>All groups in the batch must map to the same {@code __consumer_offsets} partition. The
-     * caller guarantees this, because the eligibility scan runs per partition.
+     * <p>All groups in the batch must map to the same {@code __consumer_offsets} partition.
+     * Both callers build their batches per partition.
      */
     private CompletableFuture<Set<String>> markTopologyUncertainBatchAsync(
         TopicPartition tp,
@@ -979,17 +978,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * After the plugin delete, tidy up each group's storedEpoch based on whether a push
-     * sneaked in while we were deleting.
+     * Sets the final stored topology epoch for groups whose topology was just deleted from the
+     * plugin. Each group was set to UNCERTAIN before the delete. Now, per group:
+     * <ul>
+     *   <li>Still UNCERTAIN: no push happened during the delete, so set NONE ({@code -1}).
+     *       The next expiration sweep then deletes the group.</li>
+     *   <li>A real epoch: a push finished during the delete and may have been deleted with it.
+     *       Set UNCERTAIN, so the next heartbeat asks the client to push again.</li>
+     * </ul>
      *
-     * Earlier in the cycle each group was marked UNCERTAIN, then the topology was deleted. Now, per group:
-     * - storedEpoch == UNCERTAIN  -> nothing changed it, so no push raced us -> clear to NONE (next sweep tombstones it).
-     * - storedEpoch != UNCERTAIN  -> a push wrote a real epoch mid-delete -> set back to UNCERTAIN to re-request a push.
-     *
-     * All groups share one __consumer_offsets partition. A write failure (e.g. NOT_COORDINATOR) is logged and
-     * ignored so it doesn't fail the cycle; the next cycle retries because storedEpoch stays non-default.
+     * <p>All groups must map to the same {@code __consumer_offsets} partition. A write failure
+     * (e.g. {@code NOT_COORDINATOR}) is logged and ignored. The groups stay UNCERTAIN, so the
+     * next cleanup cycle retries them.
      */
-
     private CompletableFuture<Void> finalizeAfterDeleteBatchAsync(
         TopicPartition tp,
         Set<String> groupIds
@@ -1301,12 +1302,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
         TopicPartition tp = topicPartitionFor(request.groupId());
 
-        // The classic-join write op resolves the group and, when a plugin is configured, detects an
-        // empty streams group with a stored topology before mutating anything. A plugin-less broker
-        // has no topology to clean up, so it converts directly on the first call (topologyCleanupHandled
-        // true). The op returns whether streams-topology cleanup is needed before conversion; for
-        // already-classic, non-existent, and non-streams groups (the common case) it returns false and
-        // has already completed the response, so no extra op runs.
+        // Usually the join completes in this first call and returns false. It returns true only
+        // for an empty streams group whose topology is still in the plugin. That group is about
+        // to become a classic group, so its topology must be deleted from the plugin first.
+        // Then the join runs again. With no plugin configured there is nothing to delete, so we
+        // pass topologyCleanupHandled = true and the group is converted right away.
         runClassicGroupJoin(context, request, responseFuture, tp,
             !streamsGroupTopologyDescriptionManager.isPluginConfigured()
         ).thenCompose(needsCleanup -> {
@@ -1331,16 +1331,22 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Converting an empty streams group to classic would orphan the plugin's topology, so the
-     * join detected cleanup is needed: delete the topology (behind a durable UNCERTAIN(-2)
-     * barrier) and re-run the join, which then converts because cleanup has been handled.
+     * Deletes the group's topology from the plugin, then runs the classic join again so the
+     * empty streams group can be converted to a classic group. Without this, the conversion
+     * would leave the topology in the plugin with nothing pointing to it.
      *
-     * <p>Throttle first: on {@code REBALANCE_IN_PROGRESS} the classic client retries the join
-     * immediately ({@code RebalanceInProgressException} skips its retry back-off), so a broken
-     * plugin would otherwise be hit with {@code deleteTopology} in a tight loop. While the window
-     * armed by a previous failed conversion delete is in effect, fail fast without touching the
-     * plugin or scheduling the mark; the interval-throttled cleanup cycle reclaims the group in
-     * the meantime.
+     * <p>Steps:
+     * <ol>
+     *   <li>If a recent delete for this group failed and its back-off window is still active,
+     *       fail the join with {@code REBALANCE_IN_PROGRESS} right away. The client retries
+     *       immediately, so without this check a broken plugin would receive
+     *       {@code deleteTopology} calls in a tight loop. In the meantime the periodic cleanup
+     *       cycle can still delete the topology.</li>
+     *   <li>Set the stored epoch to UNCERTAIN ({@code -2}).</li>
+     *   <li>Call {@code deleteTopology}. If it fails, start the back-off window and fail the
+     *       join with {@code REBALANCE_IN_PROGRESS}.</li>
+     *   <li>If it succeeds, run the join again, which converts the group.</li>
+     * </ol>
      */
     private CompletableFuture<Void> cleanupTopologyBeforeConversion(
         AuthorizableRequestContext context,
@@ -1355,11 +1361,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return markTopologyUncertainAsync(tp, request.groupId(), false)
             .thenCompose(marked -> {
                 if (!marked) {
-                    // The group changed underneath us (revived, converted, or removed) between
-                    // the join's cleanup check and the barrier write: no barrier exists, so
-                    // running the plugin delete could wipe a live group's topology. Fail the
-                    // join with a retriable error and let the client retry against the latest
-                    // group state.
+                    // Since the join checked the group, a member has joined it, or it was
+                    // converted or deleted. Deleting the topology now could remove data a live
+                    // group is using. Fail the join so the client retries with the latest state.
                     failJoinRetriably(request, responseFuture);
                     return CompletableFuture.<Void>completedFuture(null);
                 }
@@ -1367,22 +1371,22 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .thenCompose(failures -> {
                         recordPluginDeleteOutcome(1, failures.size());
                         if (!failures.isEmpty()) {
-                            // Plugin delete failed: leave the group a streams group at UNCERTAIN(-2)
-                            // (reclaimable by the cleanup cycle and re-soliciting), arm the
-                            // conversion-delete throttle so the client's immediate join retries do
-                            // not hammer the broken plugin, and fail the join with a retriable
-                            // error instead of converting over orphaned plugin data.
+                            // The delete failed. Don't convert, because that would leave the topology
+                            // in the plugin. The group stays a streams group at UNCERTAIN, so the
+                            // cleanup cycle can still delete it. Start the back-off window so the
+                            // client's quick retries don't keep calling the broken plugin, then
+                            // fail the join.
                             streamsGroupTopologyDescriptionManager.throttleConversionDelete(request.groupId());
                             failJoinRetriably(request, responseFuture);
                             return CompletableFuture.<Void>completedFuture(null);
                         }
                         streamsGroupTopologyDescriptionManager.clearBackoffGroup(request.groupId());
-                        // Smart-finalize after the re-join: a no-op once the group has been
-                        // converted (it is no longer a streams group). It only writes for a group
-                        // revived between the barrier and the re-join — the re-join then rejects
-                        // with INCONSISTENT_GROUP_PROTOCOL and, without the finalize, a raced
-                        // push's epoch write would land on stored == UNCERTAIN and record a real
-                        // epoch over the plugin this delete just emptied.
+                        // Run the join again, then finalize the epoch. Usually the join converts the
+                        // group and the finalize does nothing, because the group is no longer a
+                        // streams group. But a streams member may have joined during the delete.
+                        // Then the join fails with INCONSISTENT_GROUP_PROTOCOL and the group stays
+                        // a streams group. The finalize then fixes its epoch (NONE, or UNCERTAIN if
+                        // a push finished), so the broker does not record a topology the delete removed.
                         return runClassicGroupJoin(context, request, responseFuture, tp, true)
                             .thenCompose(__ -> finalizeAfterDeleteBatchAsync(tp, Set.of(request.groupId())));
                     });
@@ -1390,9 +1394,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Complete the join with {@code REBALANCE_IN_PROGRESS} (if not already completed): a
-     * retriable error classic clients respond to by re-joining, used when the pre-conversion
-     * topology cleanup could not run to completion.
+     * Fails the join with {@code REBALANCE_IN_PROGRESS}, unless the response is already
+     * complete. Classic clients react to this error by joining again. Used when the topology
+     * could not be deleted from the plugin before converting the group.
      */
     private static void failJoinRetriably(
         JoinGroupRequestData request,
@@ -2040,8 +2044,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 (coordinator, lastCommittedOffset) ->
                     coordinator.streamsGroupsWithStoredTopologyDescription(groupIds, lastCommittedOffset))
             .thenCompose(groupsWithStored -> {
-                // Common case: the batch holds no streams groups with stored topology. Skip the
-                // mark entirely instead of scheduling a no-op write on the shard's event loop.
+                // Usually no group in the batch has a topology in the plugin. Then skip the
+                // UNCERTAIN write, so we don't schedule a write that does nothing.
                 if (groupsWithStored.isEmpty()) {
                     return CompletableFuture.<Map<String, ApiError>>completedFuture(Map.of());
                 }

@@ -76,20 +76,25 @@ public class StreamsGroup implements Group {
      */
     private static final String PROTOCOL_TYPE = "streams";
 
-    /** Stored topology epoch meaning the plugin definitely holds no topology for this group. */
+    /** Stored topology epoch meaning the plugin holds no topology for this group. */
     public static final int STORED_TOPOLOGY_EPOCH_NONE = -1;
     /**
-     * Stored topology epoch meaning the plugin may or may not hold a topology: written durably
-     * before any plugin-disturbing operation. Treated like {@link #STORED_TOPOLOGY_EPOCH_NONE}
-     * for the "solicit a push" decision and like a real (>= 0) epoch for "delete-eligible".
+     * Stored topology epoch meaning we don't know whether the plugin holds a topology. It is
+     * written before any plugin call that changes the group's topology, and it stays if that
+     * call fails or the broker crashes. The group is then treated both ways:
+     * <ul>
+     *   <li>like {@link #STORED_TOPOLOGY_EPOCH_NONE}: the heartbeat asks the client to send its
+     *       topology again (TopologyDescriptionRequired=true).</li>
+     *   <li>like a real epoch: the plugin entry can still be deleted.</li>
+     * </ul>
      */
     public static final int STORED_TOPOLOGY_EPOCH_UNCERTAIN = -2;
 
     /**
-     * @return true when {@code storedEpoch} is a real, reliably-stored topology epoch — i.e. the
-     *         plugin definitely holds exactly that topology. Real epochs are non-negative; every
-     *         sentinel ({@link #STORED_TOPOLOGY_EPOCH_NONE}, {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN},
-     *         and any added later) is negative and therefore not reliably stored.
+     * @return true if {@code storedEpoch} is a real topology epoch ({@code >= 0}), meaning the
+     *         plugin holds exactly that topology. All sentinel values, such as
+     *         {@link #STORED_TOPOLOGY_EPOCH_NONE} and {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN},
+     *         are negative.
      */
     public static boolean isReliablyStoredTopologyEpoch(int storedEpoch) {
         return storedEpoch >= 0;
@@ -184,8 +189,8 @@ public class StreamsGroup implements Group {
      *   <li>{@link #STORED_TOPOLOGY_EPOCH_NONE}: the plugin holds no topology.</li>
      *   <li>{@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}: unknown, because a plugin operation may not have completed.</li>
      * </ul>
-     * The heartbeat uses this value to decide whether to set TopologyDescriptionRequired=true.
-     * It also decides whether the plugin entry can be deleted.
+     * This value decides whether the heartbeat sets TopologyDescriptionRequired=true, and
+     * whether the plugin entry can be deleted.
      */
     private final TimelineInteger storedDescriptionTopologyEpoch;
 
