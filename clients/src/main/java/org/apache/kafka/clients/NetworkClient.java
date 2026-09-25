@@ -69,6 +69,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
@@ -117,7 +118,7 @@ public class NetworkClient implements KafkaClient {
     /* the client id used to identify this client in requests to the server */
     private final String clientId;
 
-    /* the client instance id sent in the v3 request header, or null if this client does not have one */
+    /* the client instance id sent in the v3 request header */
     private final Uuid clientInstanceId;
 
     /* the current correlation id to use when sending requests to servers */
@@ -230,7 +231,7 @@ public class NetworkClient implements KafkaClient {
                 metadata,
                 selector,
                 clientId,
-                null,
+                Uuid.randomUuid(),
                 maxInFlightRequestsPerConnection,
                 reconnectBackoffMs,
                 reconnectBackoffMax,
@@ -274,7 +275,7 @@ public class NetworkClient implements KafkaClient {
              metadata,
              selector,
              clientId,
-             null,
+             Uuid.randomUuid(),
              maxInFlightRequestsPerConnection,
              reconnectBackoffMs,
              reconnectBackoffMax,
@@ -318,7 +319,7 @@ public class NetworkClient implements KafkaClient {
              null,
              selector,
              clientId,
-             null,
+             Uuid.randomUuid(),
              maxInFlightRequestsPerConnection,
              reconnectBackoffMs,
              reconnectBackoffMax,
@@ -377,7 +378,7 @@ public class NetworkClient implements KafkaClient {
         }
         this.selector = selector;
         this.clientId = clientId;
-        this.clientInstanceId = clientInstanceId;
+        this.clientInstanceId = Objects.requireNonNull(clientInstanceId, "clientInstanceId must not be null");
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
         this.connectionStates = new ClusterConnectionStates(
                 reconnectBackoffMs, reconnectBackoffMax,
@@ -1778,8 +1779,8 @@ public class NetworkClient implements KafkaClient {
                                           boolean expectResponse,
                                           int requestTimeoutMs,
                                           RequestCompletionHandler callback) {
-        return new ClientRequest(nodeId, requestBuilder, nextCorrelationId(), clientId, createdTimeMs, expectResponse,
-                requestTimeoutMs, callback, clientInstanceId);
+        return new ClientRequest(nodeId, requestBuilder, nextCorrelationId(), clientId, clientInstanceId, createdTimeMs,
+                expectResponse, requestTimeoutMs, callback);
     }
 
     public boolean discoverBrokerVersions() {

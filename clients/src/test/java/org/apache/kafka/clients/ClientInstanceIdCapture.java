@@ -53,9 +53,7 @@ public class ClientInstanceIdCapture {
     }
 
     /**
-     * Asserts that the client passes a usable client instance ID to {@code factoryClass}. The
-     * consumers do not call {@link ClientUtils} on the constructing thread, and a static mock only
-     * covers the thread that created it, so they verify the call they do make there instead.
+     * Asserts that the client passes a usable client instance ID to {@code factoryClass}.
      */
     public static <T> void assertGenerated(Class<T> factoryClass,
                                            Function<ArgumentCaptor<Uuid>, MockedStatic.Verification> verification,

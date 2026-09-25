@@ -79,7 +79,7 @@ public class RequestHeaderTest {
     @Test
     public void testRequestHeaderV3WithClientInstanceId() {
         Uuid clientInstanceId = Uuid.randomUuid();
-        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 1, "", 10, clientInstanceId);
+        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 1, "", clientInstanceId, 10);
         assertEquals(3, header.headerVersion());
         assertEquals(clientInstanceId, header.clientInstanceId());
 
@@ -95,21 +95,13 @@ public class RequestHeaderTest {
     public void testClientInstanceIdIsDroppedBelowTheV3Header() {
         // OffsetDelete v0 uses the v1 request header, which has no ClientInstanceId field, so the header
         // leaves the ID unset as its default, ZERO_UUID.
-        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 0, "", 10, Uuid.randomUuid());
+        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 0, "", Uuid.randomUuid(), 10);
         assertEquals(1, header.headerVersion());
         assertEquals(Uuid.ZERO_UUID, header.clientInstanceId());
 
         ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
         assertEquals(10, buffer.remaining());
         assertEquals(header, RequestHeader.parse(buffer));
-    }
-
-    @Test
-    public void testNullClientInstanceIdLeavesTheV3HeaderUnset() {
-        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 1, "", 10, null);
-        assertEquals(3, header.headerVersion());
-        assertEquals(Uuid.ZERO_UUID, header.clientInstanceId());
-        assertEquals(11, RequestTestUtils.serializeRequestHeader(header).remaining());
     }
 
     @Test

@@ -37,11 +37,11 @@ public class RequestHeader implements AbstractRequestResponse {
     private int size = SIZE_NOT_INITIALIZED;
 
     public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
-        this(requestApiKey, requestVersion, clientId, correlationId, null);
+        this(requestApiKey, requestVersion, clientId, null, correlationId);
     }
 
-    public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId,
-                         Uuid clientInstanceId) {
+    public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, Uuid clientInstanceId,
+                         int correlationId) {
         this.headerVersion = requestApiKey.requestHeaderVersion(requestVersion);
         this.data = new RequestHeaderData().
                 setRequestApiKey(requestApiKey.id).
@@ -182,8 +182,8 @@ public class RequestHeader implements AbstractRequestResponse {
         return "RequestHeader(apiKey=" + apiKey() +
                 ", apiVersion=" + apiVersion() +
                 ", clientId=" + clientId() +
-                ", correlationId=" + correlationId() +
                 ", clientInstanceId=" + clientInstanceId() +
+                ", correlationId=" + correlationId() +
                 ", headerVersion=" + headerVersion +
                 ")";
     }

@@ -31,7 +31,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegateInstanceIdCapture;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -183,7 +183,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.clearInvocations;
@@ -4510,9 +4509,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
     @Test
     public void testAsyncConsumerPassesTheClientInstanceIdToTheNetworkClient() {
         Map<String, Object> configs = clientInstanceIdConfigs(GroupProtocol.CONSUMER);
-        ClientInstanceIdCapture.assertGenerated(NetworkClientDelegate.class,
-            captor -> () -> NetworkClientDelegate.supplier(any(), any(), any(), any(), any(), captor.capture(), any(),
-                any(), any(), any(), anyBoolean(), any()),
+        NetworkClientDelegateInstanceIdCapture.assertGenerated(
             () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 }

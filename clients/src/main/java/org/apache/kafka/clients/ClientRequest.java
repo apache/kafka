@@ -30,61 +30,42 @@ public final class ClientRequest {
     private final AbstractRequest.Builder<?> requestBuilder;
     private final int correlationId;
     private final String clientId;
+    private final Uuid clientInstanceId;
     private final long createdTimeMs;
     private final boolean expectResponse;
     private final int requestTimeoutMs;
     private final RequestCompletionHandler callback;
-    private final Uuid clientInstanceId;
 
     /**
      * @param destination The brokerId to send the request to
      * @param requestBuilder The builder for the request to make
      * @param correlationId The correlation id for this client request
      * @param clientId The client ID to use for the header
+     * @param clientInstanceId The client instance ID to use for the header
      * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
+     * @param requestTimeoutMs Upper bound time in milliseconds to await a response before disconnecting the socket and
+     *                         cancelling the request
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
     public ClientRequest(String destination,
                          AbstractRequest.Builder<?> requestBuilder,
                          int correlationId,
                          String clientId,
+                         Uuid clientInstanceId,
                          long createdTimeMs,
                          boolean expectResponse,
                          int requestTimeoutMs,
                          RequestCompletionHandler callback) {
-        this(destination, requestBuilder, correlationId, clientId, createdTimeMs, expectResponse,
-            requestTimeoutMs, callback, null);
-    }
-
-    /**
-     * @param destination The brokerId to send the request to
-     * @param requestBuilder The builder for the request to make
-     * @param correlationId The correlation id for this client request
-     * @param clientId The client ID to use for the header
-     * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
-     * @param expectResponse Should we expect a response message or is this request complete once it is sent?
-     * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
-     * @param clientInstanceId The client instance ID to use for the header, or null if this client does not have one
-     */
-    public ClientRequest(String destination,
-                         AbstractRequest.Builder<?> requestBuilder,
-                         int correlationId,
-                         String clientId,
-                         long createdTimeMs,
-                         boolean expectResponse,
-                         int requestTimeoutMs,
-                         RequestCompletionHandler callback,
-                         Uuid clientInstanceId) {
         this.destination = destination;
         this.requestBuilder = requestBuilder;
         this.correlationId = correlationId;
         this.clientId = clientId;
+        this.clientInstanceId = clientInstanceId;
         this.createdTimeMs = createdTimeMs;
         this.expectResponse = expectResponse;
         this.requestTimeoutMs = requestTimeoutMs;
         this.callback = callback;
-        this.clientInstanceId = clientInstanceId;
     }
 
     @Override
@@ -109,7 +90,7 @@ public final class ClientRequest {
     }
 
     public RequestHeader makeHeader(short version) {
-        return new RequestHeader(apiKey(), version, clientId, correlationId, clientInstanceId);
+        return new RequestHeader(apiKey(), version, clientId, clientInstanceId, correlationId);
     }
 
     public AbstractRequest.Builder<?> requestBuilder() {
