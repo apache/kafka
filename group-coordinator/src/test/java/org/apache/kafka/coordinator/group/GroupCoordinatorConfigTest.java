@@ -1020,6 +1020,7 @@ public class GroupCoordinatorConfigTest {
 
         AllowedConfigProvider.reset();
         DisallowedConfigProvider.reset();
+        String previousAllowlist = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, AllowedConfigProvider.class.getName());
         try {
             assertThrows(ConfigException.class, () -> GroupCoordinatorConfig.clampDynamicConfigs(props));
@@ -1028,7 +1029,11 @@ public class GroupCoordinatorConfigTest {
             assertEquals(0, DisallowedConfigProvider.invocations(),
                 "a disallowed config provider must never be instantiated");
         } finally {
-            System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+            if (previousAllowlist == null) {
+                System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+            } else {
+                System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previousAllowlist);
+            }
         }
     }
 
@@ -1037,11 +1042,11 @@ public class GroupCoordinatorConfigTest {
 
         CountingConfigProvider(AtomicInteger invocations) {
             this.invocations = invocations;
+            invocations.incrementAndGet();
         }
 
         @Override
         public void configure(Map<String, ?> configs) {
-            invocations.incrementAndGet();
         }
 
         @Override
