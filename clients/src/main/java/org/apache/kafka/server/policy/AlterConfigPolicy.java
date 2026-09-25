@@ -38,7 +38,7 @@ import java.util.Objects;
 public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
     /**
-     * Class containing the create request parameters.
+     * Class containing the alter configs request parameters.
      */
     class RequestMetadata {
 
