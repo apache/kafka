@@ -77,6 +77,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
@@ -112,19 +113,24 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
     private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 2;
 
     public RaftClientTestContext(RaftClientContextBuilder<RaftClientTestContext> builder) {
-        this(builder, new MockListener(builder.localId));
-    }
-
-    private RaftClientTestContext(RaftClientContextBuilder<RaftClientTestContext> builder, MockListener listener) {
-        super(builder, listener);
+        super(builder);
         this.messageQueue = builder.messageQueue;
-        this.bootstrapIds = builder.bootstrapIds();
+        this.bootstrapIds = bootstrapIds(builder.bootstrapServers);
         this.canBecomeVoter = builder.canBecomeVoter;
         this.metrics = builder.metrics;
         this.externalKRaftMetrics = builder.externalKRaftMetrics;
-        this.listener = listener;
+        this.listener = new MockListener(builder.localId);
         this.requestTimeoutMs = builder.requestTimeoutMs;
         this.appendLingerMs = builder.appendLingerMs;
+        client.register(listener);
+    }
+
+    private static Set<Integer> bootstrapIds(Optional<List<InetSocketAddress>> bootstrapServers) {
+        return IntStream
+            .iterate(-2, id -> id - 1)
+            .limit(bootstrapServers.map(List::size).orElse(0))
+            .boxed()
+            .collect(Collectors.toSet());
     }
 
     int electionTimeoutMs() {
@@ -171,6 +177,32 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
         return builder.build();
     }
 
+    @Override
+    public void poll() {
+        super.poll();
+        assertNoAsyncExceptions();
+    }
+
+    private void assertNoAsyncExceptions() {
+        if (!uncaughtExceptions.isEmpty()) {
+            Throwable first = uncaughtExceptions.get(0);
+            uncaughtExceptions.clear();
+            throw new AssertionError("Uncaught exception in async callback", first);
+        }
+    }
+
+    @Override
+    void expectAndGrantVotes(int epoch) throws Exception {
+        super.expectAndGrantVotes(epoch);
+        assertElectedLeader(epoch, localIdOrThrow());
+    }
+
+    @Override
+    void expectAndGrantPreVotes(int epoch) throws Exception {
+        super.expectAndGrantPreVotes(epoch);
+        assertVotedCandidate(epoch + 1, ReplicaKey.of(localIdOrThrow(), localDirectoryId));
+    }
+
     public ReplicaKey localReplicaKey() {
         return raftProtocol.isReconfigSupported() ?
             ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
@@ -198,18 +230,6 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
             ElectionState.withElectedLeader(epoch, leaderId, Optional.empty(), expectedVoters()),
             quorumStateStore.readElectionState().get()
         );
-    }
-
-    @Override
-    void expectAndGrantVotes(int epoch) throws Exception {
-        super.expectAndGrantVotes(epoch);
-        assertElectedLeader(epoch, localIdOrThrow());
-    }
-
-    @Override
-    void expectAndGrantPreVotes(int epoch) throws Exception {
-        super.expectAndGrantPreVotes(epoch);
-        assertVotedCandidate(epoch + 1, ReplicaKey.of(localIdOrThrow(), localDirectoryId));
     }
 
     public void assertElectedLeaderAndVotedKey(int epoch, int leaderId, ReplicaKey candidateKey) {
@@ -381,19 +401,19 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
     }
 
     @Override
-    List<RaftRequest.Outbound> collectVoteRequests(int epoch, int lastEpoch, long lastEpochOffset) {
-        List<RaftRequest.Outbound> voteRequests = super.collectVoteRequests(epoch, lastEpoch, lastEpochOffset);
+    List<RaftRequest.Outbound> collectPreVoteRequests(int epoch, int lastEpoch, long lastEpochOffset) {
+        List<RaftRequest.Outbound> voteRequests = super.collectPreVoteRequests(epoch, lastEpoch, lastEpochOffset);
         for (RaftRequest.Outbound raftMessage : voteRequests) {
-            verifyVoteRequest((VoteRequestData) raftMessage.data(), false, epoch, lastEpoch, lastEpochOffset);
+            verifyVoteRequest((VoteRequestData) raftMessage.data(), true, epoch, lastEpoch, lastEpochOffset);
         }
         return voteRequests;
     }
 
     @Override
-    List<RaftRequest.Outbound> collectPreVoteRequests(int epoch, int lastEpoch, long lastEpochOffset) {
-        List<RaftRequest.Outbound> voteRequests = super.collectPreVoteRequests(epoch, lastEpoch, lastEpochOffset);
+    List<RaftRequest.Outbound> collectVoteRequests(int epoch, int lastEpoch, long lastEpochOffset) {
+        List<RaftRequest.Outbound> voteRequests = super.collectVoteRequests(epoch, lastEpoch, lastEpochOffset);
         for (RaftRequest.Outbound raftMessage : voteRequests) {
-            verifyVoteRequest((VoteRequestData) raftMessage.data(), true, epoch, lastEpoch, lastEpochOffset);
+            verifyVoteRequest((VoteRequestData) raftMessage.data(), false, epoch, lastEpoch, lastEpochOffset);
         }
         return voteRequests;
     }
@@ -413,9 +433,32 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
         assertEquals(lastEpochOffset, partitionRequest.lastOffset());
     }
 
-    private VoteRequestData.PartitionData unwrap(VoteRequestData voteRequest) {
-        assertTrue(hasValidTopicPartition(voteRequest, metadataPartition));
-        return voteRequest.topics().get(0).partitions().get(0);
+    // Round-trips a message through serialization to mimic the network, exercising the client's
+    // request/response encoding on every delivery.
+    private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
+        ObjectSerializationCache cache =  new ObjectSerializationCache();
+        ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
+
+        // Encode the message to a byte array with the given version
+        DataOutputStreamWritable writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
+        message.write(writer, cache, version);
+
+        // Decode the message from the byte array
+        ByteBufferAccessor reader = new ByteBufferAccessor(ByteBuffer.wrap(buffer.toByteArray()));
+        message.read(reader, version);
+
+        return message;
+    }
+
+    @Override
+    RaftRequest.Inbound inboundRequest(ApiMessage request, short version) {
+        return super.inboundRequest(roundTripApiMessage(request, version), version);
+    }
+
+    @Override
+    void deliverResponse(int correlationId, Node source, ApiMessage response) {
+        ApiMessage versionedResponse = roundTripApiMessage(response, raftResponseVersion(response));
+        super.deliverResponse(correlationId, source, versionedResponse);
     }
 
     /**
@@ -1080,6 +1123,11 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
         );
     }
 
+    private VoteRequestData.PartitionData unwrap(VoteRequestData voteRequest) {
+        assertTrue(hasValidTopicPartition(voteRequest, metadataPartition));
+        return voteRequest.topics().get(0).partitions().get(0);
+    }
+
     static void assertMatchingRecords(
         String[] expected,
         Records actual
@@ -1356,34 +1404,6 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
         }
 
         pollUntil(() -> OptionalLong.of(localLogEndOffset).equals(client.highWatermark()));
-    }
-
-    @Override
-    RaftRequest.Inbound inboundRequest(ApiMessage request, short version) {
-        return super.inboundRequest(roundTripApiMessage(request, version), version);
-    }
-
-    @Override
-    void deliverResponse(int correlationId, Node source, ApiMessage response) {
-        ApiMessage versionedResponse = roundTripApiMessage(response, raftResponseVersion(response));
-        super.deliverResponse(correlationId, source, versionedResponse);
-    }
-
-    // Round-trips a message through serialization to mimic the network, exercising the client's
-    // request/response encoding on every delivery.
-    private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
-        ObjectSerializationCache cache =  new ObjectSerializationCache();
-        ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
-
-        // Encode the message to a byte array with the given version
-        DataOutputStreamWritable writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
-        message.write(writer, cache, version);
-
-        // Decode the message from the byte array
-        ByteBufferAccessor reader = new ByteBufferAccessor(ByteBuffer.wrap(buffer.toByteArray()));
-        message.read(reader, version);
-
-        return message;
     }
 
     static class MockListener implements RaftClient.Listener<String> {

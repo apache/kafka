@@ -45,7 +45,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.apache.kafka.raft.SharedRaftClientContext.RaftProtocol.KIP_853_PROTOCOL;
 
@@ -77,7 +76,7 @@ public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
     int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
     int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
     private MemoryPool memoryPool = MemoryPool.NONE;
-    private Optional<List<InetSocketAddress>> bootstrapServers = Optional.empty();
+    Optional<List<InetSocketAddress>> bootstrapServers = Optional.empty();
     SharedRaftClientContext.RaftProtocol raftProtocol = SharedRaftClientContext.RaftProtocol.KIP_595_PROTOCOL;
     boolean canBecomeVoter = false;
     VoterSet startingVoters = VoterSet.empty();
@@ -90,6 +89,7 @@ public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
     MockNetworkChannel channel;
     Metrics metrics;
     ExternalKRaftMetrics externalKRaftMetrics;
+    KafkaRaftClient<String> client;
     private final Function<RaftClientContextBuilder<T>, T> factory;
 
     public RaftClientContextBuilder(int localId, Set<Integer> staticVoters,
@@ -317,10 +317,11 @@ public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
         this.channel = new MockNetworkChannel();
         this.metrics = new Metrics(time);
         this.externalKRaftMetrics = Mockito.mock(ExternalKRaftMetrics.class);
+        this.client = buildClient();
         return factory.apply(this);
     }
 
-    KafkaRaftClient<String> buildClient(RaftClient.Listener<String> registeredListener) {
+    private KafkaRaftClient<String> buildClient() {
         Map<Integer, InetSocketAddress> staticVoterAddressMap = Map.of();
         if (isStartingVotersStatic) {
             staticVoterAddressMap = startingVoters
@@ -390,7 +391,6 @@ public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
             quorumConfig
         );
 
-        client.register(registeredListener);
         client.initialize(
             staticVoterAddressMap,
             quorumStateStore,
@@ -399,14 +399,6 @@ public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
         );
 
         return client;
-    }
-
-    Set<Integer> bootstrapIds() {
-        return IntStream
-            .iterate(-2, id -> id - 1)
-            .limit(bootstrapServers.map(List::size).orElse(0))
-            .boxed()
-            .collect(Collectors.toSet());
     }
 
 }

@@ -62,13 +62,13 @@ public abstract class SharedRaftClientContext {
     final Uuid metadataTopicId = Uuid.METADATA_TOPIC_ID;
     final int fetchMaxBytes;
 
-    int electionTimeoutMs;
+    final int electionTimeoutMs;
 
     final MockQuorumStateStore quorumStateStore;
     final String clusterId;
     final OptionalInt localId;
-    public final Uuid localDirectoryId;
-    public final KRaftVersion kraftVersion;
+    final Uuid localDirectoryId;
+    final KRaftVersion kraftVersion;
     public final KafkaRaftClient<String> client;
     public final MockLog log;
     final MockNetworkChannel channel;
@@ -78,11 +78,11 @@ public abstract class SharedRaftClientContext {
     final RaftProtocol raftProtocol;
 
     private final List<RaftResponse.Outbound> sentResponses = new ArrayList<>();
-    private final List<Throwable> uncaughtExceptions = new ArrayList<>();
+    final List<Throwable> uncaughtExceptions = new ArrayList<>();
 
     private static final int MAX_POLLS = 50;
 
-    SharedRaftClientContext(RaftClientContextBuilder<?> builder, RaftClient.Listener<String> listener) {
+    SharedRaftClientContext(RaftClientContextBuilder<?> builder) {
         this.clusterId = builder.clusterId;
         this.localId = builder.localId;
         this.localDirectoryId = builder.localDirectoryId;
@@ -95,7 +95,7 @@ public abstract class SharedRaftClientContext {
         this.raftProtocol = builder.raftProtocol;
         this.fetchMaxBytes = builder.fetchMaxBytes;
         this.electionTimeoutMs = builder.electionTimeoutMs;
-        this.client = builder.buildClient(listener);
+        this.client = builder.client;
     }
 
     public void unattachedToCandidate() throws Exception {
@@ -176,27 +176,10 @@ public abstract class SharedRaftClientContext {
     }
 
     /**
-     * Asserts that no uncaught exceptions occurred in async callbacks (e.g., CompletionStage.whenComplete).
-     * This method is automatically called by the poll() wrapper method, but can also be called directly
-     * by tests to check for async exceptions at any point.
-     *
-     * @throws AssertionError if any uncaught exceptions were captured
-     */
-    public void assertNoAsyncExceptions() {
-        if (!uncaughtExceptions.isEmpty()) {
-            Throwable first = uncaughtExceptions.get(0);
-            uncaughtExceptions.clear();
-            throw new AssertionError("Uncaught exception in async callback", first);
-        }
-    }
-
-    /**
-     * Poll for new events and check for any uncaught exceptions in async callbacks.
-     * This is a wrapper around client.poll() that also calls assertNoAsyncExceptions().
+     * Poll for new events.
      */
     public void poll() {
         client.poll();
-        assertNoAsyncExceptions();
     }
 
     public void pollUntil(TestCondition condition) throws InterruptedException {
@@ -223,6 +206,8 @@ public abstract class SharedRaftClientContext {
         pollUntil(channel::hasSentRequests);
     }
 
+    // collectPreVoteRequests and collectVoteRequests are separate so RaftClientTestContext can
+    // assert a pre-vote and a standard vote independently.
     List<RaftRequest.Outbound> collectPreVoteRequests(
         int epoch,
         int lastEpoch,
