@@ -22,8 +22,9 @@ import kafka.coordinator.transaction.{ProducerIdManager, ZkProducerIdManager}
 import org.apache.kafka.common.config.{ConfigResource, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, PartitionRecord, ProducerIdsRecord, TopicRecord}
-import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
+import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
 import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.server.config.ReplicationConfigs
@@ -33,7 +34,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue,
 import org.junit.jupiter.api.Test
 
 import java.util.Properties
-import scala.collection.Map
+import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success}
 
@@ -511,6 +512,132 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
       assertEquals(expectedPartition.leaderEpoch, part.leaderAndIsr.leaderEpoch)
       assertEquals(expectedPartition.leaderRecoveryState, part.leaderAndIsr.leaderRecoveryState)
       assertEquals(expectedPartition.isr.toList, part.leaderAndIsr.isr)
+    }
+  }
+
+  /**
+   * A partition can be present in a topic's replica assignment without having any partition state, for
+   * instance when a controller fails in between writing the two. Verify that such partitions are only
+   * visited when the caller asks for them, and that the other partitions and topics are visited either way.
+   */
+  @Test
+  def testIterateTopicsWithMissingPartitionState(): Unit = {
+    val topicNames = Seq("test-a", "test-b")
+    topicNames.foreach { topicName =>
+      val assignment = Map(
+        new TopicPartition(topicName, 0) -> List(0, 1, 2),
+        new TopicPartition(topicName, 1) -> List(1, 2, 3)
+      )
+      zkClient.createTopicAssignment(topicName, Some(Uuid.randomUuid()), assignment)
+      // Only write the state of partition 0, leaving partition 1 without any state
+      zkClient.createTopicPartitionStatesRaw(Map(
+        new TopicPartition(topicName, 0) -> LeaderIsrAndControllerEpoch(
+          LeaderAndIsr(0, 5, List(0, 1, 2), LeaderRecoveryState.RECOVERED, -1), 1)
+      ), 0)
+    }
+
+    val skippingVisitor = new CapturingTopicVisitor()
+    migrationClient.topicClient().iterateTopics(
+      java.util.EnumSet.of(TopicVisitorInterest.TOPICS, TopicVisitorInterest.PARTITIONS),
+      skippingVisitor)
+    assertEquals(topicNames.toSet, skippingVisitor.visitedTopics.toSet)
+    assertEquals(
+      topicNames.map(new TopicPartition(_, 0)).toSet,
+      skippingVisitor.visitedPartitions.keySet.toSet)
+
+    val synthesizingVisitor = new CapturingTopicVisitor()
+    migrationClient.topicClient().iterateTopics(
+      java.util.EnumSet.of(
+        TopicVisitorInterest.TOPICS,
+        TopicVisitorInterest.PARTITIONS,
+        TopicVisitorInterest.PARTITIONS_WITHOUT_STATE),
+      synthesizingVisitor)
+    assertEquals(topicNames.toSet, synthesizingVisitor.visitedTopics.toSet)
+    assertEquals(
+      topicNames.flatMap(topicName => Seq(0, 1).map(new TopicPartition(topicName, _))).toSet,
+      synthesizingVisitor.visitedPartitions.keySet.toSet)
+    topicNames.foreach { topicName =>
+      val synthesized = synthesizingVisitor.visitedPartitions(new TopicPartition(topicName, 1))
+      assertEquals(1, synthesized.leader)
+      assertEquals(Seq(1, 2, 3), synthesized.isr.toSeq)
+      assertEquals(0, synthesized.leaderEpoch)
+      assertEquals(0, synthesized.partitionEpoch)
+      assertEquals(LeaderRecoveryState.RECOVERED, synthesized.leaderRecoveryState)
+    }
+  }
+
+  /**
+   * Simulate a controller that failed after writing a new partition to the topic assignment in ZK, but
+   * before writing that partition's state. The next controller must create the missing partition state
+   * when it syncs the KRaft state to ZK (KAFKA-21142).
+   */
+  @Test
+  def testSnapshotCreatesMissingPartitionState(): Unit = {
+    val topicName = "test"
+    val topicId = Uuid.randomUuid()
+    val newPartition = new TopicPartition(topicName, 2)
+    val assignment = Map(
+      new TopicPartition(topicName, 0) -> List(0, 1, 2),
+      new TopicPartition(topicName, 1) -> List(1, 2, 3),
+      newPartition -> List(2, 3, 4)
+    )
+    zkClient.createTopicAssignment(topicName, Some(topicId), assignment)
+    zkClient.createTopicPartitionStatesRaw(Map(
+      new TopicPartition(topicName, 0) -> LeaderIsrAndControllerEpoch(
+        LeaderAndIsr(0, 5, List(0, 1, 2), LeaderRecoveryState.RECOVERED, -1), 1),
+      new TopicPartition(topicName, 1) -> LeaderIsrAndControllerEpoch(
+        LeaderAndIsr(1, 5, List(1, 2, 3), LeaderRecoveryState.RECOVERED, -1), 1)
+    ), 0)
+    assertTrue(zkClient.getTopicPartitionState(newPartition).isEmpty)
+
+    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName))
+    assignment.foreach { case (topicPartition, replicas) =>
+      delta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(topicPartition.partition())
+        .setReplicas(replicas.map(int2Integer).asJava)
+        .setAddingReplicas(List.empty.asJava)
+        .setRemovingReplicas(List.empty.asJava)
+        .setIsr(replicas.map(int2Integer).asJava)
+        .setLeader(replicas.head)
+        .setLeaderEpoch(5)
+        .setPartitionEpoch(10)
+        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()))
+    }
+
+    val kraftWriter = new KRaftMigrationZkWriter(migrationClient, fail(_))
+    kraftWriter.handleSnapshot(delta.apply(MetadataProvenance.EMPTY), (_, _, operation) => {
+      migrationState = operation(migrationState)
+    })
+
+    val newPartitionState = zkClient.getTopicPartitionState(newPartition)
+    assertTrue(newPartitionState.isDefined, s"Expected $newPartition to have been created in ZK")
+    newPartitionState.foreach { state =>
+      assertEquals(2, state.leaderAndIsr.leader)
+      assertEquals(5, state.leaderAndIsr.leaderEpoch)
+      assertEquals(List(2, 3, 4), state.leaderAndIsr.isr)
+      assertEquals(LeaderRecoveryState.RECOVERED, state.leaderAndIsr.leaderRecoveryState)
+    }
+  }
+
+  private class CapturingTopicVisitor extends TopicVisitor {
+    val visitedTopics = new mutable.ArrayBuffer[String]()
+    val visitedPartitions = new mutable.HashMap[TopicPartition, PartitionRegistration]()
+
+    override def visitTopic(
+      topicName: String,
+      topicId: Uuid,
+      assignments: java.util.Map[Integer, java.util.List[Integer]]
+    ): Unit = {
+      visitedTopics += topicName
+    }
+
+    override def visitPartition(
+      topicIdPartition: TopicIdPartition,
+      partitionRegistration: PartitionRegistration
+    ): Unit = {
+      visitedPartitions.put(topicIdPartition.topicPartition(), partitionRegistration)
     }
   }
 }

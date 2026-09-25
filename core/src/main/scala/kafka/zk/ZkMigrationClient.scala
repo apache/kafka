@@ -147,7 +147,12 @@ class ZkMigrationClient(
   ): Unit = wrapZkException {
     var topicBatch = new util.ArrayList[ApiMessageAndVersion]()
     topicClient.iterateTopics(
-      util.EnumSet.allOf(classOf[TopicVisitorInterest]),
+      // ZooKeeper is the source of truth during the migration, so partitions without any state in ZK are
+      // migrated with a synthetic leader and ISR rather than being left out of the migrated metadata.
+      util.EnumSet.of(
+        TopicVisitorInterest.TOPICS,
+        TopicVisitorInterest.PARTITIONS,
+        TopicVisitorInterest.PARTITIONS_WITHOUT_STATE),
       new TopicVisitor() {
         override def visitTopic(topicName: String, topicId: Uuid, assignments: util.Map[Integer, util.List[Integer]]): Unit = {
           if (!topicBatch.isEmpty) {

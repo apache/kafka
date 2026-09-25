@@ -67,6 +67,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
         visitor.visitTopic(topic, topicIdOpt.get, topicAssignment)
       }
       if (interests.contains(TopicVisitorInterest.PARTITIONS)) {
+        val visitPartitionsWithoutState = interests.contains(TopicVisitorInterest.PARTITIONS_WITHOUT_STATE)
         val partitions = partitionAssignments.keys.toSeq
         val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
         partitionAssignments.foreach { case (topicPartition, replicaAssignment) =>
@@ -77,26 +78,31 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
             .setReplicas(replicaList)
             .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
             .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
-          leaderIsrAndControllerEpochs.get(topicPartition) match {
+          val recordToVisit = leaderIsrAndControllerEpochs.get(topicPartition) match {
             case Some(leaderIsrAndEpoch) =>
-              record
+              Some(record
                 .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava)
                 .setLeader(leaderIsrAndEpoch.leaderAndIsr.leader)
                 .setLeaderEpoch(leaderIsrAndEpoch.leaderAndIsr.leaderEpoch)
                 .setPartitionEpoch(leaderIsrAndEpoch.leaderAndIsr.partitionEpoch)
-                .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value())
-            case None =>
+                .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value()))
+            case None if visitPartitionsWithoutState =>
               warn(s"Could not find partition state in ZK for $topicPartition. Initializing this partition " +
                 s"with ISR={$replicaList} and leaderEpoch=0.")
-              record
+              Some(record
                 .setIsr(replicaList)
                 .setLeader(replicaList.get(0))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(0)
-                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()))
+            case None =>
+              warn(s"Could not find partition state in ZK for $topicPartition. Skipping this partition.")
+              None
           }
-          logAndRethrow(this, s"Error in partition consumer. TopicPartition was $topicPartition.") {
-            visitor.visitPartition(new TopicIdPartition(topicIdOpt.get, topicPartition), new PartitionRegistration(record))
+          recordToVisit.foreach { partitionRecord =>
+            logAndRethrow(this, s"Error in partition consumer. TopicPartition was $topicPartition.") {
+              visitor.visitPartition(new TopicIdPartition(topicIdOpt.get, topicPartition), new PartitionRegistration(partitionRecord))
+            }
           }
         }
       }

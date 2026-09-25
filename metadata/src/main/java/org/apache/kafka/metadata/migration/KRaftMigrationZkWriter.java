@@ -214,7 +214,9 @@ public class KRaftMigrationZkWriter {
                 Map<Integer, PartitionRegistration> newTopicPartitions = new HashMap<>(topic.partitions());
                 // Compute KRaft partitions that are not in ZK
                 topicPartitionsInZk.forEach(newTopicPartitions::remove);
-                newPartitions.put(topicId, newTopicPartitions);
+                if (!newTopicPartitions.isEmpty()) {
+                    newPartitions.put(topicId, newTopicPartitions);
+                }
 
                 // Compute ZK partitions that are not in KRaft
                 topicPartitionsInZk.removeAll(topic.partitions().keySet());
@@ -256,7 +258,7 @@ public class KRaftMigrationZkWriter {
             operationConsumer.accept(
                 UPDATE_PARTITION,
                 "Created additional partitions for Topic " + topic.name() + ", ID " + topicId,
-                migrationState -> migrationClient.topicClient().updateTopicPartitions(
+                migrationState -> migrationClient.topicClient().createTopicPartitions(
                     Collections.singletonMap(topic.name(), partitionMap),
                     migrationState));
         });
