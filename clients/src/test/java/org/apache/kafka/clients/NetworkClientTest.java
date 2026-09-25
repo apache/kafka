@@ -110,7 +110,6 @@ public class NetworkClientTest {
     protected final long connectionSetupTimeoutMsTest = 5 * 1000;
     protected final long connectionSetupTimeoutMaxMsTest = 127 * 1000;
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
-    private final Uuid clientInstanceId = Uuid.randomUuid();
     // Declared before the NetworkClient fields because NetworkClient's constructor now eagerly
     // triggers bootstrap resolution and dereferences bootstrapConfiguration during construction.
     private BootstrapConfiguration bootstrapConfiguration =
@@ -204,6 +203,7 @@ public class NetworkClientTest {
 
     @Test
     public void testClientInstanceIdIsSentInTheV3RequestHeader() {
+        Uuid clientInstanceId = Uuid.randomUuid();
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", clientInstanceId, Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
@@ -1277,7 +1277,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", clientInstanceId, Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
@@ -1338,7 +1338,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", clientInstanceId, Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
@@ -1391,7 +1391,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", clientInstanceId, Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
@@ -1500,7 +1500,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", clientInstanceId, Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
             reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
             defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), mockClientTelemetrySender,
@@ -1619,7 +1619,7 @@ public class NetworkClientTest {
         ManualMetadataUpdater updater = new ManualMetadataUpdater(Collections.singletonList(staleNode));
 
         NetworkClient testClient = new NetworkClient(
-                updater, null, capturingSelector, "test-client", clientInstanceId,
+                updater, null, capturingSelector, "test-client", Uuid.randomUuid(),
                 Integer.MAX_VALUE,
                 0L, 0L,   // reconnectBackoffMs = 0 for instant reconnect
                 64 * 1024, 64 * 1024,

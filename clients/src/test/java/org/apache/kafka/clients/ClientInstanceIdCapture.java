@@ -33,8 +33,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mockStatic;
 
 /**
- * Asserts that a client generates a client instance ID in its constructor and hands it to whatever
- * builds its network client (KIP-1313).
+ * Asserts that a client generates a client instance ID in its constructor and passes it to {@link ClientUtils}
+ * (KIP-1313).
  */
 public class ClientInstanceIdCapture {
 

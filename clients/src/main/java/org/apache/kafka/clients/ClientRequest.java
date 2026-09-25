@@ -45,7 +45,8 @@ public final class ClientRequest {
      * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
      * @param requestTimeoutMs Upper bound time in milliseconds to await a response before disconnecting the socket and
-     *                         cancelling the request
+     *                         cancelling the request. The request may get cancelled sooner if the socket disconnects
+     *                         for any reason including if another pending request to the same node timed out first.
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
     public ClientRequest(String destination,

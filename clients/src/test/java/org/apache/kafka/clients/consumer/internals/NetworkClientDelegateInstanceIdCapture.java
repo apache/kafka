@@ -24,8 +24,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 
 /**
- * Asserts that a consumer that builds its network client through {@link NetworkClientDelegate} generates a
- * client instance ID in its constructor and hands it over (KIP-1313).
+ * Asserts that a consumer generates a client instance ID in its constructor and passes it to
+ * {@link NetworkClientDelegate#supplier} (KIP-1313).
  */
 public class NetworkClientDelegateInstanceIdCapture {
 
