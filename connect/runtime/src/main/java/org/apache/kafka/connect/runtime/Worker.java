@@ -218,7 +218,7 @@ public final class Worker {
                 );
                 providerMap.put(providerName, configProvider);
             }
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             providerMap.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
             throw e;
         }

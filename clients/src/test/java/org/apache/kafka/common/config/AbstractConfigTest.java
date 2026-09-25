@@ -535,16 +535,21 @@ public class AbstractConfigTest {
 
     @Test
     public void testConfigProvidersClosedWhenLaterProviderConfigureThrows() {
-        Properties props = new Properties();
-        props.put("config.providers", "a,b");
-        props.put("config.providers.a.class", MockFileConfigProvider.class.getName());
-        String id = UUID.randomUUID().toString();
-        props.put("config.providers.a.param.testId", id);
-        // provider "b" is missing the required testId param, so its configure() will throw
-        props.put("config.providers.b.class", MockFileConfigProvider.class.getName());
-        RuntimeException e = assertThrows(RuntimeException.class, () -> new TestIndirectConfigResolution(props));
-        assertTrue(e.getMessage().contains("missing 'testId' config"));
-        MockFileConfigProvider.assertClosed(id);
+        try {
+            Properties props = new Properties();
+            props.put("config.providers", "a,b");
+            props.put("config.providers.a.class", MockFileConfigProvider.class.getName());
+            String id = UUID.randomUUID().toString();
+            props.put("config.providers.a.param.testId", id);
+            props.put("config.providers.b.class", TrackingMockFileConfigProvider.class.getName());
+
+            RuntimeException e = assertThrows(RuntimeException.class, () -> new TestIndirectConfigResolution(props));
+            assertEquals(TrackingMockFileConfigProvider.class.getName() + " missing 'testId' config", e.getMessage());
+            MockFileConfigProvider.assertClosed(id);
+            assertTrue(TrackingMockFileConfigProvider.closed);
+        } finally {
+            TrackingMockFileConfigProvider.closed = false;
+        }
     }
 
     @Test
@@ -700,6 +705,16 @@ public class AbstractConfigTest {
         @Override
         public ConfigData get(String path, Set<String> keys) {
             throw new ConfigException("simulated failure in ConfigProvider#get");
+        }
+    }
+
+    public static class TrackingMockFileConfigProvider extends MockFileConfigProvider {
+        static volatile boolean closed;
+
+        @Override
+        public synchronized void close() {
+            closed = true;
+            super.close();
         }
     }
 

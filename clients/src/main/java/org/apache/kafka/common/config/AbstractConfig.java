@@ -644,7 +644,7 @@ public class AbstractConfig {
                 configProviderInstances.put(entry.getKey(), provider);
                 provider.configure(configProperties);
             }
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             configProviderInstances.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
             throw e;
         }

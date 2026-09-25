@@ -474,7 +474,7 @@ public class Plugins {
                 Converter.class, classLoaderUsage, scanResult.converters());
         try (LoaderSwap loaderSwap = safeLoaderSwapper().apply(plugin.getClass().getClassLoader())) {
             plugin.configure(converterConfig, isKeyConverter);
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             Utils.closeQuietly(plugin, "converter");
             throw e;
         }
@@ -504,7 +504,7 @@ public class Plugins {
         try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
             plugin.configure(converterConfig, isKey);
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             Utils.closeQuietly(plugin, "converter");
             throw e;
         }
@@ -555,7 +555,7 @@ public class Plugins {
 
         try (LoaderSwap loaderSwap = safeLoaderSwapper().apply(plugin.getClass().getClassLoader())) {
             plugin.configure(converterConfig);
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             Utils.closeQuietly(plugin, "header converter");
             throw e;
         }
@@ -637,7 +637,7 @@ public class Plugins {
         Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
         try (LoaderSwap loaderSwap = safeLoaderSwapper().apply(plugin.getClass().getClassLoader())) {
             plugin.configure(configProviderConfig);
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             Utils.closeQuietly(plugin, "config provider");
             throw e;
         }
