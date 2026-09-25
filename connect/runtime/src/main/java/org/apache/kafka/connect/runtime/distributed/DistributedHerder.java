@@ -1937,7 +1937,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
             startAndStopExecutor.invokeAll(callables);
         } catch (InterruptedException e) {
-            // ignore
+            Thread.currentThread().interrupt();
         } catch (RejectedExecutionException e) {
             // Shutting down. Just log the exception
             if (stopping.get()) {

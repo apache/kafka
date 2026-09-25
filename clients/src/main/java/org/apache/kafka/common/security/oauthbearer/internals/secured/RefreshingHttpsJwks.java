@@ -220,6 +220,7 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
                             SHUTDOWN_TIMEOUT, SHUTDOWN_TIME_UNIT);
                 }
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 log.warn("JWKS validation key refresh thread error during close", e);
             }
         } finally {

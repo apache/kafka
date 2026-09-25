@@ -452,7 +452,7 @@ public class TopicAdmin implements AutoCloseable {
                 }
                 throw new ConnectException("Error while attempting to create/find topic(s) '" + topicNameList + "'", e);
             } catch (InterruptedException e) {
-                Thread.interrupted();
+                Thread.currentThread().interrupt();
                 throw new ConnectException("Interrupted while attempting to create/find topic(s) '" + topicNameList + "'", e);
             }
         }
@@ -507,7 +507,7 @@ public class TopicAdmin implements AutoCloseable {
                 }
                 throw new ConnectException("Error while attempting to describe topics '" + topicNameList + "'", e);
             } catch (InterruptedException e) {
-                Thread.interrupted();
+                Thread.currentThread().interrupt();
                 throw new RetriableException("Interrupted while attempting to describe topics '" + topicNameList + "'", e);
             }
         });
@@ -661,7 +661,7 @@ public class TopicAdmin implements AutoCloseable {
                     throw new ConnectException(msg, e);
                 }
             } catch (InterruptedException e) {
-                Thread.interrupted();
+                Thread.currentThread().interrupt();
                 String msg = String.format("Interrupted while attempting to describe topic configs '%s'", topicNameList);
                 throw new RetriableException(msg, e);
             }
@@ -719,7 +719,7 @@ public class TopicAdmin implements AutoCloseable {
                     throw new ConnectException(msg, cause);
                 }
             } catch (InterruptedException e) {
-                Thread.interrupted();
+                Thread.currentThread().interrupt();
                 String msg = String.format("Interrupted while attempting to read end offsets for topic '%s' on brokers at %s", partition.topic(), bootstrapServers);
                 throw new RetriableException(msg, e);
             }
