@@ -7011,9 +7011,10 @@ public class GroupMetadataManager {
             && group.type() == STREAMS
             && group.isEmpty()
             && ((StreamsGroup) group).storedDescriptionTopologyEpoch() != StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) {
-            // Converting this empty streams group to classic would tombstone its streams metadata and
-            // orphan any topology the description plugin still holds. Signal the caller to run the
-            // plugin cleanup first; the conversion happens on the re-invocation with the flag set.
+            // A classic join converts this empty streams group to classic and deletes its streams
+            // metadata. If the topology-description plugin (KIP-1331) still holds a topology for the
+            // group, that data would be orphaned. So change nothing and return TRUE. The caller deletes
+            // the topology from the plugin, then calls again with topologyCleanupHandled = true to convert.
             return new CoordinatorResult<>(List.of(), Boolean.TRUE);
         }
         if (group != null) {
@@ -8918,11 +8919,11 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Batched UNCERTAIN(-2) barrier write: folds {@link #markStoredDescriptionTopologyEpochUncertain}
-     * with {@code markWhenNone=false} over every group in {@code groupIds}. The response is the
-     * subset that the per-group mark reported eligible for a plugin op (still an <em>empty</em>
-     * streams group at the latest state and now UNCERTAIN); revived or converted groups drop out
-     * so the cleanup cycle does not run {@code plugin.deleteTopology} against them.
+     * Writes the UNCERTAIN ({@code -2}) barrier for each group in {@code groupIds}, using
+     * {@link #markStoredDescriptionTopologyEpochUncertain} with {@code markWhenNone = false}.
+     * Returns only the groups that are still empty streams groups and are now UNCERTAIN.
+     * Groups that became active again or were converted are left out, so the cleanup cycle
+     * does not delete their topologies.
      */
     public CoordinatorResult<Set<String>, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertainBatch(
         Set<String> groupIds

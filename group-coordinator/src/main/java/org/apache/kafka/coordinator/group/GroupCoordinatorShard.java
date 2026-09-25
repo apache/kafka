@@ -1045,7 +1045,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Batched UNCERTAIN(-2) barrier write for the cleanup cycle. See
+     * Writes the UNCERTAIN ({@code -2}) barrier for a batch of groups before the cleanup cycle
+     * deletes their topologies. See
      * {@link GroupMetadataManager#markStoredDescriptionTopologyEpochUncertainBatch(Set)}.
      */
     public CoordinatorResult<Set<String>, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertainBatch(

@@ -178,11 +178,14 @@ public class StreamsGroup implements Group {
     private final TimelineInteger validatedTopologyEpoch;
 
     /**
-     * The broker's record of which topology the group's plugin entry holds (KIP-1331): a real epoch
-     * ({@code >= 0}) when the plugin definitely holds that topology, {@link #STORED_TOPOLOGY_EPOCH_NONE}
-     * when it definitely holds nothing, or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} when a barrier was
-     * written before a plugin operation that may not have completed. Drives the heartbeat-side decision
-     * to set TopologyDescriptionRequired=true and the eligibility for plugin deletion.
+     * The topology the group's plugin entry holds, as recorded by the broker (KIP-1331):
+     * <ul>
+     *   <li>{@code >= 0}: the plugin holds this topology epoch.</li>
+     *   <li>{@link #STORED_TOPOLOGY_EPOCH_NONE}: the plugin holds no topology.</li>
+     *   <li>{@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}: unknown, because a plugin operation may not have completed.</li>
+     * </ul>
+     * The heartbeat uses this value to decide whether to set TopologyDescriptionRequired=true.
+     * It also decides whether the plugin entry can be deleted.
      */
     private final TimelineInteger storedDescriptionTopologyEpoch;
 
@@ -878,18 +881,19 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Defer tombstoning of an empty streams group while the broker-level topology-description
-     * cleanup cycle still has work to do for it: a plugin is configured and the persisted
-     * {@code StoredDescriptionTopologyEpoch} is not {@link #STORED_TOPOLOGY_EPOCH_NONE}. Both a
-     * real epoch and {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} defer — an UNCERTAIN group may
-     * still hold plugin data, so it must stay reclaimable by the cycle. The cycle drives
-     * {@code plugin.deleteTopology} and clears the stored epoch; the next sweep then proceeds
-     * with tombstoning. When no plugin is configured the gate never holds, so deferring
-     * indefinitely is not possible.
+     * Delays tombstoning an empty streams group until the topology-description cleanup cycle
+     * has cleared its plugin data. This applies when a plugin is configured and
+     * {@code StoredDescriptionTopologyEpoch} is anything other than {@link #STORED_TOPOLOGY_EPOCH_NONE}:
+     * <ul>
+     *   <li>a real epoch: the plugin holds data to delete.</li>
+     *   <li>{@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}: the plugin may hold data, so the cycle must still be able to clean it up.</li>
+     * </ul>
+     * The cycle calls {@code plugin.deleteTopology} and clears the stored epoch. The next sweep
+     * then tombstones the group. When no plugin is configured, tombstoning is never delayed.
      *
-     * <p>Per the {@link Group#shouldExpire(GroupCoordinatorConfig)} contract this only gates the
-     * group-metadata tombstone — committed offsets are still expired by the sweep regardless of
-     * what this returns, which is what feeds the topology-cleanup cycle's eligibility check.
+     * <p>Following the {@link Group#shouldExpire(GroupCoordinatorConfig)} contract, this only
+     * delays the group-metadata tombstone. The sweep still expires committed offsets, and the
+     * cleanup cycle relies on that when it checks which groups are eligible.
      */
     @Override
     public boolean shouldExpire(GroupCoordinatorConfig config) {
