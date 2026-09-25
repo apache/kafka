@@ -564,12 +564,10 @@ public class StickyTaskAssignor implements TaskAssignor {
                 break;
             }
             final PrevHolder prevHolder = prevHolders.get(winner.processId());
-            // The least-loaded member is below the quota because the winner has room. Found by a scan, not through
-            // the heap of addTaskToLeastLoadedMember, which the sticky pass's addTask would drop again for each task.
-            final String memberId = prevHolder != null && hasUnfulfilledTaskQuota(localState, winner, prevHolder.member())
-                ? prevHolder.member().memberId
-                : winner.leastLoadedMember();
-            final int newTaskCount = winner.addTask(memberId, task, false, true);
+            // The least-loaded member is below the quota because the winner has room.
+            final int newTaskCount = prevHolder != null && hasUnfulfilledTaskQuota(localState, winner, prevHolder.member())
+                ? winner.addTask(prevHolder.member().memberId, task, false, true)
+                : winner.addTaskToLeastLoadedMember(task, false, true);
             maybeUpdateTotalTasksPerMember(localState, newTaskCount);
             picker.markUsed(winner);
             placed++;
