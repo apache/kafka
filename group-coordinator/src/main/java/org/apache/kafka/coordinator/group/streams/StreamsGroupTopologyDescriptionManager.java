@@ -424,7 +424,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * the flag itself gets dropped at serialization — wasting heap on a per-group basis
      * for clients that will never push.
      */
-    public StreamsGroupHeartbeatResult maybeSetTopologyDescriptionRequired(
+    private StreamsGroupHeartbeatResult maybeSetTopologyDescriptionRequired(
         StreamsGroupHeartbeatResult result,
         String groupId,
         int apiVersion,
@@ -493,7 +493,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * mapped to a permanent failure with a generic message rather than forwarding the
      * raw exception text, and a {@code null} returned future is treated the same way.
      */
-    public CompletableFuture<PluginOutcome> invokeSetTopology(
+    private CompletableFuture<PluginOutcome> invokeSetTopology(
         String groupId,
         int topologyEpoch,
         StreamsGroupTopologyDescription description
@@ -547,7 +547,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      *         the group, i.e. a recent classic-join conversion delete failed and the join path
      *         must not re-invoke the plugin yet.
      */
-    public boolean isConversionDeleteThrottled(String groupId) {
+    private boolean isConversionDeleteThrottled(String groupId) {
         return backoff.isActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
     }
 
@@ -561,7 +561,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * a stale real-epoch entry left from before the group emptied is replaced. The window is
      * dropped by {@link #clearBackoffGroup} when a conversion or cleanup-cycle delete succeeds.
      */
-    public void throttleConversionDelete(String groupId) {
+    private void throttleConversionDelete(String groupId) {
         backoff.armIfNotActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
     }
 
@@ -577,7 +577,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * error leaves the back-off untouched (the new coordinator owns convergence once the client
      * retries); any other failure arms it so the next heartbeat re-solicits.
      */
-    public StreamsGroupTopologyDescriptionUpdateResponseData completeEpochWrite(
+    private StreamsGroupTopologyDescriptionUpdateResponseData completeEpochWrite(
         String groupId,
         int topologyEpoch,
         Throwable writeException,
@@ -609,7 +609,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * entries can leak until the group id is reused. Delegates to
      * {@link StreamsGroupTopologyDescriptionBackoff#clearGroup}.
      */
-    public void clearBackoffGroup(String groupId) {
+    private void clearBackoffGroup(String groupId) {
         backoff.clearGroup(groupId);
     }
 
@@ -628,7 +628,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * delete-success / delete-error sensors on the returned failure count, and is
      * responsible for invoking {@link #clearBackoffGroup} for the groups it chose to clear.
      */
-    public CompletableFuture<Map<String, ApiError>> invokeDeleteTopologies(Set<String> groupIds) {
+    private CompletableFuture<Map<String, ApiError>> invokeDeleteTopologies(Set<String> groupIds) {
         if (plugin.isEmpty() || groupIds.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
         }
@@ -722,8 +722,56 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * Building block for callers driving a single-group barrier write outside the push and
      * cleanup pipelines (the classic-group-join conversion path).
      */
-    public CompletableFuture<Boolean> markTopologyUncertain(String groupId, boolean markWhenNone) {
+    private CompletableFuture<Boolean> markTopologyUncertain(String groupId, boolean markWhenNone) {
         return runtime.markTopologyUncertain(groupId, markWhenNone);
+    }
+
+    /**
+     * Drives the classic-group-join conversion-delete path up to the plugin delete: checks the
+     * conversion-delete throttle, writes the UNCERTAIN(-2) barrier, invokes
+     * {@code plugin.deleteTopology}, and records the outcome. Returns {@code true} if the delete
+     * succeeded and the caller should proceed with the re-join; {@code false} if the group was
+     * throttled, changed underneath the caller between the throttle check and the barrier write,
+     * or the plugin delete failed — in every {@code false} case the caller must fail the join
+     * retriably instead of proceeding.
+     *
+     * <p>Throttle first: on {@code REBALANCE_IN_PROGRESS} the classic client retries the join
+     * immediately ({@code RebalanceInProgressException} skips its retry back-off), so a broken
+     * plugin would otherwise be hit with {@code deleteTopology} in a tight loop. While the window
+     * armed by a previous failed conversion delete is in effect, fail fast without touching the
+     * plugin or scheduling the mark; the interval-throttled cleanup cycle reclaims the group in
+     * the meantime.
+     */
+    public CompletableFuture<Boolean> cleanupTopologyBeforeConversion(String groupId) {
+        if (isConversionDeleteThrottled(groupId)) {
+            return CompletableFuture.completedFuture(false);
+        }
+        return markTopologyUncertain(groupId, false)
+            .thenCompose(marked -> {
+                if (!marked) {
+                    // The group changed underneath us (revived, converted, or removed) between
+                    // the join's cleanup check and the barrier write: no barrier exists, so
+                    // running the plugin delete could wipe a live group's topology. Tell the
+                    // caller to fail the join and let the client retry against the latest
+                    // group state.
+                    return CompletableFuture.completedFuture(false);
+                }
+                return invokeDeleteTopologies(Set.of(groupId))
+                    .thenCompose(failures -> {
+                        recordPluginDeleteOutcome(1, failures.size());
+                        if (!failures.isEmpty()) {
+                            // Plugin delete failed: leave the group a streams group at UNCERTAIN(-2)
+                            // (reclaimable by the cleanup cycle and re-soliciting), arm the
+                            // conversion-delete throttle so the client's immediate join retries do
+                            // not hammer the broken plugin, and tell the caller to fail the join
+                            // retriably instead of converting over orphaned plugin data.
+                            throttleConversionDelete(groupId);
+                            return CompletableFuture.completedFuture(false);
+                        }
+                        clearBackoffGroup(groupId);
+                        return CompletableFuture.completedFuture(true);
+                    });
+            });
     }
 
     /**
@@ -735,7 +783,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * poison the cycle's allOf — the next cycle retries because the persisted storedEpoch is
      * still non-default.
      */
-    public CompletableFuture<Void> finalizeAfterDelete(Set<String> groupIds) {
+    private CompletableFuture<Void> finalizeAfterDelete(Set<String> groupIds) {
         return runtime.finalizeAfterDeleteBatch(groupIds)
             .exceptionally(throwable -> {
                 log.warn("Failed to finalize StoredDescriptionTopologyEpoch for groups {}; "
@@ -756,7 +804,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * classic-group-join conversion path, so a single pair of meters tracks every
      * {@code plugin.deleteTopology} the broker drives, regardless of trigger.
      */
-    public void recordPluginDeleteOutcome(int attempted, int errors) {
+    private void recordPluginDeleteOutcome(int attempted, int errors) {
         int successes = attempted - errors;
         if (successes > 0) {
             metrics.recordSensor(

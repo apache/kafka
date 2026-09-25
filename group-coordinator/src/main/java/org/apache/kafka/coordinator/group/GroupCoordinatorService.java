@@ -1071,13 +1071,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * Converting an empty streams group to classic would orphan the plugin's topology, so the
      * join detected cleanup is needed: delete the topology (behind a durable UNCERTAIN(-2)
      * barrier) and re-run the join, which then converts because cleanup has been handled.
-     *
-     * <p>Throttle first: on {@code REBALANCE_IN_PROGRESS} the classic client retries the join
-     * immediately ({@code RebalanceInProgressException} skips its retry back-off), so a broken
-     * plugin would otherwise be hit with {@code deleteTopology} in a tight loop. While the window
-     * armed by a previous failed conversion delete is in effect, fail fast without touching the
-     * plugin or scheduling the mark; the interval-throttled cleanup cycle reclaims the group in
-     * the meantime.
      */
     private CompletableFuture<Void> cleanupTopologyBeforeConversion(
         AuthorizableRequestContext context,
@@ -1085,44 +1078,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<JoinGroupResponseData> responseFuture,
         TopicPartition tp
     ) {
-        if (streamsGroupTopologyDescriptionManager.isConversionDeleteThrottled(request.groupId())) {
-            failJoinRetriably(request, responseFuture);
-            return CompletableFuture.completedFuture(null);
-        }
-        return streamsGroupTopologyDescriptionManager.markTopologyUncertain(request.groupId(), false)
-            .thenCompose(marked -> {
-                if (!marked) {
-                    // The group changed underneath us (revived, converted, or removed) between
-                    // the join's cleanup check and the barrier write: no barrier exists, so
-                    // running the plugin delete could wipe a live group's topology. Fail the
-                    // join with a retriable error and let the client retry against the latest
-                    // group state.
+        return streamsGroupTopologyDescriptionManager.cleanupTopologyBeforeConversion(request.groupId())
+            .thenCompose(cleaned -> {
+                if (!cleaned) {
                     failJoinRetriably(request, responseFuture);
-                    return CompletableFuture.<Void>completedFuture(null);
+                    return CompletableFuture.completedFuture(null);
                 }
-                return streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(Set.of(request.groupId()))
-                    .thenCompose(failures -> {
-                        streamsGroupTopologyDescriptionManager.recordPluginDeleteOutcome(1, failures.size());
-                        if (!failures.isEmpty()) {
-                            // Plugin delete failed: leave the group a streams group at UNCERTAIN(-2)
-                            // (reclaimable by the cleanup cycle and re-soliciting), arm the
-                            // conversion-delete throttle so the client's immediate join retries do
-                            // not hammer the broken plugin, and fail the join with a retriable
-                            // error instead of converting over orphaned plugin data.
-                            streamsGroupTopologyDescriptionManager.throttleConversionDelete(request.groupId());
-                            failJoinRetriably(request, responseFuture);
-                            return CompletableFuture.<Void>completedFuture(null);
-                        }
-                        streamsGroupTopologyDescriptionManager.clearBackoffGroup(request.groupId());
-                        // Smart-finalize after the re-join: a no-op once the group has been
-                        // converted (it is no longer a streams group). It only writes for a group
-                        // revived between the barrier and the re-join — the re-join then rejects
-                        // with INCONSISTENT_GROUP_PROTOCOL and, without the finalize, a raced
-                        // push's epoch write would land on stored == UNCERTAIN and record a real
-                        // epoch over the plugin this delete just emptied.
-                        return runClassicGroupJoin(context, request, responseFuture, tp, true)
-                            .thenCompose(__ -> streamsGroupTopologyDescriptionManager.finalizeAfterDelete(request.groupId()));
-                    });
+                // Smart-finalize after the re-join: a no-op once the group has been
+                // converted (it is no longer a streams group). It only writes for a group
+                // revived between the barrier and the re-join — the re-join then rejects
+                // with INCONSISTENT_GROUP_PROTOCOL and, without the finalize, a raced
+                // push's epoch write would land on stored == UNCERTAIN and record a real
+                // epoch over the plugin this delete just emptied.
+                return runClassicGroupJoin(context, request, responseFuture, tp, true)
+                    .thenCompose(__ -> streamsGroupTopologyDescriptionManager.finalizeAfterDelete(request.groupId()));
             });
     }
 

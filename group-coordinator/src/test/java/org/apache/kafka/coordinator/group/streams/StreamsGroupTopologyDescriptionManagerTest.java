@@ -198,6 +198,8 @@ public class StreamsGroupTopologyDescriptionManagerTest {
 
     /** Plugin that fails the test if {@code setTopology} or {@code deleteTopology} is invoked at all. */
     private static final class MockUnreachablePlugin implements StreamsGroupTopologyDescriptionPlugin {
+        int closeCount;
+
         @Override
         public void configure(Map<String, ?> configs) { }
 
@@ -219,7 +221,9 @@ public class StreamsGroupTopologyDescriptionManagerTest {
         }
 
         @Override
-        public void close() { }
+        public void close() {
+            closeCount++;
+        }
     }
 
     @Test
@@ -390,5 +394,44 @@ public class StreamsGroupTopologyDescriptionManagerTest {
             currentTopologyEpoch,
             -1,
             -1);
+    }
+
+    @Test
+    public void testCloseInvokesPluginCloseOnlyOnce() throws Exception {
+        MockUnreachablePlugin plugin = new MockUnreachablePlugin();
+        StreamsGroupTopologyDescriptionManager manager = new StreamsGroupTopologyDescriptionManager(
+            new LogContext(), Optional.of(plugin), new MockTime(), new GroupCoordinatorMetrics(), new MockTopologyDescriptionRuntime());
+
+        manager.close();
+        manager.close();
+
+        assertEquals(1, plugin.closeCount);
+    }
+
+    @Test
+    public void testStopCleanupCycleNoOpWhenNotRunning() {
+        StreamsGroupTopologyDescriptionManager manager = new StreamsGroupTopologyDescriptionManager(
+            new LogContext(), Optional.of(new MockUnreachablePlugin()), new MockTime(), new GroupCoordinatorMetrics(),
+            new MockTopologyDescriptionRuntime());
+
+        manager.stopCleanupCycle();
+
+        assertFalse(manager.isRunning());
+        assertNull(manager.scheduledCleanupTask());
+    }
+
+    @Test
+    public void testStopCleanupCycleCancelsScheduledTask() {
+        StreamsGroupTopologyDescriptionManager manager = new StreamsGroupTopologyDescriptionManager(
+            new LogContext(), Optional.of(new MockUnreachablePlugin()), new MockTime(), new GroupCoordinatorMetrics(),
+            new MockTopologyDescriptionRuntime());
+        manager.startCleanupCycle(new MockTimer(), 1000L, manager::runCleanupCycle);
+        assertTrue(manager.isRunning());
+        assertFalse(manager.scheduledCleanupTask().isCancelled());
+
+        manager.stopCleanupCycle();
+
+        assertFalse(manager.isRunning());
+        assertTrue(manager.scheduledCleanupTask().isCancelled());
     }
 }
