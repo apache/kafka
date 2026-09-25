@@ -1038,10 +1038,7 @@ public class GroupCoordinatorConfigTest {
     }
 
     private abstract static class CountingConfigProvider implements ConfigProvider {
-        private final AtomicInteger invocations;
-
         CountingConfigProvider(AtomicInteger invocations) {
-            this.invocations = invocations;
             invocations.incrementAndGet();
         }
 
