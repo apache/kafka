@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -213,6 +214,30 @@ public class ProtocolSerializationTest {
         assertThrows(SchemaException.class,
             () -> type.read(invalidBuffer),
             "Array size not validated");
+    }
+
+    @Test
+    public void testReadArrayLengthAboveMaxIsRejected() {
+        Type type = new ArrayOf(Type.INT8);
+        int count = MessageUtil.MAX_ARRAY_LENGTH + 1;
+        ByteBuffer buffer = ByteBuffer.allocate(4 + count);
+        buffer.putInt(count);
+        buffer.rewind();
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(buffer));
+        assertEquals("Error reading array of size " + count + ", which exceeds the maximum allowed size of "
+                + MessageUtil.MAX_ARRAY_LENGTH, e.getMessage());
+    }
+
+    @Test
+    public void testReadCompactArrayLengthAboveMaxIsRejected() {
+        Type type = new CompactArrayOf(Type.INT8);
+        int count = MessageUtil.MAX_ARRAY_LENGTH + 1;
+        ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfUnsignedVarint(count + 1) + count);
+        ByteUtils.writeUnsignedVarint(count + 1, buffer);
+        buffer.rewind();
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(buffer));
+        assertEquals("Error reading array of size " + count + ", which exceeds the maximum allowed size of "
+                + MessageUtil.MAX_ARRAY_LENGTH, e.getMessage());
     }
 
     @Test
