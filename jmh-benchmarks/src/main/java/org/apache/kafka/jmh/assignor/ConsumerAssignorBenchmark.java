@@ -69,7 +69,9 @@ import java.util.concurrent.TimeUnit;
  * <p>The parameters describe the group and what happened to it before the assignment:
  * <ul>
  *     <li>{@code memberCount}, {@code topicCount} and {@code partitionCount}: the members, the
- *     subscribed topics and the partitions over all topics.</li>
+ *     subscribed topics and the partitions over all topics. The smallest partition count is at
+ *     least the largest topic count, so that every topic has a partition and every combination
+ *     of the parameters is a valid group.</li>
  *     <li>{@code distribution}: how the partitions are split over the topics, see
  *     {@link Distribution}.</li>
  *     <li>{@code subscription}: how the members subscribe, see {@link Subscription}.</li>
@@ -80,16 +82,23 @@ import java.util.concurrent.TimeUnit;
  *     members are those with the highest indices.</li>
  * </ul>
  *
- * <p>The parameters form 5040 combinations. These three runs of {@code jmh.sh} cover the ones
+ * <p>For the events other than {@link Event#FULL}, the members hold the output of the assignor
+ * for the group as it was before the event. The coordinator never hands the assignor its own
+ * output: it replays the target assignment from its records, see {@link Assignment#fromRecord}.
+ * The benchmark thus copies the partitions of every member the same way, into a {@link HashMap}
+ * with a {@link HashSet} per topic, so that the events measure what the coordinator hands the
+ * assignor rather than the sets the assignor happened to return.
+ *
+ * <p>The parameters form 8064 combinations. These three runs of {@code jmh.sh} cover the ones
  * of interest: the scaling with the group size, then the events on a large group with many
- * topics and on a small group with very many topics. The largest groups need about 4 GB of
- * heap, so pass {@code -jvmArgs -Xmx8g} to {@code jmh.sh} when the default heap is smaller.
+ * topics and on a small group with very many topics. The largest groups need about 1 GB of
+ * heap, so pass {@code -jvmArgs -Xmx2g} to {@code jmh.sh} when the default heap is smaller.
  * <pre>
  * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p event=FULL,STABLE,JOIN_ONE \
  *     -p distribution=EQUAL -p subscription=HOMOGENEOUS ConsumerAssignorBenchmark
- * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p memberCount=10000 -p topicCount=1000 \
+ * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p memberCount=5000 -p topicCount=500 \
  *     -p subscription=HOMOGENEOUS,HETEROGENEOUS_NESTED ConsumerAssignorBenchmark
- * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p memberCount=20 -p topicCount=10000 \
+ * ./jmh-benchmarks/jmh.sh -prof gc -w 1s -r 1s -p memberCount=50 -p topicCount=5000 \
  *     -p subscription=HOMOGENEOUS ConsumerAssignorBenchmark
  * </pre>
  */
@@ -127,12 +136,13 @@ public class ConsumerAssignorBenchmark {
 
         /**
          * The topics form geometric tiers: the first tier holds two thirds of the topics, and
-         * every following tier holds a third of the topics of the previous one, with twice as
-         * many partitions per topic. This gives a few large topics, a band of small ones and a
-         * majority of topics with the smallest size, which is how topics are commonly sized.
-         * Each tier doubles the partitions of the previous one, so the geometric split needs at
-         * least about twice as many partitions as topics. With fewer, the partitions are split
-         * equally, as with {@link #EQUAL}.
+         * every following tier holds a third of the topics of the previous one. The topics of
+         * the first tier have a single partition, whatever the partition count. The other tiers
+         * split the other partitions, the third tier with twice as many partitions per topic as
+         * the second, the fourth with twice as many as the third, and so on, up to the rounding.
+         * This gives a majority of topics with a single partition, a band of small ones and a
+         * few large ones, which is how topics are commonly sized. With too few partitions to
+         * double from one tier to the next, the other tiers split them equally.
          */
         SKEWED
     }
@@ -253,7 +263,7 @@ public class ConsumerAssignorBenchmark {
      * the buckets. The bucket count is fixed by the caller rather than derived from the member
      * count, so that the topics of a bucket are the same in groups built with different member
      * counts. Every member holds its own copy of the topics of its bucket, as members do in the
-     * coordinator, so the largest groups take gigabytes of heap.
+     * coordinator, so the largest groups take about a gigabyte of heap.
      */
     private static final class GroupBuilder {
         /**
@@ -346,9 +356,11 @@ public class ConsumerAssignorBenchmark {
         }
 
         /**
-         * @param currentAssignment The partitions the members hold. Members without an entry
-         *                          hold nothing, and the entries of members not in the group
-         *                          are ignored.
+         * @param currentAssignment The partitions the members hold, as the assignor returned
+         *                          them. Members without an entry hold nothing, and the entries
+         *                          of members not in the group are ignored. The partitions are
+         *                          copied as the coordinator builds them, see
+         *                          {@link Assignment#fromRecord}.
          */
         GroupBuilder withCurrentAssignment(GroupAssignment currentAssignment) {
             this.currentAssignment = currentAssignment;
@@ -382,19 +394,24 @@ public class ConsumerAssignorBenchmark {
             for (int i = 0; i < memberCount; i++) {
                 var memberId = "member" + i;
                 var memberAssignment = currentAssignment.members().get(memberId);
-                Map<Uuid, Set<Integer>> partitions = Map.of();
+                var assignment = Assignment.EMPTY;
                 if (memberAssignment != null) {
-                    partitions = memberAssignment.partitions();
-                    partitions.forEach((topicId, topicPartitions) -> {
+                    // The coordinator hands the assignor the target assignment replayed from its
+                    // records, not its output, so the partitions are rebuilt as
+                    // Assignment#fromRecord does: in a HashMap with a HashSet per topic.
+                    var partitions = new HashMap<Uuid, Set<Integer>>();
+                    memberAssignment.partitions().forEach((topicId, topicPartitions) -> {
+                        partitions.put(topicId, new HashSet<>(topicPartitions));
                         var owners = invertedTargetAssignment.computeIfAbsent(topicId, id -> new HashMap<>());
                         topicPartitions.forEach(partition -> owners.put(partition, memberId));
                     });
+                    assignment = new Assignment(partitions);
                 }
                 members.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                     rack == Rack.NONE ? Optional.empty() : Optional.of(rackId(i)),
                     Optional.empty(),
                     new TopicIds(new HashSet<>(bucketTopics.get(i % bucketCount)), topicResolver),
-                    new Assignment(partitions)
+                    assignment
                 ));
             }
 
@@ -472,7 +489,7 @@ public class ConsumerAssignorBenchmark {
          */
         private static int[] partitionCounts(Distribution distribution, int topicCount, int partitionCount) {
             int[] counts = new int[topicCount];
-            if (distribution == Distribution.SKEWED) {
+            if (distribution == Distribution.SKEWED && topicCount > 1) {
                 List<Integer> tierSizes = new ArrayList<>();
                 double fraction = 2.0 / 3.0;
                 for (int remaining = topicCount; remaining > 0; fraction /= 3.0) {
@@ -480,20 +497,42 @@ public class ConsumerAssignorBenchmark {
                     tierSizes.add(size);
                     remaining -= size;
                 }
+
+                // The topics of the first tier, which come last, have a single partition, and the
+                // topics of the other tiers split the other partitions.
+                int otherTopics = topicCount - tierSizes.get(0);
+                long otherPartitions = Math.max(otherTopics, (long) partitionCount - tierSizes.get(0));
+                Arrays.fill(counts, otherTopics, topicCount, 1);
                 long weight = 0;
-                for (int tier = 0; tier < tierSizes.size(); tier++) {
-                    weight += (long) tierSizes.get(tier) << tier;
+                for (int tier = 1; tier < tierSizes.size(); tier++) {
+                    weight += (long) tierSizes.get(tier) << (tier - 1);
                 }
-                if (weight <= partitionCount) {
-                    long base = partitionCount / weight;
-                    int topic = 0;
-                    for (int tier = tierSizes.size() - 1; tier >= 0; tier--) {
-                        Arrays.fill(counts, topic, topic + tierSizes.get(tier), (int) (base << tier));
-                        topic += tierSizes.get(tier);
-                    }
-                    spreadRemainder(counts, partitionCount);
+                if (weight > otherPartitions) {
+                    // Too few partitions to double from one tier to the next: split them equally.
+                    int partitionsPerTopic = (int) (otherPartitions / otherTopics);
+                    Arrays.fill(counts, 0, otherTopics, partitionsPerTopic);
+                    Arrays.fill(counts, 0, (int) (otherPartitions % otherTopics), partitionsPerTopic + 1);
                     return counts;
                 }
+
+                // Every other tier gets its share of the other partitions in proportion to its
+                // weight, the running total being rounded so that the shares add up. The topics of
+                // a tier split its share equally, the first ones getting the remainder, so that
+                // every topic is within one partition of its exact share.
+                long givenWeight = 0;
+                long givenPartitions = 0;
+                int topic = 0;
+                for (int tier = tierSizes.size() - 1; tier >= 1; tier--) {
+                    int size = tierSizes.get(tier);
+                    givenWeight += (long) size << (tier - 1);
+                    long share = otherPartitions * givenWeight / weight - givenPartitions;
+                    givenPartitions += share;
+                    int partitionsPerTopic = (int) (share / size);
+                    Arrays.fill(counts, topic, topic + size, partitionsPerTopic);
+                    Arrays.fill(counts, topic, topic + (int) (share % size), partitionsPerTopic + 1);
+                    topic += size;
+                }
+                return counts;
             }
             Arrays.fill(counts, Math.max(1, partitionCount / topicCount));
             spreadRemainder(counts, partitionCount);
@@ -533,13 +572,13 @@ public class ConsumerAssignorBenchmark {
      */
     private static final int ADDED_PARTITIONS_TOPIC_DIVISOR = 10;
 
-    @Param({"2", "20", "1000", "5000", "10000"})
+    @Param({"5", "50", "500", "5000"})
     private int memberCount;
 
-    @Param({"10", "1000", "10000"})
+    @Param({"5", "50", "500", "5000"})
     private int topicCount;
 
-    @Param({"10000", "100000"})
+    @Param({"5000", "10000", "20000"})
     private int partitionCount;
 
     @Param({"EQUAL", "SKEWED"})
@@ -576,7 +615,8 @@ public class ConsumerAssignorBenchmark {
 
         // The previous assignment is the output of the assignor for the group as it was before
         // the event: without the joining members, with the leaving members, and before the
-        // partitions were added.
+        // partitions were added. The builder copies it as the coordinator rebuilds it from the
+        // target assignment records, so the assignor does not get its own sets back.
         var previousAssignment = new GroupAssignment(Map.of());
         if (event != Event.FULL) {
             var previousGroup = builder
