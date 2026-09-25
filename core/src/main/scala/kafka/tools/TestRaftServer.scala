@@ -43,7 +43,7 @@ import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
-import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, DeferredValue, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.jdk.CollectionConverters._
@@ -96,7 +96,7 @@ class TestRaftServer(
     )
 
     raftManager = new KafkaRaftManager[Array[Byte]](
-      Uuid.ZERO_UUID.toString,
+      DeferredValue.completed(Uuid.ZERO_UUID.toString),
       config,
       nodeDirectoryId,
       new ByteArraySerde,

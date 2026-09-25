@@ -44,7 +44,7 @@ import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateSt
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
+import org.apache.kafka.server.util.{DeferredValue, FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
@@ -85,7 +85,7 @@ object KafkaRaftManager {
 }
 
 class KafkaRaftManager[T](
-  clusterId: String,
+  clusterId: DeferredValue[String],
   config: KafkaConfig,
   metadataLogDirUuid: Uuid,
   serde: RecordSerde[T],

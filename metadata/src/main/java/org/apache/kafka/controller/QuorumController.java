@@ -123,6 +123,7 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
+import org.apache.kafka.server.util.DeferredValue;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -180,7 +181,7 @@ public final class QuorumController implements Controller {
      */
     public static class Builder {
         private final int nodeId;
-        private final String clusterId;
+        private final DeferredValue<String> clusterId;
         private FaultHandler nonFatalFaultHandler = null;
         private FaultHandler fatalFaultHandler = null;
         private Time time = Time.SYSTEM;
@@ -213,7 +214,7 @@ public final class QuorumController implements Controller {
         private long delegationTokenExpiryCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
         private long uncleanLeaderElectionCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
 
-        public Builder(int nodeId, String clusterId) {
+        public Builder(int nodeId, DeferredValue<String> clusterId) {
             this.nodeId = nodeId;
             this.clusterId = clusterId;
         }
@@ -1350,7 +1351,7 @@ public final class QuorumController implements Controller {
     /**
      * The ID of this cluster.
      */
-    private final String clusterId;
+    private final DeferredValue<String> clusterId;
 
     /**
      * The single-threaded queue that processes all of our events.
@@ -1501,7 +1502,7 @@ public final class QuorumController implements Controller {
         FaultHandler fatalFaultHandler,
         LogContext logContext,
         int nodeId,
-        String clusterId,
+        DeferredValue<String> clusterId,
         KafkaEventQueue queue,
         Time time,
         KafkaConfigSchema configSchema,
@@ -1653,7 +1654,7 @@ public final class QuorumController implements Controller {
             setMetrics(controllerMetrics).
             setTime(time).
             build();
-        log.info("Creating new QuorumController with clusterId {}", clusterId);
+        log.info("Creating new QuorumController with clusterId {}", clusterId.getNow());
         this.raftClient.register(metaLogListener);
     }
 
@@ -2215,7 +2216,7 @@ public final class QuorumController implements Controller {
     }
 
     public String clusterId() {
-        return clusterId;
+        return clusterId.getNow();
     }
 
     @Override
