@@ -33,7 +33,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.internals.LogContext
-import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
@@ -57,7 +57,7 @@ import org.apache.kafka.server.share.fetch.DelayedShareFetchKey
 import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister}
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper, Timer}
-import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
+import org.apache.kafka.server.util.{Deadline, DeferredValue, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
 import org.apache.kafka.server.{AssignmentsManager, AutoTopicCreationManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DefaultAutoTopicCreationManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, ForwardingManager, ForwardingManagerImpl, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager => JLogManager}
@@ -630,7 +630,7 @@ class BrokerServer(
         val builder = new EndpointReadyFutures.Builder()
         builder.build(authorizerPlugin.toJava,
           new KafkaAuthorizerServerInfo(
-            new ClusterResource(clusterId),
+            DeferredValue.completed(clusterId),
             config.nodeId,
             listenerInfo.listeners().values(),
             listenerInfo.firstListener(),

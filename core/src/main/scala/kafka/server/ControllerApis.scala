@@ -31,7 +31,7 @@ import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, CREATE_TOKENS, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, ClusterIdNotKnownException, InvalidRequestException, TopicDeletionDisabledException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.{FatalExitError, Plugin, Topic}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
@@ -1063,6 +1063,10 @@ class ControllerApis(
   }
 
   def handleDescribeCluster(request: Request): CompletableFuture[Unit] = {
+    val knownClusterId = clusterId.getNow
+    if (knownClusterId == null) {
+      throw new ClusterIdNotKnownException("Cannot describe cluster until the cluster id is known")
+    }
     // Nearly all RPCs should check MetadataVersion inside the QuorumController. However, this
     // RPC is consulting a cache which lives outside the QC. So we check MetadataVersion here.
     if (apiVersionManager.features.isUnknown) {
@@ -1078,7 +1082,7 @@ class ControllerApis(
     val response = authHelper.computeDescribeClusterResponse(
       request,
       EndpointType.CONTROLLER,
-      clusterId.getNow,
+      knownClusterId,
       () => registrationsPublisher.describeClusterControllers(request.context.listenerName()),
       () => raftManager.client.leaderAndEpoch.leaderId().orElse(-1)
     )

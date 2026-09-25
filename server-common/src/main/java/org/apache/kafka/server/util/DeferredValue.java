@@ -19,6 +19,7 @@ package org.apache.kafka.server.util;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
@@ -86,5 +87,35 @@ public class DeferredValue<T> {
 
     public boolean isDone() {
         return future.isDone();
+    }
+
+    /**
+     * Two deferred values are equal if both are completed with equal values. A deferred value that is not
+     * completed is only equal to itself.
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DeferredValue<?> other = (DeferredValue<?>) o;
+        return isDone() && other.isDone() && Objects.equals(getNow(), other.getNow());
+    }
+
+    /**
+     * Returns the hash code of the completed value, or the identity hash code if the value is not completed.
+     * Note that the hash code changes when the value is completed.
+     */
+    @Override
+    public int hashCode() {
+        return isDone() ? Objects.hashCode(getNow()) : super.hashCode();
+    }
+
+    /**
+     * Returns the string representation of the completed value, or the default {@link Object#toString()}
+     * if the value is not completed.
+     */
+    @Override
+    public String toString() {
+        return isDone() ? Objects.toString(getNow()) : super.toString();
     }
 }

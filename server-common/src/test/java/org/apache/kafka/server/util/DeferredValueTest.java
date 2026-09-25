@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,5 +63,48 @@ public class DeferredValueTest {
         deferred.complete("first");
         deferred.complete("second");
         assertEquals("first", deferred.getNow());
+    }
+
+    @Test
+    public void testEqualsAndHashCodeWhenCompleted() {
+        DeferredValue<String> deferred = DeferredValue.incomplete("default");
+        deferred.complete("value");
+        DeferredValue<String> other = DeferredValue.completed("value");
+
+        assertEquals(other, deferred);
+        assertEquals(deferred, other);
+        assertEquals("value".hashCode(), deferred.hashCode());
+        assertEquals(other.hashCode(), deferred.hashCode());
+        assertNotEquals(DeferredValue.completed("other"), deferred);
+    }
+
+    @Test
+    public void testEqualsAndHashCodeWhenIncomplete() {
+        DeferredValue<String> deferred = DeferredValue.incomplete("default");
+
+        assertEquals(deferred, deferred);
+        assertNotEquals(DeferredValue.incomplete("default"), deferred);
+        // The default value is not used for equality.
+        assertNotEquals(DeferredValue.completed("default"), deferred);
+        assertNotEquals(deferred, DeferredValue.completed("default"));
+        assertEquals(System.identityHashCode(deferred), deferred.hashCode());
+    }
+
+    @Test
+    public void testToString() {
+        DeferredValue<String> deferred = DeferredValue.incomplete("default");
+        assertEquals(DeferredValue.class.getName() + "@" + Integer.toHexString(System.identityHashCode(deferred)),
+            deferred.toString());
+
+        deferred.complete("value");
+        assertEquals("value", deferred.toString());
+    }
+
+    @Test
+    public void testCompletedWithNull() {
+        DeferredValue<String> deferred = DeferredValue.completed(null);
+        assertEquals(DeferredValue.completed(null), deferred);
+        assertEquals(0, deferred.hashCode());
+        assertEquals("null", deferred.toString());
     }
 }

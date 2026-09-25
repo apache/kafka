@@ -53,6 +53,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.ClusterIdNotKnownException;
 import org.apache.kafka.common.errors.DuplicateVoterException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -187,6 +188,7 @@ import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeResponse;
+import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
@@ -2975,6 +2977,52 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureThrows(InvalidRequestException.class, result.controller(), errorMessage);
             TestUtils.assertFutureThrows(InvalidRequestException.class, result.nodes(), errorMessage);
             TestUtils.assertFutureThrows(InvalidRequestException.class, result.authorizedOperations(), errorMessage);
+        }
+    }
+
+    @Test
+    public void testDescribeClusterToControllerHandleClusterIdNotKnown() {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, "dummy")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            String errorMessage = "Cannot describe cluster until the cluster id is known";
+            env.kafkaClient().prepareResponse(
+                new DescribeClusterResponse(new DescribeClusterResponseData()
+                    .setErrorCode(Errors.CLUSTER_ID_NOT_KNOWN.code())
+                    .setErrorMessage(errorMessage)));
+
+            final DescribeClusterResult result = env.adminClient().describeCluster();
+            TestUtils.assertFutureThrows(ClusterIdNotKnownException.class, result.clusterId(), errorMessage);
+            TestUtils.assertFutureThrows(ClusterIdNotKnownException.class, result.controller(), errorMessage);
+            TestUtils.assertFutureThrows(ClusterIdNotKnownException.class, result.nodes(), errorMessage);
+            TestUtils.assertFutureThrows(ClusterIdNotKnownException.class, result.authorizedOperations(), errorMessage);
+        }
+    }
+
+    @Test
+    public void testControllerMetadataFetchRetriesOnClusterIdNotKnown() throws Exception {
+        // The bootstrap controller has not discovered the cluster ID yet, so the first metadata fetch fails.
+        // CLUSTER_ID_NOT_KNOWN is not fatal to the metadata manager, so the client should fetch again.
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, mockBootstrapCluster(),
+                AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, "dummy")) {
+            Cluster discoveredCluster = mockCluster(3, 0);
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(request -> request instanceof DescribeClusterRequest,
+                new DescribeClusterResponse(new DescribeClusterResponseData()
+                    .setErrorCode(Errors.CLUSTER_ID_NOT_KNOWN.code())
+                    .setErrorMessage("Cannot describe cluster until the cluster id is known")));
+            env.kafkaClient().prepareResponse(request -> request instanceof DescribeClusterRequest,
+                prepareDescribeClusterResponse(0,
+                    discoveredCluster.nodes(),
+                    discoveredCluster.clusterResource().clusterId(),
+                    discoveredCluster.controller().id(),
+                    MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED,
+                    true));
+            env.kafkaClient().prepareResponse(request -> request instanceof CreateAclsRequest,
+                new CreateAclsResponse(new CreateAclsResponseData().setResults(List.of(
+                    new CreateAclsResponseData.AclCreationResult()))));
+
+            env.adminClient().createAcls(List.of(ACL1)).all().get();
         }
     }
 

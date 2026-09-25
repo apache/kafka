@@ -32,7 +32,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.LogContext
-import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
+import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
 import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, KRaftMetadataCachePublisher, MetadataPublisher}
@@ -191,6 +191,17 @@ class ControllerServer(
         .withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
 
+      val endpointReadyFutures = {
+        val builder = new EndpointReadyFutures.Builder()
+        builder.build(authorizerPlugin.toJava,
+          new KafkaAuthorizerServerInfo(
+            clusterId,
+            config.nodeId,
+            listenerInfo.listeners().values(),
+            listenerInfo.firstListener(),
+            config.earlyStartListeners.map(_.value()).asJava))
+      }
+
       sharedServer.startForController(listenerInfo)
 
       createTopicPolicy = Option(config.
@@ -293,6 +304,23 @@ class ControllerServer(
         "controller"
       )
 
+      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = endpointReadyFutures.futures().asScala.toMap
+
+      /**
+       * Enable the controller endpoint(s). If we are using an authorizer which stores
+       * ACLs in the metadata log, such as StandardAuthorizer, we will be able to start
+       * accepting requests from principals included super.users right after this point,
+       * but we will not be able to process requests from non-superusers until AclPublisher
+       * publishes metadata from the QuorumController. MetadataPublishers do not publish
+       * metadata until the controller has caught up to the high watermark.
+       */
+      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
+
+      // Wait for the cluster ID to be known before proceeding
+      val knownClusterId = clusterId.waitWithLogging(logger.underlying, logIdent,
+        "the clusterId to be known", startupDeadline, time)
+      metricsGroup.newGauge("ClusterId", () => knownClusterId)
+
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)
 
@@ -301,11 +329,6 @@ class ControllerServer(
 
       // Set up the controller registrations publisher.
       metadataPublishers.add(registrationsPublisher)
-
-      // Wait for the cluster ID to be known before proceeding
-      val knownClusterId = clusterId.waitWithLogging(logger.underlying, logIdent,
-        "the clusterId to be known", startupDeadline, time)
-      metricsGroup.newGauge("ClusterId", () => knownClusterId)
 
       // Create the registration manager, which handles sending KIP-919 controller registrations.
       registrationManager = new ControllerRegistrationManager(config.nodeId,
@@ -392,28 +415,6 @@ class ControllerServer(
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the controller metadata publishers to be installed",
         sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
-
-      val endpointReadyFutures = {
-        val builder = new EndpointReadyFutures.Builder()
-        builder.build(authorizerPlugin.toJava,
-          new KafkaAuthorizerServerInfo(
-            new ClusterResource(knownClusterId),
-            config.nodeId,
-            listenerInfo.listeners().values(),
-            listenerInfo.firstListener(),
-            config.earlyStartListeners.map(_.value()).asJava))
-      }
-      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = endpointReadyFutures.futures().asScala.toMap
-
-      /**
-       * Enable the controller endpoint(s). If we are using an authorizer which stores
-       * ACLs in the metadata log, such as StandardAuthorizer, we will be able to start
-       * accepting requests from principals included super.users right after this point,
-       * but we will not be able to process requests from non-superusers until AclPublisher
-       * publishes metadata from the QuorumController. MetadataPublishers do not publish
-       * metadata until the controller has caught up to the high watermark.
-       */
-      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
       /**
        * Start the KIP-919 controller registration manager.

@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -60,6 +60,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, A
 import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.quota.{ClientQuotaManager, ClientRequestQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicationQuotaManager}
+import org.apache.kafka.server.util.DeferredValue
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -157,7 +158,9 @@ class ControllerApisTest {
   private def createControllerApis(authorizer: Option[Plugin[Authorizer]],
                                    controller: Controller,
                                    props: Properties = new Properties(),
-                                   throttle: Boolean = false): ControllerApis = {
+                                   throttle: Boolean = false,
+                                   clusterId: DeferredValue[String] = DeferredValue.completed("JgxuGe9URy-E-ceaL04lEw"),
+                                   features: FinalizedFeatures = FinalizedFeatures.fromMetadataVersion(MetadataVersion.latestTesting())): ControllerApis = {
     props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId: java.lang.Integer)
     props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
@@ -171,12 +174,12 @@ class ControllerApisTest {
       controller,
       raftManager,
       new KafkaConfig(props),
-      "JgxuGe9URy-E-ceaL04lEw",
+      clusterId,
       new ControllerRegistrationsPublisher(),
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         true,
-        () => FinalizedFeatures.fromMetadataVersion(MetadataVersion.latestTesting())),
+        () => features),
       metadataCache
     )
   }
@@ -1304,6 +1307,18 @@ class ControllerApisTest {
         new DescribeClusterRequest(new DescribeClusterRequestData(), 1.toShort)))
     })
     assertTrue(exception.getMessage.contains("needs ALTER permission"))
+  }
+
+  @Test
+  def testDescribeClusterWhenClusterIdNotKnown(): Unit = {
+    // Until the cluster ID is known the MetadataVersion is unknown too, but the cluster ID error should win.
+    controllerApis = createControllerApis(None, new MockController.Builder().build(),
+      clusterId = DeferredValue.incomplete[String](null),
+      features = FinalizedFeatures.unknown())
+    val response = handleRequest[DescribeClusterResponse](new DescribeClusterRequest(
+      new DescribeClusterRequestData().setEndpointType(EndpointType.CONTROLLER.id), 1.toShort), controllerApis)
+    assertEquals(Errors.CLUSTER_ID_NOT_KNOWN.code, response.data.errorCode)
+    assertEquals("Cannot describe cluster until the cluster id is known", response.data.errorMessage)
   }
 
   @AfterEach

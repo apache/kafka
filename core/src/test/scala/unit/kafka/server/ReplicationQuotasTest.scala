@@ -288,7 +288,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
       new BrokerRegistrationRequestData()
         .setBrokerId(id)
-        .setClusterId(controllerServer.clusterId)
+        .setClusterId(controllerServer.clusterId.getNow)
         .setIncarnationId(Uuid.randomUuid())
         .setListeners(listeners)
         .setLogDirs(Collections.singletonList(

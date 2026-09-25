@@ -53,6 +53,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
+import org.apache.kafka.server.util.DeferredValue;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 
 import org.slf4j.Logger;

@@ -40,7 +40,7 @@ public class ClusterResource {
 
     /**
      * Return the cluster id. Note that it may be {@code null} if the metadata request was sent to a broker without
-     * support for cluster ids.
+     * support for cluster ids, or if the cluster id is not yet known.
      */
     public String clusterId() {
         return clusterId;

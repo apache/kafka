@@ -36,6 +36,7 @@ import org.apache.kafka.raft.{Endpoints, KRaftConfigs, MetadataLogConfig, Quorum
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.server.util.DeferredValue
 import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -97,7 +98,7 @@ class RaftManagerTest {
     )
 
     new KafkaRaftManager[Array[Byte]](
-      Uuid.randomUuid.toString,
+      DeferredValue.completed(Uuid.randomUuid.toString),
       config,
       Uuid.randomUuid,
       new ByteArraySerde,
