@@ -92,7 +92,7 @@ public class RequestHeaderTest {
     }
 
     @Test
-    public void testClientInstanceIdIsDroppedBelowTheV3Header() {
+    public void testClientInstanceIdIsUnsetBelowTheV3Header() {
         // OffsetDelete v0 uses the v1 request header, which has no ClientInstanceId field, so the header
         // leaves the ID unset as its default, ZERO_UUID.
         RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 0, "", Uuid.randomUuid(), 10);

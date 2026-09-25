@@ -48,8 +48,8 @@ public class RequestHeader implements AbstractRequestResponse {
                 setRequestApiVersion(requestVersion).
                 setClientId(clientId).
                 setCorrelationId(correlationId);
-        // The client instance ID is a tagged field of the v3 header, so writing it on an older
-        // header fails. Drop it for request versions which do not map to the v3 header.
+        // The client instance ID is a tagged field from header version 3, so writing it at an older version fails.
+        // We only set it from header version 3. Otherwise, the header leaves the ID unset as its default, `Uuid.ZERO_UUID`.
         if (clientInstanceId != null && headerVersion >= 3)
             this.data.setClientInstanceId(clientInstanceId);
     }
