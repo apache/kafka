@@ -29,9 +29,10 @@ import java.util.function.Predicate;
 /**
  * Picks the processes for the standbys of one task over the keys of {@code rack.aware.assignment.tags}, whose list
  * order is the priority. A standby goes to an eligible process whose value for the highest-priority key is not yet
- * carried by a holder of the task; among those, the one whose values are new on the most lower-priority keys wins,
- * then the assignor's tie-break decides. Keys are given up lowest priority first, and once every key is given up no
- * process can make the task more diverse, so the assignor's tag-blind pass places the remaining standbys.
+ * carried by a holder of the task; among those, the one with the lexicographically largest diversity vector over the
+ * lower-priority keys wins (one bit per key, set where its value is new to the task), then the assignor's tie-break
+ * decides. Keys are given up lowest priority first, and once every key is given up no process can make the task more
+ * diverse, so the assignor's tag-blind pass places the remaining standbys.
  * <p>
  * For each task: {@link #startTask()}, {@link #markUsed(Object)} for the active owner, then per standby
  * {@link #pickNext(Predicate, Comparator)} and {@link #markUsed(Object)} for the winner.
@@ -72,6 +73,7 @@ final class RackAwareStandbyPicker<P> {
         for (int i = 0; i < tagKeys.size(); i++) {
             usedTagValues.add(new HashSet<>());
         }
+        candidates = allProcesses;
     }
 
     void startTask() {

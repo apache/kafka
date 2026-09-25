@@ -49,10 +49,11 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static final String STICKY_ASSIGNOR_NAME = "sticky";
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
 
-    // Ranks of a process among the previous holders of a task, used to break ties between equally rack-diverse processes.
+    // Ranks of a process among the previous holders of a task, used to break ties between equally rack-diverse
+    // processes: the previous active holder first, then the previous standby holders in STANDBY_CANDIDATE_ORDER.
     private static final int PREV_ACTIVE_HOLDER = 0;
-    private static final int PREV_STANDBY_HOLDER = 1;
-    private static final int NOT_PREV_HOLDER = 2;
+    private static final int FIRST_PREV_STANDBY_HOLDER = 1;
+    private static final int NOT_PREV_HOLDER = Integer.MAX_VALUE;
 
     /**
      * Members that currently hold the task as a standby or warm-up rank ahead of members only known to hold state
@@ -142,6 +143,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         localState.processIdToState = new HashMap<>(localState.totalMembersWithActiveTaskCapacity);
         localState.processIdToClientTags = new HashMap<>(localState.totalMembersWithActiveTaskCapacity);
         localState.activeTaskToPrevMember = new HashMap<>(localState.totalActiveTasks);
+        localState.statefulActiveTaskToProcess = new HashMap<>(localState.totalStatefulActiveTasks);
 
         // Standby-strength candidates per task, gathered in a single pass over the members and ranked below.
         final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates = new HashMap<>();
@@ -347,6 +349,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 // The stateful active task quota is only checked in steps 1 and 2, so it needs no update here.
                 maybeUpdateActiveTasksPerMember(localState, newTaskCount);
                 maybeUpdateTotalTasksPerMember(localState, newTaskCount);
+                recordStatefulActiveOwner(localState, task, processWithLeastLoad, stateful);
             } else {
                 throw new TaskAssignorException(String.format("No member available to assign active task %s.", task));
             }
@@ -369,6 +372,19 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
         maybeUpdateActiveTasksPerMember(localState, newTaskCount);
         maybeUpdateTotalTasksPerMember(localState, newTaskCount);
+        recordStatefulActiveOwner(localState, task, processState, stateful);
+    }
+
+    /** Remembers which process owns a stateful active task, so that the standby pass finds the owner without a scan. */
+    private static void recordStatefulActiveOwner(
+        final LocalState localState,
+        final TaskId task,
+        final ProcessState processState,
+        final boolean stateful
+    ) {
+        if (stateful) {
+            localState.statefulActiveTaskToProcess.put(task, processState);
+        }
     }
 
     private static void maybeUpdateStatefulActiveTasksPerMember(final LocalState localState, final int statefulActiveTasksNo) {
@@ -519,9 +535,11 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     /**
-     * Assigns the standbys of {@code task} that still make it more rack-diverse to processes with room, each to the
-     * least-loaded member, and returns how many were placed. Equally diverse processes are ordered by holding the
-     * task before as active, then as standby, then by load.
+     * Assigns the standbys of {@code task} that still make it more rack-diverse to processes with room and returns
+     * how many were placed. Equally diverse processes are ordered by holding the task before, as active first and
+     * then as standby in {@link #STANDBY_CANDIDATE_ORDER}, then by load. A standby that lands on a previous holder
+     * goes back to the member that held it while that member is below the quota, so that it does not hop between
+     * the members of its process; otherwise it goes to the member with the fewest tasks.
      */
     private static int assignRackAwareStandbys(
         final LocalState localState,
@@ -530,19 +548,12 @@ public class StickyTaskAssignor implements TaskAssignor {
     ) {
         picker.startTask();
         // The active owner is the only holder of the task so far.
-        for (final ProcessState process : localState.processIdToState.values()) {
-            if (process.hasTask(task)) {
-                picker.markUsed(process);
-            }
-        }
+        picker.markUsed(localState.statefulActiveTaskToProcess.get(task));
 
-        final Map<String, Integer> prevHolderRanks = prevHolderRanks(localState, task);
+        final Map<String, PrevHolder> prevHolders = prevHolders(localState, task);
         final Predicate<ProcessState> eligible = process -> !process.hasTask(task) && hasRoom(localState, process);
         final Comparator<ProcessState> tieBreak = (process1, process2) -> {
-            final int byPrevHolder = Integer.compare(
-                prevHolderRanks.getOrDefault(process1.processId(), NOT_PREV_HOLDER),
-                prevHolderRanks.getOrDefault(process2.processId(), NOT_PREV_HOLDER)
-            );
+            final int byPrevHolder = Integer.compare(prevHolderRank(prevHolders, process1), prevHolderRank(prevHolders, process2));
             return byPrevHolder != 0 ? byPrevHolder : Double.compare(process1.load(), process2.load());
         };
 
@@ -552,7 +563,13 @@ public class StickyTaskAssignor implements TaskAssignor {
             if (winner == null) {
                 break;
             }
-            final int newTaskCount = winner.addTaskToLeastLoadedMember(task, false, true);
+            final PrevHolder prevHolder = prevHolders.get(winner.processId());
+            // The least-loaded member is below the quota because the winner has room. Found by a scan, not through
+            // the heap of addTaskToLeastLoadedMember, which the sticky pass's addTask would drop again for each task.
+            final String memberId = prevHolder != null && hasUnfulfilledTaskQuota(localState, winner, prevHolder.member())
+                ? prevHolder.member().memberId
+                : winner.leastLoadedMember();
+            final int newTaskCount = winner.addTask(memberId, task, false, true);
             maybeUpdateTotalTasksPerMember(localState, newTaskCount);
             picker.markUsed(winner);
             placed++;
@@ -561,23 +578,31 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     /**
-     * Ranks the processes whose members held {@code task} before this assignment: the previous active member's process
-     * as {@link #PREV_ACTIVE_HOLDER}, the previous standby members' processes as {@link #PREV_STANDBY_HOLDER}.
+     * Collects the processes whose members held {@code task} before this assignment, by process ID: the previous
+     * active member with rank {@link #PREV_ACTIVE_HOLDER}, and the previous standby members with their position in
+     * {@link #STANDBY_CANDIDATE_ORDER} from {@link #FIRST_PREV_STANDBY_HOLDER} on, so that a process holding the task
+     * as a caught-up standby outranks one that only reports stale offsets for it. A process keeps its best-ranked member.
      */
-    private static Map<String, Integer> prevHolderRanks(final LocalState localState, final TaskId task) {
-        final Map<String, Integer> prevHolderRanks = new HashMap<>();
+    private static Map<String, PrevHolder> prevHolders(final LocalState localState, final TaskId task) {
+        final Map<String, PrevHolder> prevHolders = new HashMap<>();
         final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
         if (prevStandbyMembers != null) {
-            for (final Member prevStandbyMember : prevStandbyMembers) {
-                prevHolderRanks.put(prevStandbyMember.processId, PREV_STANDBY_HOLDER);
+            for (int i = 0; i < prevStandbyMembers.size(); i++) {
+                final Member prevStandbyMember = prevStandbyMembers.get(i);
+                prevHolders.putIfAbsent(prevStandbyMember.processId, new PrevHolder(prevStandbyMember, FIRST_PREV_STANDBY_HOLDER + i));
             }
         }
         // Put last: a process that held the active task outranks one that held a standby.
         final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
         if (prevActiveMember != null) {
-            prevHolderRanks.put(prevActiveMember.processId, PREV_ACTIVE_HOLDER);
+            prevHolders.put(prevActiveMember.processId, new PrevHolder(prevActiveMember, PREV_ACTIVE_HOLDER));
         }
-        return prevHolderRanks;
+        return prevHolders;
+    }
+
+    private static int prevHolderRank(final Map<String, PrevHolder> prevHolders, final ProcessState process) {
+        final PrevHolder prevHolder = prevHolders.get(process.processId());
+        return prevHolder == null ? NOT_PREV_HOLDER : prevHolder.rank();
     }
 
     /**
@@ -672,10 +697,16 @@ public class StickyTaskAssignor implements TaskAssignor {
     private record StandbyCandidate(Member member, boolean isPrevStandby, long offsetSum) {
     }
 
+    /** A member that held a task before this assignment, with the rank of its process among the task's previous holders. */
+    private record PrevHolder(Member member, int rank) {
+    }
+
     private static class LocalState {
         // helper data structures:
         Map<TaskId, Member> activeTaskToPrevMember;
         Map<TaskId, ArrayList<Member>> standbyTaskToPrevMember;
+        // The process that owns each stateful active task in this assignment, the sole holder when its standbys are placed.
+        Map<TaskId, ProcessState> statefulActiveTaskToProcess;
         Map<String, ProcessState> processIdToState;
         Map<String, Map<String, String>> processIdToClientTags;
         LinkedList<TaskId> statefulActiveTaskIds;

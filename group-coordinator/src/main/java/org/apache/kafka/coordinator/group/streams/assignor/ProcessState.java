@@ -176,6 +176,23 @@ public class ProcessState {
         }
     }
 
+    /**
+     * Returns the member of this process with the fewest tasks, or null if the process has no members. Found by a
+     * scan over the members rather than through the heap of {@link #addTaskToLeastLoadedMember}, so that a caller
+     * interleaving it with {@link #addTask} does not rebuild that heap for every task.
+     */
+    public String leastLoadedMember() {
+        String leastLoadedMember = null;
+        int fewestTasks = Integer.MAX_VALUE;
+        for (final Map.Entry<String, Integer> entry : memberToTaskCounts.entrySet()) {
+            if (entry.getValue() < fewestTasks) {
+                leastLoadedMember = entry.getKey();
+                fewestTasks = entry.getValue();
+            }
+        }
+        return leastLoadedMember;
+    }
+
     private void incrementCapacity() {
         capacity++;
         computeLoad();
