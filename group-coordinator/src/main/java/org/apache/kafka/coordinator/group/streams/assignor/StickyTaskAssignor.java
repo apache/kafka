@@ -49,6 +49,11 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static final String STICKY_ASSIGNOR_NAME = "sticky";
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
 
+    // Ranks of a process among the previous holders of a task, used to break ties between equally rack-diverse processes.
+    private static final int PREV_ACTIVE_HOLDER = 0;
+    private static final int PREV_STANDBY_HOLDER = 1;
+    private static final int NOT_PREV_HOLDER = 2;
+
     /**
      * Members that currently hold the task as a standby or warm-up rank ahead of members only known to hold state
      * through their reported offsets; within each group, the most caught-up state comes first.
@@ -515,8 +520,8 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     /**
      * Assigns the standbys of {@code task} that still make it more rack-diverse to processes with room, each to the
-     * least-loaded member, and returns how many were placed. Equally diverse processes are ordered by being a previous
-     * holder of the task, then by load.
+     * least-loaded member, and returns how many were placed. Equally diverse processes are ordered by holding the
+     * task before as active, then as standby, then by load.
      */
     private static int assignRackAwareStandbys(
         final LocalState localState,
@@ -531,12 +536,12 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
         }
 
-        final Set<String> prevHolderProcessIds = prevHolderProcessIds(localState, task);
+        final Map<String, Integer> prevHolderRanks = prevHolderRanks(localState, task);
         final Predicate<ProcessState> eligible = process -> !process.hasTask(task) && hasRoom(localState, process);
         final Comparator<ProcessState> tieBreak = (process1, process2) -> {
-            final int byPrevHolder = Boolean.compare(
-                prevHolderProcessIds.contains(process2.processId()),
-                prevHolderProcessIds.contains(process1.processId())
+            final int byPrevHolder = Integer.compare(
+                prevHolderRanks.getOrDefault(process1.processId(), NOT_PREV_HOLDER),
+                prevHolderRanks.getOrDefault(process2.processId(), NOT_PREV_HOLDER)
             );
             return byPrevHolder != 0 ? byPrevHolder : Double.compare(process1.load(), process2.load());
         };
@@ -555,20 +560,24 @@ public class StickyTaskAssignor implements TaskAssignor {
         return placed;
     }
 
-    /** The processes whose members held {@code task}, active or standby, before this assignment. */
-    private static Set<String> prevHolderProcessIds(final LocalState localState, final TaskId task) {
-        final Set<String> prevHolderProcessIds = new HashSet<>();
-        final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
-        if (prevActiveMember != null) {
-            prevHolderProcessIds.add(prevActiveMember.processId);
-        }
+    /**
+     * Ranks the processes whose members held {@code task} before this assignment: the previous active member's process
+     * as {@link #PREV_ACTIVE_HOLDER}, the previous standby members' processes as {@link #PREV_STANDBY_HOLDER}.
+     */
+    private static Map<String, Integer> prevHolderRanks(final LocalState localState, final TaskId task) {
+        final Map<String, Integer> prevHolderRanks = new HashMap<>();
         final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
         if (prevStandbyMembers != null) {
             for (final Member prevStandbyMember : prevStandbyMembers) {
-                prevHolderProcessIds.add(prevStandbyMember.processId);
+                prevHolderRanks.put(prevStandbyMember.processId, PREV_STANDBY_HOLDER);
             }
         }
-        return prevHolderProcessIds;
+        // Put last: a process that held the active task outranks one that held a standby.
+        final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
+        if (prevActiveMember != null) {
+            prevHolderRanks.put(prevActiveMember.processId, PREV_ACTIVE_HOLDER);
+        }
+        return prevHolderRanks;
     }
 
     /**

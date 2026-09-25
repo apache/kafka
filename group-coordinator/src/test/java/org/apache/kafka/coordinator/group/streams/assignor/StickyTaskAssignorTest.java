@@ -1783,6 +1783,30 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
+    public void shouldPreferPreviousActiveHolderOverPreviousStandbyHolderAmongEquallyDiverseProcesses() {
+        // B held tasks 0 and 1 as active and C held task 2, so the active quota of one per member moves task 1 to
+        // A. For task 1's standby, B and C are both in zone z2 with the same load: B held it as active, C as
+        // standby, so B wins.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("memberA", createMemberMetadata("processA", Map.of("zone", "z1"))),
+            mkEntry("memberB", createTaggedMemberMetadata("processB", Map.of("zone", "z2"), Map.of("test-subtopology", Set.of(0, 1)), Map.of())),
+            mkEntry("memberC", createTaggedMemberMetadata("processC", Map.of("zone", "z2"), Map.of("test-subtopology", Set.of(2)), Map.of("test-subtopology", Set.of(1))))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("zone"))),
+            new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "memberA"));
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "memberB"));
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "memberC"));
+        assertEquals(Set.of(2), getStandbyTasks(result, "test-subtopology", "memberA"));
+        assertEquals(Set.of(1), getStandbyTasks(result, "test-subtopology", "memberB"));
+        assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "memberC"));
+    }
+
+    @Test
     public void shouldPreferRackDiversityOverStickiness() {
         // B held the standby before but shares the zone with the active owner; C is in a new zone and wins.
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
