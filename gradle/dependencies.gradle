@@ -132,8 +132,7 @@ versions += [
   testcontainersKeycloak: "4.3.1",
   mockOAuth2Server: "2.3.0",
   zinc: "1.12.1",
-  // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
-  // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
+  // When updating zstd, make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   zstd: "1.5.7-17",
   junitPlatform: "1.14.4",
   hdrHistogram: "2.2.2",
