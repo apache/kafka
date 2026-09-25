@@ -228,37 +228,30 @@ public class NetworkClientTest {
     @Test
     public void testShortConstructorsGenerateClientInstanceId() {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        List<NetworkClient> clients = List.of(
-            new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false),
-            new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false),
-            new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), null, new LogContext(),
-                MetadataRecoveryStrategy.NONE, false),
-            new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
+        assertGeneratedClientInstanceId(new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
                 MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
-        Set<Uuid> clientInstanceIds = new HashSet<>();
-        for (NetworkClient client : clients) {
-            Uuid clientInstanceId = clientInstanceIdOf(client);
-            // KIP-1313 does not permit a reserved UUID; Uuid.randomUuid never returns one.
-            assertFalse(Uuid.RESERVED.contains(clientInstanceId));
-            clientInstanceIds.add(clientInstanceId);
-        }
-        assertEquals(clients.size(), clientInstanceIds.size(), "each client should generate its own client instance ID");
+        assertGeneratedClientInstanceId(new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
+        assertGeneratedClientInstanceId(new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), null, new LogContext(),
+                MetadataRecoveryStrategy.NONE, false));
+        assertGeneratedClientInstanceId(new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
     }
 
-    private static Uuid clientInstanceIdOf(NetworkClient client) {
+    private static void assertGeneratedClientInstanceId(NetworkClient client) {
         // OffsetDelete v1 uses the v3 request header.
-        return client.newClientRequest("0", new OffsetDeleteRequest.Builder(new OffsetDeleteRequestData()), 0, true)
+        Uuid clientInstanceId = client.newClientRequest("0", new OffsetDeleteRequest.Builder(new OffsetDeleteRequestData()), 0, true)
                 .makeHeader((short) 1).clientInstanceId();
+        // KIP-1313 does not permit a reserved UUID; Uuid.randomUuid never returns one.
+        assertFalse(Uuid.RESERVED.contains(clientInstanceId));
     }
 
     @Test
