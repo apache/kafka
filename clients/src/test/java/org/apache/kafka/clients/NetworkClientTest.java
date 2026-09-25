@@ -226,7 +226,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testConvenienceConstructorsGenerateAClientInstanceId() {
+    public void testShortConstructorsGenerateClientInstanceId() {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         List<NetworkClient> clients = List.of(
             new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
