@@ -4444,9 +4444,11 @@ org.apache.kafka.common.protocol.types.ProtocolSerializationTest:
 - testDefault
 - testNullableDefault
 - testNulls
+- testReadArrayLengthAboveMaxIsRejected
 - testReadArraySizeTooLarge
 - testReadBytesBeyondItsSize
 - testReadBytesSizeTooLarge
+- testReadCompactArrayLengthAboveMaxIsRejected
 - testReadCompactArraySizeTooLarge
 - testReadIgnoringExtraDataAtTheEnd
 - testReadNegativeArraySize
