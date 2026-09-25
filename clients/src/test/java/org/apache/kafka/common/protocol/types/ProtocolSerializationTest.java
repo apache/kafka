@@ -270,6 +270,30 @@ public class ProtocolSerializationTest {
     }
 
     @Test
+    public void testReadArrayLengthAboveMaxIsRejected() {
+        Type type = new ArrayOf(Type.INT8);
+        int count = MessageUtil.MAX_ARRAY_LENGTH + 1;
+        ByteBuffer buffer = ByteBuffer.allocate(4 + count);
+        buffer.putInt(count);
+        buffer.rewind();
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(buffer));
+        assertEquals("Error reading array of size " + count + ", which exceeds the maximum allowed size of "
+                + MessageUtil.MAX_ARRAY_LENGTH, e.getMessage());
+    }
+
+    @Test
+    public void testReadCompactArrayLengthAboveMaxIsRejected() {
+        Type type = new CompactArrayOf(Type.INT8);
+        int count = MessageUtil.MAX_ARRAY_LENGTH + 1;
+        ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfUnsignedVarint(count + 1) + count);
+        ByteUtils.writeUnsignedVarint(count + 1, buffer);
+        buffer.rewind();
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(buffer));
+        assertEquals("Error reading array of size " + count + ", which exceeds the maximum allowed size of "
+                + MessageUtil.MAX_ARRAY_LENGTH, e.getMessage());
+    }
+
+    @Test
     public void testReadTaggedFieldsSizeTooLarge() {
         int tag = 1;
         Type type = TaggedFields.of(tag, new Field("field", Type.NULLABLE_STRING));
