@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -25,6 +26,8 @@ import org.apache.kafka.common.test.api.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
@@ -72,6 +75,30 @@ public class AdminClientTimeoutIntegrationTest {
                     new CreateTopicsOptions().validateOnly(true)).all();
             future2.get();
             assertEquals(1, factory.failuresInjected());
+        }
+    }
+
+    @ClusterTest
+    public void testAdminClientCloseGracePeriodWithStaleLeader() throws Exception {
+        try (Admin admin = clusterInstance.admin()) {
+            String topic = "test-topic";
+            admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
+
+            TopicDescription topicDescription = admin.describeTopics(List.of(topic))
+                .allTopicNames().get().get(topic);
+            int leaderId = topicDescription.partitions().get(0).leader().id();
+
+            TopicPartition tp = new TopicPartition(topic, 0);
+            admin.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(0L))).all().get();
+
+            clusterInstance.shutdownBroker(leaderId);
+
+            DeleteRecordsResult result = admin.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(0L)));
+
+            admin.close(Duration.ofSeconds(5));
+
+            ExecutionException e = assertThrows(ExecutionException.class, () -> result.all().get());
+            assertInstanceOf(TimeoutException.class, e.getCause());
         }
     }
 
