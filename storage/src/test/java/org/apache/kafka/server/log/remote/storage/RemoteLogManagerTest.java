@@ -233,7 +233,13 @@ public class RemoteLogManagerTest {
         config = configs(props);
         brokerTopicStats = new BrokerTopicStats(config.isRemoteStorageSystemEnabled());
 
-        remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
+        remoteLogManager = newRemoteLogManager(config);
+        doReturn(true).when(remoteLogMetadataManager).isReady(any(TopicIdPartition.class));
+        when(mockLog.config()).thenReturn(new LogConfig(new Properties()));
+    }
+
+    private RemoteLogManager newRemoteLogManager(RemoteLogManagerConfig cfg) throws IOException {
+        return new RemoteLogManager(cfg, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics, endPoint) {
@@ -258,12 +264,57 @@ public class RemoteLogManagerTest {
                 return 0L;
             }
         };
-        doReturn(true).when(remoteLogMetadataManager).isReady(any(TopicIdPartition.class));
-        when(mockLog.config()).thenReturn(new LogConfig(new Properties()));
     }
 
     private RemoteLogManagerConfig configs(Properties props) {
         return new RemoteLogManagerConfig(new AbstractConfig(RemoteLogManagerConfig.configDef(), props));
+    }
+
+    private KafkaMetric clientFetchMetric(String name, String clientId) {
+        return metrics.metric(metrics.metricName(name, RemoteFetchClientMetrics.GROUP,
+            Map.of(RemoteFetchClientMetrics.CLIENT_ID_TAG, clientId)));
+    }
+
+    private long clientFetchMetricCount() {
+        return metrics.metrics().keySet().stream()
+            .filter(mn -> RemoteFetchClientMetrics.GROUP.equals(mn.group()))
+            .count();
+    }
+
+    @Test
+    void testRemoteFetchClientMetricsDisabledByDefault() {
+        String clientId = "consumer-x";
+        remoteLogManager.recordRemoteFetchClientRequest(Optional.of(clientId));
+        remoteLogManager.recordRemoteFetchClientBytes(Optional.of(clientId), 500);
+
+        assertNull(clientFetchMetric(RemoteFetchClientMetrics.BYTES_RATE, clientId));
+        assertNull(clientFetchMetric(RemoteFetchClientMetrics.REQUESTS_RATE, clientId));
+    }
+
+    @Test
+    void testRemoteFetchClientMetricsRecordedWhenEnabled() throws IOException {
+        String clientId = "consumer-x";
+        Properties props = new Properties();
+        appendRLMConfig(props);
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_CLIENT_METRICS_ENABLED_PROP, true);
+
+        try (RemoteLogManager enabledRlm = newRemoteLogManager(configs(props))) {
+            enabledRlm.recordRemoteFetchClientRequest(Optional.of(clientId));
+            enabledRlm.recordRemoteFetchClientBytes(Optional.of(clientId), 500);
+            time.sleep(1000);
+
+            KafkaMetric bytesRate = clientFetchMetric(RemoteFetchClientMetrics.BYTES_RATE, clientId);
+            KafkaMetric requestsRate = clientFetchMetric(RemoteFetchClientMetrics.REQUESTS_RATE, clientId);
+            assertNotNull(bytesRate);
+            assertNotNull(requestsRate);
+            assertTrue((double) bytesRate.metricValue() > 0.0);
+            assertTrue((double) requestsRate.metricValue() > 0.0);
+
+            long before = clientFetchMetricCount();
+            enabledRlm.recordRemoteFetchClientRequest(Optional.empty());
+            enabledRlm.recordRemoteFetchClientBytes(Optional.empty(), 999);
+            assertEquals(before, clientFetchMetricCount());
+        }
     }
 
     @AfterEach
