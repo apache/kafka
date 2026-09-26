@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Reducer;
@@ -125,7 +124,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
             }
 
             // update the store with the new value
-            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp, new RecordHeaders());
+            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp, record.headers());
             // if not put to store, do not forward downstream either
             if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                 tupleForwarder.maybeForward(
