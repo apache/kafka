@@ -111,6 +111,59 @@ class TransactionCoordinatorTest {
   }
 
   @Test
+  def shouldReturnInvalidRequestWhenKeepPreparedTxnTrueButTwoPCDisabled(): Unit = {
+    mockPidGenerator()
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = false,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+    assertEquals(new InitProducerIdResult(-1L, -1, Errors.INVALID_REQUEST), result)
+  }
+
+  @Test
+  def shouldAcceptKeepPreparedTxnWhen2PCEnabledAndNoOngoingTxn(): Unit = {
+    initPidGenericMocks(transactionalId)
+    when(transactionManager.isTransaction2pcEnabled()).thenReturn(true)
+
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(None))
+
+    when(transactionManager.putTransactionStateIfNotExists(capturedTxn.capture()))
+      .thenAnswer(_ => Right(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, capturedTxn.getValue)))
+
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any[TxnTransitMetadata],
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+    assertEquals(new InitProducerIdResult(0L, 0, Errors.NONE), result)
+  }
+
+  @Test
+  def shouldPreserveOngoing2PCTxnWhenKeepPreparedTxnTrue(): Unit = {
+    mockPidGenerator()
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt())).thenReturn(true)
+    when(transactionManager.isTransaction2pcEnabled()).thenReturn(true)
+
+    val ongoing2PCMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, Int.MaxValue, TransactionState.ONGOING, util.Set.of, time.milliseconds(), time.milliseconds(), TV_2)
+
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, ongoing2PCMetadata))))
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+
+    assertEquals(new InitProducerIdResult(producerId, producerEpoch, producerId, producerEpoch, Errors.NONE), result)
+    verify(transactionManager, never()).appendTransactionToLog(any(), anyInt(), any(), any(), any(), any())
+  }
+
+  @Test
   def shouldReturnInvalidRequestWhen2PCEnabledButBroker2PCConfigFalse(): Unit = {
     mockPidGenerator()
 
