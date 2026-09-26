@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 
@@ -33,11 +34,13 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class OAuthBearerSaslClientTest {
@@ -149,5 +152,15 @@ public class OAuthBearerSaslClientTest {
             assertEquals(errorMessage, e.getCause().getMessage());
         }
 
+    }
+
+    @Test
+    public void createSaslClientReturnsNullForUnusableCallbackHandler() {
+        // The factory is reached through the JVM-wide security provider registry and may have been loaded
+        // by a different class loader than the callback handler. Returning null lets the caller recover.
+        CallbackHandler unusable = callbacks -> { };
+        assertNull(new OAuthBearerSaslClient.OAuthBearerSaslClientFactory().createSaslClient(
+                new String[] {OAuthBearerLoginModule.OAUTHBEARER_MECHANISM},
+                null, null, null, Map.of(), unusable));
     }
 }
