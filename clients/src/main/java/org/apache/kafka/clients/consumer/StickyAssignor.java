@@ -28,7 +28,6 @@ import org.apache.kafka.common.protocol.types.Type;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -146,7 +145,7 @@ import java.util.Set;
  * <pre>
  * {@code
  * class TheNewRebalanceListener implements ConsumerRebalanceListener {
- *   Collection<TopicPartition> lastAssignment = Collections.emptyList();
+ *   Collection<TopicPartition> lastAssignment = List.of();
  *
  *   void onPartitionsRevoked(Collection<TopicPartition> partitions) {
  *     for (TopicPartition partition: partitions)
@@ -228,7 +227,7 @@ public class StickyAssignor extends AbstractStickyAssignor {
         // since StickyAssignor is an eager rebalance protocol that will revoke all existing partitions before joining group
         ByteBuffer userData = subscription.userData();
         if (userData == null || !userData.hasRemaining()) {
-            return new MemberData(Collections.emptyList(), Optional.empty(), subscription.rackId());
+            return new MemberData(List.of(), Optional.empty(), subscription.rackId());
         }
         return deserializeTopicPartitionAssignment(userData);
     }
@@ -266,7 +265,7 @@ public class StickyAssignor extends AbstractStickyAssignor {
                 struct = STICKY_ASSIGNOR_USER_DATA_V0.read(copy);
             } catch (Exception e2) {
                 // ignore the consumer's previous assignment if it cannot be parsed
-                return new MemberData(Collections.emptyList(), Optional.of(DEFAULT_GENERATION));
+                return new MemberData(List.of(), Optional.of(DEFAULT_GENERATION));
             }
         }
 

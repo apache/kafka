@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -67,15 +66,15 @@ public class RemoveMembersFromConsumerGroupHandler extends AdminApiHandler.Batch
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> newFuture(
         String groupId
     ) {
-        return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
+        return AdminApiFuture.forKeys(Set.of(CoordinatorKey.byGroupId(groupId)));
     }
 
     private void validateKeys(
         Set<CoordinatorKey> groupIds
     ) {
-        if (!groupIds.equals(Collections.singleton(groupId))) {
+        if (!groupIds.equals(Set.of(groupId))) {
             throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
-                " (expected only " + Collections.singleton(groupId) + ")");
+                " (expected only " + Set.of(groupId) + ")");
         }
     }
 
@@ -101,7 +100,7 @@ public class RemoveMembersFromConsumerGroupHandler extends AdminApiHandler.Batch
 
             handleGroupError(groupId, error, failed, groupsToUnmap);
 
-            return new ApiResult<>(Collections.emptyMap(), failed, new ArrayList<>(groupsToUnmap));
+            return new ApiResult<>(Map.of(), failed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<MemberIdentity, Errors> memberErrors = new HashMap<>();
             for (MemberResponse memberResponse : response.memberResponses()) {

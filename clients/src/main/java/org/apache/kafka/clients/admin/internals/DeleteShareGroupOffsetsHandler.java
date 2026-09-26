@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -69,13 +68,13 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
     }
 
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<String, ApiException>> newFuture(String groupId) {
-        return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
+        return AdminApiFuture.forKeys(Set.of(CoordinatorKey.byGroupId(groupId)));
     }
 
     private void validateKeys(Set<CoordinatorKey> groupIds) {
-        if (!groupIds.equals(Collections.singleton(groupId))) {
+        if (!groupIds.equals(Set.of(groupId))) {
             throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
-                " (expected only " + Collections.singleton(groupId) + ")");
+                " (expected only " + Set.of(groupId) + ")");
         }
     }
 
@@ -115,7 +114,7 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
             final Map<CoordinatorKey, Throwable> groupsFailed = new HashMap<>();
             handleGroupError(groupId, groupError, groupErrorMessage, groupsFailed, groupsToUnmap);
 
-            return new ApiResult<>(Collections.emptyMap(), groupsFailed, new ArrayList<>(groupsToUnmap));
+            return new ApiResult<>(Map.of(), groupsFailed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<String, ApiException> topicResults = new HashMap<>();
             response.data().responses().forEach(topic -> {

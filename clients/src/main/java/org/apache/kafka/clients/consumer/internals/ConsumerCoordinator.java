@@ -685,7 +685,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             log.info("Skipped assignment for returning static leader at generation {}. The static leader " +
                 "will continue with its existing assignment.", generation().generationId);
             assignmentSnapshot = metadataSnapshot;
-            return Collections.emptyMap();
+            return Map.of();
         }
 
         log.debug("Performing assignment using strategy {} with subscriptions {}", assignorName, subscriptions);
@@ -822,7 +822,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     "indicating that consumer is in old state or no longer part of the group");
                 exception = rebalanceListenerInvoker.invokePartitionsLost(revokedPartitions);
 
-                subscriptions.assignFromSubscribed(Collections.emptySet());
+                subscriptions.assignFromSubscribed(Set.of());
             }
         } else {
             switch (protocol) {
@@ -831,7 +831,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     revokedPartitions.addAll(subscriptions.assignedPartitions());
                     exception = rebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions);
 
-                    subscriptions.assignFromSubscribed(Collections.emptySet());
+                    subscriptions.assignFromSubscribed(Set.of());
 
                     break;
 
@@ -902,7 +902,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 e = rebalanceListenerInvoker.invokePartitionsRevoked(droppedPartitions);
             }
 
-            subscriptions.assignFromSubscribed(Collections.emptySet());
+            subscriptions.assignFromSubscribed(Set.of());
 
             if (e != null) {
                 throw new KafkaException("User rebalance callback throws an error", e);
@@ -964,7 +964,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(final Set<TopicPartition> partitions,
                                                                         final Timer timer) {
-        if (partitions.isEmpty()) return Collections.emptyMap();
+        if (partitions.isEmpty()) return Map.of();
 
         final Generation generationForOffsetRequest = generationIfStable();
         if (pendingCommittedOffsetRequest != null &&

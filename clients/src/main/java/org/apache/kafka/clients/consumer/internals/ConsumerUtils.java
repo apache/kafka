@@ -44,7 +44,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -144,7 +143,7 @@ public final class ConsumerUtils {
 
     public static Metrics createMetrics(ConsumerConfig config, Time time, List<MetricsReporter> reporters) {
         String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
-        Map<String, String> metricsTags = Collections.singletonMap(CONSUMER_CLIENT_ID_METRIC_TAG, clientId);
+        Map<String, String> metricsTags = Map.of(CONSUMER_CLIENT_ID_METRIC_TAG, clientId);
         MetricConfig metricConfig = new MetricConfig()
                 .samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
@@ -156,13 +155,13 @@ public final class ConsumerUtils {
     }
 
     public static FetchMetricsManager createFetchMetricsManager(Metrics metrics) {
-        Set<String> metricsTags = Collections.singleton(CONSUMER_CLIENT_ID_METRIC_TAG);
+        Set<String> metricsTags = Set.of(CONSUMER_CLIENT_ID_METRIC_TAG);
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry(metricsTags, CONSUMER_METRIC_GROUP_PREFIX);
         return new FetchMetricsManager(metrics, metricsRegistry);
     }
 
     public static ShareFetchMetricsManager createShareFetchMetricsManager(Metrics metrics) {
-        Set<String> metricsTags = Collections.singleton(CONSUMER_CLIENT_ID_METRIC_TAG);
+        Set<String> metricsTags = Set.of(CONSUMER_CLIENT_ID_METRIC_TAG);
         ShareFetchMetricsRegistry metricsRegistry = new ShareFetchMetricsRegistry(metricsTags, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
         return new ShareFetchMetricsManager(metrics, metricsRegistry);
     }

@@ -394,7 +394,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * This is a snapshot of the partitions assigned to this consumer. HOWEVER, this is only populated and used in
      * the case where this consumer is in a consumer group. Self-assigned partitions do not appear here.
      */
-    private final AtomicReference<Set<TopicPartition>> groupAssignmentSnapshot = new AtomicReference<>(Collections.emptySet());
+    private final AtomicReference<Set<TopicPartition>> groupAssignmentSnapshot = new AtomicReference<>(Set.of());
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
     private final long retryBackoffMs;
@@ -680,7 +680,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.time = time;
         this.metrics = new Metrics(time);
-        this.interceptors = new ConsumerInterceptors<>(Collections.emptyList(), metrics);
+        this.interceptors = new ConsumerInterceptors<>(List.of(), metrics);
         this.metadata = metadata;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -1269,7 +1269,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             throwIfGroupIdNotDefined();
             if (partitions.isEmpty()) {
-                return Collections.emptyMap();
+                return Map.of();
             }
 
             final FetchCommittedOffsetsEvent event = new FetchCommittedOffsetsEvent(
@@ -1327,7 +1327,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 Map<String, List<PartitionInfo>> topicMetadata =
                         applicationEventHandler.addAndGet(topicMetadataEvent);
 
-                return topicMetadata.getOrDefault(topic, Collections.emptyList());
+                return topicMetadata.getOrDefault(topic, List.of());
             } finally {
                 wakeupTrigger.clearTask();
             }
@@ -1418,7 +1418,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             if (timestampsToSearch.isEmpty()) {
-                return Collections.emptyMap();
+                return Map.of();
             }
             ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
                     timestampsToSearch,
@@ -1475,7 +1475,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             requireNonNull(partitions, "Partitions cannot be null");
 
             if (partitions.isEmpty()) {
-                return Collections.emptyMap();
+                return Map.of();
             }
 
             Map<TopicPartition, Long> timestampToSearch = partitions
@@ -1934,7 +1934,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
-            fetchBuffer.retainAll(Collections.emptySet());
+            fetchBuffer.retainAll(Set.of());
             Timer timer = time.timer(defaultApiTimeoutMs);
             UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
             applicationEventHandler.add(unsubscribeEvent);

@@ -19,9 +19,9 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * A detailed description of a single share group member in the cluster.
@@ -48,7 +48,7 @@ public class ShareMemberDescription {
         this.clientId = clientId == null ? "" : clientId;
         this.host = host == null ? "" : host;
         this.assignment = assignment == null ?
-            new ShareMemberAssignment(Collections.emptySet()) : assignment;
+            new ShareMemberAssignment(Set.of()) : assignment;
         this.memberEpoch = memberEpoch;
     }
 

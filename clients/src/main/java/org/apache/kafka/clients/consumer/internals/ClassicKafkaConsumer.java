@@ -210,7 +210,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
-                    config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
+                    config.originals(Map.of(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
 
             // If the classic rebalance protocol is used, log message to guide users towards upgrading to the
@@ -315,7 +315,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics);
-        this.interceptors = new ConsumerInterceptors<>(Collections.emptyList(), metrics);
+        this.interceptors = new ConsumerInterceptors<>(List.of(), metrics);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -599,7 +599,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
-            fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
+            fetcher.clearBufferedDataForUnassignedPartitions(Set.of());
             if (this.coordinator != null) {
                 this.coordinator.onLeavePrepare();
                 this.coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "the consumer unsubscribed from all topics");
@@ -968,7 +968,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Timer timer = time.timer(timeout);
             List<PartitionInfo> topicMetadata = topicMetadataFetcher.getTopicMetadata(topic, metadata.allowAutoTopicCreation(), timer);
-            return topicMetadata != null ? topicMetadata : Collections.emptyList();
+            return topicMetadata != null ? topicMetadata : List.of();
         } finally {
             release();
         }

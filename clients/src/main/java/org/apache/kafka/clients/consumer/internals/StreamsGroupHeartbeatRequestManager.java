@@ -468,7 +468,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             // We can ignore the leave response because we can join before or after receiving the response.
             heartbeatRequestState.reset();
             heartbeatState.reset();
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), List.of(leaveHeartbeat));
         }
         if (membershipManager.state() == MemberState.LEAVING && shouldSkipLeaveHeartbeat()) {
             logger.info("Dynamic member {} skipping leave heartbeat (operation=REMAIN_IN_GROUP). " +
@@ -479,7 +479,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
         if (shouldHeartbeatBeforeIntervalExpires() || heartbeatRequestState.canSendRequest(currentTimeMs)) {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequestAndHandleResponse(currentTimeMs);
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), List.of(request));
         } else {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
         }

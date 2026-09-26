@@ -26,8 +26,8 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
@@ -48,7 +48,7 @@ import java.util.stream.Collectors;
  */
 public class AllBrokersStrategy implements AdminApiLookupStrategy<AllBrokersStrategy.BrokerKey> {
     public static final BrokerKey ANY_BROKER = new BrokerKey(OptionalInt.empty());
-    public static final Set<BrokerKey> LOOKUP_KEYS = Collections.singleton(ANY_BROKER);
+    public static final Set<BrokerKey> LOOKUP_KEYS = Set.of(ANY_BROKER);
     private static final ApiRequestScope SINGLE_REQUEST_SCOPE = new ApiRequestScope() {
     };
 
@@ -92,8 +92,8 @@ public class AllBrokersStrategy implements AdminApiLookupStrategy<AllBrokersStra
         ));
 
         return new LookupResult<>(
-            Collections.singletonList(ANY_BROKER),
-            Collections.emptyMap(),
+            List.of(ANY_BROKER),
+            Map.of(),
             brokerKeys
         );
     }

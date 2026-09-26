@@ -40,7 +40,6 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -125,7 +124,7 @@ public class DescribeClassicGroupsHandler extends AdminApiHandler.Batched<Coordi
             final String protocolType = describedGroup.protocolType();
             final boolean isConsumerGroup = protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty();
             describedGroup.members().forEach(groupMember -> {
-                Set<TopicPartition> partitions = Collections.emptySet();
+                Set<TopicPartition> partitions = Set.of();
                 if (isConsumerGroup && groupMember.memberAssignment().length > 0) {
                     // We can only deserialize the assignment for a classic consumer group
                     final Assignment assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));

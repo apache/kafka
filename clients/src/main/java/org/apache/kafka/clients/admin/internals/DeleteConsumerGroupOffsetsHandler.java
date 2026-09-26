@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -70,13 +69,13 @@ public class DeleteConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<C
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> newFuture(
             String groupId
     ) {
-        return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
+        return AdminApiFuture.forKeys(Set.of(CoordinatorKey.byGroupId(groupId)));
     }
 
     private void validateKeys(Set<CoordinatorKey> groupIds) {
-        if (!groupIds.equals(Collections.singleton(groupId))) {
+        if (!groupIds.equals(Set.of(groupId))) {
             throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
-                " (expected only " + Collections.singleton(groupId) + ")");
+                " (expected only " + Set.of(groupId) + ")");
         }
     }
 
@@ -118,7 +117,7 @@ public class DeleteConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<C
 
             handleGroupError(groupId, error, failed, groupsToUnmap);
 
-            return new ApiResult<>(Collections.emptyMap(), failed, new ArrayList<>(groupsToUnmap));
+            return new ApiResult<>(Map.of(), failed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
             response.data().topics().forEach(topic ->

@@ -34,6 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -59,7 +60,7 @@ public class NodeApiVersions {
      * @return A new NodeApiVersions object.
      */
     public static NodeApiVersions create() {
-        return create(Collections.emptyList());
+        return create(List.of());
     }
 
     /**
@@ -81,7 +82,7 @@ public class NodeApiVersions {
             }
             if (!exists) apiVersions.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
-        return new NodeApiVersions(apiVersions, Collections.emptyList(), Collections.emptyList(), -1);
+        return new NodeApiVersions(apiVersions, List.of(), List.of(), -1);
     }
 
 
@@ -94,7 +95,7 @@ public class NodeApiVersions {
      * @return A new NodeApiVersions object.
      */
     public static NodeApiVersions create(short apiKey, short minVersion, short maxVersion) {
-        return create(Collections.singleton(new ApiVersion()
+        return create(Set.of(new ApiVersion()
                 .setApiKey(apiKey)
                 .setMinVersion(minVersion)
                 .setMaxVersion(maxVersion)));
@@ -104,7 +105,7 @@ public class NodeApiVersions {
             Collection<ApiVersion> nodeApiVersions,
             Collection<SupportedFeatureKey> nodeSupportedFeatures
     ) {
-        this(nodeApiVersions, nodeSupportedFeatures, Collections.emptyList(), -1);
+        this(nodeApiVersions, nodeSupportedFeatures, List.of(), -1);
     }
 
     public NodeApiVersions(

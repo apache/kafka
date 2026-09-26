@@ -37,7 +37,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -248,7 +247,7 @@ public class SubscriptionState {
      * Reset the group's subscription to only contain topics subscribed by this consumer.
      */
     synchronized void resetGroupSubscription() {
-        groupSubscription = Collections.emptySet();
+        groupSubscription = Set.of();
     }
 
     /**
@@ -366,10 +365,10 @@ public class SubscriptionState {
     }
 
     public synchronized void unsubscribe() {
-        this.subscription = Collections.emptySet();
-        this.groupSubscription = Collections.emptySet();
+        this.subscription = Set.of();
+        this.groupSubscription = Set.of();
         this.assignment.clear();
-        this.assignedTopicIds = Collections.emptySet();
+        this.assignedTopicIds = Set.of();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
         this.listenerContext.set(ListenerContext.NULL_LISTENER);
@@ -391,7 +390,7 @@ public class SubscriptionState {
     public synchronized Set<String> subscription() {
         if (hasAutoAssignedPartitions())
             return this.subscription;
-        return Collections.emptySet();
+        return Set.of();
     }
 
     /**

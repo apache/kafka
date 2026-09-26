@@ -365,7 +365,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             for (ConsumerPair pair: pairs) {
                 Set<ConsumerPair> reducedPairs = new HashSet<>(pairs);
                 reducedPairs.remove(pair);
-                List<String> path = new ArrayList<>(Collections.singleton(pair.srcMemberId));
+                List<String> path = new ArrayList<>(Set.of(pair.srcMemberId));
                 if (isLinked(pair.dstMemberId, pair.srcMemberId, reducedPairs, path) && !in(path, cycles)) {
                     cycles.add(new ArrayList<>(path));
                     log.error("A cycle of length {} was found: {}", path.size() - 1, path);
@@ -461,8 +461,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             Map<String, List<TopicPartition>> partitionsByRack;
             Map<TopicPartition, Set<String>> partitionRacks;
             if (consumersByRack.isEmpty()) {
-                partitionsByRack = Collections.emptyMap();
-                partitionRacks = Collections.emptyMap();
+                partitionsByRack = Map.of();
+                partitionRacks = Map.of();
             } else {
                 partitionRacks = new HashMap<>(partitionInfos.size());
                 partitionsByRack = new HashMap<>();
@@ -486,12 +486,12 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 consumersByRack.forEach((rack, rackConsumers) -> rackConsumers.forEach(c -> consumerRacks.put(c, rack)));
                 this.partitionRacks = partitionRacks;
             } else {
-                this.consumerRacks = Collections.emptyMap();
-                this.partitionRacks = Collections.emptyMap();
+                this.consumerRacks = Map.of();
+                this.partitionRacks = Map.of();
             }
             numConsumersByPartition = partitionRacks.entrySet().stream()
                     .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().stream()
-                        .map(r -> consumersByRack.getOrDefault(r, Collections.emptyList()).size())
+                        .map(r -> consumersByRack.getOrDefault(r, List.of()).size())
                         .reduce(0, Integer::sum)));
         }
 

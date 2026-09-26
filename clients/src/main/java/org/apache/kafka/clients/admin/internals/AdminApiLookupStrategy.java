@@ -117,7 +117,7 @@ public interface AdminApiLookupStrategy<T> {
             Map<K, Throwable> failedKeys,
             Map<K, Integer> mappedKeys
         ) {
-            this(Collections.emptyList(), failedKeys, mappedKeys);
+            this(List.of(), failedKeys, mappedKeys);
         }
 
         public LookupResult(
