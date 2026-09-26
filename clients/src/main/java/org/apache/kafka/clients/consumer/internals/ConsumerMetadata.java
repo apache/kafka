@@ -108,6 +108,18 @@ public class ConsumerMetadata extends Metadata {
     }
 
     /**
+     * Topics this consumer currently needs metadata for: subscribed topics, topics of assigned
+     * partitions, and transient topics registered temporarily by offset-related APIs. This is the
+     * same set of topics {@link #retainTopic(String, boolean, long)} keeps, so a metadata error
+     * about a topic outside this set cannot concern any of this consumer's pending operations.
+     */
+    public synchronized Set<String> subscribedAssignedAndTransientTopics() {
+        Set<String> topics = subscription.subscribedOrAssignedTopics();
+        topics.addAll(transientTopics);
+        return topics;
+    }
+
+    /**
      * Check if the metadata for the topic should be retained, based on the topic name.
      * It will return true for:
      * <ul>
