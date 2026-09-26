@@ -396,8 +396,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     /**
      * Builds the new target assignment.
      *
-     * @return A TargetAssignmentResult which contains the records to update
-     *         the existing target assignment.
+     * @return A TargetAssignmentResult which contains the new target assignment and its metadata.
      * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
