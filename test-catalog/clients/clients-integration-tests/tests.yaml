@@ -81,10 +81,12 @@ org.apache.kafka.clients.admin.ClientTelemetryTest:
 org.apache.kafka.clients.admin.ConcurrentListOffsetsRequestTest:
 - correctlyHandleConcurrentModificationOfPartitionLeaderCache
 org.apache.kafka.clients.admin.CreateTopicsTest:
+- testCreateManyTopics
 - testCreateTopicsRespectsConfiguredMaxRecordsPerBatch
 - testOverlyLargeCreateTopics
 org.apache.kafka.clients.admin.DeleteTopicTest:
 - testAddPartitionDuringDeleteTopic
+- testCreateAndDeleteTopic
 - testDeleteNonExistingTopic
 - testDeleteTopicAlreadyMarkedAsDeleted
 - testDeleteTopicDuringAddPartition
