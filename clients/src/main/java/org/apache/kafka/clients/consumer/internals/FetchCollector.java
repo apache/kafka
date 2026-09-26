@@ -140,7 +140,7 @@ public class FetchCollector<K, V> {
         } finally {
             // add any polled completed fetches for paused partitions back to the completed fetches queue to be
             // re-evaluated in the next poll
-            fetchBuffer.addAll(pausedCompletedFetches);
+            fetchBuffer.requeue(pausedCompletedFetches);
         }
 
         return fetch;
