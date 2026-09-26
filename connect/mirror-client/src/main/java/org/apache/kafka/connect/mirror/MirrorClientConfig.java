@@ -54,6 +54,9 @@ public class MirrorClientConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_CLASS = "replication.policy.class";
     private static final String REPLICATION_POLICY_CLASS_DOC = "Class which defines the remote topic naming convention.";
     public static final Class<?> REPLICATION_POLICY_CLASS_DEFAULT = DefaultReplicationPolicy.class;
+    public static final String GROUP_MIRRORING_POLICY_CLASS = "group.mirroring.policy.class";
+    private static final String GROUP_MIRRORING_POLICY_CLASS_DOC = "Class which defines the consumer group naming convention on the target cluster.";
+    public static final Class<?> GROUP_MIRRORING_POLICY_CLASS_DEFAULT = DefaultGroupMirroringPolicy.class;
     public static final String REPLICATION_POLICY_SEPARATOR = "replication.policy.separator";
     private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used in remote topic naming convention.";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
@@ -81,6 +84,10 @@ public class MirrorClientConfig extends AbstractConfig {
 
     public ReplicationPolicy replicationPolicy() {
         return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
+    }
+
+    public GroupMirroringPolicy groupMirroringPolicy() {
+        return getConfiguredInstance(GROUP_MIRRORING_POLICY_CLASS, GroupMirroringPolicy.class);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -147,6 +154,12 @@ public class MirrorClientConfig extends AbstractConfig {
             REPLICATION_POLICY_CLASS_DEFAULT,
             ConfigDef.Importance.LOW,
             REPLICATION_POLICY_CLASS_DOC)
+        .define(
+            GROUP_MIRRORING_POLICY_CLASS,
+            ConfigDef.Type.CLASS,
+            GROUP_MIRRORING_POLICY_CLASS_DEFAULT,
+            ConfigDef.Importance.LOW,
+            GROUP_MIRRORING_POLICY_CLASS_DOC)
         .define(
             REPLICATION_POLICY_SEPARATOR,
             ConfigDef.Type.STRING,
