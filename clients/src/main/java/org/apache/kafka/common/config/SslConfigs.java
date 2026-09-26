@@ -48,6 +48,11 @@ public class SslConfigs {
     public static final String SSL_CIPHER_SUITES_DOC = "A list of cipher suites. This is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. "
             + "By default all the available cipher suites are supported.";
 
+    public static final String SSL_NAMED_GROUPS_CONFIG = "ssl.named.groups";
+    public static final String SSL_NAMED_GROUPS_DOC = "An ordered list of key exchange named groups to use for SSL connections, with the most preferred group first. "
+        + "The supported values depend on the SSL provider and Java runtime. By default, the SSL provider's default named groups are used. "
+        + "If this configuration is set to an empty list, no named groups are used.";
+
     public static final String SSL_ENABLED_PROTOCOLS_CONFIG = "ssl.enabled.protocols";
     public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections. "
         + "The default is 'TLSv1.2,TLSv1.3'. This means that clients and servers will prefer TLSv1.3 if both support it "
@@ -129,6 +134,7 @@ public class SslConfigs {
         config.define(SslConfigs.SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)
                 .define(SslConfigs.SSL_PROVIDER_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROVIDER_DOC)
                 .define(SslConfigs.SSL_CIPHER_SUITES_CONFIG, ConfigDef.Type.LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), ConfigDef.Importance.LOW, SslConfigs.SSL_CIPHER_SUITES_DOC)
+                .define(SslConfigs.SSL_NAMED_GROUPS_CONFIG, ConfigDef.Type.LIST, null, ConfigDef.ValidList.anyNonDuplicateValues(true, true), ConfigDef.Importance.LOW, SslConfigs.SSL_NAMED_GROUPS_DOC)
                 .define(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, ConfigDef.Type.LIST, SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS, ConfigDef.ValidList.anyNonDuplicateValues(true, false), ConfigDef.Importance.MEDIUM, SslConfigs.SSL_ENABLED_PROTOCOLS_DOC)
                 .define(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_KEYSTORE_TYPE_DOC)
                 .define(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, ConfigDef.Type.STRING, null,  ConfigDef.Importance.HIGH, SslConfigs.SSL_KEYSTORE_LOCATION_DOC)
@@ -164,6 +170,7 @@ public class SslConfigs {
             SslConfigs.SSL_PROTOCOL_CONFIG,
             SslConfigs.SSL_PROVIDER_CONFIG,
             SslConfigs.SSL_CIPHER_SUITES_CONFIG,
+            SslConfigs.SSL_NAMED_GROUPS_CONFIG,
             SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
             SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
             SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
