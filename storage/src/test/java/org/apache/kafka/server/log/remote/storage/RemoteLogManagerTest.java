@@ -4079,6 +4079,45 @@ public class RemoteLogManagerTest {
     }
 
     @Test
+    public void testRemoteLogMetadataCountAndSizeResetToZeroOnBecomingFollower() {
+        remoteLogManager.onLeadershipChange(
+                Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
+        RemoteLogManager.RLMExpirationTask rlmTask = remoteLogManager.rlmExpirationTask(leaderTopicIdPartition);
+        assertNotNull(rlmTask);
+        rlmTask.updateMetadataCountAndLogSizeWith(10, 1024);
+        assertEquals(10, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteLogMetadataCount());
+        assertEquals(1024, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteLogSizeBytes());
+        // The same node becomes follower now which was the previous leader
+        remoteLogManager.onLeadershipChange(Set.of(),
+                Set.of(mockPartition(leaderTopicIdPartition)), topicIds);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteLogMetadataCount());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteLogSizeBytes());
+        // If the old (now cancelled) expiration task emits the size and metadata stats, they should be discarded.
+        // Without the isCancelled() guard this re-registers phantom values that linger on the follower.
+        rlmTask.updateMetadataCountAndLogSizeWith(20, 2048);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteLogMetadataCount());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteLogSizeBytes());
+    }
+
+    @Test
+    public void testRemoteLogSizeComputationTimeResetsToZeroOnBecomingFollower() {
+        remoteLogManager.onLeadershipChange(
+                Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
+        RemoteLogManager.RLMExpirationTask rlmTask = remoteLogManager.rlmExpirationTask(leaderTopicIdPartition);
+        assertNotNull(rlmTask);
+        rlmTask.recordRemoteLogSizeComputationTime(50);
+        assertEquals(50, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteLogSizeComputationTime());
+        // The same node becomes follower now which was the previous leader
+        remoteLogManager.onLeadershipChange(Set.of(),
+                Set.of(mockPartition(leaderTopicIdPartition)), topicIds);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteLogSizeComputationTime());
+        // If the old (now cancelled) expiration task emits the size computation time, it should be discarded.
+        // Without the isCancelled() guard this re-registers a phantom value that lingers on the follower.
+        rlmTask.recordRemoteLogSizeComputationTime(100);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteLogSizeComputationTime());
+    }
+
+    @Test
     public void testRemoteDeleteLagResetsToZeroOnBecomingFollower() {
         remoteLogManager.onLeadershipChange(
                 Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
