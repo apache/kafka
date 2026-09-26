@@ -338,13 +338,20 @@ public class StickyTaskAssignor implements TaskAssignor {
         for (final Iterator<TaskId> it = activeTasks.iterator(); it.hasNext();) {
             final TaskId task = it.next();
             final ArrayList<Member> prevMembers = localState.standbyTaskToPrevMember.get(task);
-            final Member prevMember = findPrevMemberWithLeastLoad(localState, prevMembers, Optional.empty(), member -> true);
+            final Member prevMember = findPrevMemberWithLeastLoad(
+                localState,
+                prevMembers,
+                Optional.empty(),
+                member -> hasUnfulfilledActiveTaskQuota(
+                    localState,
+                    localState.processIdToState.get(member.processId),
+                    member,
+                    stateful
+                ));
             if (prevMember != null) {
                 final ProcessState processState = localState.processIdToState.get(prevMember.processId);
-                if (hasUnfulfilledActiveTaskQuota(localState, processState, prevMember, stateful)) {
-                    addActiveTask(localState, processState, prevMember, task, stateful);
-                    it.remove();
-                }
+                addActiveTask(localState, processState, prevMember, task, stateful);
+                it.remove();
             }
         }
 
@@ -523,7 +530,15 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         // prev standby tasks
-        final Member prevStandbyMember = findPrevMemberWithLeastLoad(localState, localState.standbyTaskToPrevMember.get(task), Optional.of(task), eligible);
+        final Member prevStandbyMember = findPrevMemberWithLeastLoad(
+            localState,
+            localState.standbyTaskToPrevMember.get(task),
+            Optional.of(task),
+            member -> eligible.test(member) && hasUnfulfilledTaskQuota(
+                localState,
+                localState.processIdToState.get(member.processId),
+                member
+            ));
         if (prevStandbyMember != null && hasUnfulfilledTaskQuota(localState, localState.processIdToState.get(prevStandbyMember.processId), prevStandbyMember)) {
             return prevStandbyMember;
         }
