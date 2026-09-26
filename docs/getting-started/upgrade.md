@@ -58,6 +58,12 @@ If you are upgrading from version 2.4.0 or above, and you have not overridden th
 
 
 
+### Notable changes in 3.9.3
+
+  * Protocol message readers now limit array and collection allocations when decoding messages. Arrays and collections with more than 1,000,000 elements and flexible-version tagged-field sections with more than 10,000 fields are rejected before allocation. Arrays and collections are initially allocated with a capacity no greater than 1,000 and grow as needed during decoding.
+
+
+
 ### Notable changes in 3.9.2
 
   * There is a new server configuration, `alter.config.policy.kraft.compatibility.enable`, which ensures that an AlterConfigPolicy is invoked consistently between KRaft and ZooKeeper modes. To enable this behavior, set the property to `true` in `server.properties`. For backward compatibility, the default value is `false`. See [KIP-1252](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=399279475) for more details.
