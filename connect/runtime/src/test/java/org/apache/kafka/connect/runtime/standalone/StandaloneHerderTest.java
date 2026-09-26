@@ -38,6 +38,7 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
@@ -147,6 +148,8 @@ public class StandaloneHerderTest {
     public void initialize(boolean mockTransform) {
         when(worker.getPlugins()).thenReturn(plugins);
         when(worker.metrics()).thenReturn(new MockConnectMetrics());
+        when(worker.config()).thenReturn(workerConfig);
+        when(workerConfig.getBoolean(WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(true);
         herder = mock(StandaloneHerder.class, withSettings()
             .useConstructor(worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy, new MockTime())
             .defaultAnswer(CALLS_REAL_METHODS));
@@ -281,12 +284,18 @@ public class StandaloneHerderTest {
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
+        TopicStatus fooStatus = new TopicStatus("foo", CONNECTOR_NAME, 0, 0L);
+        TopicStatus barStatus = new TopicStatus("bar", CONNECTOR_NAME, 0, 0L);
+        when(statusBackingStore.getAllTopics(CONNECTOR_NAME)).thenReturn(Set.of(fooStatus, barStatus));
+
         FutureCallback<Herder.Created<ConnectorInfo>> deleteCallback = new FutureCallback<>();
         expectDestroy();
         herder.deleteConnectorConfig(CONNECTOR_NAME, deleteCallback);
         verify(herder).onDeletion(CONNECTOR_NAME);
         verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
         verify(statusBackingStore).put(new ConnectorStatus(CONNECTOR_NAME, ConnectorStatus.State.DESTROYED, WORKER_ID, 0));
+        verify(statusBackingStore).deleteTopic(CONNECTOR_NAME, "foo");
+        verify(statusBackingStore).deleteTopic(CONNECTOR_NAME, "bar");
         deleteCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
 
         // Second deletion should fail since the connector is gone
