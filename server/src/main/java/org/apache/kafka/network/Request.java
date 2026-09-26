@@ -362,7 +362,7 @@ public final class Request implements BaseRequest {
         for (String metricName : overrideMetricNames) {
             RequestMetrics m = metrics.get(metricName);
             m.requestRate(header().apiVersion()).mark();
-            m.deprecatedRequestRate(header().apiKey(), header().apiVersion(), context.clientInformation)
+            m.deprecatedRequestRate(header().apiKey(), header().apiVersion(), context.clientInformation())
                 .ifPresent(Meter::mark);
             m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs));
             m.localTimeHist.update(Math.round(apiLocalTimeMs));
