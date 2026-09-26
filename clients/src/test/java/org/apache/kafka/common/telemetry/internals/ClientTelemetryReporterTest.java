@@ -335,6 +335,65 @@ public class ClientTelemetryReporterTest {
         assertEquals(now + 1000, telemetrySender.lastRequestMs());
     }
 
+    @Test
+    public void testCreateRequestPushPayloadFailureRetriesOnNextInterval() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+
+        KafkaMetricsCollector failingCollector = Mockito.mock(KafkaMetricsCollector.class);
+        Mockito.doThrow(new RuntimeException("Error collecting metrics")).when(failingCollector).collect(any());
+        clientTelemetryReporter.metricsCollector(failingCollector);
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        assertFalse(telemetrySender.createRequest().isPresent());
+        /*
+         No request was sent, so no response or failure callback can arrive to move the state on.
+         The sender must not be left in PUSH_IN_PROGRESS, otherwise timeToNextUpdate keeps
+         returning requestTimeoutMs and no telemetry request is ever made again.
+        */
+        assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+
+        // The push is retried once the push interval elapses.
+        assertEquals(subscription.pushIntervalMs(), telemetrySender.timeToNextUpdate(100));
+        time.sleep(subscription.pushIntervalMs());
+        assertEquals(0, telemetrySender.timeToNextUpdate(100));
+
+        Mockito.reset(failingCollector);
+        Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
+        assertTrue(requestOptional.isPresent());
+        assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+        assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+    }
+
+    @Test
+    public void testCreateRequestTerminatingPushPayloadFailure() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+
+        KafkaMetricsCollector failingCollector = Mockito.mock(KafkaMetricsCollector.class);
+        Mockito.doThrow(new RuntimeException("Error collecting metrics")).when(failingCollector).collect(any());
+        clientTelemetryReporter.metricsCollector(failingCollector);
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        assertFalse(telemetrySender.createRequest().isPresent());
+        // A terminating push can only transition to TERMINATED, and close() follows it, so
+        // remaining in TERMINATING_PUSH_IN_PROGRESS is expected rather than a stuck state.
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+
+        telemetrySender.close();
+        assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state());
+    }
+
     @ParameterizedTest
     @EnumSource(CompressionType.class)
     public void testCreateRequestPushCompression(CompressionType compressionType) {
