@@ -34,6 +34,7 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Callable;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -48,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JmxToolTest {
     private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-    private static JMXConnectorServer jmxAgent;
+    private static JmxFixture jmxFixture;
     private static String jmxUrl;
 
     @BeforeAll
@@ -65,15 +66,16 @@ public class JmxToolTest {
         env.put("com.sun.management.jmxremote.ssl", "false");
         JMXServiceURL url = new JMXServiceURL(jmxUrl);
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        server.registerMBean(new Metrics(),
+        jmxFixture = new JmxFixture(server,
             new ObjectName("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"));
-        jmxAgent = JMXConnectorServerFactory.newJMXConnectorServer(url, env, server);
-        jmxAgent.start();
+        jmxFixture.start(() -> JMXConnectorServerFactory.newJMXConnectorServer(url, env, server));
     }
 
     @AfterAll
     public static void afterAll() throws Exception {
-        jmxAgent.stop();
+        if (jmxFixture != null) {
+            jmxFixture.close();
+        }
     }
 
     @BeforeEach
@@ -407,6 +409,63 @@ public class JmxToolTest {
             return true;
         } catch (ParseException e) {
             return false;
+        }
+    }
+
+    static class JmxFixture implements AutoCloseable {
+        private final MBeanServer server;
+        private final ObjectName metricsName;
+        private JMXConnectorServer connector;
+        private boolean metricsRegistered;
+
+        JmxFixture(MBeanServer server, ObjectName metricsName) {
+            this.server = server;
+            this.metricsName = metricsName;
+        }
+
+        void start(Callable<JMXConnectorServer> connectorFactory) throws Exception {
+            server.registerMBean(new Metrics(), metricsName);
+            metricsRegistered = true;
+            try {
+                connector = connectorFactory.call();
+                connector.start();
+            } catch (Exception e) {
+                try {
+                    close();
+                } catch (Exception cleanupFailure) {
+                    e.addSuppressed(cleanupFailure);
+                }
+                throw e;
+            }
+        }
+
+        @Override
+        public void close() throws Exception {
+            Exception failure = null;
+            if (connector != null) {
+                JMXConnectorServer connectorToStop = connector;
+                connector = null;
+                try {
+                    connectorToStop.stop();
+                } catch (Exception e) {
+                    failure = e;
+                }
+            }
+            if (metricsRegistered) {
+                try {
+                    server.unregisterMBean(metricsName);
+                    metricsRegistered = false;
+                } catch (Exception e) {
+                    if (failure == null) {
+                        failure = e;
+                    } else {
+                        failure.addSuppressed(e);
+                    }
+                }
+            }
+            if (failure != null) {
+                throw failure;
+            }
         }
     }
 

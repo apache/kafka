@@ -76,6 +76,7 @@ class LogCleanerManagerTest {
     private static final ProducerStateManagerConfig PRODUCER_STATE_MANAGER_CONFIG =
         new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false);
 
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private File tmpDir;
     private File tmpDir2;
     private File logDir;
@@ -155,8 +156,12 @@ class LogCleanerManagerTest {
 
     @AfterEach
     public void tearDown() throws IOException {
-        Utils.delete(tmpDir);
-        Utils.delete(tmpDir2);
+        try {
+            Utils.delete(tmpDir);
+            Utils.delete(tmpDir2);
+        } finally {
+            brokerTopicStats.close();
+        }
     }
 
     private ConcurrentMap<TopicPartition, UnifiedLog> setupIncreasinglyFilthyLogs(List<TopicPartition> partitions) throws IOException {
@@ -193,7 +198,7 @@ class LogCleanerManagerTest {
             segments, 0L, 0L, leaderEpochCache, producerStateManager, new ConcurrentHashMap<>(), false).load();
         LocalLog localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint(), offsets.nextOffsetMetadata(),
             TIME.scheduler, TIME, tp, logDirFailureChannel);
-        UnifiedLog log = new LogMock(offsets.logStartOffset(), localLog, new BrokerTopicStats(), PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+        UnifiedLog log = new LogMock(offsets.logStartOffset(), localLog, brokerTopicStats, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
             leaderEpochCache, producerStateManager, Optional.empty(), false, LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
 
         writeRecords(log, logSegmentsCount * 2, 10, 2);
@@ -869,7 +874,7 @@ class LogCleanerManagerTest {
         LogConfig config = createLowRetentionLogConfig(segmentSize, cleanupPolicy);
         File partitionDir = new File(logDir, UnifiedLog.logDirName(topicPartition));
 
-        return UnifiedLog.create(partitionDir, config, 0L, 0L, TIME.scheduler, new BrokerTopicStats(), TIME, 5 * 60 * 1000,
+        return UnifiedLog.create(partitionDir, config, 0L, 0L, TIME.scheduler, brokerTopicStats, TIME, 5 * 60 * 1000,
             PRODUCER_STATE_MANAGER_CONFIG, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, new LogDirFailureChannel(10),
             true, Optional.empty());
     }
@@ -907,7 +912,7 @@ class LogCleanerManagerTest {
     }
 
     private UnifiedLog makeLog(LogConfig config) throws IOException {
-        return UnifiedLog.create(logDir, config, 0L, 0L, TIME.scheduler, new BrokerTopicStats(), TIME, 5 * 60 * 1000,
+        return UnifiedLog.create(logDir, config, 0L, 0L, TIME.scheduler, brokerTopicStats, TIME, 5 * 60 * 1000,
             PRODUCER_STATE_MANAGER_CONFIG, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, new LogDirFailureChannel(10),
             true, Optional.empty());
     }
