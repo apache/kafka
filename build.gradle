@@ -358,12 +358,6 @@ subprojects {
     tasks.register('uploadArchives').configure { dependsOn(publish) }
   }
 
-  tasks.withType(AbstractArchiveTask).configureEach {
-    reproducibleFileOrder = false
-    preserveFileTimestamps = true
-    useFileSystemPermissions()
-  }
-
   tasks.withType(AbstractTestTask).configureEach {
     failOnNoDiscoveredTests = false
   }
@@ -1433,6 +1427,14 @@ project(':core') {
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy = 'exclude'
+    eachFile {
+      if (name.endsWith(".sh") || name.endsWith(".bat")) {
+        permissions {
+          user.execute = true
+          other.execute = true
+        }
+      }
+    }
   }
 
   jar {
