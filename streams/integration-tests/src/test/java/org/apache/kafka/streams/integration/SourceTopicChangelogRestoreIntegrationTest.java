@@ -68,6 +68,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * KAFKA-20416: a KTable that reuses its source topic as the changelog, written back to by the same task, under EOS.
@@ -91,7 +92,6 @@ public class SourceTopicChangelogRestoreIntegrationTest {
 
     private final Map<String, String> stateDirs = new HashMap<>();
     private final List<KafkaStreams> streamsToClose = new ArrayList<>();
-    private final Map<KafkaStreams, AtomicInteger> rebalanceCounts = new HashMap<>();
     private EmbeddedKafkaCluster cluster;
     private KafkaProtocolFaultProxy proxy;
     private String appId;
@@ -109,7 +109,8 @@ public class SourceTopicChangelogRestoreIntegrationTest {
         for (final String key : preloadedKeys()) {
             vehicles.add(KeyValue.pair(key, "initial-state"));
         }
-        produce(TABLE_TOPIC, vehicles);
+        // batch the preload so the 5000 records load quickly (see produce())
+        produce(TABLE_TOPIC, vehicles, false);
     }
 
     @AfterEach
@@ -123,7 +124,8 @@ public class SourceTopicChangelogRestoreIntegrationTest {
 
     @Test
     public void shouldFullyRestoreSourceTopicChangelogStoreAfterTaskCorruptionWithStandbyReplica() throws Exception {
-        final KafkaStreams instanceA = start("instance-a");
+        final AtomicInteger instanceARebalances = new AtomicInteger();
+        final KafkaStreams instanceA = start("instance-a", instanceARebalances);
         waitForTableKeys(instanceA, false, preloadedKeys());
         // enough updates on the dedicated changelog that a wiped copy of the task is not caught up
         final List<KeyValue<String, String>> events = new ArrayList<>();
@@ -133,18 +135,19 @@ public class SourceTopicChangelogRestoreIntegrationTest {
         produce(EVENTS_TOPIC, events);
         waitForTableKeys(instanceA, false, keysOf(events));
 
-        final KafkaStreams instanceB = start("instance-b");
+        final KafkaStreams instanceB = start("instance-b", null);
         waitForPlacement(instanceA, instanceB);
         waitForTableKeys(instanceB, true, keysOf(events));
 
         // corrupt instance-a's active task while its restore consumer is stalled
-        final int rebalancesBeforeCorruption = rebalanceCounts.get(instanceA).get();
-        proxy.delayOn(ApiKeys.FETCH, RESTORE_FETCH_DELAY).forClient(restoreConsumer("instance-a")).everyTime();
+        final int rebalancesBeforeCorruption = instanceARebalances.get();
+        final FaultRule restoreDelay =
+            proxy.delayOn(ApiKeys.FETCH, RESTORE_FETCH_DELAY).forClient(restoreConsumer("instance-a")).everyTime();
         final FaultRule commitTimeout =
             proxy.delayOn(ApiKeys.TXN_OFFSET_COMMIT, COMMIT_DELAY).forClient(producer("instance-a")).once();
         produce(EVENTS_TOPIC, List.of(KeyValue.pair("event-trigger", "update")));
         TestUtils.waitForCondition(
-            () -> rebalanceCounts.get(instanceA).get() > rebalancesBeforeCorruption,
+            () -> instanceARebalances.get() > rebalancesBeforeCorruption,
             WAIT_MS,
             "instance-a never rebalanced after its task was corrupted"
         );
@@ -166,6 +169,12 @@ public class SourceTopicChangelogRestoreIntegrationTest {
                 commitTimeout.timesTriggered(),
                 "the commit timeout should fire exactly once to corrupt instance-a's active task"
             ),
+            () -> assertTrue(
+                restoreDelay.timesTriggered() > 0,
+                "the restore-fetch delay never matched " + restoreConsumer("instance-a")
+                    + ", so the restore was never actually stalled; the internal restore-consumer client "
+                    + "naming may have changed"
+            ),
             () -> assertEquals(
                 NUM_PRELOADED_KEYS,
                 restoredOnInstanceA,
@@ -181,15 +190,16 @@ public class SourceTopicChangelogRestoreIntegrationTest {
             .withTimeout(Duration.ofSeconds(60)));
     }
 
-    private KafkaStreams start(final String clientId) throws Exception {
+    // rebalanceCounter is only wired up for the instance whose rebalances the test inspects; pass null otherwise
+    private KafkaStreams start(final String clientId, final AtomicInteger rebalanceCounter) throws Exception {
         final KafkaStreams streams = new KafkaStreams(topology(), streamsConfig(clientId));
-        final AtomicInteger rebalances = new AtomicInteger();
-        streams.setStateListener((newState, oldState) -> {
-            if (newState == KafkaStreams.State.REBALANCING) {
-                rebalances.incrementAndGet();
-            }
-        });
-        rebalanceCounts.put(streams, rebalances);
+        if (rebalanceCounter != null) {
+            streams.setStateListener((newState, oldState) -> {
+                if (newState == KafkaStreams.State.REBALANCING) {
+                    rebalanceCounter.incrementAndGet();
+                }
+            });
+        }
         streamsToClose.add(streams);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         return streams;
@@ -239,12 +249,20 @@ public class SourceTopicChangelogRestoreIntegrationTest {
     }
 
     private void produce(final String topic, final List<KeyValue<String, String>> records) throws Exception {
+        produce(topic, records, true);
+    }
+
+    private void produce(final String topic,
+                         final List<KeyValue<String, String>> records,
+                         final boolean oneRecordPerBatch) throws Exception {
         final Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        // one record per batch, so a restore fetch capped by max.partition.fetch.bytes only returns a handful of records
-        producerConfig.put(ProducerConfig.BATCH_SIZE_CONFIG, 0);
+        if (oneRecordPerBatch) {
+            // one record per batch, so a restore fetch capped by max.partition.fetch.bytes only returns a handful of records
+            producerConfig.put(ProducerConfig.BATCH_SIZE_CONFIG, 0);
+        }
         IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, cluster.time);
     }
 
