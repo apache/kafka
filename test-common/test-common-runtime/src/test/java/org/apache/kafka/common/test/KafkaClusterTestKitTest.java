@@ -62,6 +62,8 @@ import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Tag("integration")
+@Timeout(120)
 public class KafkaClusterTestKitTest {
     @ParameterizedTest
     @ValueSource(ints = {0, -1})
@@ -200,8 +202,6 @@ public class KafkaClusterTestKitTest {
     }
 
     @Test
-    @Tag("integration")
-    @Timeout(120)
     public void testCreateClusterAndClose() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
@@ -215,8 +215,6 @@ public class KafkaClusterTestKitTest {
     }
 
     @Test
-    @Tag("integration")
-    @Timeout(120)
     public void testCreateClusterAndRestartBrokerNode() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
@@ -233,8 +231,6 @@ public class KafkaClusterTestKitTest {
     }
 
     @Test
-    @Tag("integration")
-    @Timeout(120)
     public void testCreateClusterAndWaitForBrokerInRunningState() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
@@ -256,8 +252,6 @@ public class KafkaClusterTestKitTest {
     }
 
     @Test
-    @Tag("integration")
-    @Timeout(120)
     public void testClusterWithLowerCaseListeners() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
@@ -285,8 +279,6 @@ public class KafkaClusterTestKitTest {
     }
 
     @Test
-    @Tag("integration")
-    @Timeout(120)
     public void testAuthorizerFailureFoundInControllerStartup() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
