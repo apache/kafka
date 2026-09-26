@@ -18,12 +18,12 @@
 package kafka.server
 
 import java.util.AbstractMap.SimpleImmutableEntry
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.util.Map.Entry
 import kafka.server.KafkaConfig.fromProps
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
-import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewPartitionReassignment, NewTopic}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.ConfigResource
@@ -77,8 +77,8 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
   def shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(leaderThrottle: Boolean): Unit = {
     /**
-      * In short we have 8 brokers, 2 are not-started. We assign replicas for the two non-started
-      * brokers, so when we start them we can monitor replication from the 6 to the 2.
+      * We preload data on 6 brokers, then start 2 empty brokers and wait for their quotas.
+      * Assigning replicas to the new brokers then lets us measure replication from the 6 to the 2.
       *
       * We also have two non-throttled partitions on two of the 6 brokers, just to make sure
       * regular replication works as expected.
@@ -86,8 +86,8 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
     brokers = (100 to 105).map { id => createBroker(fromProps(createBrokerConfig(id))) }
 
-    //Given six partitions, led on nodes 0,1,2,3,4,5 but with followers on node 6,7 (not started yet)
-    //And two extra partitions 6,7, which we don't intend on throttling.
+    //The final assignment has six throttled partitions with leaders on brokers 100-105 and followers on 106-107.
+    //Two extra partitions, 6 and 7, are not throttled. Initially only the leaders are assigned.
     val assignment = Map(
       0 -> Seq(100, 106), //Throttled
       1 -> Seq(101, 106), //Throttled
@@ -109,8 +109,9 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
     Using.resource(createAdminClient(brokers, listenerName)) { admin =>
       (106 to 107).foreach(registerBroker)
-      admin.createTopics(List(new NewTopic(topic, assignment.map(a => a._1.asInstanceOf[Integer] ->
-        a._2.map(_.asInstanceOf[Integer]).toList.asJava).asJava)).asJava).all().get()
+      admin.createTopics(List(new NewTopic(topic, assignment.map { case (partition, replicas) =>
+        Int.box(partition) -> List(Int.box(replicas.head)).asJava
+      }.asJava)).asJava).all().get()
       //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
       (100 to 107).foreach { brokerId =>
         val entry = new SimpleImmutableEntry[AlterConfigOp.OpType, String](SET, throttle.toString)
@@ -122,7 +123,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
             QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
           false,
           false
-        ).get()
+        ).get().values().forEach(error => assertFalse(error.isFailure, error.message()))
       }
       //Either throttle the six leaders or the two followers
       val configEntry = if (leaderThrottle)
@@ -149,18 +150,29 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     waitForOffsetsToMatch(msgCount, 6, 100)
     waitForOffsetsToMatch(msgCount, 7, 101)
 
-    val start = System.currentTimeMillis()
-
-    //When we create the 2 new, empty brokers
+    //Start the empty brokers without replicas, so replication cannot race with initial quota configuration.
     createBrokers(106 to 107)
 
-    //Check that throttled config correctly migrated to the new brokers
-    (106 to 107).foreach { brokerId =>
-      assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound)
+    //Wait for the actual quota state on the brokers before assigning followers and starting the timer.
+    (100 to 107).foreach { brokerId =>
+      val quotas = brokerFor(brokerId).quotaManagers
+      val quota = if (leaderThrottle) quotas.leader else quotas.follower
+      waitUntilTrue(() => quota.upperBound == throttle,
+        s"Replication quota was not applied on broker $brokerId")
     }
-    if (!leaderThrottle) {
-      (0 to 2).foreach { partition => assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(tp(partition))) }
-      (3 to 5).foreach { partition => assertTrue(brokerFor(107).quotaManagers.follower.isThrottled(tp(partition))) }
+    (0 to 5).foreach { partition =>
+      val brokerId = if (leaderThrottle) assignment(partition).head else assignment(partition).last
+      val quotas = brokerFor(brokerId).quotaManagers
+      val quota = if (leaderThrottle) quotas.leader else quotas.follower
+      waitUntilTrue(() => quota.isThrottled(tp(partition)),
+        s"Partition $partition was not throttled on broker $brokerId")
+    }
+
+    val start = System.currentTimeMillis()
+    Using.resource(createAdminClient(brokers, listenerName)) { admin =>
+      admin.alterPartitionReassignments(assignment.map { case (partition, replicas) =>
+        tp(partition) -> Optional.of(new NewPartitionReassignment(replicas.map(Int.box).asJava))
+      }.asJava).all().get()
     }
 
     //Wait for non-throttled partitions to replicate first
