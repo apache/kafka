@@ -188,6 +188,27 @@ public class FileOffsetBackingStoreTest {
         verify(setCallback, times(3)).onCompletion(isNull(), isNull());
     }
 
+    @Test
+    public void testSaveRestoreUsesByteBufferRemainingBytes() throws Exception {
+        @SuppressWarnings("unchecked")
+        Callback<Void> setCallback = mock(Callback.class);
+
+        Map<ByteBuffer, ByteBuffer> offsets = Map.of(
+                ByteBuffer.wrap("xkeyx".getBytes(), 1, 3),
+                ByteBuffer.wrap("xvaluex".getBytes(), 1, 5)
+        );
+
+        store.set(offsets, setCallback).get();
+        store.stop();
+
+        FileOffsetBackingStore restore = new FileOffsetBackingStore(converter);
+        restore.configure(config);
+        restore.start();
+        Map<ByteBuffer, ByteBuffer> values = restore.get(List.of(buffer("key"))).get();
+        assertEquals(buffer("value"), values.get(buffer("key")));
+        verify(setCallback).onCompletion(isNull(), isNull());
+    }
+
     private static ByteBuffer buffer(String v) {
         return ByteBuffer.wrap(v.getBytes());
     }
