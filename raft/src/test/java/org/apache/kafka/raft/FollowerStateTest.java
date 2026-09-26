@@ -124,6 +124,24 @@ public class FollowerStateTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    public void testPreVoteAfterLeaderResigned(boolean isLogUpToDate) {
+        FollowerState state = newFollowerState(Set.of(1, 2, 3));
+        state.resetFetchTimeoutForSuccessfulFetch(time.milliseconds());
+        state.setLeaderHasResigned();
+
+        assertEquals(isLogUpToDate, state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+        assertEquals(isLogUpToDate, state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+        assertEquals(isLogUpToDate, state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+        assertEquals(isLogUpToDate, state.canGrantVote(ReplicaKey.of(10, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(10, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     public void testGrantStandardVote(boolean isLogUpToDate) {
         FollowerState state = newFollowerState(Set.of(1, 2, 3));
 
