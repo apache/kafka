@@ -2757,6 +2757,52 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotCommitStaleNextOffsetForPartitionNotReReadAfterRevive() {
+        // A revived task must not commit a stale "next offset to consume" for a partition it has not re-read.
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        // idle disabled (-1) so the revived task can process partition2 without waiting on empty partition1
+        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "-1"));
+
+        // committed offset partition1 will be seeked back to when the revived task restores
+        consumer.commitSync(Map.of(partition1, new OffsetAndMetadata(5L)));
+
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        // a poll advanced partition1 past its committed offset before the corruption
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(10L, Optional.of(0), ""));
+
+        // closeDirtyAndRevive: suspend, close dirty, mark inputs for offset reset, revive
+        task.suspend();
+        task.closeDirty();
+        task.addPartitionsForOffsetReset(Set.of(partition1));
+        task.revive();
+
+        // restoration seeks partition1 back to its committed offset; partition1 is now NOT re-read
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        assertEquals(5L, consumer.position(partition1));
+
+        // the revived task re-reads partition2 only, and processor metadata forces a commit of all inputs
+        task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition2, 0L, 0)));
+        task.process(0L);
+        task.updateNextOffsets(partition2, new OffsetAndMetadata(1L, Optional.of(0), ""));
+        processorStreamTime.mockProcessor.addProcessorMetadata("key1", 100L);
+
+        assertTrue(task.commitNeeded());
+        final Map<TopicPartition, OffsetAndMetadata> committed = task.prepareCommit(true);
+
+        // partition1 must be left out: committing its stale next offset (10) would skip records 5..9
+        assertFalse(
+            committed.containsKey(partition1),
+            "revived task committed a stale next offset for a partition it did not re-read"
+        );
+        // partition2, which was re-read, is still committed
+        assertTrue(committed.containsKey(partition2));
+    }
+
+    @Test
     public void closeShouldBeIdempotent() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
