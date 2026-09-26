@@ -154,7 +154,7 @@ public class ConnectInternalTopics {
     }
 
     private static ArgumentParser parser() {
-        var parser = ArgumentParsers.newArgumentParser("connect-internal-topics")
+        var parser = ArgumentParsers.newFor("connect-internal-topics").build()
                 .defaultHelp(true)
                 .description("Manage internal topics required by Kafka Connect clusters (config, status, and offset topics).");
 

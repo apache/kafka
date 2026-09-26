@@ -253,7 +253,8 @@ public class ProducerPerformance {
     /** Get the command-line argument parser. */
     static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("kafka-producer-perf-test")
+                .newFor("kafka-producer-perf-test")
+                .build()
                 .defaultHelp(true)
                 .description("This tool is used to verify the producer performance. To enable transactions, " +
                         "you can specify a transactional id or set a transaction duration using --transaction-duration-ms. " +
