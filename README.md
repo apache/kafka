@@ -11,7 +11,7 @@
 
 [**Apache Kafka**](https://kafka.apache.org) is an open-source distributed event streaming platform used by thousands of companies for high-performance data pipelines, streaming analytics, data integration, and mission-critical applications.
 
-You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
+You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed:
 
 We build and test Apache Kafka with Java versions 17 and 25. The `release` parameter in javac is set to `11` for the clients 
 and streams modules, and `17` for the rest, ensuring compatibility with their respective
