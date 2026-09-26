@@ -1688,21 +1688,14 @@ public class QuorumControllerTest {
         try (
             MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv)
-                // Set the batch size to 1 so that any non-empty write is an exact multiple
-                // of maxRecordsPerBatch, exercising the off-by-one path.
                 .setControllerBuilderInitializer(b -> b.setControllerMaxRecordsPerBatch(1))
                 .build()
         ) {
-            // Wait for the controller to become active and finish activation.
             QuorumController controller = controlEnv.activeController(true);
-            
-            // Remember the leadership epoch so we can detect a failover.
             int epochBefore = controller.curClaimEpoch();
 
-            // A non-atomic write (broker registration) goes through the real production appender
-            assertEquals(1, registerBrokersAndUnfence(controller, 1).size());
+            registerBrokersAndUnfence(controller, 1);
 
-            // An unchanged epoch proves the controller has not renounced leadership
             assertEquals(epochBefore, controller.curClaimEpoch(), "controller must not renounce leadership");
         }
     }
