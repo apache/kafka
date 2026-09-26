@@ -232,6 +232,9 @@ public class LoginManager {
         final Class<? extends Login> loginClass;
         final Class<? extends AuthenticateCallbackHandler> loginCallbackClass;
         final Map<String, Object> saslConfigs;
+        // A Login may start a background thread that inherits the context class loader of the thread
+        // which created it, so a Login must not be shared by callers from different class loaders.
+        final ClassLoader contextClassLoader;
 
         LoginMetadata(T configInfo, Class<? extends Login> loginClass,
                       Class<? extends AuthenticateCallbackHandler> loginCallbackClass,
@@ -239,6 +242,7 @@ public class LoginManager {
             this.configInfo = configInfo;
             this.loginClass = loginClass;
             this.loginCallbackClass = loginCallbackClass;
+            this.contextClassLoader = Utils.getContextOrKafkaClassLoader();
             this.saslConfigs = new HashMap<>();
             configs.entrySet().stream()
                     .filter(e -> e.getKey().startsWith("sasl."))
@@ -247,7 +251,7 @@ public class LoginManager {
 
         @Override
         public int hashCode() {
-            return Objects.hash(configInfo, loginClass, loginCallbackClass, saslConfigs);
+            return Objects.hash(configInfo, loginClass, loginCallbackClass, saslConfigs, contextClassLoader);
         }
 
         @Override
@@ -259,7 +263,8 @@ public class LoginManager {
             return Objects.equals(configInfo, loginMetadata.configInfo) &&
                    Objects.equals(loginClass, loginMetadata.loginClass) &&
                    Objects.equals(loginCallbackClass, loginMetadata.loginCallbackClass) &&
-                   Objects.equals(saslConfigs, loginMetadata.saslConfigs);
+                   Objects.equals(saslConfigs, loginMetadata.saslConfigs) &&
+                   Objects.equals(contextClassLoader, loginMetadata.contextClassLoader);
         }
     }
 }
