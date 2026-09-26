@@ -36,6 +36,7 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     final Function<byte[], V> deserializeValue;
     private final long startNs;
     private final long startTimestampMs;
+    private final long sequenceNumber = SEQUENCE_NUMBERS.getAndIncrement();
     private final Time time;
     private final LongAdder numOpenIterators;
     private final Set<MeteredIterator> openIterators;
@@ -65,6 +66,11 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     @Override
     public long startTimestamp() {
         return this.startTimestampMs;
+    }
+
+    @Override
+    public long sequenceNumber() {
+        return sequenceNumber;
     }
 
     @Override
