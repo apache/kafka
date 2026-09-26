@@ -2055,7 +2055,6 @@ project(':clients') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.testcontainersKeycloak
-    testImplementation libs.testcontainersJunitJupiter
 
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly runtimeTestLibs
@@ -2897,7 +2896,6 @@ project(':streams') {
 
     testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
-    testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
@@ -3098,7 +3096,6 @@ project(':streams:integration-tests') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
     testImplementation project(':transaction-coordinator')
-    testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
     testImplementation libs.mockitoCore

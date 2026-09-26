@@ -108,7 +108,7 @@ supported_image_tag: ['3.6.1', 'latest', '3.7.0-rc1']
 Local Setup
 -----------
 
-Make sure you have python (>= 3.7.x) and java (>= 17) (java needed only for running tests) installed before running the tests and scripts.
+Make sure you have python (>= 3.10.x) and java (>= 17) (java needed only for running tests) installed before running the tests and scripts.
 
 Run `pip install -r requirements.txt` to get all the requirements for running the scripts.
 
@@ -216,4 +216,3 @@ python generate_kafka_pr_template.py --image-type=jvm
 - kafka-version - This is the version to create the Docker official images static Dockerfile and assets for, as well as the version to build and test the Docker official image for.
 - image-type - This is the type of image that we intend to build. This will be dropdown menu type selection in the workflow. `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/x/z5izDw). 
   - **NOTE:** As of now [KIP-1028](https://cwiki.apache.org/confluence/x/0AmpEQ) only aims to release JVM based Docker Official Images and not GraalVM based native Apache Kafka docker image.
-

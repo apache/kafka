@@ -68,12 +68,12 @@ class StreamsUpgradeTest(Test):
             self.kafka.start_node(node)
 
     @cluster(num_nodes=9)
-    @matrix(from_version=smoke_test_versions, bounce_type=["full"], metadata_quorum=[quorum.combined_kraft])
-    def test_app_upgrade(self, from_version, bounce_type, metadata_quorum):
+    @matrix(from_version=smoke_test_versions, metadata_quorum=[quorum.combined_kraft])
+    def test_app_upgrade(self, from_version, metadata_quorum):
         """
-        Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
+        Starts 3 KafkaStreams instances with <from_version> and upgrades them all at once to <DEV_VERSION>.
         """
-        self._run_app_transition(from_version, str(DEV_VERSION), bounce_type)
+        self._run_app_transition(from_version, str(DEV_VERSION))
 
     @cluster(num_nodes=9)
     @matrix(direction=["upgrade", "downgrade"], metadata_quorum=[quorum.combined_kraft])
@@ -105,11 +105,10 @@ class StreamsUpgradeTest(Test):
         self._run_app_transition(
             from_version,
             to_version,
-            "full",
             extra_configs={DSL_STORE_FORMAT_CONFIG: DSL_STORE_FORMAT_HEADERS},
             verify_suppress_restore=True)
 
-    def _run_app_transition(self, from_version, to_version, bounce_type,
+    def _run_app_transition(self, from_version, to_version,
                             extra_configs=None, verify_suppress_restore=False):
         """
         Starts 3 KafkaStreams instances with <from_version> and moves them all to <to_version>,
@@ -152,19 +151,7 @@ class StreamsUpgradeTest(Test):
 
         self.processors = [self.processor1, self.processor2, self.processor3]
 
-        if bounce_type == "rolling":
-            counter = 1
-            random.seed()
-            # upgrade one-by-one via rolling bounce
-            random.shuffle(self.processors)
-            for p in self.processors:
-                p.CLEAN_NODE_ENABLED = False
-                self.do_stop_start_bounce(p, None, from_version, to_version, counter)
-                counter = counter + 1
-        elif bounce_type == "full":
-            self.restart_all_nodes_with(from_version, to_version)
-        else:
-            raise Exception("Unrecognized bounce_type: " + str(bounce_type))
+        self.restart_all_nodes_with(from_version, to_version)
 
         if verify_suppress_restore:
             # The liveness checks above only prove the app came back up. A suppress-changelog record
@@ -297,77 +284,6 @@ class StreamsUpgradeTest(Test):
 
     def purge_state_dir(self, processor):
         processor.node.account.ssh("rm -rf " + processor.PERSISTENT_ROOT, allow_fail=False)
-
-    def do_stop_start_bounce(self, processor, upgrade_from, from_version, to_version, counter):
-        kafka_version_str = self.get_version_string(to_version)
-
-        first_other_processor = None
-        second_other_processor = None
-        for p in self.processors:
-            if p != processor:
-                if first_other_processor is None:
-                    first_other_processor = p
-                else:
-                    second_other_processor = p
-
-        node = processor.node
-        first_other_node = first_other_processor.node
-        second_other_node = second_other_processor.node
-
-        # stop processor and wait for rebalance of others
-        with first_other_node.account.monitor_log(first_other_processor.STDOUT_FILE) as first_other_monitor:
-            with second_other_node.account.monitor_log(second_other_processor.STDOUT_FILE) as second_other_monitor:
-                processor.stop_node(processor.node)
-                first_other_monitor.wait_until(self.processed_msg,
-                                               timeout_sec=60,
-                                               err_msg="Never saw output '%s' on " % self.processed_msg + str(first_other_node.account))
-                second_other_monitor.wait_until(self.processed_msg,
-                                                timeout_sec=60,
-                                                err_msg="Never saw output '%s' on " % self.processed_msg + str(second_other_node.account))
-
-        if from_version.startswith("2."):
-            # some older versions crash on shutdown, so we allow crashes here.
-            node.account.ssh_capture("grep -E 'SMOKE-TEST-CLIENT-(EXCEPTION|CLOSED)' %s" % processor.STDOUT_FILE, allow_fail=False)
-        else:
-            node.account.ssh_capture("grep -E 'SMOKE-TEST-CLIENT-CLOSED' %s" % processor.STDOUT_FILE, allow_fail=False)
-
-        if upgrade_from is None:  # upgrade disabled -- second round of rolling bounces
-            roll_counter = ".1-"  # second round of rolling bounces
-        else:
-            roll_counter = ".0-"  # first  round of rolling bounces
-
-        self.roll_logs(processor, roll_counter + str(counter))
-
-        self.set_version(processor, to_version)
-        processor.set_upgrade_from(upgrade_from)
-
-        grep_metadata_error = "grep \"org.apache.kafka.streams.errors.TaskAssignmentException: unable to decode subscription data: version=2\" "
-        with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
-                with first_other_node.account.monitor_log(first_other_processor.STDOUT_FILE) as first_other_monitor:
-                    with second_other_node.account.monitor_log(second_other_processor.STDOUT_FILE) as second_other_monitor:
-                        processor.start_node(processor.node)
-
-                        log_monitor.wait_until(kafka_version_str,
-                                               timeout_sec=60,
-                                               err_msg="Could not detect Kafka Streams version " + to_version + " on " + str(node.account))
-                        first_other_monitor.wait_until(self.processed_msg,
-                                                       timeout_sec=60,
-                                                       err_msg="Never saw output '%s' on " % self.processed_msg + str(first_other_node.account))
-                        found = list(first_other_node.account.ssh_capture(grep_metadata_error + first_other_processor.STDERR_FILE, allow_fail=True))
-                        if len(found) > 0:
-                            raise Exception("Kafka Streams failed with 'unable to decode subscription data: version=2'")
-
-                        second_other_monitor.wait_until(self.processed_msg,
-                                                        timeout_sec=60,
-                                                        err_msg="Never saw output '%s' on " % self.processed_msg + str(second_other_node.account))
-                        found = list(second_other_node.account.ssh_capture(grep_metadata_error + second_other_processor.STDERR_FILE, allow_fail=True))
-                        if len(found) > 0:
-                            raise Exception("Kafka Streams failed with 'unable to decode subscription data: version=2'")
-
-                        monitor.wait_until(self.processed_msg,
-                                           timeout_sec=60,
-                                           err_msg="Never saw output '%s' on " % self.processed_msg + str(node.account))
 
     def roll_logs(self, processor, roll_suffix):
         processor.node.account.ssh("mv " + processor.STDOUT_FILE + " " + processor.STDOUT_FILE + roll_suffix,

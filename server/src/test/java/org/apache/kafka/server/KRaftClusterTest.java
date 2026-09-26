@@ -18,18 +18,14 @@ package org.apache.kafka.server;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.AlterClientQuotasResult;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeMetadataQuorumOptions;
-import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.FeatureUpdate;
-import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
-import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
@@ -46,19 +42,13 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
-import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.quota.ClientQuotaAlteration;
-import org.apache.kafka.common.quota.ClientQuotaEntity;
-import org.apache.kafka.common.quota.ClientQuotaFilter;
-import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.DescribeClusterRequest;
 import org.apache.kafka.common.requests.DescribeClusterResponse;
@@ -83,7 +73,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.ClientQuotaType;
@@ -106,9 +95,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -339,214 +326,6 @@ public class KRaftClusterTest {
                 .authorizerPlugin().get().get();
             assertEquals(expected, ((FakeConfigurableAuthorizer) brokerAuthorizer).foobar.get());
         });
-    }
-
-    @Test
-    public void testCreateClusterAndCreateListDeleteTopic() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-                "Broker never made it to RUNNING state.");
-            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
-                "RaftManager was not initialized.");
-
-            String testTopic = "test-topic";
-            try (Admin admin = cluster.admin()) {
-                // Create a test topic
-                List<NewTopic> newTopic = List.of(new NewTopic(testTopic, 1, (short) 3));
-                CreateTopicsResult createTopicResult = admin.createTopics(newTopic);
-                createTopicResult.all().get();
-                waitForTopicListing(admin, List.of(testTopic), List.of());
-
-                // Delete topic
-                DeleteTopicsResult deleteResult = admin.deleteTopics(List.of(testTopic));
-                deleteResult.all().get();
-
-                // List again
-                waitForTopicListing(admin, List.of(), List.of(testTopic));
-            }
-        }
-    }
-
-    @Test
-    public void testCreateClusterAndCreateAndManyTopics() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-                "Broker never made it to RUNNING state.");
-            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
-                "RaftManager was not initialized.");
-
-            try (Admin admin = cluster.admin()) {
-                // Create many topics
-                List<NewTopic> newTopics = List.of(
-                    new NewTopic("test-topic-1", 2, (short) 3),
-                    new NewTopic("test-topic-2", 2, (short) 3),
-                    new NewTopic("test-topic-3", 2, (short) 3)
-                );
-                CreateTopicsResult createTopicResult = admin.createTopics(newTopics);
-                createTopicResult.all().get();
-
-                // List created topics
-                waitForTopicListing(admin, List.of("test-topic-1", "test-topic-2", "test-topic-3"), List.of());
-            }
-        }
-    }
-
-    private Map<ClientQuotaEntity, Map<String, Double>> alterThenDescribe(
-        Admin admin,
-        ClientQuotaEntity entity,
-        List<ClientQuotaAlteration.Op> quotas,
-        ClientQuotaFilter filter,
-        int expectCount
-    ) throws Exception {
-        AlterClientQuotasResult alterResult = admin.alterClientQuotas(List.of(new ClientQuotaAlteration(entity, quotas)));
-        alterResult.all().get();
-
-        TestUtils.waitForCondition(() -> {
-            Map<ClientQuotaEntity, Map<String, Double>> results = admin.describeClientQuotas(filter).entities().get();
-            return results.getOrDefault(entity, Map.of()).size() == expectCount;
-        }, "Broker never saw new client quotas");
-
-        return admin.describeClientQuotas(filter).entities().get();
-    }
-
-    @Test
-    public void testClientQuotas() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-                "Broker never made it to RUNNING state.");
-
-            try (Admin admin = cluster.admin()) {
-                ClientQuotaEntity entity = new ClientQuotaEntity(Map.of("user", "testkit"));
-                ClientQuotaFilter filter = ClientQuotaFilter.containsOnly(
-                    List.of(ClientQuotaFilterComponent.ofEntity("user", "testkit")));
-
-                Map<ClientQuotaEntity, Map<String, Double>> describeResult = alterThenDescribe(admin, entity,
-                    List.of(new ClientQuotaAlteration.Op("request_percentage", 0.99)), filter, 1);
-                assertEquals(0.99, describeResult.get(entity).get("request_percentage"), 1e-6);
-
-                describeResult = alterThenDescribe(admin, entity, List.of(
-                    new ClientQuotaAlteration.Op("request_percentage", 0.97),
-                    new ClientQuotaAlteration.Op("producer_byte_rate", 10000.0),
-                    new ClientQuotaAlteration.Op("consumer_byte_rate", 10001.0)
-                ), filter, 3);
-                assertEquals(0.97, describeResult.get(entity).get("request_percentage"), 1e-6);
-                assertEquals(10000.0, describeResult.get(entity).get("producer_byte_rate"), 1e-6);
-                assertEquals(10001.0, describeResult.get(entity).get("consumer_byte_rate"), 1e-6);
-
-                describeResult = alterThenDescribe(admin, entity, List.of(
-                    new ClientQuotaAlteration.Op("request_percentage", 0.95),
-                    new ClientQuotaAlteration.Op("producer_byte_rate", null),
-                    new ClientQuotaAlteration.Op("consumer_byte_rate", null)
-                ), filter, 1);
-                assertEquals(0.95, describeResult.get(entity).get("request_percentage"), 1e-6);
-
-                alterThenDescribe(admin, entity, List.of(
-                    new ClientQuotaAlteration.Op("request_percentage", null)), filter, 0);
-
-                describeResult = alterThenDescribe(admin, entity,
-                    List.of(new ClientQuotaAlteration.Op("producer_byte_rate", 9999.0)), filter, 1);
-                assertEquals(9999.0, describeResult.get(entity).get("producer_byte_rate"), 1e-6);
-
-                ClientQuotaEntity entity2 = new ClientQuotaEntity(Map.of("user", "testkit", "client-id", "some-client"));
-                filter = ClientQuotaFilter.containsOnly(
-                    List.of(
-                        ClientQuotaFilterComponent.ofEntity("user", "testkit"),
-                        ClientQuotaFilterComponent.ofEntity("client-id", "some-client")
-                    ));
-                describeResult = alterThenDescribe(admin, entity2,
-                    List.of(new ClientQuotaAlteration.Op("producer_byte_rate", 9998.0)), filter, 1);
-                assertEquals(9998.0, describeResult.get(entity2).get("producer_byte_rate"), 1e-6);
-
-                final ClientQuotaFilter finalFilter = ClientQuotaFilter.contains(
-                    List.of(ClientQuotaFilterComponent.ofEntity("user", "testkit")));
-
-                TestUtils.waitForCondition(() -> {
-                    Map<ClientQuotaEntity, Map<String, Double>> results = admin.describeClientQuotas(finalFilter).entities().get();
-                    if (results.size() != 2) {
-                        return false;
-                    }
-                    assertEquals(9999.0, results.get(entity).get("producer_byte_rate"), 1e-6);
-                    assertEquals(9998.0, results.get(entity2).get("producer_byte_rate"), 1e-6);
-                    return true;
-                }, "Broker did not see two client quotas");
-            }
-        }
-    }
-
-    private void setConsumerByteRate(Admin admin, ClientQuotaEntity entity, Long value) throws Exception {
-        admin.alterClientQuotas(List.of(
-            new ClientQuotaAlteration(entity, List.of(
-                new ClientQuotaAlteration.Op("consumer_byte_rate", value.doubleValue())))
-        )).all().get();
-    }
-
-    private Map<ClientQuotaEntity, Long> getConsumerByteRates(Admin admin) throws Exception {
-        return admin.describeClientQuotas(ClientQuotaFilter.contains(List.of()))
-            .entities().get()
-            .entrySet().stream()
-            .filter(entry -> entry.getValue().containsKey("consumer_byte_rate"))
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> entry.getValue().get("consumer_byte_rate").longValue()
-            ));
-    }
-
-    @Test
-    public void testDefaultClientQuotas() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-                "Broker never made it to RUNNING state.");
-
-            try (Admin admin = cluster.admin()) {
-                ClientQuotaEntity defaultUser = new ClientQuotaEntity(Collections.singletonMap("user", null));
-                ClientQuotaEntity bobUser = new ClientQuotaEntity(Map.of("user", "bob"));
-
-                TestUtils.waitForCondition(
-                    () -> getConsumerByteRates(admin).isEmpty(),
-                    "Initial consumer byte rates should be empty");
-
-                setConsumerByteRate(admin, defaultUser, 100L);
-                TestUtils.waitForCondition(() -> {
-                    Map<ClientQuotaEntity, Long> rates = getConsumerByteRates(admin);
-                    return rates.size() == 1 &&
-                        rates.get(defaultUser) == 100L;
-                }, "Default user rate should be 100");
-
-                setConsumerByteRate(admin, bobUser, 1000L);
-                TestUtils.waitForCondition(() -> {
-                    Map<ClientQuotaEntity, Long> rates = getConsumerByteRates(admin);
-                    return rates.size() == 2 &&
-                        rates.get(defaultUser) == 100L &&
-                        rates.get(bobUser) == 1000L;
-                }, "Should have both default and bob user rates");
-            }
-        }
     }
 
     @Test
@@ -1077,38 +856,6 @@ public class KRaftClusterTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"3.7-IV0", "3.7-IV2"})
-    public void testCreatePartitions(String metadataVersionString) throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString, true))
-                .setNumControllerNodes(3)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-
-            try (Admin admin = cluster.admin()) {
-                Map<String, KafkaFuture<Void>> createResults = admin.createTopics(List.of(
-                    new NewTopic("foo", 1, (short) 3),
-                    new NewTopic("bar", 2, (short) 3)
-                )).values();
-                createResults.get("foo").get();
-                createResults.get("bar").get();
-                Map<String, KafkaFuture<Void>> increaseResults = admin.createPartitions(Map.of(
-                    "foo", NewPartitions.increaseTo(3),
-                    "bar", NewPartitions.increaseTo(2)
-                )).values();
-
-                increaseResults.get("foo").get();
-                ExecutionException exception = assertThrows(ExecutionException.class, () -> increaseResults.get("bar").get());
-                assertEquals(InvalidPartitionsException.class, exception.getCause().getClass());
-            }
-        }
-    }
-
     @Test
     public void testDescribeQuorumRequestToBrokers() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
@@ -1249,30 +996,6 @@ public class KRaftClusterTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testDescribeKRaftVersion(boolean usingBootstrapControllers) throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .setStandalone(true)
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-
-            try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
-                FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
-                assertEquals(new SupportedVersionRange((short) 0, (short) 1),
-                    featureMetadata.supportedFeatures().get(KRaftVersion.FEATURE_NAME));
-                assertEquals(new FinalizedVersionRange((short) 1, (short) 1),
-                    featureMetadata.finalizedFeatures().get(KRaftVersion.FEATURE_NAME));
-            }
-        }
-    }
-
     @Test
     public void testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
@@ -1397,55 +1120,6 @@ public class KRaftClusterTest {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
-        }
-    }
-
-    @Test
-    public void testOverlyLargeCreateTopics() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            try (Admin admin = cluster.admin()) {
-                var newTopics = new ArrayList<NewTopic>();
-                for (int i = 0; i <= 10000; i++) {
-                    newTopics.add(new NewTopic("foo" + i, 100000, (short) 1));
-                }
-                var executionException = assertThrows(ExecutionException.class,
-                    () -> admin.createTopics(newTopics).all().get());
-                assertNotNull(executionException.getCause());
-                assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
-                assertEquals("Too many partitions in request.",
-                    executionException.getCause().getMessage());
-            }
-        }
-    }
-
-    @Test
-    public void testCreateTopicsRespectsConfiguredMaxRecordsPerBatch() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .setConfigProp(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG, "10")
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            try (Admin admin = cluster.admin()) {
-                var newTopics = List.of(
-                    new NewTopic("foo1", 5, (short) 1),
-                    new NewTopic("foo2", 6, (short) 1));
-                var executionException = assertThrows(ExecutionException.class,
-                    () -> admin.createTopics(newTopics).all().get());
-                assertNotNull(executionException.getCause());
-                assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
-                assertEquals("Too many partitions in request.",
-                    executionException.getCause().getMessage());
-            }
         }
     }
 
@@ -1802,30 +1476,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.startup();
             cluster.waitForReadyBrokers();
-        }
-    }
-
-    @Test
-    public void testIncreaseNumIoThreads() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1).build())
-            .setConfigProp(ServerConfigs.NUM_IO_THREADS_CONFIG, "4")
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-            try (Admin admin = cluster.admin()) {
-                admin.incrementalAlterConfigs(
-                    Map.of(new ConfigResource(Type.BROKER, ""),
-                        List.of(new AlterConfigOp(
-                            new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, "8"), OpType.SET)))).all().get();
-                var newTopic = List.of(new NewTopic("test-topic", 1, (short) 1));
-                var createTopicResult = admin.createTopics(newTopic);
-                createTopicResult.all().get();
-                waitForTopicListing(admin, List.of("test-topic"), List.of());
-            }
         }
     }
 

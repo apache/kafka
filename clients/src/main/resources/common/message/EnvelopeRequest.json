@@ -21,6 +21,9 @@
   // Request struct for forwarding.
   "validVersions": "0",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "RequestData", "type": "bytes", "versions": "0+", "zeroCopy": true,
       "about": "The embedded request header and data."},

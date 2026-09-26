@@ -23,7 +23,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
-import org.apache.kafka.coordinator.group.modern.UnionSet;
+import org.apache.kafka.coordinator.group.util.UnionSet;
 
 import java.util.HashMap;
 import java.util.HashSet;

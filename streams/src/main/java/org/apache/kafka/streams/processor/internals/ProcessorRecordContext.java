@@ -112,11 +112,11 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         size += Long.BYTES; // value.context.timestamp
         size += Long.BYTES; // value.context.offset
         if (topic != null) {
-            size += topic.toCharArray().length;
+            size += topic.length();
         }
         size += Integer.BYTES; // partition
         for (final Header header : headers) {
-            size += header.key().toCharArray().length;
+            size += header.key().length();
             final byte[] value = header.value();
             if (value != null) {
                 size += value.length;
