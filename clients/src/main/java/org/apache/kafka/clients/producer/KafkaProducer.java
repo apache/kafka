@@ -456,9 +456,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 config.getBoolean(ProducerConfig.PARTITIONER_RACK_AWARE_CONFIG),
                 config.getString(ProducerConfig.CLIENT_RACK_CONFIG)
             );
-            // As per Kafka producer configuration documentation batch.size may be set to 0 to explicitly disable
-            // batching which in practice actually means using a batch size of 1.
-            int batchSize = Math.max(1, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
+            // batch.size may be set to 0 to explicitly disable batching, which RecordAccumulator enforces
+            // by closing every batch for appends immediately after its first record.
+            int batchSize = config.getInt(ProducerConfig.BATCH_SIZE_CONFIG);
             String allocationStrategy = config.getString(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG)
                     .toLowerCase(Locale.ROOT);
             boolean incremental = ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL.equals(allocationStrategy);
