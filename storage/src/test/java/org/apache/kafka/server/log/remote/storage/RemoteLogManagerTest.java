@@ -37,6 +37,7 @@ import org.apache.kafka.common.record.internal.RemoteLogInputStream;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -4356,6 +4357,49 @@ public class RemoteLogManagerTest {
                 }
             }
             fileRecords.flush();
+        }
+    }
+
+    @ParameterizedTest(name = "logStartOffset={0}, localLogStartOffset={1}, earliestEpochEntryStartOffset={2}")
+    @CsvSource(value = {
+        // the cache covers the remote range
+        "10, 100, 10, false",
+        "10, 100, 5, false",
+        // the cache lost the entries of the remote range, fully or partly
+        "10, 100, 100, true",
+        "10, 100, 50, true",
+        "10, 100, -1, true",
+        // no remote range
+        "100, 100, 150, false",
+        "0, 0, -1, false"
+    })
+    public void testIsLeaderEpochCacheMissingRemoteEntries(long logStartOffset,
+                                                          long localLogStartOffset,
+                                                          long earliestEpochEntryStartOffset,
+                                                          boolean expected) {
+        checkpoint.write(earliestEpochEntryStartOffset < 0 ? List.of() : List.of(new EpochEntry(0, earliestEpochEntryStartOffset)));
+        UnifiedLog log = mock(UnifiedLog.class);
+        when(log.logStartOffset()).thenReturn(logStartOffset);
+        when(log.localLogStartOffset()).thenReturn(localLogStartOffset);
+        when(log.leaderEpochCache()).thenReturn(new LeaderEpochFileCache(tp, checkpoint, scheduler));
+
+        assertEquals(expected, RemoteLogManager.isLeaderEpochCacheMissingRemoteEntries(log));
+    }
+
+    @Test
+    public void testWarnOnBecomingLeaderWhenLeaderEpochCacheMissesRemoteRange() {
+        TopicPartitionLog leaderPartition = mockPartition(leaderTopicIdPartition);
+        UnifiedLog log = leaderPartition.unifiedLog().get();
+        checkpoint.write(List.of(new EpochEntry(5, 100L)));
+        when(log.leaderEpochCache()).thenReturn(new LeaderEpochFileCache(tp, checkpoint, scheduler));
+        when(log.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+        when(log.logStartOffset()).thenReturn(10L);
+        when(log.localLogStartOffset()).thenReturn(100L);
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RemoteLogManager.class)) {
+            remoteLogManager.onLeadershipChange(Set.of(leaderPartition), Set.of(), topicIds);
+            assertTrue(appender.getEvents().stream().anyMatch(event -> "WARN".equals(event.getLevel())
+                    && event.getMessage().contains("does not cover the remote log range [10, 100)")));
         }
     }
 
