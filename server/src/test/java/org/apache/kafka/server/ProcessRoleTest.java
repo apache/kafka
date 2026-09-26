@@ -14,32 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.config.ConfigException;
 
-public enum ProcessRole {
-    BrokerRole("broker"),
-    ControllerRole("controller");
+import org.junit.jupiter.api.Test;
 
-    private final String roleName;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-    ProcessRole(String roleName) {
-        this.roleName = roleName;
+public class ProcessRoleTest {
+
+    @Test
+    public void testFromString() {
+        assertEquals(ProcessRole.BrokerRole, ProcessRole.fromString("broker"));
+        assertEquals(ProcessRole.ControllerRole, ProcessRole.fromString("controller"));
     }
 
-    public static ProcessRole fromString(String role) {
-        return switch (role) {
-            case "broker" -> BrokerRole;
-            case "controller" -> ControllerRole;
-            default -> throw new ConfigException("Unknown process role '" + role +
-                "' (only 'broker' and 'controller' are allowed roles)");
-        };
-    }
-
-    @Override
-    public String toString() {
-        return roleName;
+    @Test
+    public void testFromStringWithInvalidRole() {
+        ConfigException exception = assertThrows(ConfigException.class, () -> ProcessRole.fromString("unknown"));
+        assertEquals("Unknown process role 'unknown' (only 'broker' and 'controller' are allowed roles)", exception.getMessage());
     }
 }
