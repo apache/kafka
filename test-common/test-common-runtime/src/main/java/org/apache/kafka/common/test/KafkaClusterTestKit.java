@@ -588,23 +588,28 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public void startup() throws ExecutionException, InterruptedException {
-        List<Future<?>> futures = new ArrayList<>();
+        List<Future<?>> controllerFutures = new ArrayList<>();
+        List<Future<?>> brokerFutures = new ArrayList<>();
         try {
-            // Note the startup order here is chosen to be consistent with
-            // `KafkaRaftServer`. See comments in that class for an explanation.
+            // Startup order matches `KafkaRaftServer`: controllers before brokers.
+            // Submit all controllers concurrently (avoids deadlocking a multi-controller
+            // quorum), then await them before starting brokers so a broker can't fail
+            // catching up to a not-yet-ready controller and leak threads (KAFKA-15104).
             for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(controller::startup));
+                controllerFutures.add(executorService.submit(controller::startup));
+            }
+            for (Future<?> future : controllerFutures) {
+                future.get();
             }
             for (BrokerServer broker : brokers.values()) {
-                futures.add(executorService.submit(broker::startup));
+                brokerFutures.add(executorService.submit(broker::startup));
             }
-            for (Future<?> future: futures) {
+            for (Future<?> future : brokerFutures) {
                 future.get();
             }
         } catch (Exception e) {
-            for (Future<?> future: futures) {
-                future.cancel(true);
-            }
+            brokerFutures.forEach(future -> future.cancel(true));
+            controllerFutures.forEach(future -> future.cancel(true));
             throw e;
         }
     }
