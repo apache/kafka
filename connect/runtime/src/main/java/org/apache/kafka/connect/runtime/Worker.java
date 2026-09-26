@@ -681,9 +681,6 @@ public final class Worker {
             connectorStatusMetricsGroup.recordTaskAdded(id);
 
             final ClassLoader connectorLoader;
-            Converter keyConverter = null;
-            Converter valueConverter = null;
-            HeaderConverter headerConverter = null;
             Plugin<Converter> keyConverterPlugin = null;
             Plugin<Converter> valueConverterPlugin = null;
             Plugin<HeaderConverter> headerConverterPlugin = null;
@@ -701,37 +698,13 @@ public final class Worker {
                     final Task task = plugins.newTask(taskClass);
                     log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
-
                     // By maintaining connector's specific class loader for this thread here, we first
                     // search for converters within the connector dependencies.
                     // If any of these aren't found, that means the connector didn't configure specific converters,
                     // so we should instantiate based upon the worker configuration
-                    keyConverter = plugins.newConverter(connConfig, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG);
-                    valueConverter = plugins.newConverter(connConfig, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG);
-                    headerConverter = plugins.newHeaderConverter(connConfig, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG);
-
-                    if (keyConverter == null) {
-                        keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, WorkerConfig.KEY_CONVERTER_VERSION);
-                        log.info("Set up the key converter {} for task {} using the worker config", keyConverter.getClass(), id);
-                    } else {
-                        log.info("Set up the key converter {} for task {} using the connector config", keyConverter.getClass(), id);
-                    }
-                    if (valueConverter == null) {
-                        valueConverter = plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, WorkerConfig.VALUE_CONVERTER_VERSION);
-                        log.info("Set up the value converter {} for task {} using the worker config", valueConverter.getClass(), id);
-                    } else {
-                        log.info("Set up the value converter {} for task {} using the connector config", valueConverter.getClass(), id);
-                    }
-                    if (headerConverter == null) {
-                        headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION);
-                        log.info("Set up the header converter {} for task {} using the worker config", headerConverter.getClass(), id);
-                    } else {
-                        log.info("Set up the header converter {} for task {} using the connector config", headerConverter.getClass(), id);
-                    }
-
-                    keyConverterPlugin = metrics.wrap(keyConverter, id, true);
-                    valueConverterPlugin = metrics.wrap(valueConverter, id, false);
-                    headerConverterPlugin = metrics.wrap(headerConverter, id);
+                    keyConverterPlugin = newConverterPlugin(id, connConfig, true);
+                    valueConverterPlugin = newConverterPlugin(id, connConfig, false);
+                    headerConverterPlugin = newHeaderConverterPlugin(id, connConfig);
                     workerTask = taskBuilder
                         .withTask(task)
                         .withConnectorConfig(connConfig)
@@ -744,9 +717,9 @@ public final class Worker {
                     workerTask.initialize(taskConfig);
                 }
             } catch (Throwable t) {
-                Utils.closeQuietly(keyConverterPlugin != null ? keyConverterPlugin : keyConverter, "key converter");
-                Utils.closeQuietly(valueConverterPlugin != null ? valueConverterPlugin : valueConverter, "value converter");
-                Utils.closeQuietly(headerConverterPlugin != null ? headerConverterPlugin : headerConverter, "header converter");
+                Utils.closeQuietly(keyConverterPlugin, "key converter");
+                Utils.closeQuietly(valueConverterPlugin, "value converter");
+                Utils.closeQuietly(headerConverterPlugin, "header converter");
                 log.error("Failed to start task {}", id, t);
                 connectorStatusMetricsGroup.recordTaskRemoved(id);
                 taskStatusListener.onFailure(id, t);
@@ -762,6 +735,54 @@ public final class Worker {
                 sourceTaskOffsetCommitter.ifPresent(committer -> committer.schedule(id, (WorkerSourceTask) workerTask));
             }
             return true;
+        }
+    }
+
+    /**
+     * Instantiate the key or value converter for a task, and wrap it in a {@link Plugin}.
+     * If wrapping fails, close the raw converter.
+     */
+    private Plugin<Converter> newConverterPlugin(ConnectorTaskId id, ConnectorConfig connConfig, boolean isKey) {
+        String connectorConverterClassConfig = isKey ? ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG : WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
+        String connectorConverterVersionConfig = isKey ? ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG : ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG;
+        String workerConverterClassConfig = isKey ? WorkerConfig.KEY_CONVERTER_CLASS_CONFIG : WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
+        String workerConverterVersionConfig = isKey ? WorkerConfig.KEY_CONVERTER_VERSION : WorkerConfig.VALUE_CONVERTER_VERSION;
+        String converterName = isKey ? "key converter" : "value converter";
+
+        Converter converter = plugins.newConverter(connConfig, connectorConverterClassConfig, connectorConverterVersionConfig);
+        if (converter == null) {
+            converter = plugins.newConverter(config, workerConverterClassConfig, workerConverterVersionConfig);
+            log.info("Set up the {} {} for task {} using the worker config", converterName, converter.getClass(), id);
+        } else {
+            log.info("Set up the {} {} for task {} using the connector config", converterName, converter.getClass(), id);
+        }
+
+        try {
+            return metrics.wrap(converter, id, isKey);
+        } catch (Throwable t) {
+            Utils.closeQuietly(converter, converterName);
+            throw t;
+        }
+    }
+
+    /**
+     * Instantiate the header converter for a task, and wrap it in a {@link Plugin}.
+     * If wrapping fails, close the raw converter.
+     */
+    private Plugin<HeaderConverter> newHeaderConverterPlugin(ConnectorTaskId id, ConnectorConfig connConfig) {
+        HeaderConverter converter = plugins.newHeaderConverter(connConfig, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG);
+        if (converter == null) {
+            converter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION);
+            log.info("Set up the header converter {} for task {} using the worker config", converter.getClass(), id);
+        } else {
+            log.info("Set up the header converter {} for task {} using the connector config", converter.getClass(), id);
+        }
+
+        try {
+            return metrics.wrap(converter, id);
+        } catch (Throwable t) {
+            Utils.closeQuietly(converter, "header converter");
+            throw t;
         }
     }
 
