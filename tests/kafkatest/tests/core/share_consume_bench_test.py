@@ -65,9 +65,8 @@ class ShareConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True],
     )
-    def test_share_consume_bench(self, metadata_quorum, use_share_groups=True):
+    def test_share_consume_bench(self, metadata_quorum):
         """
         Runs a ShareConsumeBench workload to consume messages
         """
@@ -93,9 +92,8 @@ class ShareConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True],
     )
-    def test_two_share_consumers_in_a_group_topics(self, metadata_quorum, use_share_groups=True):
+    def test_two_share_consumers_in_a_group_topics(self, metadata_quorum):
         """
         Runs two share consumers in the same share group to read messages from topics.
         """
@@ -122,9 +120,8 @@ class ShareConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True],
     )
-    def test_one_share_consumer_subscribed_to_single_topic(self, metadata_quorum, use_share_groups=True):
+    def test_one_share_consumer_subscribed_to_single_topic(self, metadata_quorum):
         """
         Runs one share consumers in a share group to read messages from topic with single partition.
         """
@@ -150,9 +147,8 @@ class ShareConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True],
     )
-    def test_multiple_share_consumers_subscribed_to_single_topic(self, metadata_quorum, use_share_groups=True):
+    def test_multiple_share_consumers_subscribed_to_single_topic(self, metadata_quorum):
         """
         Runs multiple share consumers in a share group to read messages from topic with single partition.
         """

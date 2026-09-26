@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -65,19 +66,19 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K> The key type
  * @param <V> The (raw) value type
  */
-// TODO: replace with new method in follow-up PR of KIP-1271
-@SuppressWarnings("deprecation")
 public class MeteredVersionedKeyValueStore<K, V>
     extends WrappedStateStore<VersionedBytesStore, K, V>
     implements VersionedKeyValueStore<K, V> {
 
     private final MeteredVersionedKeyValueStoreInternal internal;
 
-    MeteredVersionedKeyValueStore(final VersionedBytesStore inner,
-                                  final String metricScope,
-                                  final Time time,
-                                  final Serde<K> keySerde,
-                                  final Serde<V> valueSerde) {
+    MeteredVersionedKeyValueStore(
+        final VersionedBytesStore inner,
+        final String metricScope,
+        final Time time,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde
+    ) {
         super(inner);
         internal = new MeteredVersionedKeyValueStoreInternal(inner, metricScope, time, keySerde, valueSerde);
     }
@@ -97,14 +98,13 @@ public class MeteredVersionedKeyValueStore<K, V>
      * Note that the addition of {@link #get(Object, long)} and {@link #delete(Object, long)} in
      * this class are to match the interface of {@link VersionedKeyValueStore}.
      */
-    private class MeteredVersionedKeyValueStoreInternal
-        extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
+    private class MeteredVersionedKeyValueStoreInternal extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
 
         private final VersionedBytesStore inner;
         private final Serde<V> plainValueSerde;
         private StateSerdes<K, V> plainValueSerdes;
 
-        private final Map<Class<?>, QueryHandler> queryHandlers =
+        private final Map<Class<?>, QueryHandler<?>> queryHandlers =
             mkMap(
                 mkEntry(
                     RangeQuery.class,
@@ -124,11 +124,13 @@ public class MeteredVersionedKeyValueStore<K, V>
                 )
             );
 
-        MeteredVersionedKeyValueStoreInternal(final VersionedBytesStore inner,
-                                              final String metricScope,
-                                              final Time time,
-                                              final Serde<K> keySerde,
-                                              final Serde<V> valueSerde) {
+        MeteredVersionedKeyValueStoreInternal(
+            final VersionedBytesStore inner,
+            final String metricScope,
+            final Time time,
+            final Serde<K> keySerde,
+            final Serde<V> valueSerde
+        ) {
             super(
                 inner,
                 metricScope,
@@ -145,7 +147,15 @@ public class MeteredVersionedKeyValueStore<K, V>
         public long put(final K key, final V value, final long timestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
-                final long validTo = maybeMeasureLatency(() -> inner.put(keyBytes(key), plainValueSerdes.rawValue(value), timestamp), time, putSensor);
+                final long validTo = maybeMeasureLatency(
+                    () -> inner.put(
+                        serializeKey(key),
+                        plainValueSerdes.rawValue(value, internalContext.headers()),
+                        timestamp
+                    ),
+                    time,
+                    putSensor
+                );
                 maybeRecordE2ELatency();
                 return validTo;
             } catch (final ProcessorStateException e) {
@@ -157,7 +167,7 @@ public class MeteredVersionedKeyValueStore<K, V>
         public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
-                return maybeMeasureLatency(() -> outerValue(inner.get(keyBytes(key), asOfTimestamp)), time, getSensor);
+                return maybeMeasureLatency(() -> deserializeValue(inner.get(serializeKey(key), asOfTimestamp)), time, getSensor);
             } catch (final ProcessorStateException e) {
                 final String message = String.format(e.getMessage(), key);
                 throw new ProcessorStateException(message, e);
@@ -167,7 +177,7 @@ public class MeteredVersionedKeyValueStore<K, V>
         public ValueAndTimestamp<V> delete(final K key, final long timestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
-                return maybeMeasureLatency(() -> outerValue(inner.delete(keyBytes(key), timestamp)), time, deleteSensor);
+                return maybeMeasureLatency(() -> deserializeValue(inner.delete(serializeKey(key), timestamp)), time, deleteSensor);
             } catch (final ProcessorStateException e) {
                 final String message = String.format(e.getMessage(), key);
                 throw new ProcessorStateException(message, e);
@@ -176,59 +186,65 @@ public class MeteredVersionedKeyValueStore<K, V>
 
         @SuppressWarnings("unchecked")
         @Override
-        public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
-
+        public <R> QueryResult<R> query(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             final long start = time.nanoseconds();
             final QueryResult<R> result;
 
-            final QueryHandler handler = queryHandlers.get(query.getClass());
+            final QueryHandler<?> handler = queryHandlers.get(query.getClass());
             if (handler == null) {
                 result = wrapped().query(query, positionBound, config);
                 if (config.isCollectExecutionInfo()) {
-                    result.addExecutionInfo(
-                        "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                    result.addExecutionInfo("Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
                 }
             } else {
-                result = (QueryResult<R>) handler.apply(
+                result = ((QueryHandler<R>) handler).apply(
                     query,
                     positionBound,
                     config,
                     this
                 );
                 if (config.isCollectExecutionInfo()) {
-                    result.addExecutionInfo(
-                        "Handled in " + getClass() + " with serdes "
-                            + serdes + " in " + (time.nanoseconds() - start) + "ns");
+                    result.addExecutionInfo("Handled in " + getClass() + " with serdes " + serdes + " in " + (time.nanoseconds() - start) + "ns");
                 }
             }
             return result;
         }
 
         @SuppressWarnings("unused")
-        private <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                                 final PositionBound positionBound,
-                                                 final QueryConfig config) {
+        private <R> QueryResult<R> runRangeQuery(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             // throw exception for now to reserve the ability to implement this in the future
             // without clashing with users' custom implementations in the meantime
             throw new UnsupportedOperationException("Versioned stores do not support RangeQuery queries at this time.");
         }
 
         @SuppressWarnings("unused")
-        private <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                               final PositionBound positionBound,
-                                               final QueryConfig config) {
+        private <R> QueryResult<R> runKeyQuery(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             // throw exception for now to reserve the ability to implement this in the future
             // without clashing with users' custom implementations in the meantime
             throw new UnsupportedOperationException("Versioned stores do not support KeyQuery queries at this time.");
         }
 
         @SuppressWarnings("unchecked")
-        private <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
-                                                          final PositionBound positionBound,
-                                                          final QueryConfig config) {
+        private <R> QueryResult<R> runVersionedKeyQuery(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             final QueryResult<R> result;
             final VersionedKeyQuery<K, V> typedKeyQuery = (VersionedKeyQuery<K, V>) query;
-            VersionedKeyQuery<Bytes, byte[]> rawKeyQuery = VersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+            VersionedKeyQuery<Bytes, byte[]> rawKeyQuery = VersionedKeyQuery.withKey(serializeKey(typedKeyQuery.key()));
             if (typedKeyQuery.asOfTimestamp().isPresent()) {
                 rawKeyQuery = rawKeyQuery.asOf(typedKeyQuery.asOfTimestamp().get());
             }
@@ -247,7 +263,11 @@ public class MeteredVersionedKeyValueStore<K, V>
         }
 
         @SuppressWarnings("unchecked")
-        private <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
+        private <R> QueryResult<R> runMultiVersionedKeyQuery(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             final QueryResult<R> result;
             final MultiVersionedKeyQuery<K, V> typedKeyQuery = (MultiVersionedKeyQuery<K, V>) query;
 
@@ -256,7 +276,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             if (fromTime.compareTo(toTime) > 0) {
                 throw new IllegalArgumentException("The `fromTime` timestamp must be smaller than the `toTime` timestamp.");
             }
-            MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+            MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(serializeKey(typedKeyQuery.key()));
             rawKeyQuery = rawKeyQuery.fromTime(fromTime).toTime(toTime);
             if (typedKeyQuery.resultOrder().equals(ResultOrder.DESCENDING)) {
                 rawKeyQuery = rawKeyQuery.withDescendingTimestamps();
@@ -267,16 +287,16 @@ public class MeteredVersionedKeyValueStore<K, V>
             final QueryResult<VersionedRecordIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
                 final MeteredMultiVersionedKeyQueryIterator<V> typedResult =
-                        new MeteredMultiVersionedKeyQueryIterator<>(
-                            rawResult.getResult(),
-                            iteratorDurationSensor,
-                            time,
-                            StoreQueryUtils.deserializeValue(plainValueSerdes),
-                            numOpenIterators,
-                            openIterators
-                        );
+                    new MeteredMultiVersionedKeyQueryIterator<>(
+                        rawResult.getResult(),
+                        iteratorDurationSensor,
+                        time,
+                        StoreQueryUtils.deserializeValue(plainValueSerdes),
+                        numOpenIterators,
+                        openIterators
+                    );
                 final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
-                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.
@@ -306,7 +326,13 @@ public class MeteredVersionedKeyValueStore<K, V>
             final String storeName = super.name();
             final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
             plainValueSerdes = StoreSerdeInitializer.prepareStoreSerde(
-                context, storeName, changelogTopic, keySerde, plainValueSerde, WrappingNullableUtils::prepareValueSerde);
+                context,
+                storeName,
+                changelogTopic,
+                keySerde,
+                plainValueSerde,
+                WrappingNullableUtils::prepareValueSerde
+            );
         }
     }
 
@@ -377,5 +403,94 @@ public class MeteredVersionedKeyValueStore<K, V>
     @Override
     public Position getPosition() {
         return internal.getPosition();
+    }
+
+    @Override
+    public VersionedKeyValueStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        return new ReadOnlyView(wrapped().readOnly(isolationLevel));
+    }
+
+    /**
+     * Read-only view that re-applies this store's serdes and get sensor on top of a configurable
+     * underlying {@link VersionedBytesStore}. Used so that IQ reads at a given isolation level
+     * preserve the Metered layer's metrics and (de)serialisation behaviour. Mutating operations
+     * throw; lifecycle methods that only report state delegate to the enclosing store.
+     */
+    private final class ReadOnlyView implements VersionedKeyValueStore<K, V> {
+
+        private final VersionedBytesStore underlying;
+
+        ReadOnlyView(final VersionedBytesStore underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                final ValueAndTimestamp<V> valueAndTimestamp = maybeMeasureLatency(
+                    () -> internal.deserializeValue(underlying.get(internal.serializeKey(key))),
+                    internal.time,
+                    internal.getSensor
+                );
+                return valueAndTimestamp == null
+                    ? null
+                    : new VersionedRecord<>(valueAndTimestamp.value(), valueAndTimestamp.timestamp());
+            } catch (final ProcessorStateException e) {
+                throw new ProcessorStateException(String.format(e.getMessage(), key), e);
+            }
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key, final long asOfTimestamp) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                final ValueAndTimestamp<V> valueAndTimestamp = maybeMeasureLatency(
+                    () -> internal.deserializeValue(underlying.get(internal.serializeKey(key), asOfTimestamp)),
+                    internal.time,
+                    internal.getSensor
+                );
+                return valueAndTimestamp == null
+                    ? null
+                    : new VersionedRecord<>(valueAndTimestamp.value(), valueAndTimestamp.timestamp());
+            } catch (final ProcessorStateException e) {
+                throw new ProcessorStateException(String.format(e.getMessage(), key), e);
+            }
+        }
+
+        @Override
+        public long put(final K key, final V value, final long timestamp) {
+            throw new UnsupportedOperationException("put is not supported on a read-only view");
+        }
+
+        @Override
+        public VersionedRecord<V> delete(final K key, final long timestamp) {
+            throw new UnsupportedOperationException("delete is not supported on a read-only view");
+        }
+
+        @Override
+        public String name() {
+            return MeteredVersionedKeyValueStore.this.name();
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            throw new UnsupportedOperationException("init is not supported on a read-only view");
+        }
+
+        @Override
+        public void close() {
+            throw new UnsupportedOperationException("close is not supported on a read-only view");
+        }
+
+        @Override
+        public boolean persistent() {
+            return MeteredVersionedKeyValueStore.this.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return MeteredVersionedKeyValueStore.this.isOpen();
+        }
     }
 }

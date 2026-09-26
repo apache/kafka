@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
+import org.apache.kafka.coordinator.group.util.UnionSet;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -288,17 +289,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
-     * The members which have been updated or deleted. Deleted members
-     * are signaled by a null value.
-     */
-    private final Map<String, T> updatedMembers = new HashMap<>();
-
-    /**
-     * The static members in the group.
-     */
-    private Map<String, String> staticMembers = new HashMap<>();
-
-    /**
      * Topic partition assignable map.
      */
     private Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = Optional.empty();
@@ -341,19 +331,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         Map<String, T> members
     ) {
         this.members = members;
-        return self();
-    }
-
-    /**
-     * Adds all the existing static members.
-     *
-     * @param staticMembers   The existing static members in the consumer group.
-     * @return This object.
-     */
-    public U withStaticMembers(
-        Map<String, String> staticMembers
-    ) {
-        this.staticMembers = staticMembers;
         return self();
     }
 
@@ -417,35 +394,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     }
 
     /**
-     * Adds or updates a member. This is useful when the updated member is
-     * not yet materialized in memory.
-     *
-     * @param memberId  The member id.
-     * @param member    The member to add or update.
-     * @return This object.
-     */
-    public U addOrUpdateMember(
-        String memberId,
-        T member
-    ) {
-        this.updatedMembers.put(memberId, member);
-        return self();
-    }
-
-    /**
-     * Removes a member. This is useful when the removed member
-     * is not yet materialized in memory.
-     *
-     * @param memberId The member id.
-     * @return This object.
-     */
-    public U removeMember(
-        String memberId
-    ) {
-        return addOrUpdateMember(memberId, null);
-    }
-
-    /**
      * Builds the new target assignment.
      *
      * @return A TargetAssignmentResult which contains the records to update
@@ -464,29 +412,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
                 topicResolver
             ))
         );
-
-        // Update the member spec if updated or deleted members.
-        updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
-            if (updatedMemberOrNull == null) {
-                memberSpecs.remove(memberId);
-            } else {
-                Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
-
-                // A new static member joins and needs to replace an existing departed one.
-                if (updatedMemberOrNull.instanceId() != null) {
-                    String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
-                    if (previousMemberId != null && !previousMemberId.equals(memberId)) {
-                        assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
-                    }
-                }
-
-                memberSpecs.put(memberId, newMemberSubscriptionAndAssignment(
-                    updatedMemberOrNull,
-                    assignment,
-                    topicResolver
-                ));
-            }
-        });
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(

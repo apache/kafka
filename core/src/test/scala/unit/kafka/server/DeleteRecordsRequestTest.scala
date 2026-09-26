@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test
 import java.util.Collections
 import java.util.concurrent.TimeUnit
 import scala.collection.Seq
+import scala.jdk.OptionConverters.RichOptional
 
 class DeleteRecordsRequestTest extends BaseRequestTest {
   private val TIMEOUT_MS = 1000
@@ -156,7 +157,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
   }
 
   private def validateLogStartOffsetForTopic(topicPartition: TopicPartition, expectedStartOffset: Long): Unit = {
-    val logForTopicPartition = brokers.flatMap(_.replicaManager.logManager.getLog(topicPartition)).headOption
+    val logForTopicPartition = brokers.flatMap(_.replicaManager.logManager.getLog(topicPartition).toScala).headOption
     // logManager should exist for the provided partition
     assertTrue(logForTopicPartition.isDefined)
     // assert that log start offset is equal to the expectedStartOffset after DeleteRecords has been called.

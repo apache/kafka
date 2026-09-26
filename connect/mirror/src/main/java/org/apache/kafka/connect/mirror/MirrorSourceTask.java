@@ -42,6 +42,9 @@ import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_LEGACY;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_NEW;
+
 /** Replicates a set of topic-partitions. */
 public class MirrorSourceTask extends SourceTask {
 
@@ -51,6 +54,7 @@ public class MirrorSourceTask extends SourceTask {
     private String sourceClusterAlias;
     private Duration pollTimeout;
     private ReplicationPolicy replicationPolicy;
+    private MirrorSourceLegacyMetrics legacyMetrics;
     private MirrorSourceMetrics metrics;
     private boolean stopping = false;
     private Semaphore consumerAccess;
@@ -59,11 +63,11 @@ public class MirrorSourceTask extends SourceTask {
     public MirrorSourceTask() {}
 
     // for testing
-    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
+    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceLegacyMetrics metrics, String sourceClusterAlias,
                      ReplicationPolicy replicationPolicy,
                      OffsetSyncWriter offsetSyncWriter) {
         this.consumer = consumer;
-        this.metrics = metrics;
+        this.legacyMetrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
         consumerAccess = new Semaphore(1);
@@ -75,7 +79,9 @@ public class MirrorSourceTask extends SourceTask {
         MirrorSourceTaskConfig config = new MirrorSourceTaskConfig(props);
         consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
         sourceClusterAlias = config.sourceClusterAlias();
-        metrics = config.metrics();
+        List<String> metricNamesFormats = config.metricNamesFormats();
+        legacyMetrics = metricNamesFormats.contains(METRIC_NAMES_LEGACY) ? config.legacyMetrics() : null;
+        metrics = metricNamesFormats.contains(METRIC_NAMES_NEW) ? config.metrics(context.pluginMetrics()) : null;
         pollTimeout = config.consumerPollTimeout();
         replicationPolicy = config.replicationPolicy();
         if (config.emitOffsetSyncsEnabled()) {
@@ -114,7 +120,7 @@ public class MirrorSourceTask extends SourceTask {
         }
         Utils.closeQuietly(consumer, "source consumer");
         Utils.closeQuietly(offsetSyncWriter, "offset sync writer");
-        Utils.closeQuietly(metrics, "metrics");
+        Utils.closeQuietly(legacyMetrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
    
@@ -138,8 +144,16 @@ public class MirrorSourceTask extends SourceTask {
                 SourceRecord converted = convertRecord(record);
                 sourceRecords.add(converted);
                 TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
-                metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
-                metrics.recordBytes(topicPartition, byteSize(record.value()));
+                long age = System.currentTimeMillis() - record.timestamp();
+                long size = byteSize(record.value());
+                if (legacyMetrics != null) {
+                    legacyMetrics.recordAge(topicPartition, age);
+                    legacyMetrics.recordBytes(topicPartition, size);
+                }
+                if (metrics != null) {
+                    metrics.recordAge(topicPartition, age);
+                    metrics.recordBytes(topicPartition, size);
+                }
             }
             if (sourceRecords.isEmpty()) {
                 // WorkerSourceTasks expects non-zero batch size
@@ -177,8 +191,14 @@ public class MirrorSourceTask extends SourceTask {
         }
         TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
         long latency = System.currentTimeMillis() - record.timestamp();
-        metrics.countRecord(topicPartition);
-        metrics.replicationLatency(topicPartition, latency);
+        if (legacyMetrics != null) {
+            legacyMetrics.countRecord(topicPartition);
+            legacyMetrics.replicationLatency(topicPartition, latency);
+        }
+        if (metrics != null) {
+            metrics.countRecord(topicPartition);
+            metrics.replicationLatency(topicPartition, latency);
+        }
         // Queue offset syncs only when offsetWriter is available
         if (offsetSyncWriter != null) {
             TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());

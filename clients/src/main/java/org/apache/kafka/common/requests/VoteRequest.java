@@ -23,7 +23,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
+import java.util.List;
+
 
 public class VoteRequest extends AbstractRequest {
 
@@ -77,10 +78,10 @@ public class VoteRequest extends AbstractRequest {
                                                    boolean preVote) {
         return new VoteRequestData()
                    .setClusterId(clusterId)
-                   .setTopics(Collections.singletonList(
+                   .setTopics(List.of(
                        new VoteRequestData.TopicData()
                            .setTopicName(topicPartition.topic())
-                           .setPartitions(Collections.singletonList(
+                           .setPartitions(List.of(
                                new VoteRequestData.PartitionData()
                                    .setPartitionIndex(topicPartition.partition())
                                    .setReplicaEpoch(replicaEpoch)

@@ -18,14 +18,15 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.FileRecords.LogOffsetPosition;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 
@@ -33,7 +34,6 @@ import com.yammer.metrics.core.Timer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.event.Level;
 
 import java.io.Closeable;
 import java.io.File;
@@ -348,7 +348,11 @@ public class LogSegment implements Closeable {
     public void updateTxnIndex(CompletedTxn completedTxn, long lastStableOffset) throws IOException {
         if (completedTxn.isAborted()) {
             LOGGER.trace("Writing aborted transaction {} to transaction index, last stable offset is {}", completedTxn, lastStableOffset);
-            txnIndex.append(new AbortedTxn(completedTxn, lastStableOffset));
+            txnIndex.append(new AbortedTxn()
+                .setProducerId(completedTxn.producerId())
+                .setFirstOffset(completedTxn.firstOffset())
+                .setLastOffset(completedTxn.lastOffset())
+                .setLastStableOffset(lastStableOffset));
         }
     }
 
@@ -623,16 +627,12 @@ public class LogSegment implements Closeable {
      */
     public void flush() throws IOException {
         try {
-            LOG_FLUSH_TIMER.time(new Callable<Void>() {
-                // lambdas cannot declare a more specific exception type, so we use an anonymous inner class
-                @Override
-                public Void call() throws IOException {
-                    log.flush();
-                    offsetIndex().flush();
-                    timeIndex().flush();
-                    txnIndex.flush();
-                    return null;
-                }
+            LOG_FLUSH_TIMER.time((Callable<Void>) () -> {
+                log.flush();
+                offsetIndex().flush();
+                timeIndex().flush();
+                txnIndex.flush();
+                return null;
             });
         } catch (Exception e) {
             if (e instanceof IOException)
@@ -745,15 +745,17 @@ public class LogSegment implements Closeable {
      *
      * @param timestampMs The timestamp to search for.
      * @param startingOffset The starting offset to search.
+     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed record
+     *                          exceeding it is rejected with an InvalidRecordException before its body is allocated.
      * @return the timestamp and offset of the first message that meets the requirements. Empty will be returned if there is no such message.
      */
-    public Optional<FileRecords.TimestampAndOffset> findOffsetByTimestamp(long timestampMs, long startingOffset) throws IOException {
+    public Optional<FileRecords.TimestampAndOffset> findOffsetByTimestamp(long timestampMs, long startingOffset, int maxRecordBodySize) throws IOException {
         // Get the index entry with a timestamp less than or equal to the target timestamp
         TimestampOffset timestampOffset = timeIndex().lookup(timestampMs);
         int position = offsetIndex().lookup(Math.max(timestampOffset.offset(), startingOffset)).position();
 
         // Search the timestamp
-        return Optional.ofNullable(log.searchForTimestamp(timestampMs, position, startingOffset));
+        return Optional.ofNullable(log.searchForTimestamp(timestampMs, position, startingOffset, maxRecordBodySize));
     }
 
     /**
@@ -761,18 +763,16 @@ public class LogSegment implements Closeable {
      */
     @Override
     public void close() throws IOException {
-        if (maxTimestampAndOffsetSoFar != TimestampOffset.UNKNOWN)
-            Utils.swallow(LOGGER, Level.WARN, "maybeAppend", () -> timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true));
         Utils.closeAll(lazyOffsetIndex, lazyTimeIndex, log, txnIndex);
     }
 
     /**
-     * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
+     * Close the log segment, swallowing any exceptions. This is used when the disk may have failed.
      */
-    void closeHandlers() {
-        Utils.swallow(LOGGER, Level.WARN, "offsetIndex", lazyOffsetIndex::closeHandler);
-        Utils.swallow(LOGGER, Level.WARN, "timeIndex", lazyTimeIndex::closeHandler);
-        Utils.swallow(LOGGER, Level.WARN, "log", log::closeHandlers);
+    void closeQuietly() {
+        Utils.closeQuietly(lazyOffsetIndex, "offsetIndex", LOGGER);
+        Utils.closeQuietly(lazyTimeIndex, "timeIndex", LOGGER);
+        Utils.closeQuietly(log, "log", LOGGER);
         Utils.closeQuietly(txnIndex, "txnIndex", LOGGER);
     }
 

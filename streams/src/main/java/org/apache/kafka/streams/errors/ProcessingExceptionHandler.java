@@ -18,6 +18,7 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.Collections;
@@ -26,6 +27,7 @@ import java.util.List;
 /**
  * An interface that allows user code to inspect a record that has failed processing
  */
+@InterfaceAudience.Public
 public interface ProcessingExceptionHandler extends Configurable {
 
     /**
@@ -59,7 +61,7 @@ public interface ProcessingExceptionHandler extends Configurable {
      * @return a {@link Response} object
      */
     default Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
-        return new Response(ProcessingExceptionHandler.Result.from(handle(context, record, exception)), Collections.emptyList());
+        return new Response(ProcessingExceptionHandler.Result.from(handle(context, record, exception)), List.of());
     }
 
     @Deprecated
@@ -171,7 +173,7 @@ public interface ProcessingExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link ProcessingExceptionHandler.Result#FAIL} status.
          */
         public static Response fail() {
-            return fail(Collections.emptyList());
+            return fail(List.of());
         }
 
         /**
@@ -190,7 +192,7 @@ public interface ProcessingExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link ProcessingExceptionHandler.Result#RESUME} status.
          */
         public static Response resume() {
-            return resume(Collections.emptyList());
+            return resume(List.of());
         }
 
         /**
@@ -213,7 +215,7 @@ public interface ProcessingExceptionHandler extends Configurable {
          */
         public List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords() {
             if (deadLetterQueueRecords == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             return Collections.unmodifiableList(deadLetterQueueRecords);
         }

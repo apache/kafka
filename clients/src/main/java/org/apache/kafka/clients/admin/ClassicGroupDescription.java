@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.ClassicGroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.List;
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
  *
  * @see Admin#describeClassicGroups(java.util.Collection)
  */
+@InterfaceAudience.Public
 public class ClassicGroupDescription {
     private final String groupId;
     private final String protocol;

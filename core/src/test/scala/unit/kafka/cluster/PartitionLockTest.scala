@@ -18,11 +18,10 @@
 package kafka.cluster
 
 import java.lang.{Long => JLong}
+import java.util
 import java.util.{Optional, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.log.LogManager
-import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
@@ -33,12 +32,12 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, MockConfigRepository, PartitionRegistration}
 import org.apache.kafka.server.common.{RequestLocal, TopicIdPartition}
 import org.apache.kafka.server.config.ReplicationConfigs
-import org.apache.kafka.server.partition.{AlterPartitionListener, CommittedPartitionState, PendingShrinkIsr}
+import org.apache.kafka.server.partition.{AlterPartitionListener, AlterPartitionManager, CommittedPartitionState, PendingShrinkIsr}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogManager, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -87,7 +86,7 @@ class PartitionLockTest extends Logging {
   @AfterEach
   def tearDown(): Unit = {
     executorService.shutdownNow()
-    logManager.liveLogDirs.foreach(Utils.delete)
+    logManager.liveLogDirs().forEach(Utils.delete(_))
     Utils.delete(tmpDir)
   }
 
@@ -271,7 +270,7 @@ class PartitionLockTest extends Logging {
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     val alterIsrManager: AlterPartitionManager = mock(classOf[AlterPartitionManager])
 
-    logManager.startup(Set.empty)
+    logManager.startup(util.Set.of)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
       localBrokerId = brokerId,

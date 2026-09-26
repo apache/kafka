@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.connect.tools;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
 
@@ -30,6 +31,7 @@ import java.util.Map;
  * A connector primarily intended for system tests.
  * @see VerifiableSinkTask
  */
+@InterfaceAudience.Public
 public class VerifiableSinkConnector extends SinkConnector {
     private Map<String, String> config;
 

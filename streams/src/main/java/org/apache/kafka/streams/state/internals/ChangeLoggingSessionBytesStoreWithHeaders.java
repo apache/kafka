@@ -20,8 +20,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 
-import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.headers;
-import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.rawAggregation;
+import static org.apache.kafka.streams.state.internals.Utils.headers;
+import static org.apache.kafka.streams.state.internals.Utils.rawAggregation;
 
 /**
  * Change-logging wrapper for a session bytes store whose values also carry headers.

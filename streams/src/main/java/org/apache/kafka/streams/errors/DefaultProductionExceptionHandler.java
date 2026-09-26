@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -28,6 +29,7 @@ import static org.apache.kafka.streams.errors.internals.ExceptionHandlerUtils.ma
  * {@code ProductionExceptionHandler} that always instructs streams to fail when an exception
  * happens while attempting to produce result records.
  */
+@InterfaceAudience.Public
 public class DefaultProductionExceptionHandler implements ProductionExceptionHandler {
 
     private String deadLetterQueueTopic = null;

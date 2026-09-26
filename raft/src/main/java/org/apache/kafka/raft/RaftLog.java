@@ -57,9 +57,15 @@ public interface RaftLog extends AutoCloseable {
     LogAppendInfo appendAsFollower(Records records, int epoch);
 
     /**
-     * Read a set of records within a range of offsets.
+     * Read a set of records from startOffsetInclusive. Always returns at least one records batch if one exists.
+     *
+     * @param startOffsetInclusive Records later and including this offset are returned.
+     * @param isolation The fetch isolation, which controls the maximum offset we are allowed to read.
+     * @param maxTotalBatchBytes The maximum number of bytes to read if there are more than one record batch.
+     * @return Records and start offset information wrapped in a LogFetchInfo
      */
-    LogFetchInfo read(long startOffsetInclusive, Isolation isolation);
+    LogFetchInfo read(long startOffsetInclusive, Isolation isolation, int maxTotalBatchBytes);
+
 
     /**
      * Return the latest epoch. For an empty log, the latest epoch is defined
@@ -175,7 +181,7 @@ public interface RaftLog extends AutoCloseable {
 
     /**
      * Update the high watermark and associated metadata (which is used to avoid
-     * index lookups when handling reads with {@link #read(long, Isolation)} with
+     * index lookups when handling reads with {@link #read(long, Isolation, int)} with
      * the {@link Isolation#COMMITTED} isolation level).
      *
      * @param offsetMetadata The offset and optional metadata

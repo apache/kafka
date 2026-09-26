@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -145,7 +146,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                 //
                 // if FK did change, we need to explicitly delete the old subscription,
                 // because the new subscription goes to a different partition
-                if (foreignKeyChanged(newForeignKey, oldForeignKey)) {
+                if (foreignKeyChanged(newForeignKey, oldForeignKey, record.headers())) {
                     // this may lead to unnecessary tombstones if the old FK did not join;
                     // however, we cannot avoid it as we have no means to know if the old FK joined or not
                     forward(record, oldForeignKey, DELETE_KEY_NO_PROPAGATE);
@@ -189,7 +190,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                     if (needToUnsubscribe) {
                         // update case
 
-                        if (foreignKeyChanged(newForeignKey, oldForeignKey)) {
+                        if (foreignKeyChanged(newForeignKey, oldForeignKey, record.headers())) {
                             // if FK did change, we need to explicitly delete the old subscription,
                             // because the new subscription goes to a different partition
                             //
@@ -227,12 +228,12 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
             }
         }
 
-        private boolean foreignKeyChanged(final KRight newForeignKey, final KRight oldForeignKey) {
-            return !Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey));
+        private boolean foreignKeyChanged(final KRight newForeignKey, final KRight oldForeignKey, final Headers headers) {
+            return !Arrays.equals(serialize(newForeignKey, headers), serialize(oldForeignKey, headers));
         }
 
-        private byte[] serialize(final KRight key) {
-            return foreignKeySerializer.serialize(foreignKeySerdeTopic, key);
+        private byte[] serialize(final KRight key, final Headers headers) {
+            return foreignKeySerializer.serialize(foreignKeySerdeTopic, headers, key);
         }
 
         private void forward(final Record<KLeft, Change<VLeft>> record, final KRight foreignKey, final Instruction deleteKeyNoPropagate) {
@@ -249,7 +250,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
             if (recordHash == null) {
                 recordHash = record.value().newValue == null
                     ? null
-                    : Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, record.value().newValue));
+                    : Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, record.headers(), record.value().newValue));
             }
             return recordHash;
         }

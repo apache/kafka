@@ -23,6 +23,8 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -102,7 +104,7 @@ public class TimestampedWindowStoreWithHeadersTest {
     }
 
     @BeforeEach
-    public void beforeTest(final TestInfo testInfo) throws InterruptedException {
+    public void beforeTest(final TestInfo testInfo) {
         this.testInfo = testInfo;
         final String uniqueTestName = safeUniqueTestName(testInfo);
         inputStream = "input-stream-" + uniqueTestName;
@@ -119,6 +121,12 @@ public class TimestampedWindowStoreWithHeadersTest {
             kafkaStreams.close(Duration.ofSeconds(30L));
             kafkaStreams.cleanUp();
         }
+    }
+
+    private void closeAndLeaveGroupBeforeRestart() {
+        // Leave the group so the immediate restart with the same application id
+        // does not wait for the previous member's session timeout.
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
     }
 
     @Test
@@ -199,7 +207,7 @@ public class TimestampedWindowStoreWithHeadersTest {
         // verify changelog topic properties
         final String changelogTopic = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + STORE_NAME + "-changelog";
         final Properties changelogTopicConfig = CLUSTER.getLogConfig(changelogTopic);
-        assertEquals("compact", changelogTopicConfig.getProperty("cleanup.policy"));
+        assertEquals("compact,delete", changelogTopicConfig.getProperty("cleanup.policy"));
     }
 
     @Test
@@ -241,7 +249,7 @@ public class TimestampedWindowStoreWithHeadersTest {
             initialRecordsProduced);
 
         // wipe out state store to trigger restore process on restart
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams.cleanUp();
 
         // restart app - use processor WITHOUT validation of initial data, just write to store
@@ -320,7 +328,7 @@ public class TimestampedWindowStoreWithHeadersTest {
 
         receivedRecords.forEach(receivedRecord -> assertEquals(0, receivedRecord.value));
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams.cleanUp();
 
         // restart app with headers-aware store to test upgrade path
@@ -375,9 +383,9 @@ public class TimestampedWindowStoreWithHeadersTest {
      */
     @SuppressWarnings("varargs")
     @SafeVarargs
-    private final int produceDataToTopic(final String topic,
-                                         final long timestamp,
-                                         final KeyValue<Integer, String>... keyValues) {
+    private int produceDataToTopic(final String topic,
+                                   final long timestamp,
+                                   final KeyValue<Integer, String>... keyValues) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             topic,
             Arrays.asList(keyValues),

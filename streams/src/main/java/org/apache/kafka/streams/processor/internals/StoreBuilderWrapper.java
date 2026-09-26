@@ -19,7 +19,9 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.SessionStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
@@ -69,11 +71,14 @@ public class StoreBuilderWrapper implements StoreFactory {
             return ((WindowStoreBuilder<?, ?>) builder).retentionPeriod();
         } else if (builder instanceof TimestampedWindowStoreBuilder) {
             return ((TimestampedWindowStoreBuilder<?, ?>) builder).retentionPeriod();
+        } else if (builder instanceof TimestampedWindowStoreWithHeadersBuilder) {
+            return ((TimestampedWindowStoreWithHeadersBuilder<?, ?>) builder).retentionPeriod();
         } else if (builder instanceof SessionStoreBuilder) {
             return ((SessionStoreBuilder<?, ?>) builder).retentionPeriod();
+        } else if (builder instanceof SessionStoreWithHeadersBuilder) {
+            return ((SessionStoreWithHeadersBuilder<?, ?>) builder).retentionPeriod();
         } else {
-            throw new IllegalStateException(
-                    "retentionPeriod is not supported when not a window store");
+            throw new IllegalStateException("retentionPeriod is not supported when not a window store");
         }
     }
 
@@ -82,8 +87,7 @@ public class StoreBuilderWrapper implements StoreFactory {
         if (builder instanceof VersionedKeyValueStoreBuilder) {
             return ((VersionedKeyValueStoreBuilder<?, ?>) builder).historyRetention();
         } else {
-            throw new IllegalStateException(
-                    "historyRetention is not supported when not a versioned store");
+            throw new IllegalStateException("historyRetention is not supported when not a versioned store");
         }
     }
 
@@ -105,8 +109,10 @@ public class StoreBuilderWrapper implements StoreFactory {
     @Override
     public boolean isWindowStore() {
         return builder instanceof WindowStoreBuilder
-                || builder instanceof TimestampedWindowStoreBuilder
-                || builder instanceof SessionStoreBuilder;
+            || builder instanceof TimestampedWindowStoreBuilder
+            || builder instanceof TimestampedWindowStoreWithHeadersBuilder
+            || builder instanceof SessionStoreBuilder
+            || builder instanceof SessionStoreWithHeadersBuilder;
     }
 
     @Override

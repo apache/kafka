@@ -28,11 +28,15 @@ import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.internal.ArbitraryMemoryRecords;
 import org.apache.kafka.common.record.internal.InvalidMemoryRecordsProvider;
 import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.LogAppendInfo;
+import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
@@ -51,16 +55,13 @@ import org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.test.TestUtils;
 
-import net.jqwik.api.AfterFailureMode;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -75,6 +76,7 @@ import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -88,8 +90,7 @@ public class KafkaRaftLogTest {
             10 * 1000,
             100 * 1024,
             60 * 1000,
-            KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            KafkaRaftClient.MAX_BATCH_SIZE_BYTES
     );
 
     private final MockTime mockTime = new MockTime();
@@ -175,22 +176,24 @@ public class KafkaRaftLogTest {
         assertEquals(previousEndOffset, log.endOffset().offset());
     }
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    public void testRandomRecords(@ForAll(supplier = ArbitraryMemoryRecords.class) MemoryRecords records) throws IOException {
-        File tempDir = TestUtils.tempDirectory();
-        try {
-            KafkaRaftLog log = buildMetadataLog(tempDir, mockTime);
-            long previousEndOffset = log.endOffset().offset();
+    @Test
+    public void testRandomRecords() {
+        ArbitraryMemoryRecords.forRandomRecords(100, records -> {
+            File tempDir = TestUtils.tempDirectory();
+            try {
+                KafkaRaftLog log = buildMetadataLog(tempDir, mockTime);
+                long previousEndOffset = log.endOffset().offset();
 
-            assertThrows(
-                    CorruptRecordException.class,
-                    () -> log.appendAsFollower(records, Integer.MAX_VALUE)
-            );
+                assertThrows(
+                        CorruptRecordException.class,
+                        () -> log.appendAsFollower(records, Integer.MAX_VALUE)
+                );
 
-            assertEquals(previousEndOffset, log.endOffset().offset());
-        } finally {
-            Utils.delete(tempDir);
-        }
+                assertEquals(previousEndOffset, log.endOffset().offset());
+            } finally {
+                assertDoesNotThrow(() -> Utils.delete(tempDir));
+            }
+        });
     }
 
     @Test
@@ -718,8 +721,7 @@ public class KafkaRaftLogTest {
                 DEFAULT_METADATA_LOG_CONFIG.logSegmentMillis(),
                 DEFAULT_METADATA_LOG_CONFIG.retentionMaxBytes(),
                 DEFAULT_METADATA_LOG_CONFIG.retentionMillis(),
-                maxBatchSizeInBytes,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                maxBatchSizeInBytes
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -928,8 +930,7 @@ public class KafkaRaftLogTest {
                 10 * 1000,
                 256,
                 60 * 1000,
-                512,
-                DEFAULT_METADATA_LOG_CONFIG.internalMaxFetchSizeInBytes()
+                512
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -963,8 +964,7 @@ public class KafkaRaftLogTest {
                 10 * 1000,
                 1024,
                 60 * 1000,
-                100,
-                DEFAULT_METADATA_LOG_CONFIG.internalMaxFetchSizeInBytes()
+                100
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -995,8 +995,7 @@ public class KafkaRaftLogTest {
                 10 * 1000,
                 10240,
                 60 * 1000,
-                100,
-                DEFAULT_METADATA_LOG_CONFIG.internalMaxFetchSizeInBytes()
+                100
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -1043,8 +1042,7 @@ public class KafkaRaftLogTest {
                 10 * 1000,
                 10240,
                 60 * 1000,
-                200,
-                DEFAULT_METADATA_LOG_CONFIG.internalMaxFetchSizeInBytes()
+                200
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -1083,13 +1081,117 @@ public class KafkaRaftLogTest {
         );
     }
 
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3})
+    public void testReadRespectsMaxSizeInBytes(int expectedBatches) throws IOException {
+        // 5 records are written in batches of 101 bytes each (at time of writing).
+        int magicMaxBatchSizeBytes = 101;
+        MetadataLogConfig config = createMetadataLogConfig(
+            10240,
+            10 * 1000,
+            10240,
+            60 * 1000,
+            magicMaxBatchSizeBytes
+        );
+        KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
+        int recordsPerBatch = 5;
+        append(log, recordsPerBatch, 1);
+        append(log, recordsPerBatch, 1);
+        append(log, recordsPerBatch, 1);
+        append(log, recordsPerBatch, 1);
+
+        LogFetchInfo info = log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            magicMaxBatchSizeBytes * expectedBatches
+        );
+        assertEquals(expectedBatches * magicMaxBatchSizeBytes, info.records.sizeInBytes());
+        // Asserts that we have exactly B * R records. Further there must be B batches of SimpleRecords each with a value of
+        // [0..R-1] converted to an utf-8 string with empty keys and headers.
+        int count = 0;
+        for (Record record : info.records.records()) {
+            byte[] expectedValue = String.valueOf(count % recordsPerBatch).getBytes(StandardCharsets.UTF_8);
+            assertEquals(ByteBuffer.wrap(expectedValue), record.value());
+            count += 1;
+        }
+        assertEquals(recordsPerBatch * expectedBatches, count);
+    }
+
+    @Test
+    public void testLogLimitsReturnsLessThanMaxBytes() throws IOException {
+        // 5 records are written in batches of 141 bytes each (at time of writing).
+        int magicMaxBatchSizeBytes = 141;
+        MetadataLogConfig config = createMetadataLogConfig(
+            10240,
+            10 * 1000,
+            10240,
+            60 * 1000,
+            magicMaxBatchSizeBytes
+        );
+        KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
+        int numberOfRecordsPerBatch = 10;
+        append(log, numberOfRecordsPerBatch, 5);
+        append(log, numberOfRecordsPerBatch, 5);
+        append(log, numberOfRecordsPerBatch, 5);
+        // Set to be larger than 1 batch but smaller than 2.
+        int magicMaxTotalBytes = 200;
+        Records records = log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            magicMaxTotalBytes
+        ).records;
+        // MockLog#read returns data in batches and will return an additional batch if one of them
+        // exceeds maxTotalBytes.
+        assertEquals(magicMaxTotalBytes, records.sizeInBytes());
+    }
+
+    @Test
+    public void testLogLimitsReturnsAtLeastOne() throws IOException {
+        int numberOfRecordsPerBatch = 10;
+        // 5 records are written in batches of 141 bytes each (at time of writing).
+        int magicMaxBatchSizeBytes = 141;
+        MetadataLogConfig config = createMetadataLogConfig(
+            10240,
+            10 * 1000,
+            10240,
+            60 * 1000,
+            magicMaxBatchSizeBytes
+        );
+        KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
+        append(log, numberOfRecordsPerBatch, 5);
+        append(log, numberOfRecordsPerBatch, 5);
+        // magicMaxTotalBytes are smaller than 10 simple records in a batch.
+        // Meaning we will read only the first batch and not the second.
+        int magicMaxTotalBytes = 1;
+        Records records = log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            magicMaxTotalBytes
+        ).records;
+        assertTrue(
+            records.sizeInBytes() > magicMaxTotalBytes,
+            String.format(
+                "Expected records size (%d) > maxTotalBytes (%d) since one whole batch must be returned",
+                records.sizeInBytes(),
+                magicMaxTotalBytes
+            )
+        );
+        int recordCount = 0;
+        var iterator = records.records().iterator();
+        while (iterator.hasNext()) {
+            recordCount++;
+            iterator.next();
+        }
+        assertEquals(numberOfRecordsPerBatch, recordCount);
+    }
+
     private static MetadataLogConfig createMetadataLogConfig(
             int internalLogSegmentBytes,
             long logSegmentMillis,
             long retentionMaxBytes,
             long retentionMillis,
-            int internalMaxBatchSizeInBytes, //: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-            int internalMaxFetchSizeInBytes //: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+            int internalMaxBatchSizeInBytes
     ) {
         Map<String, ?> config = Map.of(
                 MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
@@ -1097,9 +1199,8 @@ public class KafkaRaftLogTest {
                 MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
                 MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
                 MetadataLogConfig.INTERNAL_METADATA_MAX_BATCH_SIZE_IN_BYTES_CONFIG, internalMaxBatchSizeInBytes,
-                MetadataLogConfig.INTERNAL_METADATA_MAX_FETCH_SIZE_IN_BYTES_CONFIG, internalMaxFetchSizeInBytes,
                 MetadataLogConfig.INTERNAL_METADATA_DELETE_DELAY_MILLIS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
-                );
+        );
         return new MetadataLogConfig(new AbstractConfig(MetadataLogConfig.CONFIG_DEF, config, false));
     }
 

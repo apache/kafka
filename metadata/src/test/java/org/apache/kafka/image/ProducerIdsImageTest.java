@@ -17,7 +17,6 @@
 
 package org.apache.kafka.image;
 
-import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -25,7 +24,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,40 +32,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class ProducerIdsImageTest {
-    public static final ProducerIdsImage IMAGE1;
+    public static final ProducerIdsImage IMAGE1 = ProducerIdsImageFixtures.IMAGE1;
 
-    static final List<ApiMessageAndVersion> DELTA1_RECORDS;
+    static final List<ApiMessageAndVersion> DELTA1_RECORDS = ProducerIdsImageFixtures.DELTA1_RECORDS;
 
-    static final ProducerIdsDelta DELTA1;
+    static final ProducerIdsDelta DELTA1 = ProducerIdsImageFixtures.DELTA1;
 
-    static final ProducerIdsImage IMAGE2;
-
-    static {
-        IMAGE1 = new ProducerIdsImage(123);
-
-        DELTA1_RECORDS = new ArrayList<>();
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
-            setBrokerId(2).
-            setBrokerEpoch(100).
-            setNextProducerId(456), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
-            setBrokerId(3).
-            setBrokerEpoch(100).
-            setNextProducerId(780), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
-            setBrokerId(3).
-            setBrokerEpoch(100).
-            setNextProducerId(785), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
-            setBrokerId(2).
-            setBrokerEpoch(100).
-            setNextProducerId(800), (short) 0));
-
-        DELTA1 = new ProducerIdsDelta(IMAGE1);
-        RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
-
-        IMAGE2 = new ProducerIdsImage(800);
-    }
+    static final ProducerIdsImage IMAGE2 = ProducerIdsImageFixtures.IMAGE2;
 
     @Test
     public void testEmptyImageRoundTrip() {

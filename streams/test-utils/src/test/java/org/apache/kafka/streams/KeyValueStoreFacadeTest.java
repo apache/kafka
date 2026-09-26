@@ -17,9 +17,15 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.TopologyTestDriver.KeyValueStoreFacade;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -29,9 +35,11 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -58,6 +66,13 @@ public class KeyValueStoreFacadeTest {
         verify(mockedKeyValueTimestampStore).init(context, store);
     }
 
+    @Deprecated
+    @Test
+    public void shouldForwardFlush() {
+        keyValueStoreFacade.flush();
+        verify(mockedKeyValueTimestampStore).flush();
+    }
+
     @Test
     public void shouldPutWithUnknownTimestamp() {
         keyValueStoreFacade.put("key", "value");
@@ -72,7 +87,7 @@ public class KeyValueStoreFacadeTest {
             .putIfAbsent("key", ValueAndTimestamp.make("value", ConsumerRecord.NO_TIMESTAMP));
 
         assertNull(keyValueStoreFacade.putIfAbsent("key", "value"));
-        assertThat(keyValueStoreFacade.putIfAbsent("key", "value"), is("oldValue"));
+        assertEquals("oldValue", keyValueStoreFacade.putIfAbsent("key", "value"));
         verify(mockedKeyValueTimestampStore, times(2))
             .putIfAbsent("key", ValueAndTimestamp.make("value", ConsumerRecord.NO_TIMESTAMP));
     }
@@ -95,7 +110,7 @@ public class KeyValueStoreFacadeTest {
             .when(mockedKeyValueTimestampStore).delete("key");
 
         assertNull(keyValueStoreFacade.delete("key"));
-        assertThat(keyValueStoreFacade.delete("key"), is("oldValue"));
+        assertEquals("oldValue", keyValueStoreFacade.delete("key"));
         verify(mockedKeyValueTimestampStore, times(2)).delete("key");
     }
 
@@ -103,6 +118,24 @@ public class KeyValueStoreFacadeTest {
     public void shouldForwardCommit() {
         keyValueStoreFacade.commit(Map.of());
         verify(mockedKeyValueTimestampStore).commit(Map.of());
+    }
+
+    @Test
+    public void shouldReturnCommitOffsets() {
+        final TopicPartition topicPartition = new TopicPartition("topic", 0);
+        when(mockedKeyValueTimestampStore.committedOffset(any())).thenReturn(42L);
+
+        assertEquals(42L, keyValueStoreFacade.committedOffset(topicPartition));
+        verify(mockedKeyValueTimestampStore).committedOffset(topicPartition);
+    }
+
+    @Deprecated
+    @Test
+    public void shouldReturnManagedOffsets() {
+        when(mockedKeyValueTimestampStore.managesOffsets()).thenReturn(true);
+
+        assertTrue(keyValueStoreFacade.managesOffsets());
+        verify(mockedKeyValueTimestampStore).managesOffsets();
     }
 
     @Test
@@ -115,7 +148,7 @@ public class KeyValueStoreFacadeTest {
     public void shouldReturnName() {
         when(mockedKeyValueTimestampStore.name()).thenReturn("name");
 
-        assertThat(keyValueStoreFacade.name(), is("name"));
+        assertEquals("name", keyValueStoreFacade.name());
         verify(mockedKeyValueTimestampStore).name();
     }
 
@@ -124,8 +157,8 @@ public class KeyValueStoreFacadeTest {
         when(mockedKeyValueTimestampStore.persistent())
             .thenReturn(true, false);
 
-        assertThat(keyValueStoreFacade.persistent(), is(true));
-        assertThat(keyValueStoreFacade.persistent(), is(false));
+        assertTrue(keyValueStoreFacade.persistent());
+        assertFalse(keyValueStoreFacade.persistent());
         verify(mockedKeyValueTimestampStore, times(2)).persistent();
     }
 
@@ -134,8 +167,34 @@ public class KeyValueStoreFacadeTest {
         when(mockedKeyValueTimestampStore.isOpen())
             .thenReturn(true, false);
 
-        assertThat(keyValueStoreFacade.isOpen(), is(true));
-        assertThat(keyValueStoreFacade.isOpen(), is(false));
+        assertTrue(keyValueStoreFacade.isOpen());
+        assertFalse(keyValueStoreFacade.isOpen());
         verify(mockedKeyValueTimestampStore, times(2)).isOpen();
+    }
+
+    @Test
+    public void shouldReturnPosition() {
+        when(mockedKeyValueTimestampStore.getPosition())
+            .thenReturn(Position.emptyPosition());
+
+        assertEquals(Position.emptyPosition(), keyValueStoreFacade.getPosition());
+        verify(mockedKeyValueTimestampStore, times(1)).getPosition();
+    }
+
+    @Test
+    public void shouldReturnQueryResult() {
+        final Query<Object> query = new Query<>() { };
+        final QueryConfig queryConfig = new QueryConfig(true);
+        final QueryResult<Integer> queryResult = QueryResult.forResult(42);
+        when(mockedKeyValueTimestampStore.<Integer>query(any(), any(), any())).thenReturn(queryResult);
+
+        assertEquals(
+            queryResult,
+            keyValueStoreFacade.query(
+                query,
+                PositionBound.unbounded(),
+                queryConfig
+            ));
+        verify(mockedKeyValueTimestampStore).query(query, PositionBound.unbounded(), queryConfig);
     }
 }

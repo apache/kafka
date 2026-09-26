@@ -89,13 +89,15 @@ public class TimestampedWindowStoreBuilder<K, V>
             return new TimeOrderedCachingWindowStore(
                 inner,
                 storeSupplier.windowSize(),
-                storeSupplier.segmentIntervalMs());
+                storeSupplier.segmentIntervalMs()
+            );
         }
 
         return new CachingWindowStore(
             inner,
             storeSupplier.windowSize(),
-            storeSupplier.segmentIntervalMs());
+            storeSupplier.segmentIntervalMs()
+        );
     }
 
     private boolean isTimeOrderedStore(final StateStore stateStore) {
@@ -103,7 +105,7 @@ public class TimestampedWindowStoreBuilder<K, V>
             return true;
         }
         if (stateStore instanceof WrappedStateStore) {
-            return isTimeOrderedStore(((WrappedStateStore) stateStore).wrapped());
+            return isTimeOrderedStore(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
         }
         return false;
     }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -25,9 +26,7 @@ import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
 class SessionCacheFlushListener<KOut, VOut> implements CacheFlushListener<Windowed<KOut>, VOut> {
     private final InternalProcessorContext<Windowed<KOut>, Change<VOut>> context;
-
-    @SuppressWarnings("rawtypes")
-    private final ProcessorNode myNode;
+    private final ProcessorNode<?, ?, ?, ?> myNode;
 
     SessionCacheFlushListener(final ProcessorContext<Windowed<KOut>, Change<VOut>> context) {
         this.context = (InternalProcessorContext<Windowed<KOut>, Change<VOut>>) context;
@@ -36,10 +35,14 @@ class SessionCacheFlushListener<KOut, VOut> implements CacheFlushListener<Window
 
     @Override
     public void apply(final Record<Windowed<KOut>, Change<VOut>> record) {
-        @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
+        final ProcessorNode<?, ?, ?, ?> prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            context.forward(record.withTimestamp(record.key().window().end()));
+            context.forward(
+                record
+                    .withValue(new Change<>(record.value().newValue, record.value().oldValue, record.value().isLatest))
+                    .withTimestamp(record.key().window().end())
+                    .withHeaders(record.headers() != null ? record.headers() : new RecordHeaders()));
         } finally {
             context.setCurrentNode(prev);
         }

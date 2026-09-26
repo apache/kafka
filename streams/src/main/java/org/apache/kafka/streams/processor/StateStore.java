@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -48,6 +49,7 @@ import java.util.Map;
  * functionality required to reload a storage engine from its changelog as well
  * as basic lifecycle management.
  */
+@InterfaceAudience.Public
 public interface StateStore {
 
     /**
@@ -103,8 +105,19 @@ public interface StateStore {
      * <p>
      * Implementations <em>SHOULD</em> ensure that {@code changelogOffsets} are committed to disk atomically with the
      * records they represent, if possible.
+     * <p>
+     * <b>Empty map:</b> If {@code changelogOffsets} is empty, implementations that manage offsets <em>MUST</em>
+     * remove all previously committed offsets. After an empty commit, {@link #committedOffset(TopicPartition)} should
+     * return {@code null} for all partitions. This is used during corruption recovery to clear stale offsets so that
+     * restoration can restart from the beginning.
+     * <p>
+     * <b>Null values:</b> If a value in {@code changelogOffsets} is {@code null}, implementations that manage offsets
+     * <em>MUST</em> remove the committed offset for that partition. After such a commit,
+     * {@link #committedOffset(TopicPartition)} should return {@code null} for the affected partition.
      *
      * @param changelogOffsets The changelog offset(s) corresponding to the most recently written records.
+     *                         An empty map signals that all committed offsets should be cleared.
+     *                         A {@code null} value for a partition signals that its committed offset should be removed.
      */
     default void commit(final Map<TopicPartition, Long> changelogOffsets) {
         flush();
@@ -202,6 +215,15 @@ public interface StateStore {
         final QueryConfig config) {
         // If a store doesn't implement a query handler, then all queries are unknown.
         return QueryResult.forUnknownQueryType(query, this);
+    }
+
+    /**
+     * Returns an approximation of the number of uncommitted bytes currently buffered in this store's
+     * transaction buffer, or 0 if the store is not transactional. This is used to trigger early
+     * commits when the buffer grows too large.
+     */
+    default long approximateNumUncommittedBytes() {
+        return 0;
     }
 
     /**

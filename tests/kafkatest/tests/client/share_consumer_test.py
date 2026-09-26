@@ -119,9 +119,9 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True]
+        enable_assignment_batching=[False, True]
     )
-    def test_share_single_topic_partition(self, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+    def test_share_single_topic_partition(self, metadata_quorum=quorum.isolated_kraft, enable_assignment_batching=True):
 
         total_messages = 100000
         producer = self.setup_producer(self.TOPIC1["name"], max_messages=total_messages)
@@ -151,9 +151,9 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True]
+        enable_assignment_batching=[False, True]
     )
-    def test_share_multiple_partitions(self, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+    def test_share_multiple_partitions(self, metadata_quorum=quorum.isolated_kraft, enable_assignment_batching=True):
 
         total_messages = 1000000
         producer = self.setup_producer(self.TOPIC2["name"], max_messages=total_messages, throughput=5000)
@@ -184,9 +184,9 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @matrix(
         clean_shutdown=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True]
+        enable_assignment_batching=[False, True]
     )
-    def test_broker_rolling_bounce(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+    def test_broker_rolling_bounce(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, enable_assignment_batching=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
         consumer = self.setup_share_group(self.TOPIC2["name"])
@@ -219,9 +219,9 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         clean_shutdown=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         num_failed_brokers=[1, 2],
-        use_share_groups=[True]
+        enable_assignment_batching=[False, True]
     )
-    def test_broker_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_brokers=1, use_share_groups=True):
+    def test_broker_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_brokers=1, enable_assignment_batching=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
         consumer = self.setup_share_group(self.TOPIC2["name"])
@@ -254,9 +254,9 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         clean_shutdown=[True, False],
         bounce_mode=["all", "rolling"],
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True]
+        enable_assignment_batching=[False, True]
     )
-    def test_share_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+    def test_share_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, enable_assignment_batching=True):
         """
         Verify correct share consumer behavior when the share consumers in the group are consecutively restarted.
 
@@ -299,9 +299,9 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         clean_shutdown=[True, False],
         num_failed_consumers=[1, 2],
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True]
+        enable_assignment_batching=[False, True]
     )
-    def test_share_consumer_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_consumers=1, use_share_groups=True):
+    def test_share_consumer_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_consumers=1, enable_assignment_batching=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
         consumer = self.setup_share_group(self.TOPIC2["name"])

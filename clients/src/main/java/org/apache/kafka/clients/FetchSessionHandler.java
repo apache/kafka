@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -526,11 +526,23 @@ public class FetchSessionHandler {
      */
     public boolean handleResponse(FetchResponse response, short version) {
         if (response.error() != Errors.NONE) {
-            log.info("Node {} was unable to process the fetch request with {}: {}.",
-                node, nextMetadata, response.error());
             if (response.error() == Errors.FETCH_SESSION_ID_NOT_FOUND) {
+                // Session does not exist on the broker anymore. Recoverable and self-healing, the client re-sends a full fetch request.
+                if (log.isDebugEnabled()) {
+                    log.debug("Node {} returned a {} error; the fetch session {} was likely evicted from the broker's " +
+                        "fetch session cache. Re-sending a full fetch request to establish a new session.",
+                        node, response.error(), nextMetadata.sessionId());
+                }
                 nextMetadata = FetchMetadata.INITIAL;
             } else {
+                // Other fetch-session errors (e.g. INVALID_FETCH_SESSION_EPOCH, FETCH_SESSION_TOPIC_ID_ERROR) are
+                // also recoverable and self-healing: the existing session is closed and a new one is re-established
+                // with a full fetch.
+                if (log.isDebugEnabled()) {
+                    log.debug("Node {} was unable to process the fetch request with {}: {}. " +
+                        "Re-sending a full fetch request, which closes the existing session on the broker and establishes a new one.",
+                        node, nextMetadata, response.error());
+                }
                 nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             }
             return false;

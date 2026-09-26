@@ -94,6 +94,8 @@ class BaseVersionRange {
             mapToString(toMap()));
     }
 
+    // Uses Utils.mkMap to preserve insertion order so that min version appears
+    // before max version when converted to a String via toString().
     public Map<String, Short> toMap() {
         return Utils.mkMap(Utils.mkEntry(minKeyLabel, min()), Utils.mkEntry(maxKeyLabel, max()));
     }

@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -84,10 +83,10 @@ public class EndQuorumEpochRequest extends AbstractRequest {
                                                              List<Integer> preferredSuccessors) {
         return new EndQuorumEpochRequestData()
                    .setClusterId(clusterId)
-                   .setTopics(Collections.singletonList(
+                   .setTopics(List.of(
                        new EndQuorumEpochRequestData.TopicData()
                            .setTopicName(topicPartition.topic())
-                           .setPartitions(Collections.singletonList(
+                           .setPartitions(List.of(
                                new EndQuorumEpochRequestData.PartitionData()
                                    .setPartitionIndex(topicPartition.partition())
                                    .setLeaderEpoch(leaderEpoch)

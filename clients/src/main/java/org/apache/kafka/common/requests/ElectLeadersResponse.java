@@ -83,11 +83,6 @@ public class ElectLeadersResponse extends AbstractResponse {
         return new ElectLeadersResponse(new ElectLeadersResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return true;
-    }
-
     public static Map<TopicPartition, Optional<Throwable>> electLeadersResult(ElectLeadersResponseData data) {
         Map<TopicPartition, Optional<Throwable>> map = new HashMap<>();
 

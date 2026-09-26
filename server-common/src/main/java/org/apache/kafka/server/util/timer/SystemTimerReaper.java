@@ -18,6 +18,8 @@ package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.server.util.ShutdownableThread;
 
+import java.util.Objects;
+
 /**
  * SystemTimerReaper wraps a {@link Timer} and starts a reaper thread
  * to expire the tasks in the {@link Timer}.
@@ -44,8 +46,8 @@ public class SystemTimerReaper implements Timer {
     private final Reaper reaper;
 
     public SystemTimerReaper(String reaperThreadName, Timer timer) {
-        this.timer = timer;
-        this.reaper = new Reaper(reaperThreadName);
+        this.timer = Objects.requireNonNull(timer, "timer must not be null");
+        this.reaper = new Reaper(Objects.requireNonNull(reaperThreadName, "reaperThreadName must not be null"));
         this.reaper.start();
     }
 

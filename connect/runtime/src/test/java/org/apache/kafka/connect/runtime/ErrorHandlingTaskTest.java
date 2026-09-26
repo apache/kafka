@@ -28,7 +28,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -488,7 +487,7 @@ public class ErrorHandlingTaskTest {
     }
 
     // Public to allow plugin discovery to complete without errors
-    public static class FaultyConverter extends JsonConverter implements Versioned {
+    public static class FaultyConverter extends JsonConverter {
         private static final Logger log = LoggerFactory.getLogger(FaultyConverter.class);
         private int invocations = 0;
 
@@ -513,7 +512,7 @@ public class ErrorHandlingTaskTest {
     }
 
     // Public to allow plugin discovery to complete without errors
-    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
 
         private static final Logger log = LoggerFactory.getLogger(FaultyPassthrough.class);
 

@@ -100,7 +100,7 @@ class BrokerRegistrationRequestTest {
                             setName("kraft.version").
                             setMinSupportedVersion((short) 0).
                             setMaxSupportedVersion((short) 1)
-                    ).iterator())).
+                    ))).
                 setIncarnationId(Uuid.fromString("EfIEKywJSaWl5yWDwlop1Q")).
                 setListeners(new BrokerRegistrationRequestData.ListenerCollection()).
                 setPreviousBrokerEpoch(1L));
@@ -113,7 +113,7 @@ class BrokerRegistrationRequestTest {
                     new BrokerRegistrationRequestData.Feature().
                         setName("metadata.version").
                         setMinSupportedVersion((short) 1).
-                        setMaxSupportedVersion((short) 17)).iterator()), data.features());
+                        setMaxSupportedVersion((short) 17))), data.features());
         } else {
             assertEquals(new BrokerRegistrationRequestData.FeatureCollection(
                 Arrays.asList(
@@ -124,7 +124,7 @@ class BrokerRegistrationRequestTest {
                     new BrokerRegistrationRequestData.Feature().
                         setName("kraft.version").
                         setMinSupportedVersion((short) 0).
-                        setMaxSupportedVersion((short) 1)).iterator()), data.features());
+                        setMaxSupportedVersion((short) 1))), data.features());
         }
     }
 

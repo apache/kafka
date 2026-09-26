@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -24,8 +25,6 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -76,10 +75,10 @@ public class WindowedSerdesTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> serializer.serialize("topic", new Windowed<>(new byte[0], new TimeWindow(0, 1))));
-        assertThat(
-            exception.getMessage(),
-            equalTo("Inner serializer is `null`. User code must use constructor " +
-                "`TimeWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor."));
+        assertEquals(
+            "Inner serializer is `null`. User code must use constructor " +
+                "`TimeWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor.",
+            exception.getMessage());
     }
 
     @Test
@@ -87,11 +86,11 @@ public class WindowedSerdesTest {
         final TimeWindowedSerializer<byte[]> serializer = new TimeWindowedSerializer<>();
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], new TimeWindow(0, 1))));
-        assertThat(
-            exception.getMessage(),
-            equalTo("Inner serializer is `null`. User code must use constructor " +
-                "`TimeWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor."));
+            () -> serializer.serializeBaseKey("topic", new RecordHeaders(), new Windowed<>(new byte[0], new TimeWindow(0, 1))));
+        assertEquals(
+            "Inner serializer is `null`. User code must use constructor " +
+                "`TimeWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor.",
+            exception.getMessage());
     }
 
     @Test
@@ -100,10 +99,10 @@ public class WindowedSerdesTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> deserializer.deserialize("topic", new byte[0]));
-        assertThat(
-            exception.getMessage(),
-            equalTo("Inner deserializer is `null`. User code must use constructor " +
-                "`TimeWindowedDeserializer(final Deserializer<T> inner)` instead of the no-arg constructor."));
+        assertEquals(
+            "Inner deserializer is `null`. User code must use constructor " +
+                "`TimeWindowedDeserializer(final Deserializer<T> inner)` instead of the no-arg constructor.",
+            exception.getMessage());
     }
 
     @Test
@@ -112,10 +111,10 @@ public class WindowedSerdesTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> serializer.serialize("topic", new Windowed<>(new byte[0], new SessionWindow(0, 0))));
-        assertThat(
-            exception.getMessage(),
-            equalTo("Inner serializer is `null`. User code must use constructor " +
-                "`SessionWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor."));
+        assertEquals(
+            "Inner serializer is `null`. User code must use constructor " +
+                "`SessionWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor.",
+            exception.getMessage());
     }
 
     @Test
@@ -123,11 +122,11 @@ public class WindowedSerdesTest {
         final SessionWindowedSerializer<byte[]> serializer = new SessionWindowedSerializer<>();
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], new SessionWindow(0, 0))));
-        assertThat(
-            exception.getMessage(),
-            equalTo("Inner serializer is `null`. User code must use constructor " +
-                "`SessionWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor."));
+            () -> serializer.serializeBaseKey("topic", new RecordHeaders(), new Windowed<>(new byte[0], new SessionWindow(0, 0))));
+        assertEquals(
+            "Inner serializer is `null`. User code must use constructor " +
+                "`SessionWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor.",
+            exception.getMessage());
     }
 
     @Test
@@ -136,10 +135,10 @@ public class WindowedSerdesTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> deserializer.deserialize("topic", new byte[0]));
-        assertThat(
-            exception.getMessage(),
-            equalTo("Inner deserializer is `null`. User code must use constructor " +
-                "`SessionWindowedDeserializer(final Deserializer<T> inner)` instead of the no-arg constructor."));
+        assertEquals(
+            "Inner deserializer is `null`. User code must use constructor " +
+                "`SessionWindowedDeserializer(final Deserializer<T> inner)` instead of the no-arg constructor.",
+            exception.getMessage());
     }
 
     @Test

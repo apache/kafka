@@ -16,4 +16,4 @@
 # Note: Ensure the 'requests' version here matches the version in tests/setup.py
 PyYAML~=6.0
 pytz==2024.2
-requests==2.32.4
+requests==2.33.0

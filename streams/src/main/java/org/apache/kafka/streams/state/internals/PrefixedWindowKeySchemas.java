@@ -31,8 +31,6 @@ import java.util.List;
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 
-// TODO: replace with new method in follow-up PR of KIP-1271
-@SuppressWarnings("deprecation")
 public class PrefixedWindowKeySchemas {
 
     private static final int PREFIX_SIZE = 1;
@@ -179,16 +177,18 @@ public class PrefixedWindowKeySchemas {
 
         public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey,
                                                  final int seqnum,
+                                                 final Headers headers,
                                                  final StateSerdes<K, ?> serdes) {
-            final byte[] serializedKey = serdes.rawKey(timeKey.key());
+            final byte[] serializedKey = serdes.rawKey(timeKey.key(), headers);
             return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
         }
 
         public static <K> Bytes toStoreKeyBinary(final K key,
                                                  final long timestamp,
                                                  final int seqnum,
+                                                 final Headers headers,
                                                  final StateSerdes<K, ?> serdes) {
-            final byte[] serializedKey = serdes.rawKey(key);
+            final byte[] serializedKey = serdes.rawKey(key, headers);
             return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
@@ -312,8 +312,9 @@ public class PrefixedWindowKeySchemas {
         public static <K> Bytes toStoreKeyBinary(final K key,
                                                  final long timestamp,
                                                  final int seqnum,
+                                                 final Headers headers,
                                                  final StateSerdes<K, ?> serdes) {
-            final byte[] serializedKey = serdes.rawKey(key);
+            final byte[] serializedKey = serdes.rawKey(key, headers);
             return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
@@ -324,8 +325,9 @@ public class PrefixedWindowKeySchemas {
 
         public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey,
                                                  final int seqnum,
+                                                 final Headers headers,
                                                  final StateSerdes<K, ?> serdes) {
-            final byte[] serializedKey = serdes.rawKey(timeKey.key());
+            final byte[] serializedKey = serdes.rawKey(timeKey.key(), headers);
             return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
         }
 

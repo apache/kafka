@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -90,7 +89,7 @@ public class AlterPartitionRequest extends AbstractRequest {
                                 newIsr.add(brokerState.brokerId())
                             );
                             partitionData.setNewIsr(newIsr);
-                            partitionData.setNewIsrWithEpochs(Collections.emptyList());
+                            partitionData.setNewIsrWithEpochs(List.of());
                         }
                     })
                 );

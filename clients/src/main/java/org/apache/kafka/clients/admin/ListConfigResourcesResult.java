@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
@@ -26,6 +27,7 @@ import java.util.Collection;
  * The result of the {@link Admin#listConfigResources()} call.
  * <p>
  */
+@InterfaceAudience.Public
 public class ListConfigResourcesResult {
     private final KafkaFuture<Collection<ConfigResource>> future;
 

@@ -18,10 +18,12 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -32,6 +34,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.publisher.MetadataPublisher;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.ControlRecord;
@@ -921,6 +924,78 @@ public class MetadataLoaderTest {
                 assertFalse(metadataImage.isEmpty())
             );
 
+        }
+        faultHandler.maybeRethrowFirstException();
+    }
+
+    @Test
+    public void testUnsupportedConfigFilteredInCommit() throws Exception {
+        // Create a checker that rejects "message.format.version"
+        SupportedConfigChecker checker = (type, name) ->
+            !name.equals("message.format.version");
+
+        MockFaultHandler faultHandler = new MockFaultHandler("testUnsupportedConfigFilteredInCommit");
+        MockPublisher publisher = new MockPublisher("testUnsupportedConfigFilteredInCommit");
+
+        try (MetadataLoader loader = new MetadataLoader.Builder().
+                setFaultHandler(faultHandler).
+                setHighWaterMarkAccessor(() -> OptionalLong.of(1L)).
+                setSupportedConfigChecker(checker).
+                build()) {
+            loader.installPublishers(List.of(publisher)).get();
+            loadTestSnapshot(loader, 100);
+            publisher.firstPublish.get(10, TimeUnit.SECONDS);
+
+            // Commit a batch containing ConfigRecord with message.format.version
+            loader.handleCommit(MockBatchReader.newSingleBatchReader(200, 100, List.of(
+                new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(ConfigResource.Type.TOPIC.id()).
+                    setResourceName("test-topic").
+                    setName("message.format.version").
+                    setValue("2.8"), (short) 0)
+            )));
+            loader.waitForAllEventsToBeHandled();
+
+            // Verify config was filtered out
+            assertTrue(publisher.latestImage.configs().configMapForResource(
+                new ConfigResource(ConfigResource.Type.TOPIC, "test-topic")).isEmpty());
+        }
+        faultHandler.maybeRethrowFirstException();
+    }
+
+    @Test
+    public void testUnsupportedConfigFilteredInSnapshot() throws Exception {
+        // Create a checker that rejects "message.format.version"
+        SupportedConfigChecker checker = (type, name) ->
+            !name.equals("message.format.version");
+
+        MockFaultHandler faultHandler = new MockFaultHandler("testUnsupportedConfigFilteredInSnapshot");
+        MockPublisher publisher = new MockPublisher("testUnsupportedConfigFilteredInSnapshot");
+
+        try (MetadataLoader loader = new MetadataLoader.Builder().
+                setFaultHandler(faultHandler).
+                setHighWaterMarkAccessor(() -> OptionalLong.of(0L)).
+                setSupportedConfigChecker(checker).
+                build()) {
+            loader.installPublishers(List.of(publisher)).get();
+
+            // Load a snapshot containing ConfigRecord with message.format.version
+            loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
+                new MetadataProvenance(200, 100, 4000, true), List.of(
+                    List.of(new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)),
+                    List.of(new ApiMessageAndVersion(new ConfigRecord().
+                        setResourceType(ConfigResource.Type.TOPIC.id()).
+                        setResourceName("test-topic").
+                        setName("message.format.version").
+                        setValue("2.8"), (short) 0))
+                )));
+            loader.waitForAllEventsToBeHandled();
+
+            // Verify config was filtered out
+            assertTrue(publisher.latestImage.configs().configMapForResource(
+                new ConfigResource(ConfigResource.Type.TOPIC, "test-topic")).isEmpty());
         }
         faultHandler.maybeRethrowFirstException();
     }

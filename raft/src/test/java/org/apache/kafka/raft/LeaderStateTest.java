@@ -19,8 +19,8 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
@@ -732,7 +732,7 @@ public class LeaderStateTest {
                 .get()
         );
 
-        // Upate in-memory voter and check state
+        // Update in-memory voter and check state
         assertTrue(
             state.compareAndSetVolatileVoters(votersWithLeaderUpdated, updatedVoters)
         );

@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state.internals;
 
-
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -29,9 +30,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -53,7 +54,8 @@ public class QueryableStoreProviderTest {
         globalStateStores = new HashMap<>();
         storeProvider =
             new QueryableStoreProvider(
-                new GlobalStateStoreProvider(globalStateStores)
+                new GlobalStateStoreProvider(globalStateStores),
+                () -> org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED
             );
         storeProvider.addStoreProviderForThread("thread1", theStoreProvider);
     }
@@ -104,6 +106,26 @@ public class QueryableStoreProviderTest {
     }
 
     @Test
+    public void shouldResolveDefaultIsolationLevelAtQueryTime() {
+        final NoOpReadOnlyStore<Object, Object> kvStore = new NoOpReadOnlyStore<>();
+        final StateStoreProviderStub threadProvider = new StateStoreProviderStub(false);
+        threadProvider.addStore(keyValueStore, kvStore);
+
+        final AtomicReference<IsolationLevel> levelRef = new AtomicReference<>(IsolationLevel.READ_UNCOMMITTED);
+        final QueryableStoreProvider provider = new QueryableStoreProvider(
+            new GlobalStateStoreProvider(new HashMap<>()),
+            levelRef::get
+        );
+        provider.addStoreProviderForThread("thread-iso", threadProvider);
+
+        levelRef.set(IsolationLevel.READ_COMMITTED);
+
+        provider.store(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())).get("k");
+
+        assertEquals(IsolationLevel.READ_COMMITTED, kvStore.isolationLevel);
+    }
+
+    @Test
     public void shouldThrowExceptionWhenKVStoreWithPartitionDoesntExists() {
         final int partition = numStateStorePartitions + 1;
         final InvalidStateStoreException thrown = assertThrows(InvalidStateStoreException.class, () ->
@@ -112,7 +134,7 @@ public class QueryableStoreProviderTest {
                                 .fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())
                                 .withPartition(partition)).get("1")
         );
-        assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, keyValueStore)));
+        assertEquals(String.format("The specified partition %d for store %s does not exist.", partition, keyValueStore), thrown.getMessage());
     }
 
     @Test
@@ -129,6 +151,6 @@ public class QueryableStoreProviderTest {
                                 .fromNameAndType(windowStore, QueryableStoreTypes.windowStore())
                                 .withPartition(partition)).fetch("1", System.currentTimeMillis())
         );
-        assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, windowStore)));
+        assertEquals(String.format("The specified partition %d for store %s does not exist.", partition, windowStore), thrown.getMessage());
     }
 }

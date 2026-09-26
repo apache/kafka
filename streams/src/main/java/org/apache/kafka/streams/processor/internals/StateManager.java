@@ -41,11 +41,9 @@ public interface StateManager {
 
     StateStore store(final String name);
 
-    void flush();
+    void commit();
 
     void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets);
-
-    void checkpoint();
 
     Map<TopicPartition, Long> changelogOffsets();
 

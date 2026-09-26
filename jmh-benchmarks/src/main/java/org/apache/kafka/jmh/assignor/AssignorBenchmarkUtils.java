@@ -100,7 +100,9 @@ public class AssignorBenchmarkUtils {
         List<String> allTopicNames,
         int partitionsPerTopic
     ) {
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
 
         for (String topicName : allTopicNames) {
             AssignorBenchmarkUtils.addTopic(

@@ -192,7 +192,7 @@ public class IncrementalCooperativeConnectProtocol {
                         .setName(EAGER.protocol())
                         .setMetadata(ConnectProtocol.serializeMetadata(workerState).array())
         );
-        return new JoinGroupRequestProtocolCollection(joinGroupRequestProtocols.iterator());
+        return new JoinGroupRequestProtocolCollection(joinGroupRequestProtocols);
     }
 
     /**

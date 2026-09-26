@@ -54,8 +54,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         # So with (2 * 15000) = 30 seconds, we'll set downtime to 70 seconds
         broker_down_time_in_seconds = 70
 
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.get_configs(
-            group_protocol=group_protocol))
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol)
         processor.start()
 
         self.assert_produce_consume(self.inputTopic,
@@ -91,16 +90,16 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
 
-        configs = self.get_configs(group_protocol=group_protocol, extra_configs=",application.id=starting_wo_broker_id")
+        extra_configs = {"application.id": "starting_wo_broker_id"}
 
         # start streams with broker down initially
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol, extra_configs=extra_configs)
         processor.start()
 
-        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol, extra_configs=extra_configs)
         processor_2.start()
 
-        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol, extra_configs=extra_configs)
         processor_3.start()
 
         broker_unavailable_message = "Node may not be available"
@@ -159,24 +158,19 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             group_protocol=["classic", "streams"])
     def test_streams_should_scale_in_while_brokers_down(self, metadata_quorum, group_protocol):
         self.kafka.start()
-        extra_configs = ",application.id=shutdown_with_broker_down"
+        extra_configs = {"application.id": "shutdown_with_broker_down"}
 
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         if group_protocol == "classic":
-            extra_configs += ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
+            extra_configs["internal.task.assignor.class"] = "org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
 
-        configs = self.get_configs(
-            group_protocol=group_protocol,
-            extra_configs=extra_configs
-        )
-
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol, extra_configs=extra_configs)
         processor.start()
 
-        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol, extra_configs=extra_configs)
         processor_2.start()
 
-        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol, extra_configs=extra_configs)
 
         # need to wait for rebalance once
         rebalance = "State transition from REBALANCING to RUNNING"
@@ -245,24 +239,19 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             group_protocol=["classic", "streams"])
     def test_streams_should_failover_while_brokers_down(self, metadata_quorum, group_protocol):
         self.kafka.start()
-        extra_configs = ",application.id=shutdown_with_broker_down"
+        extra_configs = {"application.id": "shutdown_with_broker_down"}
 
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         if group_protocol == "classic":
-            extra_configs += ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
+            extra_configs["internal.task.assignor.class"] = "org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
 
-        configs = self.get_configs(
-            group_protocol=group_protocol,
-            extra_configs=extra_configs
-        )
-
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol, extra_configs=extra_configs)
         processor.start()
 
-        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol, extra_configs=extra_configs)
         processor_2.start()
 
-        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, group_protocol=group_protocol, extra_configs=extra_configs)
 
         # need to wait for rebalance once
         rebalance = "State transition from REBALANCING to RUNNING"

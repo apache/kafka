@@ -20,7 +20,7 @@ import java.util.Comparator;
 import java.util.Objects;
 
 /**
- * The identifier for a task
+ * The identifier for a task, consisting of the subtopology ID and the partition.
  *
  * @param subtopologyId The unique identifier of the subtopology.
  * @param partition     The partition of the input topics this task is processing.

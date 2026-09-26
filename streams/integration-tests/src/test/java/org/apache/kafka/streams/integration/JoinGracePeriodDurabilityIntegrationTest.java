@@ -37,14 +37,16 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -64,8 +66,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cl
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 @Timeout(600)
@@ -88,8 +89,9 @@ public class JoinGracePeriodDurabilityIntegrationTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final long COMMIT_INTERVAL = 100L;
 
-    @Test
-    public void shouldRecoverBufferAfterShutdown(final TestInfo testInfo) {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldRecoverBufferAfterShutdown(final boolean withHeaders, final TestInfo testInfo) {
         final String testId = safeUniqueTestName(testInfo);
         final String appId = "appId_" + testId;
         final String streamInput = "Streaminput" + testId;
@@ -126,7 +128,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
 
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
 
-        KafkaStreams driver = getStartedStreams(streamsConfig, builder, true);
+        KafkaStreams driver = startStream(streamsConfig, builder, true, withHeaders);
         try {
             produceSynchronouslyToPartitionZero(
                 tableInput,
@@ -154,7 +156,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k2", "v2+v2", scaledTime(2L))
                 )
             );
-            assertThat(eventCount.get(), is(2));
+            assertEquals(2, eventCount.get());
 
             produceSynchronouslyToPartitionZero(
                 streamInput,
@@ -169,8 +171,8 @@ public class JoinGracePeriodDurabilityIntegrationTest {
 
             // restart the driver
             driver.close();
-            assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
-            driver = getStartedStreams(streamsConfig, builder, false);
+            assertEquals(KafkaStreams.State.NOT_RUNNING, driver.state());
+            driver = startStream(streamsConfig, builder, false, withHeaders);
 
 
             // flush those recovered buffered events out.
@@ -188,7 +190,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k3", "v3+v3", scaledTime(7L))
                     )
             );
-            assertThat("There should only be 5 output events.", eventCount.get(), is(5));
+            assertEquals(5, eventCount.get(), "There should only be 5 output events.");
 
         } finally {
             driver.close();
@@ -224,5 +226,15 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
         IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, Optional.of(0), toProduce);
+    }
+
+    private KafkaStreams startStream(
+        final Properties streamsConfig,
+        final StreamsBuilder builder,
+        final boolean clean,
+        final boolean withHeaders) {
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        return getStartedStreams(streamsConfig, builder, clean);
     }
 }

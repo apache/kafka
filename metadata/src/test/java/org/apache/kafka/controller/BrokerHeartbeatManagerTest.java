@@ -18,8 +18,8 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatState;
 import org.apache.kafka.controller.BrokerHeartbeatManager.UsableBrokerIterator;
 import org.apache.kafka.metadata.placement.UsableBroker;

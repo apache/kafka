@@ -67,6 +67,7 @@ from runtime import (
     repo_dir,
 )
 import git
+import gh_actions
 import gpg
 import notes
 import preferences
@@ -217,6 +218,48 @@ elif not (subcommand is None or subcommand == 'stage'):
 ## Default 'stage' subcommand implementation isn't isolated to its own function yet for historical reasons
 
 
+def trigger_docker_workflows(rc_tag, release_version, dev_branch):
+    """
+    Trigger Docker image build/test and RC release workflows via GitHub Actions API.
+    Prompts the user for confirmation before each step.
+    """
+    print("\n=== Docker Image Workflows ===")
+    if gh_actions.DRY_RUN:
+        print("NOTE: GITHUB_DRY_RUN is enabled. No actual API calls will be made.")
+    if gh_actions.GITHUB_REPO != "apache/kafka":
+        print(f"NOTE: Using custom repository: {gh_actions.GITHUB_REPO}")
+    if not confirm("Trigger Docker image build workflows via GitHub Actions?"):
+        print("Skipping Docker image workflows.")
+        return
+
+    def get_github_token():
+        print(templates.github_token_instructions())
+        return prompt("Enter your GitHub personal access token: ")
+    github_token = preferences.get('github_token', get_github_token)
+    kafka_url = f"https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka_2.13-{release_version}.tgz"
+
+    # Step 1: Trigger build/test workflows and loop until CVE-free
+    while True:
+        print("\nStep 1/2: Triggering Docker Build Test workflows for JVM and native images...")
+        for image_type in ["jvm", "native"]:
+            gh_actions.trigger_docker_build_test(github_token, dev_branch, image_type, kafka_url)
+        print(f"\nReview build results and CVE scan reports at:")
+        print(f"  https://github.com/{gh_actions.GITHUB_REPO}/actions/workflows/docker_build_and_test.yml")
+        print("Both JVM and native builds should succeed with no CRITICAL or HIGH CVEs.")
+        print("If CVEs are found, update docker/jvm/Dockerfile or docker/native/Dockerfile and answer 'n' below to retry.")
+        if confirm("Have the builds passed with no CVEs?"):
+            break
+
+    # Step 2: Push RC images to DockerHub
+    print("\nStep 2/2: Triggering Docker RC Release workflows for JVM and native images...")
+    for image_type in ["jvm", "native"]:
+        docker_image_name = "apache/kafka-native" if image_type == "native" else "apache/kafka"
+        rc_docker_image = f"{docker_image_name}:{rc_tag}"
+        gh_actions.trigger_docker_rc_release(github_token, dev_branch, image_type, rc_docker_image, kafka_url)
+
+    print(f"\nMonitor all Docker workflow runs at: https://github.com/{gh_actions.GITHUB_REPO}/actions")
+
+
 def verify_gpg_key():
     if not gpg.key_exists(gpg_key_id):
         fail(f"GPG key {gpg_key_id} not found")
@@ -283,18 +326,7 @@ def delete_gitrefs():
 
 git.create_branch(release_version, f"{git.push_remote_name}/{dev_branch}")
 append_fail_hook("Delete gitrefs", delete_gitrefs)
-print("Updating version numbers")
-textfiles.replace(f"{repo_dir}/gradle.properties", "version", f"version={release_version}")
-textfiles.replace(f"{repo_dir}/tests/kafkatest/__init__.py", "__version__", f"__version__ = '{release_version}'")
-print("Updating streams quickstart pom")
-textfiles.replace(f"{repo_dir}/streams/quickstart/pom.xml", "-SNAPSHOT", "", regex=True)
-print("Updating streams quickstart java pom")
-textfiles.replace(f"{repo_dir}/streams/quickstart/java/pom.xml", "-SNAPSHOT", "", regex=True)
-print("Updating streams quickstart archetype pom")
-textfiles.replace(f"{repo_dir}/streams/quickstart/java/src/main/resources/archetype-resources/pom.xml", "-SNAPSHOT", "", regex=True)
-print("Updating ducktape version.py")
-textfiles.replace(f"{repo_dir}/tests/kafkatest/version.py", "^DEV_VERSION =.*",
-    f"DEV_VERSION = KafkaVersion(\"{release_version}-SNAPSHOT\")", regex=True)
+cmd("Updating version numbers", f"./gradlew updateVersion -PnewVersion={release_version}", cwd=repo_dir)
 git.commit(f"Bump version to {release_version}")
 git.create_tag(rc_tag)
 git.switch_branch(starting_branch)
@@ -357,6 +389,25 @@ svn.commit_artifacts(rc_tag, artifacts_dir, work_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
 cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
+# Publishes the KIP-1265 plugin artifacts to the same Nexus staging repo. The api-checker
+# tree is a separate Gradle build (composite/included) so the root :publish task does not
+# descend into it. The four coordinates uploaded here are:
+#   org.apache.kafka:kafka-api-checker-core                        (shared scanner/reporter jar)
+#   org.apache.kafka:kafka-internal-api-checker-gradle-plugin      (Gradle plugin impl jar)
+#   org.apache.kafka.internal-api-checker:org.apache.kafka.internal-api-checker.gradle.plugin
+#                                                                  (Gradle plugin marker)
+#   org.apache.kafka:kafka-internal-api-checker-maven-plugin       (Maven plugin)
+# The companion `public-api-checker` plugin stays registered in the included build so it can
+# be applied to Kafka's own subprojects, but its marker publication is disabled in
+# api-checker/gradle-plugins/build.gradle — only the internal-api-checker is shipped.
+# The version is read from the root gradle.properties — release.py has already bumped it
+# via `updateVersion` above — and the included build's allprojects block picks it up
+# automatically. The api-checker tree is pure Java with no Scala dependencies, so the
+# scalaVersion flag isn't passed. Publish credentials come from ~/.gradle/gradle.properties
+# (mavenUrl / mavenUsername / mavenPassword).
+cmd("Building and uploading archives",
+    "./gradlew :api-checker:core:publish :api-checker:gradle-plugins:publish :api-checker:maven-plugin:publish",
+    cwd=kafka_dir, env=jdk25_env, shell=True)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk25_env, shell=True)
 
 # TODO: Many of these suggested validation steps could be automated
@@ -371,6 +422,8 @@ confirm_or_fail("Have you successfully deployed the artifacts?")
 confirm_or_fail(f"Ok to push RC tag {rc_tag}?")
 git.push_ref(rc_tag)
 git.push_ref(starting_branch)
+
+trigger_docker_workflows(rc_tag, release_version, dev_branch)
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 git.reset_hard_head()

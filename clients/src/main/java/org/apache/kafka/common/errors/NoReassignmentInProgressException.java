@@ -17,9 +17,12 @@
 
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Thrown if a reassignment cannot be cancelled because none is in progress.
  */
+@InterfaceAudience.Public
 public class NoReassignmentInProgressException extends ApiException {
     public NoReassignmentInProgressException(String message) {
         super(message);

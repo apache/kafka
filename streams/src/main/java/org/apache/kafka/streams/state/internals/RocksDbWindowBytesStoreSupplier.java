@@ -27,31 +27,21 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
         TIMESTAMPED_WINDOW_STORE_WITH_HEADERS
     }
 
-    private final String name;
-    private final long retentionPeriod;
-    private final long segmentInterval;
-    private final long windowSize;
-    private final boolean retainDuplicates;
+    protected final String name;
+    protected final long retentionPeriod;
+    protected final long segmentInterval;
+    protected final long windowSize;
+    protected final boolean retainDuplicates;
     private final WindowStoreTypes windowStoreType;
 
-    public RocksDbWindowBytesStoreSupplier(final String name,
-                                           final long retentionPeriod,
-                                           final long segmentInterval,
-                                           final long windowSize,
-                                           final boolean retainDuplicates,
-                                           final boolean returnTimestampedStore) {
-        this(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates,
-            returnTimestampedStore
-                ? WindowStoreTypes.TIMESTAMPED_WINDOW_STORE
-                : WindowStoreTypes.DEFAULT_WINDOW_STORE);
-    }
-
-    public RocksDbWindowBytesStoreSupplier(final String name,
-                                           final long retentionPeriod,
-                                           final long segmentInterval,
-                                           final long windowSize,
-                                           final boolean retainDuplicates,
-                                           final WindowStoreTypes windowStoreType) {
+    public RocksDbWindowBytesStoreSupplier(
+        final String name,
+        final long retentionPeriod,
+        final long segmentInterval,
+        final long windowSize,
+        final boolean retainDuplicates,
+        final WindowStoreTypes windowStoreType
+    ) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.segmentInterval = segmentInterval;
@@ -81,16 +71,6 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
             case TIMESTAMPED_WINDOW_STORE:
                 return new RocksDBTimestampedWindowStore(
                     new RocksDBTimestampedSegmentedBytesStore(
-                        name,
-                        metricsScope(),
-                        retentionPeriod,
-                        segmentInterval,
-                        new WindowKeySchema()),
-                    retainDuplicates,
-                    windowSize);
-            case TIMESTAMPED_WINDOW_STORE_WITH_HEADERS:
-                return new RocksDBTimestampedWindowStoreWithHeaders(
-                    new RocksDBTimestampedSegmentedBytesStoreWithHeaders(
                         name,
                         metricsScope(),
                         retentionPeriod,

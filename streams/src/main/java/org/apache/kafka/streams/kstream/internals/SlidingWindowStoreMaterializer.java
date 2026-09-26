@@ -17,12 +17,13 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.state.DslWindowParams;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -35,11 +36,11 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
     private final long retentionPeriod;
 
     public SlidingWindowStoreMaterializer(
-            final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized,
-            final SlidingWindows windows,
-            final EmitStrategy emitStrategy
+        final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized,
+        final SlidingWindows windows,
+        final EmitStrategy emitStrategy
     ) {
-        super(materialized);
+        super(materialized, DslStoreFormat.TIMESTAMPED);
         this.windows = windows;
         this.emitStrategy = emitStrategy;
 
@@ -59,23 +60,31 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
     @Override
     public StoreBuilder<?> builder() {
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().windowStore(new DslWindowParams(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        Duration.ofMillis(windows.timeDifferenceMs()),
-                        false,
-                        emitStrategy,
-                        true,
-                        true
-                ))
-                : (WindowBytesStoreSupplier) materialized.storeSupplier();
+            ? dslStoreSuppliers().windowStore(new DslWindowParams(
+                materialized.storeName(),
+                Duration.ofMillis(retentionPeriod),
+                Duration.ofMillis(windows.timeDifferenceMs()),
+                false,
+                emitStrategy,
+                true,
+                dslStoreFormat()
+            ))
+            : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
-                .timestampedWindowStoreBuilder(
-                        supplier,
-                        materialized.keySerde(),
-                        materialized.valueSerde()
-                );
+        final StoreBuilder<?> builder;
+        if (supplier instanceof HeadersBytesStoreSupplier) {
+            builder = Stores.timestampedWindowStoreWithHeadersBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
+        } else {
+            builder = Stores.timestampedWindowStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
+        }
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

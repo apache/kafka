@@ -25,7 +25,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class RebalanceCallbackMetricsManager {
+public class RebalanceCallbackMetricsManager extends AbstractConsumerMetricsManager {
     final MetricName partitionRevokeLatencyAvg;
     final MetricName partitionAssignLatencyAvg;
     final MetricName partitionLostLatencyAvg;
@@ -41,6 +41,11 @@ public class RebalanceCallbackMetricsManager {
     }
 
     public RebalanceCallbackMetricsManager(Metrics metrics, String grpMetricsPrefix) {
+        this(new MetricsLedger(metrics), grpMetricsPrefix);
+    }
+
+    private RebalanceCallbackMetricsManager(MetricsLedger metrics, String grpMetricsPrefix) {
+        super(metrics);
         final String metricGroupName = grpMetricsPrefix + COORDINATOR_METRICS_SUFFIX;
         partitionRevokeCallbackSensor = metrics.sensor("partition-revoked-latency");
         partitionRevokeLatencyAvg = metrics.metricName("partition-revoked-latency-avg",

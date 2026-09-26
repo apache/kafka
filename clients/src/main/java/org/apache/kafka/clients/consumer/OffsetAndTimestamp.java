@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -22,15 +25,31 @@ import java.util.Optional;
 /**
  * A container class for offset and timestamp.
  */
+@InterfaceAudience.Public
 public final class OffsetAndTimestamp {
     private final long timestamp;
     private final long offset;
     private final Optional<Integer> leaderEpoch;
 
+    /**
+     * Constructs a new OffsetAndTimestamp with the given offset and timestamp.
+     *
+     * @param offset The offset
+     * @param timestamp The timestamp
+     * @throws IllegalArgumentException If the offset or timestamp is negative
+     */
     public OffsetAndTimestamp(long offset, long timestamp) {
         this(offset, timestamp, Optional.empty());
     }
 
+    /**
+     * Constructs a new OffsetAndTimestamp with the given offset, timestamp, and leader epoch.
+     *
+     * @param offset The offset
+     * @param timestamp The timestamp
+     * @param leaderEpoch The leader epoch
+     * @throws IllegalArgumentException If the offset or timestamp is negative
+     */
     public OffsetAndTimestamp(long offset, long timestamp, Optional<Integer> leaderEpoch) {
         if (offset < 0)
             throw new IllegalArgumentException("Invalid negative offset");
@@ -43,10 +62,20 @@ public final class OffsetAndTimestamp {
         this.leaderEpoch = leaderEpoch;
     }
 
+    /**
+     * Returns the timestamp.
+     *
+     * @return The timestamp
+     */
     public long timestamp() {
         return timestamp;
     }
 
+    /**
+     * Returns the offset.
+     *
+     * @return The offset
+     */
     public long offset() {
         return offset;
     }

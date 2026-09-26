@@ -16,25 +16,40 @@
  */
 package org.apache.kafka.streams.test;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StateManager;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -44,9 +59,9 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MockProcessorContextAPITest {
     @Test
@@ -78,11 +93,11 @@ public class MockProcessorContextAPITest {
             new CapturedForward<>(new Record<>("foo5", 8L, 0L)),
             new CapturedForward<>(new Record<>("barbaz50", 56L, 0L))
         );
-        assertThat(actual, is(expected));
+        assertEquals(expected, actual);
 
         context.resetForwards();
 
-        assertThat(context.forwarded(), empty());
+        assertTrue(context.forwarded().isEmpty());
     }
 
     @Test
@@ -126,7 +141,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("barbaz50", 56L, 0L), Optional.of("pete"))
             );
 
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwarded = context.forwarded("george");
@@ -135,7 +150,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("foo5", 8L, 0L), Optional.of("george"))
             );
 
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwarded = context.forwarded("pete");
@@ -144,7 +159,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("barbaz50", 56L, 0L), Optional.of("pete"))
             );
 
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwarded = context.forwarded("steve");
@@ -152,7 +167,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("start", -1L, 0L))
             );
 
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
     }
 
@@ -182,17 +197,18 @@ public class MockProcessorContextAPITest {
         processor.process(new Record<>("foo", 5L, 0L));
         processor.process(new Record<>("barbaz", 50L, 0L));
 
-        assertThat(context.committed(), is(false));
+        assertFalse(context.committed());
 
         processor.process(new Record<>("foobar", 500L, 0L));
 
-        assertThat(context.committed(), is(true));
+        assertTrue(context.committed());
 
         context.resetCommit();
 
-        assertThat(context.committed(), is(false));
+        assertFalse(context.committed());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldStoreAndReturnStateStores() {
         final Processor<String, Long, Void, Void> processor = new Processor<>() {
@@ -224,16 +240,75 @@ public class MockProcessorContextAPITest {
 
         final KeyValueStore<String, Long> store = storeBuilder.build();
 
-        store.init(context.getStateStoreContext(), store);
+        store.init(
+            new AbstractProcessorContext<>(new TaskId(0, 0), new StreamsConfig(context.appConfigs()), (StreamsMetricsImpl) context.metrics(), null) {
+                @SuppressWarnings("rawtypes")
+                @Override
+                public void forward(final Record record, final String childName) { }
+                @SuppressWarnings("rawtypes")
+                @Override
+                public void forward(final Record record) { }
+                @SuppressWarnings("rawtypes")
+                @Override
+                public void forward(final FixedKeyRecord record, final String childName) { }
+                @SuppressWarnings("rawtypes")
+                @Override
+                public void forward(final FixedKeyRecord record) { }
+                @Override
+                public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+                    return null;
+                }
+                @Override
+                public Cancellable schedule(final Instant startTime, final Duration interval, final PunctuationType type, final Punctuator callback) {
+                    return null;
+                }
+                @Override
+                public void commit() { }
+                @Override
+                public long currentStreamTimeMs() {
+                    return 0;
+                }
+                @Override
+                public void forward(final Object key, final Object value, final To to) { }
+                @Override
+                public void forward(final Object key, final Object value) { }
+                @SuppressWarnings("unchecked")
+                @Override
+                public StateStore getStateStore(final String name) {
+                    return null;
+                }
+                @Override
+                public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) { }
+                @Override
+                public void transitionToStandby(final ThreadCache newCache) { }
+                @Override
+                public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) { }
+                @Override
+                public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Headers headers, final Position position) { }
+                @Override
+                protected StateManager stateManager() {
+                    return null;
+                }
+                @Override
+                public String changelogFor(final String storeName) {
+                    return "changelog";
+                }
+                @Override
+                public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+                    context.getStateStoreContext().register(store, stateRestoreCallback);
+                }
+            },
+            store
+        );
 
         processor.init(context);
 
         processor.process(new Record<>("foo", 5L, 0L));
         processor.process(new Record<>("bar", 50L, 0L));
 
-        assertThat(store.get("foo"), is(5L));
-        assertThat(store.get("bar"), is(50L));
-        assertThat(store.get("all"), is(55L));
+        assertEquals(5L, store.get("foo"));
+        assertEquals(50L, store.get("bar"));
+        assertEquals(55L, store.get("all"));
     }
 
 
@@ -281,7 +356,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("taskId", new TaskId(0, 0), 0L)),
                 new CapturedForward<>(new Record<>("record", new Record<>("foo", 5L, 0L), 0L))
             );
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
         context.resetForwards();
         context.setRecordMetadata("t1", 0, 0L);
@@ -296,7 +371,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("offset", 0L, 0L)),
                 new CapturedForward<>(new Record<>("record", new Record<>("foo", 5L, 0L), 0L))
             );
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
     }
 
@@ -321,14 +396,14 @@ public class MockProcessorContextAPITest {
         processor.init(context);
 
         final MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
-        assertThat(capturedPunctuator.getInterval(), is(Duration.ofMillis(1000L)));
-        assertThat(capturedPunctuator.getType(), is(PunctuationType.WALL_CLOCK_TIME));
-        assertThat(capturedPunctuator.cancelled(), is(false));
+        assertEquals(Duration.ofMillis(1000L), capturedPunctuator.getInterval());
+        assertEquals(PunctuationType.WALL_CLOCK_TIME, capturedPunctuator.getType());
+        assertFalse(capturedPunctuator.cancelled());
 
         final Punctuator punctuator = capturedPunctuator.getPunctuator();
-        assertThat(context.committed(), is(false));
+        assertFalse(context.committed());
         punctuator.punctuate(1234L);
-        assertThat(context.committed(), is(true));
+        assertTrue(context.committed());
     }
 
     @SuppressWarnings("resource")
@@ -344,12 +419,12 @@ public class MockProcessorContextAPITest {
         final MockProcessorContext<Void, Void> context =
             new MockProcessorContext<>(config, new TaskId(1, 1), dummyFile);
 
-        assertThat(context.applicationId(), is("testFullConstructor"));
-        assertThat(context.taskId(), is(new TaskId(1, 1)));
-        assertThat(context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG), is("testFullConstructor"));
-        assertThat(context.appConfigsWithPrefix("application.").get("id"), is("testFullConstructor"));
-        assertThat(context.keySerde().getClass(), is(Serdes.StringSerde.class));
-        assertThat(context.valueSerde().getClass(), is(Serdes.LongSerde.class));
-        assertThat(context.stateDir(), is(dummyFile));
+        assertEquals("testFullConstructor", context.applicationId());
+        assertEquals(new TaskId(1, 1), context.taskId());
+        assertEquals("testFullConstructor", context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG));
+        assertEquals("testFullConstructor", context.appConfigsWithPrefix("application.").get("id"));
+        assertEquals(Serdes.StringSerde.class, context.keySerde().getClass());
+        assertEquals(Serdes.LongSerde.class, context.valueSerde().getClass());
+        assertEquals(dummyFile, context.stateDir());
     }
 }

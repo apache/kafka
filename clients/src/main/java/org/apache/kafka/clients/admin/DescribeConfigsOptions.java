@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 
 /**
  * Options for {@link Admin#describeConfigs(Collection)}.
  */
+@InterfaceAudience.Public
 public class DescribeConfigsOptions extends AbstractOptions<DescribeConfigsOptions> {
 
     private boolean includeSynonyms = false;

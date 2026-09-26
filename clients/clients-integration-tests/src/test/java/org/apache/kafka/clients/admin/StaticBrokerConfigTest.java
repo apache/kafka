@@ -155,7 +155,7 @@ public class StaticBrokerConfigTest {
 
             // test for case ConfigResource.Type == GROUP
             Config groupConfig = configResourceMap.get(groupResource);
-            assertNotContainsAnyInternalConfig(groupConfig, GroupConfig.configDef().configKeys());
+            assertNotContainsAnyInternalConfig(groupConfig, GroupConfig.CONFIG_DEF.configKeys());
 
             // test for case ConfigResource.Type == CLIENT_METRICS
             Config clientMetricsConfig = configResourceMap.get(clientMetricsResource);

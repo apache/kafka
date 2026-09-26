@@ -19,13 +19,15 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
+import java.util.List;
+
 
 public class FindCoordinatorRequest extends AbstractRequest {
 
@@ -42,8 +44,8 @@ public class FindCoordinatorRequest extends AbstractRequest {
         @Override
         public FindCoordinatorRequest build(short version) {
             if (version < 1 && data.keyType() == CoordinatorType.TRANSACTION.id()) {
-                throw new UnsupportedVersionException("Cannot create a v" + version + " FindCoordinator request " +
-                        "because we require features supported only in 2 or later.");
+                throw new UnsupportedProtocolFieldException(CoordinatorType.TRANSACTION.name(),
+                    apiKey().name(), version, 2);
             }
             int batchedKeys = data.coordinatorKeys().size();
             if (version < MIN_BATCHED_VERSION) {
@@ -52,10 +54,10 @@ public class FindCoordinatorRequest extends AbstractRequest {
                         "because we require features supported only in " + MIN_BATCHED_VERSION + " or later.");
                 if (batchedKeys == 1) {
                     data.setKey(data.coordinatorKeys().get(0));
-                    data.setCoordinatorKeys(Collections.emptyList());
+                    data.setCoordinatorKeys(List.of());
                 }
             } else if (batchedKeys == 0 && data.key() != null) {
-                data.setCoordinatorKeys(Collections.singletonList(data.key()));
+                data.setCoordinatorKeys(List.of(data.key()));
                 data.setKey(""); // default value
             }
             return new FindCoordinatorRequest(data, version);

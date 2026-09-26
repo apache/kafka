@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.jmh.util;
 
-import org.apache.kafka.common.utils.Crc32C;
+import org.apache.kafka.common.utils.internals.Crc32C;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.CompoundStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
@@ -31,6 +32,7 @@ import java.util.List;
 /**
  * A compound stat that reports one or more percentiles
  */
+@InterfaceAudience.Public
 public class Percentiles extends SampledStat implements CompoundStat {
 
     private static final Logger log = LoggerFactory.getLogger(Percentiles.class);

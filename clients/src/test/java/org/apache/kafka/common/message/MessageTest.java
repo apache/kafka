@@ -57,6 +57,7 @@ import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -106,7 +107,7 @@ public final class MessageTest {
                 setV3AndBelowTopics(new AddPartitionsToTxnTopicCollection(singletonList(
                         new AddPartitionsToTxnTopic().
                                 setName("Topic").
-                                setPartitions(singletonList(1))).iterator()));
+                                setPartitions(singletonList(1)))));
         testDuplication(v3AndBelowData);
         testAllMessageRoundTripsUntilVersion((short) 3, v3AndBelowData);
 
@@ -116,7 +117,7 @@ public final class MessageTest {
                               setTransactionalId("blah").
                               setProducerId(0xbadcafebadcafeL).
                               setProducerEpoch((short) 30000).
-                              setTopics(v3AndBelowData.v3AndBelowTopics())).iterator()));
+                              setTopics(v3AndBelowData.v3AndBelowTopics()))));
         testDuplication(data);
         testAllMessageRoundTripsFromVersion((short) 4, data);
     }
@@ -324,7 +325,7 @@ public final class MessageTest {
                     .setBrokerId(1)
                     .setHost("localhost")
                     .setPort(9092)
-                    .setRack("rack1")).iterator()))
+                    .setRack("rack1"))))
             .setClusterId("clusterId")
             .setControllerId(1)
             .setClusterAuthorizedOperations(10);
@@ -455,92 +456,46 @@ public final class MessageTest {
         testMessageRoundTrip(version, response, response);
     }
 
-    @Test
-    public void testTxnOffsetCommitRequestVersions() throws Exception {
-        String groupId = "groupId";
-        String topicName = "topic";
-        String metadata = "metadata";
-        String txnId = "transactionalId";
-        int producerId = 25;
-        short producerEpoch = 10;
-        String instanceId = "instance";
-        String memberId = "member";
-        int generationId = 1;
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+    public void testTxnOffsetCommitRequestVersions(short version) throws Exception {
+        TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData()
+            .setGroupId("groupId")
+            .setTransactionalId("transactionalId")
+            .setProducerId(25)
+            .setProducerEpoch((short) 10)
+            .setMemberId(version >= 3 ? "member" : "")
+            .setGenerationIdOrMemberEpoch(version >= 3 ? 1 : -1)
+            .setGroupInstanceId(version >= 3 ? "instance" : null)
+            .setTopics(singletonList(
+                new TxnOffsetCommitRequestTopic()
+                    .setTopicId(version >= 6 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
+                    .setName(version < 6 ? "topic" : "")
+                    .setPartitions(singletonList(
+                        new TxnOffsetCommitRequestPartition()
+                            .setPartitionIndex(2)
+                            .setCommittedLeaderEpoch(version >= 2 ? 10 : -1)
+                            .setCommittedMetadata("metadata")
+                            .setCommittedOffset(100)))));
 
-        int partition = 2;
-        int offset = 100;
-
-        testAllMessageRoundTrips(new TxnOffsetCommitRequestData()
-                                     .setGroupId(groupId)
-                                     .setTransactionalId(txnId)
-                                     .setProducerId(producerId)
-                                     .setProducerEpoch(producerEpoch)
-                                     .setTopics(Collections.singletonList(
-                                         new TxnOffsetCommitRequestTopic()
-                                             .setName(topicName)
-                                             .setPartitions(Collections.singletonList(
-                                                 new TxnOffsetCommitRequestPartition()
-                                                     .setPartitionIndex(partition)
-                                                     .setCommittedMetadata(metadata)
-                                                     .setCommittedOffset(offset)
-                                             )))));
-
-        Supplier<TxnOffsetCommitRequestData> request =
-            () -> new TxnOffsetCommitRequestData()
-                      .setGroupId(groupId)
-                      .setTransactionalId(txnId)
-                      .setProducerId(producerId)
-                      .setProducerEpoch(producerEpoch)
-                      .setGroupInstanceId(instanceId)
-                      .setMemberId(memberId)
-                      .setGenerationId(generationId)
-                      .setTopics(Collections.singletonList(
-                          new TxnOffsetCommitRequestTopic()
-                              .setName(topicName)
-                              .setPartitions(Collections.singletonList(
-                                  new TxnOffsetCommitRequestPartition()
-                                      .setPartitionIndex(partition)
-                                      .setCommittedLeaderEpoch(10)
-                                      .setCommittedMetadata(metadata)
-                                      .setCommittedOffset(offset)
-                              ))));
-
-        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
-            TxnOffsetCommitRequestData requestData = request.get();
-            if (version < 2) {
-                requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
-            }
-
-            if (version < 3) {
-                final short finalVersion = version;
-                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
-                requestData.setGroupInstanceId(null);
-                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
-                requestData.setMemberId("");
-                assertThrows(UnsupportedVersionException.class, () -> testEquivalentMessageRoundTrip(finalVersion, requestData));
-                requestData.setGenerationId(-1);
-            }
-
-            testAllMessageRoundTripsFromVersion(version, requestData);
-        }
+        testMessageRoundTrip(version, request, request);
     }
 
-    @Test
-    public void testTxnOffsetCommitResponseVersions() throws Exception {
-        testAllMessageRoundTrips(
-            new TxnOffsetCommitResponseData()
-                .setTopics(
-                   singletonList(
-                       new TxnOffsetCommitResponseTopic()
-                           .setName("topic")
-                           .setPartitions(singletonList(
-                               new TxnOffsetCommitResponsePartition()
-                                   .setPartitionIndex(1)
-                                   .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                           ))
-                   )
-               )
-               .setThrottleTimeMs(20));
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+    public void testTxnOffsetCommitResponseVersions(short version) throws Exception {
+        TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData()
+            .setThrottleTimeMs(20)
+            .setTopics(singletonList(
+                new TxnOffsetCommitResponseTopic()
+                    .setTopicId(version >= 6 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
+                    .setName(version < 6 ? "topic" : "")
+                    .setPartitions(singletonList(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(1)
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())))));
+
+        testMessageRoundTrip(version, response, response);
     }
 
     @ParameterizedTest
@@ -646,7 +601,7 @@ public final class MessageTest {
                         new ProduceResponseData.PartitionProduceResponse()
                             .setIndex(partitionIndex)
                             .setErrorCode(errorCode)
-                            .setBaseOffset(baseOffset)))).iterator())));
+                            .setBaseOffset(baseOffset)))))));
 
         Supplier<ProduceResponseData> response = () -> new ProduceResponseData()
                 .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
@@ -662,7 +617,7 @@ public final class MessageTest {
                                      new ProduceResponseData.BatchIndexAndErrorMessage()
                                          .setBatchIndex(batchIndex)
                                          .setBatchIndexErrorMessage(batchIndexErrorMessage)))
-                                 .setErrorMessage(errorMessage)))).iterator()))
+                                 .setErrorMessage(errorMessage))))))
                 .setThrottleTimeMs(throttleTimeMs);
 
         for (short version : ApiKeys.PRODUCE.allVersions()) {
@@ -901,6 +856,68 @@ public final class MessageTest {
         createTopics.unknownTaggedFields().add(field1000);
         verifyWriteRaisesUve((short) 0, "Tagged fields were set", createTopics);
         verifyWriteSucceeds((short) 6, createTopics);
+    }
+
+    private byte[] rawTaggedFieldsSection(int declaredCount, int... tagsAndSizes) {
+        ByteBuffer scratch = ByteBuffer.allocate(64);
+        ByteUtils.writeUnsignedVarint(declaredCount, scratch);
+        for (int i = 0; i < tagsAndSizes.length; i += 2) {
+            ByteUtils.writeUnsignedVarint(tagsAndSizes[i], scratch);
+            ByteUtils.writeUnsignedVarint(tagsAndSizes[i + 1], scratch);
+        }
+        scratch.flip();
+        byte[] bytes = new byte[scratch.remaining()];
+        scratch.get(bytes);
+        return bytes;
+    }
+
+    private ByteBuffer messageWithTaggedFieldsSection(short version, byte[] taggedFieldsSection) {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
+        ByteBuffer prefix = ByteBuffer.allocate(size);
+        message.write(new ByteBufferAccessor(prefix), cache, version);
+        prefix.flip();
+        byte[] prefixBytes = new byte[prefix.remaining() - 1];
+        prefix.get(prefixBytes);
+        assertEquals((byte) 0, prefix.get(), "expected an empty tagged-fields section to replace");
+        ByteBuffer result = ByteBuffer.allocate(prefixBytes.length + taggedFieldsSection.length);
+        result.put(prefixBytes);
+        result.put(taggedFieldsSection);
+        result.flip();
+        return result;
+    }
+
+    @Test
+    public void testTaggedFieldCountRejectedWhenLargerThanRemainingBytes() {
+        short version = 1;
+        ByteBuffer buf = messageWithTaggedFieldsSection(version, rawTaggedFieldsSection(1_000_000));
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        RuntimeException e = assertThrows(RuntimeException.class,
+            () -> message.read(new ByteBufferAccessor(buf), version));
+        assertTrue(e.getMessage().contains("tagged fields"),
+            "Expected a bounded-count rejection, but got: " + e.getMessage());
+    }
+
+    @Test
+    public void testTaggedFieldCountRejectedWhenExceedingHardCap() {
+        short version = 1;
+        int declaredCount = MessageUtil.MAX_TAGGED_FIELD_COUNT + 1;
+        ByteBuffer scratch = ByteBuffer.allocate(16);
+        ByteUtils.writeUnsignedVarint(declaredCount, scratch);
+        scratch.flip();
+        byte[] countBytes = new byte[scratch.remaining()];
+        scratch.get(countBytes);
+        byte[] padding = new byte[declaredCount];
+        ByteBuffer section = ByteBuffer.allocate(countBytes.length + padding.length);
+        section.put(countBytes);
+        section.put(padding);
+        ByteBuffer buf = messageWithTaggedFieldsSection(version, section.array());
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        RuntimeException e = assertThrows(RuntimeException.class,
+            () -> message.read(new ByteBufferAccessor(buf), version));
+        assertTrue(e.getMessage().contains("exceeds the maximum allowed count"),
+            "Expected a hard-cap rejection, but got: " + e.getMessage());
     }
 
     @Test

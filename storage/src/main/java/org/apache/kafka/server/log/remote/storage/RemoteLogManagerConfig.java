@@ -168,6 +168,28 @@ public final class RemoteLogManagerConfig {
             "less than or equal to <code>log.retention.bytes</code> value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
+    public static final String LOG_REMOTE_COPY_LAG_MS_PROP = "log.remote.copy.lag.ms";
+    public static final String LOG_REMOTE_COPY_LAG_MS_DOC = "Controls one of the two upload eligibility checks (time and size) for copying segments to remote storage. " +
+            "A non-active segment is upload-eligible when either this time-based check or <code>log.remote.copy.lag.bytes</code> is satisfied. " +
+            "When set to 0, uploads are immediately eligible regardless of lag checks. " +
+            "When set to a positive value (ms), the segment is time-eligible once elapsed time since its latest record reaches this value. " +
+            "When set to -1, this value is derived from effective local retention time (<code>log.local.retention.ms</code>). " +
+            "If that effective local retention time is unlimited (-1), this time-based check is not applied. " +
+            "A positive value should not exceed effective local retention time unless local retention is unlimited (-1).";
+    public static final Long MAX_LOG_REMOTE_COPY_LAG_MS = -1L; // It indicates the value depends on log.local.retention.ms
+    public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_MS = 0L;
+
+    public static final String LOG_REMOTE_COPY_LAG_BYTES_PROP = "log.remote.copy.lag.bytes";
+    public static final String LOG_REMOTE_COPY_LAG_BYTES_DOC = "Controls one of the two upload eligibility checks (time and size) for copying segments to remote storage. " +
+            "A non-active segment is upload-eligible when either this size-based check or <code>log.remote.copy.lag.ms</code> is satisfied. " +
+            "When set to 0, uploads are immediately eligible regardless of lag checks. " +
+            "When set to a positive value (bytes), the segment is size-eligible once bytes of newer local log data after that segment reaches this value. " +
+            "When set to -1, this value is derived from effective local retention size (<code>log.local.retention.bytes</code>). " +
+            "If that effective local retention size is unlimited (-1), this size-based check is not applied. " +
+            "A positive value should not exceed effective local retention size unless local retention is unlimited (-1).";
+    public static final Long MAX_LOG_REMOTE_COPY_LAG_BYTES = -1L; // It indicates the value depends on log.local.retention.bytes
+    public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_BYTES = MAX_LOG_REMOTE_COPY_LAG_BYTES;
+
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_DOC = "The maximum number of bytes that can be copied from local storage to remote storage per second. " +
             "This is a global limit for all the partitions that are being copied from local storage to remote storage. " +
@@ -347,6 +369,18 @@ public final class RemoteLogManagerConfig {
                         atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
                         MEDIUM,
                         LOG_LOCAL_RETENTION_BYTES_DOC)
+                .define(LOG_REMOTE_COPY_LAG_MS_PROP,
+                        LONG,
+                        DEFAULT_LOG_REMOTE_COPY_LAG_MS,
+                        atLeast(MAX_LOG_REMOTE_COPY_LAG_MS),
+                        MEDIUM,
+                        LOG_REMOTE_COPY_LAG_MS_DOC)
+                .define(LOG_REMOTE_COPY_LAG_BYTES_PROP,
+                        LONG,
+                        DEFAULT_LOG_REMOTE_COPY_LAG_BYTES,
+                        atLeast(MAX_LOG_REMOTE_COPY_LAG_BYTES),
+                        MEDIUM,
+                        LOG_REMOTE_COPY_LAG_BYTES_DOC)
                 .define(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
                         LONG,
                         DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND,
@@ -562,6 +596,14 @@ public final class RemoteLogManagerConfig {
 
     public long logLocalRetentionMs() {
         return config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
+    }
+
+    public long logRemoteCopyLagMs() {
+        return config.getLong(LOG_REMOTE_COPY_LAG_MS_PROP);
+    }
+
+    public long logRemoteCopyLagBytes() {
+        return config.getLong(LOG_REMOTE_COPY_LAG_BYTES_PROP);
     }
 
     public long remoteListOffsetsRequestTimeoutMs() {

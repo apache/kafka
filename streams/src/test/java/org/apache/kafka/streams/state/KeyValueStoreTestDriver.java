@@ -18,12 +18,13 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -162,8 +163,26 @@ public class KeyValueStoreTestDriver<K, V> {
      * @return the test driver; never null
      */
     public static <K, V> KeyValueStoreTestDriver<K, V> create(final Class<K> keyClass, final Class<V> valueClass) {
+        return create(keyClass, valueClass, false);
+    }
+
+    /**
+     * Create a driver whose {@link #context()} enables transactional state stores
+     * ({@link StreamsConfig#TRANSACTIONAL_STATE_STORES_CONFIG}) when {@code transactional} is true, so a store
+     * built with it exercises the KIP-892 staged-write path.
+     *
+     * @param keyClass      the class for the keys; must be one of {@code String.class}, {@code Integer.class},
+     *                      {@code Long.class}, or {@code byte[].class}
+     * @param valueClass    the class for the values; must be one of {@code String.class}, {@code Integer.class},
+     *                      {@code Long.class}, or {@code byte[].class}
+     * @param transactional whether the context enables transactional state stores
+     * @return the test driver; never null
+     */
+    public static <K, V> KeyValueStoreTestDriver<K, V> create(final Class<K> keyClass,
+                                                              final Class<V> valueClass,
+                                                              final boolean transactional) {
         final StateSerdes<K, V> serdes = StateSerdes.withBuiltinTypes("unexpected", keyClass, valueClass);
-        return new KeyValueStoreTestDriver<>(serdes);
+        return new KeyValueStoreTestDriver<>(serdes, transactional);
     }
 
     /**
@@ -196,8 +215,12 @@ public class KeyValueStoreTestDriver<K, V> {
     private final InternalMockProcessorContext<?, ?> context;
     private final StateSerdes<K, V> stateSerdes;
 
-    @SuppressWarnings("resource")
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
+        this(serdes, false);
+    }
+
+    @SuppressWarnings("resource")
+    private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes, final boolean transactional) {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -206,6 +229,9 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
+        if (transactional) {
+            props.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        }
 
         final ProcessorTopology topology = mock(ProcessorTopology.class);
         when(topology.sinkTopics()).thenReturn(Collections.emptySet());
@@ -240,8 +266,8 @@ public class KeyValueStoreTestDriver<K, V> {
                 final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
                 final byte[] valueBytes = valueSerializer.serialize(topic, headers, value);
 
-                final K keyTest = serdes.keyFrom(keyBytes);
-                final V valueTest = serdes.valueFrom(valueBytes);
+                final K keyTest = serdes.keyFrom(keyBytes, headers);
+                final V valueTest = serdes.valueFrom(valueBytes, headers);
 
                 recordCommitted(keyTest, valueTest);
             }
@@ -338,7 +364,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @see #checkForRestoredEntries(KeyValueStore)
      */
     public void addEntryToRestoreLog(final K key, final V value) {
-        restorableEntries.add(new KeyValue<>(stateSerdes.rawKey(key), stateSerdes.rawValue(value)));
+        restorableEntries.add(new KeyValue<>(stateSerdes.rawKey(key, new RecordHeaders()), stateSerdes.rawValue(value, new RecordHeaders())));
     }
 
     /**
@@ -368,8 +394,8 @@ public class KeyValueStoreTestDriver<K, V> {
         int missing = 0;
         for (final KeyValue<byte[], byte[]> kv : restorableEntries) {
             if (kv != null) {
-                final V value = store.get(stateSerdes.keyFrom(kv.key));
-                if (!Objects.equals(value, stateSerdes.valueFrom(kv.value))) {
+                final V value = store.get(stateSerdes.keyFrom(kv.key, new RecordHeaders()));
+                if (!Objects.equals(value, stateSerdes.valueFrom(kv.value, new RecordHeaders()))) {
                     ++missing;
                 }
             }

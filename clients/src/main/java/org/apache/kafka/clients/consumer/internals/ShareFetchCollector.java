@@ -23,11 +23,11 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ShareFetchResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
+import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -119,6 +119,9 @@ public class ShareFetchCollector<K, V> {
                 }
             }
         } catch (KafkaException e) {
+            // Records already collected from other partitions must be returned rather than lost, otherwise
+            // they can never be acknowledged and the completed fetches which delivered them will never be drained.
+            // The failing fetch is still at the head of the queue and will be handled again on the next poll.
             if (fetch.isEmpty()) {
                 throw e;
             }
@@ -172,7 +175,7 @@ public class ShareFetchCollector<K, V> {
         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
             // Log the actual partition and not just the topic to help with ACL propagation issues in large clusters
             log.warn("Not authorized to read from partition {}.", tp.topicPartition());
-            throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
+            throw new TopicAuthorizationException(Set.of(tp.topic()));
         } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
             log.debug("Received unknown leader epoch error in fetch for partition {}.", tp);
         } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
@@ -182,7 +185,7 @@ public class ShareFetchCollector<K, V> {
             throw new KafkaException("Encountered corrupt message when fetching topic-partition "
                     + tp.topicPartition());
         } else {
-            throw new IllegalStateException("Unexpected error code " + error.code()
+            throw new KafkaException("Unexpected error code " + error.code()
                     + " while fetching from topic-partition " + tp.topicPartition());
         }
     }

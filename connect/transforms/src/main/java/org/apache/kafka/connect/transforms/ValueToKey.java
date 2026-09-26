@@ -20,16 +20,18 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.transforms.field.FieldSyntaxVersion;
+import org.apache.kafka.connect.transforms.field.SingleFieldPath;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,22 +39,24 @@ import java.util.Map;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC = "Replace the record key with a new key formed from a subset of fields in the record value.";
 
     public static final String FIELDS_CONFIG = "fields";
     public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
-    public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.ValidList.anyNonDuplicateValues(false, false), ConfigDef.Importance.HIGH,
-                    "Field names on the record value to extract as the record key.")
-            .define(REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
-                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
+    public static final ConfigDef CONFIG_DEF = FieldSyntaxVersion.appendConfigTo(
+            new ConfigDef()
+                    .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.ValidList.anyNonDuplicateValues(false, false), ConfigDef.Importance.HIGH,
+                            "Field names on the record value to extract as the record key.")
+                    .define(REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+                            "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used."));
 
     private static final String PURPOSE = "copying fields from value to key";
 
     private List<String> fields;
+    private List<SingleFieldPath> fieldPaths;
     private boolean replaceNullWithDefault;
 
     private Cache<Schema, Schema> valueToKeySchemaCache;
@@ -66,6 +70,11 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     public void configure(Map<String, ?> configs) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
         fields = config.getList(FIELDS_CONFIG);
+        final FieldSyntaxVersion fieldSyntaxVersion = FieldSyntaxVersion.fromConfig(config);
+        fieldPaths = new ArrayList<>(fields.size());
+        for (String field : fields) {
+            fieldPaths.add(new SingleFieldPath(field, fieldSyntaxVersion));
+        }
         replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
         valueToKeySchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
@@ -82,8 +91,8 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     private R applySchemaless(R record) {
         final Map<String, Object> value = requireMap(record.value(), PURPOSE);
         final Map<String, Object> key = new HashMap<>(fields.size());
-        for (String field : fields) {
-            key.put(field, value.get(field));
+        for (int i = 0; i < fields.size(); i++) {
+            key.put(fields.get(i), fieldPaths.get(i).valueFrom(value));
         }
         return record.newRecord(record.topic(), record.kafkaPartition(), null, key, record.valueSchema(), record.value(), record.timestamp());
     }
@@ -94,20 +103,20 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
         Schema keySchema = valueToKeySchemaCache.get(value.schema());
         if (keySchema == null) {
             final SchemaBuilder keySchemaBuilder = SchemaBuilder.struct();
-            for (String field : fields) {
-                final Field fieldFromValue = value.schema().field(field);
+            for (int i = 0; i < fields.size(); i++) {
+                final Field fieldFromValue = fieldPaths.get(i).fieldFrom(value.schema());
                 if (fieldFromValue == null) {
-                    throw new DataException("Field does not exist: " + field);
+                    throw new DataException("Field does not exist: " + fields.get(i));
                 }
-                keySchemaBuilder.field(field, fieldFromValue.schema());
+                keySchemaBuilder.field(fields.get(i), fieldFromValue.schema());
             }
             keySchema = keySchemaBuilder.build();
             valueToKeySchemaCache.put(value.schema(), keySchema);
         }
 
         final Struct key = new Struct(keySchema);
-        for (String field : fields) {
-            key.put(field, replaceNullWithDefault ? value.get(field) : value.getWithoutDefault(field));
+        for (int i = 0; i < fields.size(); i++) {
+            key.put(fields.get(i), fieldPaths.get(i).valueFrom(value, replaceNullWithDefault));
         }
 
         return record.newRecord(record.topic(), record.kafkaPartition(), keySchema, key, value.schema(), value, record.timestamp());

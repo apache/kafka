@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class HttpJwtRetrieverTest extends OAuthBearerTest {
@@ -112,6 +113,14 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
         IOException ioe = assertThrows(IOException.class,
             () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
         assertTrue(ioe.getMessage().contains("{non json error output}"));
+    }
+
+    @Test
+    public void testCloseClosesFormatter() throws IOException {
+        ClientAssertionRequestFormatter formatter = mock(ClientAssertionRequestFormatter.class);
+        HttpJwtRetriever retriever = new HttpJwtRetriever(formatter);
+        retriever.close();
+        verify(formatter).close();
     }
 
     @Test

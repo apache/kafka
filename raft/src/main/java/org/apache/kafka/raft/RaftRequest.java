@@ -20,8 +20,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiMessage;
 
-import java.util.concurrent.CompletableFuture;
-
 public abstract class RaftRequest implements RaftMessage {
     private final int correlationId;
     private final ApiMessage data;
@@ -50,8 +48,6 @@ public abstract class RaftRequest implements RaftMessage {
     public static final class Inbound extends RaftRequest {
         private final short apiVersion;
         private final ListenerName listenerName;
-
-        public final CompletableFuture<RaftResponse.Outbound> completion = new CompletableFuture<>();
 
         public Inbound(
             ListenerName listenerName,
@@ -90,9 +86,13 @@ public abstract class RaftRequest implements RaftMessage {
 
     public static final class Outbound extends RaftRequest {
         private final Node destination;
-        public final CompletableFuture<RaftResponse.Inbound> completion = new CompletableFuture<>();
 
-        public Outbound(int correlationId, ApiMessage data, Node destination, long createdTimeMs) {
+        public Outbound(
+            int correlationId,
+            ApiMessage data,
+            Node destination,
+            long createdTimeMs
+        ) {
             super(correlationId, data, createdTimeMs);
             this.destination = destination;
         }

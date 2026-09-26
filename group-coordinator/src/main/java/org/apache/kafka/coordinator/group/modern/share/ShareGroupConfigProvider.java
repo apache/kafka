@@ -18,6 +18,9 @@ package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
+
+import java.util.Optional;
 
 /**
  * A provider that retrieves share group dynamic configuration values,
@@ -39,9 +42,9 @@ public class ShareGroupConfigProvider {
      * @return The record lock duration for the group.
      */
     public int recordLockDurationMsOrDefault(String groupId, int defaultValue) {
-        return manager.groupConfig(groupId).
-            map(GroupConfig::shareRecordLockDurationMs).
-            orElse(defaultValue);
+        return manager.groupConfig(groupId)
+            .flatMap(GroupConfig::shareRecordLockDurationMs)
+            .orElse(defaultValue);
     }
 
     /**
@@ -54,7 +57,7 @@ public class ShareGroupConfigProvider {
      */
     public int deliveryCountLimitOrDefault(String groupId, int defaultValue) {
         return manager.groupConfig(groupId)
-            .map(GroupConfig::shareDeliveryCountLimit)
+            .flatMap(GroupConfig::shareDeliveryCountLimit)
             .orElse(defaultValue);
     }
 
@@ -68,7 +71,7 @@ public class ShareGroupConfigProvider {
      */
     public int partitionMaxRecordLocksOrDefault(String groupId, int defaultValue) {
         return manager.groupConfig(groupId)
-            .map(GroupConfig::sharePartitionMaxRecordLocks)
+            .flatMap(GroupConfig::sharePartitionMaxRecordLocks)
             .orElse(defaultValue);
     }
 
@@ -81,7 +84,33 @@ public class ShareGroupConfigProvider {
      */
     public boolean isRenewAcknowledgeEnabled(String groupId) {
         return manager.groupConfig(groupId)
-            .map(GroupConfig::shareRenewAcknowledgeEnable)
+            .flatMap(GroupConfig::shareRenewAcknowledgeEnable)
             .orElse(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT);
+    }
+
+    /**
+     * The method is used to get the auto offset reset strategy for the group. If the group config
+     * is present, then the value from the group config is used. Otherwise, the default value is used.
+     *
+     * @param groupId The group id for which the auto offset reset strategy is to be fetched.
+     * @return The auto offset reset strategy for the group.
+     */
+    public ShareGroupAutoOffsetResetStrategy autoOffsetReset(String groupId) {
+        return manager.groupConfig(groupId)
+            .flatMap(GroupConfig::shareAutoOffsetReset)
+            .orElseGet(GroupConfig::defaultShareAutoOffsetReset);
+    }
+
+    /**
+     * The method is used to get the name of the configured DLQ topic on the share group. If the group config
+     * is present, then the value from the group config is used. Otherwise, empty optional is returned.
+     *
+     * @param groupId The group id for which the DLQ topic name is to be fetched.
+     * @return Optional representing DLQ topic name for the share group, empty if not found.
+     */
+    public Optional<String> errorsDLQTopicName(String groupId) {
+        return manager.groupConfig(groupId)
+            .map(GroupConfig::errorsDLQTopicName)
+            .filter(val -> !val.isEmpty());
     }
 }

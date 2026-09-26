@@ -17,9 +17,12 @@
 
 package org.apache.kafka.connect.components;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Connect requires some components implement this interface to define a version string.
  */
+@InterfaceAudience.Public
 public interface Versioned {
     /**
      * Get the version of this component.

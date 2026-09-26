@@ -24,8 +24,8 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
-import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +48,6 @@ import java.security.cert.CertificateFactory;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
@@ -176,6 +175,8 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
     @Override
     public void close() {
+        // JaasOptionsUtils.createSSLSocketFactory() closes the SslFactory after obtaining an SSLSocketFactory,
+        // relying on close() not invalidating already returned SSLContext/SSLSocketFactory objects.
         this.sslContext = null;
     }
 
@@ -385,7 +386,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             try {
                 return Files.getLastModifiedTime(Paths.get(path)).toMillis();
             } catch (IOException e) {
-                log.error("Modification time of key store could not be obtained: " + path, e);
+                log.error("Modification time of key store could not be obtained: {}", path, e);
                 return null;
             }
         }
@@ -424,11 +425,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     static class PemStore implements SecurityStore {
         private static final PemParser CERTIFICATE_PARSER = new PemParser("CERTIFICATE");
         private static final PemParser PRIVATE_KEY_PARSER = new PemParser("PRIVATE KEY");
-        private static final List<KeyFactory> KEY_FACTORIES = Arrays.asList(
-                keyFactory("RSA"),
-                keyFactory("DSA"),
-                keyFactory("EC")
-        );
+        private static final List<KeyFactory> KEY_FACTORIES = keyFactories(List.of("RSA", "DSA", "EC"));
 
         private final char[] keyPassword;
         private final KeyStore keyStore;
@@ -458,9 +455,21 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             return false;
         }
 
+        static List<KeyFactory> keyFactories(List<String> algorithms) {
+            List<KeyFactory> keyFactories = new ArrayList<>();
+            for (String algorithm : algorithms) {
+                try {
+                    keyFactories.add(KeyFactory.getInstance(algorithm));
+                } catch (Exception e) {
+                    log.info("Could not create key factory for algorithm {}", algorithm, e);
+                }
+            }
+            return keyFactories;
+        }
+
         private KeyStore createKeyStoreFromPem(String privateKeyPem, String certChainPem, char[] keyPassword) {
             try {
-                KeyStore ks = KeyStore.getInstance("PKCS12");
+                KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
                 ks.load(null, null);
                 Key key = privateKey(privateKeyPem, keyPassword);
                 Certificate[] certChain = certs(certChainPem);
@@ -473,7 +482,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
         private KeyStore createTrustStoreFromPem(String trustedCertsPem) {
             try {
-                KeyStore ts = KeyStore.getInstance("PKCS12");
+                KeyStore ts = KeyStore.getInstance(KeyStore.getDefaultType());
                 ts.load(null, null);
                 Certificate[] certs = certs(trustedCertsPem);
                 for (int i = 0; i < certs.length; i++) {
@@ -521,6 +530,10 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
                 keySpec = keyInfo.getKeySpec(cipher);
             }
 
+            if (KEY_FACTORIES.isEmpty()) {
+                throw new InvalidConfigurationException("No key factories available to load private key");
+            }
+
             InvalidKeySpecException firstException = null;
             for (KeyFactory factory : KEY_FACTORIES) {
                 try {
@@ -533,13 +546,6 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             throw new InvalidConfigurationException("Private key could not be loaded", firstException);
         }
 
-        private static KeyFactory keyFactory(String algorithm) {
-            try {
-                return KeyFactory.getInstance(algorithm);
-            } catch (Exception e) {
-                throw new InvalidConfigurationException("Could not create key factory for algorithm " + algorithm, e);
-            }
-        }
     }
 
     /**

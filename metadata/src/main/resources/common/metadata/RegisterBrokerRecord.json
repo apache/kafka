@@ -60,7 +60,8 @@
       "about": "True if the broker is in controlled shutdown." },
     { "name": "LogDirs", "type":  "[]uuid", "versions":  "3+", "taggedVersions": "3+", "tag": 0,
       "about": "Log directories configured in this broker which are available." },
-    { "name": "CordonedLogDirs", "type":  "[]uuid", "versions":  "4+", "taggedVersions": "4+", "tag": "1",
-      "about": "Log directories that are cordoned." }
+    { "name": "CordonedLogDirs", "type":  "[]uuid", "versions":  "4+", "taggedVersions": "4+", "tag": 1,
+      "nullableVersions": "4+", "default":  "null",
+      "about": "Log directories that are cordoned. This is initially null before the broker starts sending the value via its heartbeats." }
   ]
 }

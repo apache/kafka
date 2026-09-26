@@ -46,6 +46,9 @@ import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -63,8 +66,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionStore;
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
+import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
-import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper;
 import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper.WrapperRecorder;
@@ -75,8 +78,6 @@ import org.apache.kafka.test.MockPredicate;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.hamcrest.CoreMatchers;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -104,12 +105,9 @@ import static org.apache.kafka.streams.state.Stores.inMemoryKeyValueStore;
 import static org.apache.kafka.streams.state.Stores.timestampedKeyValueStoreBuilder;
 import static org.apache.kafka.streams.utils.TestUtils.PROCESSOR_WRAPPER_COUNTER_CONFIG;
 import static org.apache.kafka.streams.utils.TestUtils.dummyStreamsConfigMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -159,13 +157,13 @@ public class StreamsBuilderTest {
                 }
             }
         );
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic", new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("hey", "there");
             final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
             final String hey = store.get("hey");
-            assertThat(hey, is("there"));
+            assertEquals("there", hey);
         }
     }
 
@@ -190,14 +188,11 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology =
             builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
 
-        assertThat(
-            topology.stateStores().size(),
-            equalTo(1));
-        assertThat(
-            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"),
-            equalTo(Collections.singleton(topology.stateStores().get(0).name())));
-        assertTrue(
-            topology.processorConnectedStateStores("KTABLE-FILTER-0000000003").isEmpty());
+        assertEquals(1, topology.stateStores().size());
+        assertEquals(
+            Set.of(topology.stateStores().get(0).name()),
+            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"));
+        assertTrue(topology.processorConnectedStateStores("KTABLE-FILTER-0000000003").isEmpty());
     }
 
     @Test
@@ -213,15 +208,9 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology =
             builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
 
-        assertThat(
-            topology.stateStores().size(),
-            equalTo(1));
-        assertThat(
-            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"),
-            equalTo(Collections.singleton("store")));
-        assertThat(
-            topology.processorConnectedStateStores("KTABLE-FILTER-0000000003"),
-            equalTo(Collections.singleton("store")));
+        assertEquals(1, topology.stateStores().size());
+        assertEquals(Set.of("store"), topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"));
+        assertEquals(Set.of("store"), topology.processorConnectedStateStores("KTABLE-FILTER-0000000003"));
     }
 
     @Test
@@ -237,14 +226,11 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology =
             builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
 
-        assertThat(
-            topology.stateStores().size(),
-            equalTo(1));
-        assertThat(
-            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"),
-            equalTo(Collections.singleton(topology.stateStores().get(0).name())));
-        assertTrue(
-            topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003").isEmpty());
+        assertEquals(1, topology.stateStores().size());
+        assertEquals(
+            Set.of(topology.stateStores().get(0).name()),
+            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"));
+        assertTrue(topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003").isEmpty());
     }
 
     @Test
@@ -260,15 +246,9 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology =
             builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
 
-        assertThat(
-            topology.stateStores().size(),
-            equalTo(1));
-        assertThat(
-            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"),
-            equalTo(Collections.singleton("store")));
-        assertThat(
-            topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003"),
-            equalTo(Collections.singleton("store")));
+        assertEquals(1, topology.stateStores().size());
+        assertEquals(Set.of("store"), topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"));
+        assertEquals(Set.of("store"), topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003"));
     }
 
     @Test
@@ -283,14 +263,11 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology =
             builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
 
-        assertThat(
-            topology.stateStores().size(),
-            equalTo(2));
-        assertThat(
-            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"),
-            equalTo(Set.of(topology.stateStores().get(0).name(), topology.stateStores().get(1).name())));
-        assertTrue(
-            topology.processorConnectedStateStores("KTABLE-MERGE-0000000007").isEmpty());
+        assertEquals(2, topology.stateStores().size());
+        assertEquals(
+            Set.of(topology.stateStores().get(0).name(), topology.stateStores().get(1).name()),
+            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"));
+        assertTrue(topology.processorConnectedStateStores("KTABLE-MERGE-0000000007").isEmpty());
     }
 
     @Test
@@ -307,15 +284,9 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology =
             builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
 
-        assertThat(
-            topology.stateStores().size(),
-            equalTo(3));
-        assertThat(
-            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"),
-            equalTo(Collections.singleton("store")));
-        assertThat(
-            topology.processorConnectedStateStores("KTABLE-MERGE-0000000007"),
-            equalTo(Collections.singleton("store")));
+        assertEquals(3, topology.stateStores().size());
+        assertEquals(Set.of("store"), topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"));
+        assertEquals(Set.of("store"), topology.processorConnectedStateStores("KTABLE-MERGE-0000000007"));
     }
 
     @Test
@@ -327,15 +298,13 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology =
             builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
 
-        assertThat(
-            topology.stateStores().size(),
-            equalTo(1));
-        assertThat(
-            topology.processorConnectedStateStores("KTABLE-SOURCE-0000000002"),
-            equalTo(Collections.singleton(topology.stateStores().get(0).name())));
-        assertThat(
-            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000004"),
-            equalTo(Collections.singleton(topology.stateStores().get(0).name())));
+        assertEquals(1, topology.stateStores().size());
+        assertEquals(
+            Set.of(topology.stateStores().get(0).name()),
+            topology.processorConnectedStateStores("KTABLE-SOURCE-0000000002"));
+        assertEquals(
+            Set.of(topology.stateStores().get(0).name()),
+            topology.processorConnectedStateStores("KSTREAM-JOIN-0000000004"));
     }
 
     @Test
@@ -346,7 +315,7 @@ public class StreamsBuilderTest {
         final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
         source.process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("A", "aa");
@@ -368,7 +337,7 @@ public class StreamsBuilderTest {
         final MockApiProcessorSupplier<String, String, Void, Void> throughProcessorSupplier = new MockApiProcessorSupplier<>();
         through.process(throughProcessorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("A", "aa");
@@ -390,7 +359,7 @@ public class StreamsBuilderTest {
         final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> inputTopic2 =
@@ -630,17 +599,17 @@ public class StreamsBuilderTest {
             .withValueSerde(Serdes.String()))
                .toStream().foreach(action);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<Long, String> inputTopic =
                 driver.createInputTopic(topic, new LongSerializer(), new StringSerializer());
             inputTopic.pipeInput(1L, "value1");
             inputTopic.pipeInput(2L, "value2");
 
             final KeyValueStore<Long, String> store = driver.getKeyValueStore("store");
-            assertThat(store.get(1L), equalTo("value1"));
-            assertThat(store.get(2L), equalTo("value2"));
-            assertThat(results.get(1L), equalTo("value1"));
-            assertThat(results.get(2L), equalTo("value2"));
+            assertEquals("value1", store.get(1L));
+            assertEquals("value2", store.get(2L));
+            assertEquals("value1", results.get(1L));
+            assertEquals("value2", results.get(2L));
         }
     }
 
@@ -651,15 +620,15 @@ public class StreamsBuilderTest {
             .withKeySerde(Serdes.Long())
             .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<Long, String> inputTopic =
                 driver.createInputTopic(topic, new LongSerializer(), new StringSerializer());
             inputTopic.pipeInput(1L, "value1");
             inputTopic.pipeInput(2L, "value2");
             final KeyValueStore<Long, String> store = driver.getKeyValueStore("store");
 
-            assertThat(store.get(1L), equalTo("value1"));
-            assertThat(store.get(2L), equalTo("value2"));
+            assertEquals("value1", store.get(1L));
+            assertEquals("value2", store.get(2L));
         }
     }
 
@@ -686,7 +655,7 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology =
             builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
 
-        assertThat(topology.stateStores().size(), equalTo(0));
+        assertEquals(0, topology.stateStores().size());
     }
 
     @Test
@@ -700,18 +669,10 @@ public class StreamsBuilderTest {
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
         internalTopologyBuilder.rewriteTopology(new StreamsConfig(props));
 
-        assertThat(
-            internalTopologyBuilder.buildTopology().storeToChangelogTopic(),
-            equalTo(Collections.singletonMap("store", "topic")));
-        assertThat(
-            internalTopologyBuilder.stateStores().keySet(),
-            equalTo(Collections.singleton("store")));
-        assertThat(
-            internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
-            equalTo(false));
-        assertThat(
-            internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).nonSourceChangelogTopics().isEmpty(),
-            equalTo(true));
+        assertEquals(Map.of("store", "topic"), internalTopologyBuilder.buildTopology().storeToChangelogTopic());
+        assertEquals(Set.of("store"), internalTopologyBuilder.stateStores().keySet());
+        assertFalse(internalTopologyBuilder.stateStores().get("store").loggingEnabled());
+        assertTrue(internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).nonSourceChangelogTopics().isEmpty());
     }
 
     @Test
@@ -725,22 +686,14 @@ public class StreamsBuilderTest {
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
         internalTopologyBuilder.rewriteTopology(new StreamsConfig(props));
 
-        assertThat(
-            internalTopologyBuilder.buildTopology().storeToChangelogTopic(),
-            equalTo(Collections.singletonMap("store", "appId-store-changelog"))
-        );
-        assertThat(
-            internalTopologyBuilder.stateStores().keySet(),
-            equalTo(Collections.singleton("store"))
-        );
-        assertThat(
-            internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
-            equalTo(true)
-        );
-        assertThat(
-            internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_1).stateChangelogTopics.keySet(),
-            equalTo(Collections.singleton("appId-store-changelog"))
-        );
+        assertEquals(
+            Map.of("store", "appId-store-changelog"),
+            internalTopologyBuilder.buildTopology().storeToChangelogTopic());
+        assertEquals(Set.of("store"), internalTopologyBuilder.stateStores().keySet());
+        assertTrue(internalTopologyBuilder.stateStores().get("store").loggingEnabled());
+        assertEquals(
+            Set.of("appId-store-changelog"),
+            internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_1).stateChangelogTopics.keySet());
     }
 
     @Test
@@ -751,18 +704,14 @@ public class StreamsBuilderTest {
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
         internalTopologyBuilder.setApplicationId("appId");
 
-        assertThat(
-            internalTopologyBuilder.buildTopology().storeToChangelogTopic(),
-            equalTo(Collections.singletonMap("store", "appId-store-changelog")));
-        assertThat(
-            internalTopologyBuilder.stateStores().keySet(),
-            equalTo(Collections.singleton("store")));
-        assertThat(
-            internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
-            equalTo(true));
-        assertThat(
-            internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.keySet(),
-            equalTo(Collections.singleton("appId-store-changelog")));
+        assertEquals(
+            Map.of("store", "appId-store-changelog"),
+            internalTopologyBuilder.buildTopology().storeToChangelogTopic());
+        assertEquals(Set.of("store"), internalTopologyBuilder.stateStores().keySet());
+        assertTrue(internalTopologyBuilder.stateStores().get("store").loggingEnabled());
+        assertEquals(
+            Set.of("appId-store-changelog"),
+            internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.keySet());
     }
 
     @Test
@@ -1222,7 +1171,7 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertTypesForStateStore(topology.stateStores(),
                 InMemoryWindowStore.class,
-                RocksDBWindowStore.class,
+                PlainToHeadersWindowStoreAdapter.class,
                 InMemoryKeyValueStore.class);
     }
 
@@ -1257,7 +1206,7 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertTypesForStateStore(topology.stateStores(),
                 InMemoryWindowStore.class,
-                RocksDBWindowStore.class,
+                PlainToHeadersWindowStoreAdapter.class,
                 RocksDBStore.class);
     }
 
@@ -1296,7 +1245,7 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertTypesForStateStore(topology.stateStores(),
                 InMemoryWindowStore.class,
-                RocksDBWindowStore.class,
+                PlainToHeadersWindowStoreAdapter.class,
                 InMemoryKeyValueStore.class);
     }
 
@@ -1331,6 +1280,78 @@ public class StreamsBuilderTest {
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", "test-fixed-key-processor");
+    }
+
+    @Test
+    public void shouldPlaceProcessorsLinkedByStoreBuilderInSameSubtopology() {
+        final StoreBuilder<KeyValueStore<String, String>> store =
+            Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore("store"),
+                Serdes.String(),
+                Serdes.String());
+
+        final StreamsBuilder localBuilder = new StreamsBuilder();
+        localBuilder.stream("topic1")
+            .processValues(new StoreLinkedFixedKeyProcessorSupplier<>(Set.of(store)));
+        localBuilder.stream("topic2")
+            .processValues(new StoreLinkedFixedKeyProcessorSupplier<>(Set.of(store)));
+
+        assertSingleSubtopologyWithBothProcessorsUsingStore(localBuilder, "store");
+    }
+
+    @Test
+    public void shouldPlaceProcessorsInSameSubtopologyWhenMixingStoreNameAndStoreBuilderLinking() {
+        final StoreBuilder<KeyValueStore<String, String>> store =
+            Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore("store"),
+                Serdes.String(),
+                Serdes.String());
+
+        final StreamsBuilder localBuilder = new StreamsBuilder();
+        localBuilder.addStateStore(store);
+        localBuilder.stream("topic1")
+            .processValues(new StoreLinkedFixedKeyProcessorSupplier<>(Set.of()), store.name());
+        localBuilder.stream("topic2")
+            .processValues(new StoreLinkedFixedKeyProcessorSupplier<>(Set.of(store)));
+
+        assertSingleSubtopologyWithBothProcessorsUsingStore(localBuilder, "store");
+    }
+
+    private static void assertSingleSubtopologyWithBothProcessorsUsingStore(final StreamsBuilder builder,
+                                                                           final String storeName) {
+        final Set<TopologyDescription.Subtopology> subtopologies = builder.build().describe().subtopologies();
+        assertEquals(1, subtopologies.size());
+
+        int processorCount = 0;
+        for (final TopologyDescription.Node node : subtopologies.iterator().next().nodes()) {
+            if (node instanceof TopologyDescription.Processor) {
+                processorCount++;
+                assertEquals(Set.of(storeName), ((TopologyDescription.Processor) node).stores());
+            }
+        }
+        assertEquals(2, processorCount);
+    }
+
+    private static class StoreLinkedFixedKeyProcessorSupplier<K, V> implements FixedKeyProcessorSupplier<K, V, V> {
+        private final Set<StoreBuilder<?>> stores;
+
+        StoreLinkedFixedKeyProcessorSupplier(final Set<StoreBuilder<?>> stores) {
+            this.stores = stores;
+        }
+
+        @Override
+        public Set<StoreBuilder<?>> stores() {
+            return stores;
+        }
+
+        @Override
+        public FixedKeyProcessor<K, V, V> get() {
+            return new FixedKeyProcessor<>() {
+                @Override
+                public void process(final FixedKeyRecord<K, V> record) {
+                }
+            };
+        }
     }
 
     @Test
@@ -1471,11 +1492,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(3));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
-            "stateful-process-1", "stateful-process-2", "stateless-processValues"));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+        assertEquals(3, counter.numWrappedProcessors());
+        assertEquals(Set.of("stateful-process-1", "stateful-process-2", "stateless-processValues"), counter.wrappedProcessorNames());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(2, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1495,11 +1515,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
-            "groupBy", "groupBy-repartition-filter", "reduce", "toStream"));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(4));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+        assertEquals(Set.of("groupBy", "groupBy-repartition-filter", "reduce", "toStream"), counter.wrappedProcessorNames());
+        assertEquals(4, counter.numWrappedProcessors());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(1, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1519,10 +1538,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder("count", "toStream"));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+        assertEquals(2, counter.numWrappedProcessors());
+        assertEquals(Set.of("count", "toStream"), counter.wrappedProcessorNames());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(1, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1543,10 +1562,10 @@ public class StreamsBuilderTest {
                 .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(3));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder("count", "toStream", "suppressed"));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+        assertEquals(3, counter.numWrappedProcessors());
+        assertEquals(Set.of("count", "toStream", "suppressed"), counter.wrappedProcessorNames());
+        assertEquals(2, counter.numUniqueStateStores());
+        assertEquals(2, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1567,10 +1586,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder("count", "toStream"));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+        assertEquals(2, counter.numWrappedProcessors());
+        assertEquals(Set.of("count", "toStream"), counter.wrappedProcessorNames());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(1, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1591,10 +1610,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder("count", "toStream"));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+        assertEquals(2, counter.numWrappedProcessors());
+        assertEquals(Set.of("count", "toStream"), counter.wrappedProcessorNames());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(1, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1615,10 +1634,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder("count", "toStream"));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+        assertEquals(2, counter.numWrappedProcessors());
+        assertEquals(Set.of("count", "toStream"), counter.wrappedProcessorNames());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(1, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1646,12 +1665,12 @@ public class StreamsBuilderTest {
 
         builder.build();
 
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(Set.of(
             "aggregate-cogroup-agg-0", "aggregate-cogroup-agg-1", "aggregate-cogroup-merge", "toStream"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(4));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+        ), counter.wrappedProcessorNames());
+        assertEquals(4, counter.numWrappedProcessors());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(2, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1668,10 +1687,9 @@ public class StreamsBuilderTest {
             .to("output-topic", Produced.as("sink"));
         builder.build();
 
-        assertThat(counter.wrappedProcessorNames(),
-            Matchers.containsInAnyOrder("source-table", "map-values", "to-stream"));
-        assertThat(counter.numUniqueStateStores(), is(1));
-        assertThat(counter.numConnectedStateStores(), is(1));
+        assertEquals(Set.of("source-table", "map-values", "to-stream"), counter.wrappedProcessorNames());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(1, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1688,10 +1706,9 @@ public class StreamsBuilderTest {
             .to("output-topic", Produced.as("sink"));
         builder.build();
 
-        assertThat(counter.wrappedProcessorNames(),
-            Matchers.containsInAnyOrder("source-table", "filter", "to-stream"));
-        assertThat(counter.numUniqueStateStores(), is(1));
-        assertThat(counter.numConnectedStateStores(), is(1));
+        assertEquals(Set.of("source-table", "filter", "to-stream"), counter.wrappedProcessorNames());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(1, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1711,12 +1728,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
-            "source-table", "groupBy", "count", "toStream"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(4));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+        assertEquals(Set.of("source-table", "groupBy", "count", "toStream"), counter.wrappedProcessorNames());
+        assertEquals(4, counter.numWrappedProcessors());
+        assertEquals(2, counter.numUniqueStateStores());
+        assertEquals(2, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1736,12 +1751,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
-            "source-table", "groupBy", "reduce", "toStream"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(4));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+        assertEquals(Set.of("source-table", "groupBy", "reduce", "toStream"), counter.wrappedProcessorNames());
+        assertEquals(4, counter.numWrappedProcessors());
+        assertEquals(2, counter.numUniqueStateStores());
+        assertEquals(2, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1763,12 +1776,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
-            "filter-stream", "map", "selectKey", "peek", "flatMap"
-        ));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(0));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(0));
+        assertEquals(5, counter.numWrappedProcessors());
+        assertEquals(Set.of("filter-stream", "map", "selectKey", "peek", "flatMap"), counter.wrappedProcessorNames());
+        assertEquals(0, counter.numUniqueStateStores());
+        assertEquals(0, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1791,13 +1802,13 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(6));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(6, counter.numWrappedProcessors());
+        assertEquals(Set.of(
             "to-table", "map-values", "map-values-stateful",
             "filter-table", "filter-table-stateful", "to-stream"
-        ));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+        ), counter.wrappedProcessorNames());
+        assertEquals(2, counter.numUniqueStateStores());
+        assertEquals(2, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1815,12 +1826,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
-            "source", "toStream"
-        ));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(0));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(0));
+        assertEquals(2, counter.numWrappedProcessors());
+        assertEquals(Set.of("source", "toStream"), counter.wrappedProcessorNames());
+        assertEquals(0, counter.numUniqueStateStores());
+        assertEquals(0, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1838,12 +1847,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
-            "source", "toStream"
-        ));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+        assertEquals(2, counter.numWrappedProcessors());
+        assertEquals(Set.of("source", "toStream"), counter.wrappedProcessorNames());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(1, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1869,14 +1876,14 @@ public class StreamsBuilderTest {
         builder.build();
 
         // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(Set.of(
             "KSTREAM-JOINTHIS-0000000004", "KSTREAM-JOINOTHER-0000000005",
             "KSTREAM-WINDOWED-0000000003", "KSTREAM-WINDOWED-0000000002",
             "KSTREAM-MERGE-0000000006"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(4));
+        ), counter.wrappedProcessorNames());
+        assertEquals(5, counter.numWrappedProcessors());
+        assertEquals(2, counter.numUniqueStateStores());
+        assertEquals(4, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1902,16 +1909,16 @@ public class StreamsBuilderTest {
         builder.build();
 
         // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(Set.of(
             "KSTREAM-JOINTHIS-0000000004", "KSTREAM-OUTEROTHER-0000000005",
             "KSTREAM-WINDOWED-0000000003", "KSTREAM-WINDOWED-0000000002",
             "KSTREAM-MERGE-0000000006"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
+        ), counter.wrappedProcessorNames());
+        assertEquals(5, counter.numWrappedProcessors());
 
         // 1 additional store due to spurious results fix for left/outer joins
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(3));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(6));
+        assertEquals(3, counter.numUniqueStateStores());
+        assertEquals(6, counter.numConnectedStateStores());
     }
 
     @Test
@@ -1937,16 +1944,16 @@ public class StreamsBuilderTest {
         builder.build();
 
         // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(Set.of(
             "KSTREAM-OUTERTHIS-0000000004", "KSTREAM-OUTEROTHER-0000000005",
             "KSTREAM-WINDOWED-0000000003", "KSTREAM-WINDOWED-0000000002",
             "KSTREAM-MERGE-0000000006"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
+        ), counter.wrappedProcessorNames());
+        assertEquals(5, counter.numWrappedProcessors());
 
         // 1 additional store due to spurious results fix for left/outer joins
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(3));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(6));
+        assertEquals(3, counter.numUniqueStateStores());
+        assertEquals(6, counter.numConnectedStateStores());
     }
 
     @SuppressWarnings("deprecation")
@@ -1973,14 +1980,14 @@ public class StreamsBuilderTest {
         builder.build();
 
         // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(Set.of(
             "KSTREAM-OUTERTHIS-0000000004", "KSTREAM-OUTEROTHER-0000000005",
             "KSTREAM-WINDOWED-0000000003", "KSTREAM-WINDOWED-0000000002",
             "KSTREAM-MERGE-0000000006"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(4));
+        ), counter.wrappedProcessorNames());
+        assertEquals(5, counter.numWrappedProcessors());
+        assertEquals(2, counter.numUniqueStateStores());
+        assertEquals(4, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2005,14 +2012,14 @@ public class StreamsBuilderTest {
         builder.build();
 
         // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(Set.of(
             "KSTREAM-JOINTHIS-0000000003", "KSTREAM-JOINOTHER-0000000004",
             "KSTREAM-WINDOWED-0000000001", "KSTREAM-WINDOWED-0000000002",
             "KSTREAM-MERGE-0000000005"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(4));
+        ), counter.wrappedProcessorNames());
+        assertEquals(5, counter.numWrappedProcessors());
+        assertEquals(2, counter.numUniqueStateStores());
+        assertEquals(4, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2040,13 +2047,13 @@ public class StreamsBuilderTest {
         builder.build(properties);
 
         // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(Set.of(
             "KSTREAM-WINDOWED-0000000001", "KSTREAM-MERGE-0000000005"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
+        ), counter.wrappedProcessorNames());
+        assertEquals(2, counter.numWrappedProcessors());
         // only 1 store when topology optimizations enabled due to sharing self-join store
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(2, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2070,12 +2077,10 @@ public class StreamsBuilderTest {
 
         builder.build();
 
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
-            "source-table", "st-join"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+        assertEquals(Set.of("source-table", "st-join"), counter.wrappedProcessorNames());
+        assertEquals(2, counter.numWrappedProcessors());
+        assertEquals(1, counter.numUniqueStateStores());
+        assertEquals(1, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2102,12 +2107,10 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
-            "versioned-source-table", "st-join"
-        ));
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+        assertEquals(Set.of("versioned-source-table", "st-join"), counter.wrappedProcessorNames());
+        assertEquals(2, counter.numWrappedProcessors());
+        assertEquals(2, counter.numUniqueStateStores());
+        assertEquals(2, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2128,18 +2131,18 @@ public class StreamsBuilderTest {
                 .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(6));
-        assertThat(counter.wrappedProcessorNames().toString(), counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(6, counter.numWrappedProcessors());
+        assertEquals(Set.of(
                 "input1",
                 "input2",
                 "join-processor-join-this",
                 "join-processor-join-other",
                 "join-processor",
                 "toStream"
-        ));
+        ), counter.wrappedProcessorNames(), counter.wrappedProcessorNames().toString());
 
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(3)); // one for join this, one for join that
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(3));
+        assertEquals(3, counter.numUniqueStateStores()); // one for join this, one for join that
+        assertEquals(3, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2160,18 +2163,18 @@ public class StreamsBuilderTest {
                 .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(6));
-        assertThat(counter.wrappedProcessorNames().toString(), counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(6, counter.numWrappedProcessors());
+        assertEquals(Set.of(
                 "input1",
                 "input2",
                 "join-processor-join-this",
                 "join-processor-join-other",
                 "join-processor",
                 "toStream"
-        ));
+        ), counter.wrappedProcessorNames(), counter.wrappedProcessorNames().toString());
 
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(3)); // table1, table2, join materialized
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(3));
+        assertEquals(3, counter.numUniqueStateStores()); // table1, table2, join materialized
+        assertEquals(3, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2192,18 +2195,18 @@ public class StreamsBuilderTest {
                 .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(6));
-        assertThat(counter.wrappedProcessorNames().toString(), counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(6, counter.numWrappedProcessors());
+        assertEquals(Set.of(
                 "input1",
                 "input2",
                 "join-processor-join-this",
                 "join-processor-join-other",
                 "join-processor",
                 "toStream"
-        ));
+        ), counter.wrappedProcessorNames(), counter.wrappedProcessorNames().toString());
 
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(3)); // table1, table2, join materialized
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(3));
+        assertEquals(3, counter.numUniqueStateStores()); // table1, table2, join materialized
+        assertEquals(3, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2228,8 +2231,8 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(9));
-        assertThat(counter.wrappedProcessorNames().toString(), counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(9, counter.numWrappedProcessors());
+        assertEquals(Set.of(
             "input1",
             "input2",
             "join-foreign-join-subscription",
@@ -2239,10 +2242,10 @@ public class StreamsBuilderTest {
             "join-result",
             "join-subscription-response-resolver",
             "toStream"
-        ));
+        ), counter.wrappedProcessorNames(), counter.wrappedProcessorNames().toString());
 
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(4)); // table1, table2, subscription store, and join materialized
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(5));
+        assertEquals(4, counter.numUniqueStateStores()); // table1, table2, subscription store, and join materialized
+        assertEquals(5, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2267,8 +2270,8 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(9));
-        assertThat(counter.wrappedProcessorNames().toString(), counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+        assertEquals(9, counter.numWrappedProcessors());
+        assertEquals(Set.of(
             "input1",
             "input2",
             "l-join-foreign-join-subscription",
@@ -2278,10 +2281,10 @@ public class StreamsBuilderTest {
             "l-join-result",
             "l-join-subscription-response-resolver",
             "toStream"
-        ));
+        ), counter.wrappedProcessorNames(), counter.wrappedProcessorNames().toString());
 
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(4)); // table1, table2, subscription store, and join materialized
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(5));
+        assertEquals(4, counter.numUniqueStateStores()); // table1, table2, subscription store, and join materialized
+        assertEquals(5, counter.numConnectedStateStores());
     }
 
     @Test
@@ -2937,7 +2940,7 @@ public class StreamsBuilderTest {
             while (store instanceof WrappedStateStore && !(expected[i].isInstance(store))) {
                 store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
             }
-            assertThat(store, instanceOf(expected[i]));
+            assertInstanceOf(expected[i], store);
         }
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.source;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.Header;
@@ -41,6 +42,7 @@ import java.util.Objects;
  * "table_name"} and the sourceOffset as a Long containing the timestamp of the row.
  * </p>
  */
+@InterfaceAudience.Public
 public class SourceRecord extends ConnectRecord<SourceRecord> {
     private final Map<String, ?> sourcePartition;
     private final Map<String, ?> sourceOffset;

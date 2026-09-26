@@ -167,6 +167,53 @@ public class TasksTupleTest {
     }
 
     @Test
+    public void testSameTasks() {
+        TasksTuple tuple = new TasksTuple(
+            Map.of(SUBTOPOLOGY_1, Set.of(1, 2, 3)),
+            Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6)),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9))
+        );
+
+        // Same task sets, but the active tasks carry (different) epochs -> still the same.
+        assertTrue(tuple.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(1, 5, 2, 7, 3, 9)),
+            Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6)),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9))
+        )));
+
+        // Different active task set -> not the same.
+        assertFalse(tuple.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(1, 5, 2, 7)),
+            Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6)),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9))
+        )));
+
+        // Extra active subtopology (differing key set) -> not the same.
+        assertFalse(tuple.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(1, 5, 2, 7, 3, 9), SUBTOPOLOGY_2, Map.of(1, 1)),
+            Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6)),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9))
+        )));
+
+        // Different standby task set -> not the same.
+        assertFalse(tuple.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(1, 5, 2, 7, 3, 9)),
+            Map.of(SUBTOPOLOGY_2, Set.of(4, 5)),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9))
+        )));
+
+        // Different warm-up task set -> not the same.
+        assertFalse(tuple.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(1, 5, 2, 7, 3, 9)),
+            Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6)),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 8))
+        )));
+
+        // Two empty tuples are the same.
+        assertTrue(new TasksTuple(Map.of(), Map.of(), Map.of()).sameTasks(TasksTupleWithEpochs.EMPTY));
+    }
+
+    @Test
     public void testIsEmpty() {
         TasksTuple emptyTuple = new TasksTuple(Map.of(), Map.of(), Map.of());
         assertTrue(emptyTuple.isEmpty());

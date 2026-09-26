@@ -34,8 +34,8 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.SimpleRecord;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult;
@@ -186,6 +186,51 @@ public class LogValidatorTest {
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ));
+    }
+
+    /**
+     * The compressed validation path enforces the per-record decompressed-body-size limit
+     * (max.decompressed.message.bytes): a record whose decompressed body exceeds the configured
+     * limit is rejected with InvalidRecordException before the body is allocated, while the
+     * limit-less constructor applies no effective limit.
+     */
+    @Test
+    public void testCompressedRecordExceedingMaxRecordBodySizeIsRejected() {
+        MemoryRecords records = MemoryRecords.withRecords(Compression.gzip().build(),
+                new SimpleRecord(System.currentTimeMillis(), "key".getBytes(), new byte[1000]));
+
+        new LogValidator(records,
+                topicPartition,
+                time,
+                CompressionType.GZIP,
+                Compression.gzip().build(),
+                false,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                TimestampType.CREATE_TIME,
+                5000L,
+                5000L,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                AppendOrigin.CLIENT
+        ).validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier());
+
+        InvalidRecordException e = assertThrows(InvalidRecordException.class, () -> new LogValidator(records,
+                topicPartition,
+                time,
+                CompressionType.GZIP,
+                Compression.gzip().build(),
+                false,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                TimestampType.CREATE_TIME,
+                5000L,
+                5000L,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                AppendOrigin.CLIENT,
+                100
+        ).validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size"),
+                "expected the configured-maximum guard, got: " + e.getMessage());
     }
 
     @ParameterizedTest

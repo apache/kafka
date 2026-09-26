@@ -25,7 +25,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.util.Objects;
 
@@ -39,7 +39,7 @@ import java.util.Objects;
  * @param <VRight> Type of foreign value
  */
 public class SubscriptionJoinProcessorSupplier<KLeft, KRight, VRight>
-    implements ProcessorSupplier<CombinedKey<KRight, KLeft>, Change<ValueAndTimestamp<SubscriptionWrapper<KLeft>>>, KLeft, SubscriptionResponseWrapper<VRight>> {
+    implements ProcessorSupplier<CombinedKey<KRight, KLeft>, Change<ValueTimestampHeaders<SubscriptionWrapper<KLeft>>>, KLeft, SubscriptionResponseWrapper<VRight>> {
 
     private final KTableValueGetterSupplier<KRight, VRight> foreignValueGetterSupplier;
 
@@ -48,7 +48,7 @@ public class SubscriptionJoinProcessorSupplier<KLeft, KRight, VRight>
     }
 
     @Override
-    public Processor<CombinedKey<KRight, KLeft>, Change<ValueAndTimestamp<SubscriptionWrapper<KLeft>>>, KLeft, SubscriptionResponseWrapper<VRight>> get() {
+    public Processor<CombinedKey<KRight, KLeft>, Change<ValueTimestampHeaders<SubscriptionWrapper<KLeft>>>, KLeft, SubscriptionResponseWrapper<VRight>> get() {
         return new ContextualProcessor<>() {
             private KTableValueGetter<KRight, VRight> foreignValues;
 
@@ -60,22 +60,22 @@ public class SubscriptionJoinProcessorSupplier<KLeft, KRight, VRight>
             }
 
             @Override
-            public void process(final Record<CombinedKey<KRight, KLeft>, Change<ValueAndTimestamp<SubscriptionWrapper<KLeft>>>> record) {
+            public void process(final Record<CombinedKey<KRight, KLeft>, Change<ValueTimestampHeaders<SubscriptionWrapper<KLeft>>>> record) {
                 Objects.requireNonNull(record.key(), "This processor should never see a null key.");
                 Objects.requireNonNull(record.value(), "This processor should never see a null value.");
-                final ValueAndTimestamp<SubscriptionWrapper<KLeft>> valueAndTimestamp = record.value().newValue;
-                Objects.requireNonNull(valueAndTimestamp, "This processor should never see a null newValue.");
-                final SubscriptionWrapper<KLeft> value = subscriptionWrapper(valueAndTimestamp);
+                final ValueTimestampHeaders<SubscriptionWrapper<KLeft>> valueTimestampHeaders = record.value().newValue;
+                Objects.requireNonNull(valueTimestampHeaders, "This processor should never see a null newValue.");
+                final SubscriptionWrapper<KLeft> value = subscriptionWrapper(valueTimestampHeaders);
 
-                final ValueAndTimestamp<VRight> foreignValueAndTime =
+                final ValueTimestampHeaders<VRight> foreignValueAndTime =
                     record.key().foreignKey() == null ?
                         null :
                         foreignValues.get(record.key().foreignKey());
 
                 final long resultTimestamp =
                     foreignValueAndTime == null ?
-                        valueAndTimestamp.timestamp() :
-                        Math.max(valueAndTimestamp.timestamp(), foreignValueAndTime.timestamp());
+                        valueTimestampHeaders.timestamp() :
+                        Math.max(valueTimestampHeaders.timestamp(), foreignValueAndTime.timestamp());
 
                 switch (value.instruction()) {
                     case DELETE_KEY_AND_PROPAGATE:
@@ -125,8 +125,8 @@ public class SubscriptionJoinProcessorSupplier<KLeft, KRight, VRight>
                 }
             }
 
-            private SubscriptionWrapper<KLeft> subscriptionWrapper(final ValueAndTimestamp<SubscriptionWrapper<KLeft>> valueAndTimestamp) {
-                final SubscriptionWrapper<KLeft> value = valueAndTimestamp.value();
+            private SubscriptionWrapper<KLeft> subscriptionWrapper(final ValueTimestampHeaders<SubscriptionWrapper<KLeft>> valueTimestampHeaders) {
+                final SubscriptionWrapper<KLeft> value = valueTimestampHeaders.value();
 
                 if (value.version() > SubscriptionWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionWrapper. Need to ensure that there is compatibility

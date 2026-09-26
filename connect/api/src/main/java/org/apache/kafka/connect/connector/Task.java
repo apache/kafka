@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.connect.connector;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 
@@ -31,6 +34,7 @@ import java.util.Map;
  * {@link org.apache.kafka.connect.sink.SinkTask}.
  * </p>
  */
+@InterfaceAudience.Public
 public interface Task {
     /**
      * Get the version of this task. Usually this should be the same as the corresponding {@link Connector} class's version.

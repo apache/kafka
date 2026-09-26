@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 
 import java.util.Objects;
@@ -25,6 +26,7 @@ import java.util.Optional;
  * A metadata struct containing the consumer group information.
  * Note: Any change to this class is considered public and requires a KIP.
  */
+@InterfaceAudience.Public
 public class ConsumerGroupMetadata {
     private final String groupId;
     private final int generationId;
@@ -56,18 +58,38 @@ public class ConsumerGroupMetadata {
             Optional.empty());
     }
 
+    /**
+     * Returns the consumer group ID.
+     *
+     * @return The group ID
+     */
     public String groupId() {
         return groupId;
     }
 
+    /**
+     * Returns the generation ID of the consumer group.
+     *
+     * @return The generation ID
+     */
     public int generationId() {
         return generationId;
     }
 
+    /**
+     * Returns the member ID of this consumer.
+     *
+     * @return The member ID
+     */
     public String memberId() {
         return memberId;
     }
 
+    /**
+     * Returns the group instance ID if this is a static member.
+     *
+     * @return The group instance ID, or empty if this is a dynamic member
+     */
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
     }

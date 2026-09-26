@@ -16,11 +16,10 @@
   */
 package kafka.server
 
-import java.io.File
 import java.util.{Collections, Optional, Properties}
 import kafka.cluster.{Partition, PartitionTest}
-import kafka.log.LogManager
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils._
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.metrics.Metrics
@@ -30,12 +29,15 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderRecoveryState}
 import org.apache.kafka.server.common.KRaftVersion
+import org.apache.kafka.server.partition.AlterPartitionManager
+import org.apache.kafka.server.purgatory.DelayedFetch
+import org.apache.kafka.server.quota.ReplicaQuota
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchPartitionStatus, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchPartitionStatus, LogConfig, LogDirFailureChannel, LogManager, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
-import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
 import org.mockito.Mockito.{mock, when}
 import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 
@@ -166,16 +168,21 @@ class ReplicaManagerQuotasTest {
       when(replicaManager.getPartitionOrException(any[TopicPartition]))
         .thenReturn(partition)
 
-      when(replicaManager.shouldLeaderThrottle(any[ReplicaQuota], any[Partition], anyInt))
-        .thenReturn(!isReplicaInSync)
-      when(partition.getReplica(1)).thenReturn(None)
+      val replicaId = 1
+      when(partition.isReplicaInSync(replicaId)).thenReturn(isReplicaInSync)
 
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
+      val quota = mockQuota()
+      // Force the quota conditions to be active so this test isolates the ISR check:
+      // in-sync replicas should complete, while out-of-sync replicas should be throttled.
+      when(quota.isThrottled(tp.topicPartition)).thenReturn(true)
+      when(quota.isQuotaExceeded).thenReturn(true)
+
       val fetchPartitionStatus = new FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
-        1,
+        replicaId,
         1,
         600,
         1,
@@ -185,11 +192,11 @@ class ReplicaManagerQuotasTest {
       )
 
       new DelayedFetch(
-        params = fetchParams,
-        fetchPartitionStatus = createFetchPartitionStatusMap(tp, fetchPartitionStatus),
-        replicaManager = replicaManager,
-        quota = null,
-        responseCallback = null
+        fetchParams,
+        createFetchPartitionStatusMap(tp, fetchPartitionStatus),
+        replicaManager,
+        quota,
+        null
       ) {
         override def forceComplete(): Boolean = true
       }
@@ -236,11 +243,11 @@ class ReplicaManagerQuotasTest {
       )
 
       new DelayedFetch(
-        params = fetchParams,
-        fetchPartitionStatus = createFetchPartitionStatusMap(tidp, fetchPartitionStatus),
-        replicaManager = replicaManager,
-        quota = null,
-        responseCallback = null
+        fetchParams,
+        createFetchPartitionStatusMap(tidp, fetchPartitionStatus),
+        replicaManager,
+        null,
+        null
       ) {
         override def forceComplete(): Boolean = true
       }
@@ -292,8 +299,8 @@ class ReplicaManagerQuotasTest {
     val logManager: LogManager = mock(classOf[LogManager])
 
     //Return the same log for each partition as it doesn't matter
-    when(logManager.getLog(any[TopicPartition], anyBoolean)).thenReturn(Some(log))
-    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
+    when(logManager.getLog(any[TopicPartition], anyBoolean)).thenReturn(Optional.of(log))
+    when(logManager.liveLogDirs).thenReturn(util.List.of)
 
     val alterIsrManager: AlterPartitionManager = mock(classOf[AlterPartitionManager])
 

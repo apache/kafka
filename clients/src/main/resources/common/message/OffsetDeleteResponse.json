@@ -19,6 +19,9 @@
   "name": "OffsetDeleteResponse",
   "validVersions": "0",
   "flexibleVersions": "none",
+  "headerVersions": {
+    "0+": "0"
+  },
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error code, or 0 if there was no error." },

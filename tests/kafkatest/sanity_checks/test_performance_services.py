@@ -33,16 +33,25 @@ class PerformanceServiceTest(Test):
 
     @cluster(num_nodes=6)
     @matrix(version=[str(LATEST_2_1)], metadata_quorum=quorum.all_kraft)
-    @matrix(version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_kraft, use_share_groups=[True])
-    def test_version(self, version=str(LATEST_2_1), metadata_quorum=quorum.zk, use_share_groups=False):
+    @matrix(version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_kraft)
+    def test_version(self, version=str(LATEST_2_1), metadata_quorum=quorum.zk):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
         number of messages. The actual stats here are pretty meaningless since the number of messages is quite small.
         """
         version = KafkaVersion(version)
+        server_overrides = [
+            ["group.share.min.heartbeat.interval.ms", "1500"],
+            ["group.share.heartbeat.interval.ms", "1500"],
+        ]
         self.kafka = KafkaService(
-            self.test_context, 1,
-            None, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=DEV_BRANCH)
+            self.test_context,
+            1,
+            None,
+            topics={self.topic: {'partitions': 1, 'replication-factor': 1}},
+            version=DEV_BRANCH,
+            server_prop_overrides=server_overrides
+        )
         self.kafka.start()
 
         # check basic run of producer performance

@@ -34,7 +34,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -167,15 +166,16 @@ public class ListSerializerTest {
         when(mockSerializer.serialize(anyString(), any(Headers.class), anyString())).thenReturn("test-value".getBytes());
 
         final String topic = "topic";
-        final List<String> data = List.of("test-key");
+        final String key = "test-key";
+        final List<String> data = List.of(key);
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
 
         final ListSerializer<String> testSerializer = new ListSerializer<>(mockSerializer);
 
         testSerializer.serialize(topic, headers, data);
 
-        verify(mockSerializer).serialize(eq(topic), eq(headers), eq("test-key"));
-        verify(mockSerializer, never()).serialize(anyString(), anyString());
+        verify(mockSerializer).serialize(topic, headers, key);
+        verify(mockSerializer, never()).serialize(topic, key);
     }
 
 }

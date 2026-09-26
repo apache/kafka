@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -46,8 +47,9 @@ import static org.apache.kafka.clients.producer.ProducerConfig.REQUEST_TIMEOUT_M
 import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG;
-import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC;
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.MESSAGE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         //  15200 is filed replicaFetchMaxBytes
         @ClusterConfigProperty(key = REPLICA_FETCH_MAX_BYTES_CONFIG, value = "15200"),
         //  15400 is filed replicaFetchMaxResponseBytes
-        @ClusterConfigProperty(key = REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC, value = "15400"),
+        @ClusterConfigProperty(key = REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG, value = "15400"),
         // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
         // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
@@ -88,7 +90,7 @@ public class ProducerFailureHandlingTest {
      * With ack == 0 the future metadata will have no exceptions with offset -1
      */
     @ClusterTest
-    void testTooLargeRecordWithAckZero(ClusterInstance clusterInstance) throws InterruptedException,
+    public void testTooLargeRecordWithAckZero(ClusterInstance clusterInstance) throws InterruptedException,
             ExecutionException {
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(0))) {
@@ -107,7 +109,7 @@ public class ProducerFailureHandlingTest {
      * With ack == 1 the future metadata will throw ExecutionException caused by RecordTooLargeException
      */
     @ClusterTest
-    void testTooLargeRecordWithAckOne(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testTooLargeRecordWithAckOne(ClusterInstance clusterInstance) throws InterruptedException {
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
@@ -123,7 +125,7 @@ public class ProducerFailureHandlingTest {
      * This should succeed as the replica fetcher thread can handle oversized messages since KIP-74
      */
     @ClusterTest
-    void testPartitionTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
+    public void testPartitionTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
             ExecutionException {
         checkTooLargeRecordForReplicationWithAckAll(clusterInstance, replicaFetchMaxPartitionBytes);
     }
@@ -132,7 +134,7 @@ public class ProducerFailureHandlingTest {
      * This should succeed as the replica fetcher thread can handle oversized messages since KIP-74
      */
     @ClusterTest
-    void testResponseTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
+    public void testResponseTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
             ExecutionException {
         checkTooLargeRecordForReplicationWithAckAll(clusterInstance, replicaFetchMaxResponseBytes);
     }
@@ -142,7 +144,7 @@ public class ProducerFailureHandlingTest {
      * With non-exist-topic the future metadata should return ExecutionException caused by TimeoutException
      */
     @ClusterTest
-    void testNonExistentTopic(ClusterInstance clusterInstance) {
+    public void testNonExistentTopic(ClusterInstance clusterInstance) {
         // send a record with non-exist topic
         ProducerRecord<byte[], byte[]> record =
                 new ProducerRecord<>(topic2, null, "key".getBytes(), "value".getBytes());
@@ -156,7 +158,7 @@ public class ProducerFailureHandlingTest {
      * With incorrect broker-list the future metadata should return ExecutionException caused by TimeoutException
      */
     @ClusterTest
-    void testWrongBrokerList(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testWrongBrokerList(ClusterInstance clusterInstance) throws InterruptedException {
         clusterInstance.createTopic(topic1, 1, (short) 1);
         // producer with incorrect broker list
         Map<String, Object> producerConfig = new HashMap<>(producerConfig(1));
@@ -174,7 +176,7 @@ public class ProducerFailureHandlingTest {
      * when partition is higher than the upper bound of partitions.
      */
     @ClusterTest
-    void testInvalidPartition(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testInvalidPartition(ClusterInstance clusterInstance) throws InterruptedException {
         // create topic with a single partition
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 
@@ -192,7 +194,7 @@ public class ProducerFailureHandlingTest {
      * The send call after producer closed should throw IllegalStateException
      */
     @ClusterTest
-    void testSendAfterClosed(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+    public void testSendAfterClosed(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         // create topic
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 
@@ -215,29 +217,63 @@ public class ProducerFailureHandlingTest {
         assertThrows(IllegalStateException.class, () -> producer3.send(record));
     }
 
-    @ClusterTest
-    void testCannotSendToInternalTopic(ClusterInstance clusterInstance) throws InterruptedException {
-        try (Admin admin = clusterInstance.admin()) {
-            Map<String, String> topicConfig = new HashMap<>();
-            clusterInstance.brokers().get(0)
-                    .groupCoordinator()
-                    .groupMetadataTopicConfigs()
-                    .forEach((k, v) -> topicConfig.put(k.toString(), v.toString()));
-            admin.createTopics(List.of(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1).configs(topicConfig)));
-            clusterInstance.waitTopicDeletion(Topic.GROUP_METADATA_TOPIC_NAME);
-        }
+    /**
+     * Test that sending to an internal topic throws InvalidTopicException
+     * when auto.create.topics.enable=true and the internal topic already exists.
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "true")
+    })
+    public void testCannotSendToInternalTopicWhenAutoCreateTrueAndTopicExists(ClusterInstance clusterInstance) throws Exception {
+        createInternalTopic(clusterInstance);
+        assertSendToInternalTopicFails(clusterInstance, InvalidTopicException.class);
+    }
 
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
-            Exception thrown = assertThrows(ExecutionException.class,
-                    () -> producer.send(new ProducerRecord<>(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes(),
-                            "test".getBytes())).get());
-            assertInstanceOf(InvalidTopicException.class, thrown.getCause(),
-                    () -> "Unexpected exception while sending to an invalid topic " + thrown.getCause());
+    /**
+     * Test that sending to an internal topic throws InvalidTopicException
+     * when auto.create.topics.enable=false and the internal topic already exists.
+     */
+    @ClusterTest
+    public void testCannotSendToInternalTopicWhenAutoCreateFalseAndTopicExists(ClusterInstance clusterInstance) throws Exception {
+        createInternalTopic(clusterInstance);
+        assertSendToInternalTopicFails(clusterInstance, InvalidTopicException.class);
+    }
+
+    /**
+     * Test that sending to an internal topic throws InvalidTopicException
+     * when auto.create.topics.enable=true and the internal topic does not exist.
+     * The broker should auto-create the internal topic even though the send is rejected.
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "true"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testCannotSendToInternalTopicWhenAutoCreateTrueAndTopicNotExists(ClusterInstance clusterInstance) throws Exception {
+        assertSendToInternalTopicFails(clusterInstance, InvalidTopicException.class);
+
+        // verify the broker auto-created the internal topic
+        clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
+    }
+
+    /**
+     * Test that sending to an internal topic throws TimeoutException
+     * when auto.create.topics.enable=false and the internal topic does not exist.
+     * The broker returns UNKNOWN_TOPIC_OR_PARTITION as a recoverable error causing the producer to time out.
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testCannotSendToInternalTopicWhenAutoCreateFalseAndTopicNotExists(ClusterInstance clusterInstance) throws Exception {
+        assertSendToInternalTopicFails(clusterInstance, TimeoutException.class);
+
+        // verify the internal topic was not auto-created
+        try (Admin admin = clusterInstance.admin()) {
+            assertFalse(admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get().contains(Topic.GROUP_METADATA_TOPIC_NAME));
         }
     }
 
     @ClusterTest
-    void testNotEnoughReplicasAfterBrokerShutdown(ClusterInstance clusterInstance) throws InterruptedException,
+    public void testNotEnoughReplicasAfterBrokerShutdown(ClusterInstance clusterInstance) throws InterruptedException,
             ExecutionException {
         String topicName = "minisrtest2";
         int brokerNum = clusterInstance.brokers().size();
@@ -297,4 +333,21 @@ public class ProducerFailureHandlingTest {
                 BUFFER_MEMORY_CONFIG, producerBufferSize);
     }
 
+    private void createInternalTopic(ClusterInstance clusterInstance) throws Exception {
+        clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1, clusterInstance.brokers().get(0)
+                .groupCoordinator()
+                .groupMetadataTopicConfigs());
+    }
+
+    private void assertSendToInternalTopicFails(ClusterInstance clusterInstance, Class<? extends Throwable> expectedCause) {
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
+            Exception thrown = assertThrows(ExecutionException.class,
+                    () -> producer.send(new ProducerRecord<>(
+                            Topic.GROUP_METADATA_TOPIC_NAME,
+                            "test".getBytes(),
+                            "test".getBytes())).get());
+            assertInstanceOf(expectedCause, thrown.getCause(),
+                    () -> "Expected " + expectedCause.getSimpleName() + " but got " + thrown.getCause());
+        }
+    }
 }

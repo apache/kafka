@@ -28,7 +28,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -100,7 +99,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
         Subject subject = SecurityManagerCompatibility.get().current();
         Set<OAuthBearerToken> privateCredentials = subject != null
             ? subject.getPrivateCredentials(OAuthBearerToken.class)
-            : Collections.emptySet();
+            : Set.of();
         if (privateCredentials.isEmpty())
             throw new IOException("No OAuth Bearer tokens in Subject's private credentials");
         if (privateCredentials.size() == 1)

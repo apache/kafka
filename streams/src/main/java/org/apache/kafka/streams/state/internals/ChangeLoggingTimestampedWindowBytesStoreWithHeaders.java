@@ -19,9 +19,9 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowStore;
 
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.headers;
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.rawValue;
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.timestamp;
+import static org.apache.kafka.streams.state.internals.Utils.headers;
+import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
+import static org.apache.kafka.streams.state.internals.Utils.timestamp;
 
 /**
  * Change-logging wrapper for window stores that support headers.
@@ -34,7 +34,7 @@ import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDese
  * this class uses {@link ValueTimestampHeadersDeserializer} to extract
  * the timestamp from the correct position in the byte array.
  */
-class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeLoggingWindowBytesStore {
+public class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeLoggingWindowBytesStore {
 
     ChangeLoggingTimestampedWindowBytesStoreWithHeaders(final WindowStore<Bytes, byte[]> bytesStore,
                                                         final boolean retainDuplicates) {
@@ -47,7 +47,7 @@ class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeLoggingW
         internalContext.logChange(
             name(),
             key,
-            rawValue(valueTimestampHeaders),
+            rawPlainValue(valueTimestampHeaders),
             valueTimestampHeaders != null
                 ? timestamp(valueTimestampHeaders)
                 : internalContext.recordContext().timestamp(),

@@ -22,6 +22,7 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -42,6 +43,7 @@ import java.util.stream.Collectors;
  *
  * @see Admin#describeConsumerGroups(java.util.Collection)
  */
+@InterfaceAudience.Public
 public class ConsumerGroupDescription {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;

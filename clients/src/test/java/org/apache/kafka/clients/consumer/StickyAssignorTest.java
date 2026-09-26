@@ -25,7 +25,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.test.api.Flaky;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -368,7 +367,11 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     private Subscription buildSubscriptionWithOldSchema(List<String> topics, List<TopicPartition> partitions, int consumerIndex) {
         Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
         List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(partitions).entrySet()) {
+        Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
+        for (TopicPartition tp : partitions) {
+            partitionsByTopic.computeIfAbsent(tp.topic(), t -> new ArrayList<>()).add(tp.partition());
+        }
+        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
             Struct topicAssignment = new Struct(StickyAssignor.TOPIC_ASSIGNMENT);
             topicAssignment.set(StickyAssignor.TOPIC_KEY_NAME, topicEntry.getKey());
             topicAssignment.set(StickyAssignor.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());

@@ -20,7 +20,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -30,12 +29,11 @@ import java.util.function.Function;
 
 class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V>, MeteredIterator {
 
-    private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
+    final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
     private final Sensor operationSensor;
     private final Sensor iteratorSensor;
-    private final StreamsMetrics metrics;
-    private final Function<byte[], K> deserializeKey;
-    private final Function<byte[], V> deserializeValue;
+    final Function<byte[], K> deserializeKey;
+    final Function<byte[], V> deserializeValue;
     private final long startNs;
     private final long startTimestampMs;
     private final Time time;
@@ -45,7 +43,6 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     MeteredWindowedKeyValueIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter,
                                     final Sensor operationSensor,
                                     final Sensor iteratorSensor,
-                                    final StreamsMetrics metrics,
                                     final Function<byte[], K> deserializeKey,
                                     final Function<byte[], V> deserializeValue,
                                     final Time time,
@@ -54,7 +51,6 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
         this.iter = iter;
         this.operationSensor = operationSensor;
         this.iteratorSensor = iteratorSensor;
-        this.metrics = metrics;
         this.deserializeKey = deserializeKey;
         this.deserializeValue = deserializeValue;
         this.startNs = time.nanoseconds();

@@ -16,43 +16,42 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,7 +70,7 @@ public class KTableSourceTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, Integer> inputTopic =
                     driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
             inputTopic.pipeInput("A", 1, 10L);
@@ -102,7 +101,7 @@ public class KTableSourceTest {
                .toStream()
                .to("output");
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, Integer> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
             final TestOutputTopic<String, Integer> outputTopic =
@@ -138,7 +137,7 @@ public class KTableSourceTest {
         builder.table(topic, stringConsumed);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
 
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
@@ -150,13 +149,8 @@ public class KTableSourceTest {
                 );
             inputTopic.pipeInput(null, "value");
 
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
-            );
+            assertTrue(appender.getMessages(Level.WARN).contains(
+                "Skipping record due to null key. topic=[topic] partition=[0] offset=[0]"));
         }
     }
 
@@ -167,7 +161,7 @@ public class KTableSourceTest {
         builder.table(topic, stringConsumed, Materialized.as("store"));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
-            final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
 
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
@@ -180,13 +174,8 @@ public class KTableSourceTest {
             inputTopic.pipeInput("key", "value", 10L);
             inputTopic.pipeInput("key", "value", 5L);
 
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1].")
-            );
+            assertTrue(appender.getMessages(Level.WARN).contains(
+                "Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1]."));
         }
     }
 
@@ -221,29 +210,29 @@ public class KTableSourceTest {
             inputTopic1.pipeInput("B", "01", 20L);
             inputTopic1.pipeInput("C", "01", 15L);
 
-            assertEquals(ValueAndTimestamp.make("01", 10L), getter1.get("A"));
-            assertEquals(ValueAndTimestamp.make("01", 20L), getter1.get("B"));
-            assertEquals(ValueAndTimestamp.make("01", 15L), getter1.get("C"));
+            assertEquals(ValueTimestampHeaders.make("01", 10L, new RecordHeaders()), getter1.get("A"));
+            assertEquals(ValueTimestampHeaders.make("01", 20L, new RecordHeaders()), getter1.get("B"));
+            assertEquals(ValueTimestampHeaders.make("01", 15L, new RecordHeaders()), getter1.get("C"));
 
             inputTopic1.pipeInput("A", "02", 30L);
             inputTopic1.pipeInput("B", "02", 5L);
 
-            assertEquals(ValueAndTimestamp.make("02", 30L), getter1.get("A"));
-            assertEquals(ValueAndTimestamp.make("02", 5L), getter1.get("B"));
-            assertEquals(ValueAndTimestamp.make("01", 15L), getter1.get("C"));
+            assertEquals(ValueTimestampHeaders.make("02", 30L, new RecordHeaders()), getter1.get("A"));
+            assertEquals(ValueTimestampHeaders.make("02", 5L, new RecordHeaders()), getter1.get("B"));
+            assertEquals(ValueTimestampHeaders.make("01", 15L, new RecordHeaders()), getter1.get("C"));
 
             inputTopic1.pipeInput("A", "03", 29L);
 
-            assertEquals(ValueAndTimestamp.make("03", 29L), getter1.get("A"));
-            assertEquals(ValueAndTimestamp.make("02", 5L), getter1.get("B"));
-            assertEquals(ValueAndTimestamp.make("01", 15L), getter1.get("C"));
+            assertEquals(ValueTimestampHeaders.make("03", 29L, new RecordHeaders()), getter1.get("A"));
+            assertEquals(ValueTimestampHeaders.make("02", 5L, new RecordHeaders()), getter1.get("B"));
+            assertEquals(ValueTimestampHeaders.make("01", 15L, new RecordHeaders()), getter1.get("C"));
 
             inputTopic1.pipeInput("A", null, 50L);
             inputTopic1.pipeInput("B", null, 3L);
 
             assertNull(getter1.get("A"));
             assertNull(getter1.get("B"));
-            assertEquals(ValueAndTimestamp.make("01", 15L), getter1.get("C"));
+            assertEquals(ValueTimestampHeaders.make("01", 15L, new RecordHeaders()), getter1.get("C"));
         }
     }
 
@@ -259,7 +248,7 @@ public class KTableSourceTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc1", supplier, table1.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(
                     topic1,
@@ -314,7 +303,7 @@ public class KTableSourceTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc1", supplier, table1.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(
                     topic1,

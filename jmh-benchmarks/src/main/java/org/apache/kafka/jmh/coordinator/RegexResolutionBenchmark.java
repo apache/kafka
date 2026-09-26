@@ -18,8 +18,8 @@ package org.apache.kafka.jmh.coordinator;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.modern.consumer.TopicRegexResolver;
 import org.apache.kafka.image.MetadataDelta;
@@ -96,7 +96,9 @@ public class RegexResolutionBenchmark {
     public void setup() {
         Random random = new Random();
 
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         for (int i = 0; i < topicCount; i++) {
             String topicName =
                 WORDS.get(random.nextInt(WORDS.size())) + "_" +

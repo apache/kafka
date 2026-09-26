@@ -22,11 +22,12 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -45,13 +46,15 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     private static final String APP_ID = "stream-stream-join-integration-test";
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testSelfJoin(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testSelfJoin(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-selfJoin");
         streamsConfig.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -88,13 +91,16 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInner(final boolean cacheEnabled) {
+    @CsvSource({"true, false, false", "true, true, false", "false, false, false", "false, true, false", "false, false, true"})
+    public void testInner(final boolean cacheEnabled, final boolean withHeaders, final boolean transactional) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+        maybeEnableTransactionalStateStores(streamsConfig, transactional);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -140,13 +146,15 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInnerRepartitioned(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInnerRepartitioned(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-repartitioned");
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -194,13 +202,16 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeft(final boolean cacheEnabled) {
+    @CsvSource({"true, false, false", "true, true, false", "false, false, false", "false, true, false", "false, false, true"})
+    public void testLeft(final boolean cacheEnabled, final boolean withHeaders, final boolean transactional) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+        maybeEnableTransactionalStateStores(streamsConfig, transactional);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -247,13 +258,15 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeftRepartitioned(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeftRepartitioned(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-repartitioned");
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -302,13 +315,16 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testOuter(final boolean cacheEnabled) {
+    @CsvSource({"true, false, false", "true, true, false", "false, false, false", "false, true, false", "false, false, true"})
+    public void testOuter(final boolean cacheEnabled, final boolean withHeaders, final boolean transactional) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+        maybeEnableTransactionalStateStores(streamsConfig, transactional);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -356,13 +372,15 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testOuterRepartitioned(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testOuterRepartitioned(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -412,13 +430,15 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testMultiInner(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testMultiInner(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-multi-inner");
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -513,5 +533,14 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, streamsConfig, builder.build(streamsConfig));
+    }
+
+    // Transactional state stores (KIP-892) are only supported under exactly-once, so whenever
+    // enable.transactional.statestores=true we must also set processing.guarantee=exactly_once_v2.
+    private static void maybeEnableTransactionalStateStores(final Properties streamsConfig, final boolean transactional) {
+        if (transactional) {
+            streamsConfig.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
     }
 }

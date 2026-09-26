@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
+
 import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,7 +35,10 @@ public class ProcessState {
     // number of members
     private int capacity;
     private double load;
+    private double statelessActiveLoad;
     private int taskCount;
+    private int activeTaskCount;
+    private int statefulActiveTaskCount;
     private final Map<String, Integer> memberToTaskCounts;
     private final Map<String, Set<TaskId>> assignedActiveTasks;
     private final Map<String, Set<TaskId>> assignedStandbyTasks;
@@ -67,6 +72,13 @@ public class ProcessState {
         return memberToTaskCounts;
     }
 
+    /**
+     * The number of active tasks of stateless subtopologies per member of this process.
+     */
+    public double statelessActiveLoad() {
+        return statelessActiveLoad;
+    }
+
     public Set<TaskId> assignedActiveTasks() {
         return assignedActiveTasks.values().stream()
             .flatMap(Set::stream)
@@ -90,13 +102,14 @@ public class ProcessState {
     /**
      * Assigns a task to a member of this process.
      *
-     * @param memberId The member to assign to.
-     * @param taskId   The task to assign.
-     * @param isActive Whether the task is an active task (true) or a standby task (false).
+     * @param memberId   The member to assign to.
+     * @param taskId     The task to assign.
+     * @param isActive   Whether the task is an active task (true) or a standby task (false).
+     * @param isStateful Whether the task belongs to a stateful subtopology.
      * @return the number of tasks that `memberId` has assigned after adding the new task.
      */
-    public int addTask(final String memberId, final TaskId taskId, final boolean isActive) {
-        int newTaskCount = addTaskInternal(memberId, taskId, isActive);
+    public int addTask(final String memberId, final TaskId taskId, final boolean isActive, final boolean isStateful) {
+        int newTaskCount = addTaskInternal(memberId, taskId, isActive, isStateful);
         // We cannot efficiently add a task to a specific member and keep the memberByLoad ordered correctly.
         // So we just drop the heap here.
         //
@@ -106,12 +119,16 @@ public class ProcessState {
         return newTaskCount;
     }
 
-    private int addTaskInternal(final String memberId, final TaskId taskId, final boolean isActive) {
+    private int addTaskInternal(final String memberId, final TaskId taskId, final boolean isActive, final boolean isStateful) {
         taskCount += 1;
         assignedTasks.add(taskId);
         if (isActive) {
+            activeTaskCount += 1;
             assignedActiveTasks.putIfAbsent(memberId, new HashSet<>());
             assignedActiveTasks.get(memberId).add(taskId);
+            if (isStateful) {
+                statefulActiveTaskCount += 1;
+            }
         } else {
             assignedStandbyTasks.putIfAbsent(memberId, new HashSet<>());
             assignedStandbyTasks.get(memberId).add(taskId);
@@ -125,17 +142,18 @@ public class ProcessState {
     /**
      * Assigns a task to the least loaded member of this process
      *
-     * @param taskId   The task to assign.
-     * @param isActive Whether the task is an active task (true) or a standby task (false).
+     * @param taskId     The task to assign.
+     * @param isActive   Whether the task is an active task (true) or a standby task (false).
+     * @param isStateful Whether the task belongs to a stateful subtopology.
      * @return the number of tasks that `memberId` has assigned after adding the new task, or -1 if the
      *         task was not assigned to any member.
      */
-    public int addTaskToLeastLoadedMember(final TaskId taskId, final boolean isActive) {
+    public int addTaskToLeastLoadedMember(final TaskId taskId, final boolean isActive, final boolean isStateful) {
         if (memberToTaskCounts.isEmpty()) {
             return -1;
         }
         if (memberToTaskCounts.size() == 1) {
-            return addTaskInternal(memberToTaskCounts.keySet().iterator().next(), taskId, isActive);
+            return addTaskInternal(memberToTaskCounts.keySet().iterator().next(), taskId, isActive, isStateful);
         }
         if (membersByLoad == null) {
             membersByLoad = new PriorityQueue<>(
@@ -149,7 +167,7 @@ public class ProcessState {
         }
         Map.Entry<String, Integer> member = membersByLoad.poll();
         if (member != null) {
-            int newTaskCount = addTaskInternal(member.getKey(), taskId, isActive);
+            int newTaskCount = addTaskInternal(member.getKey(), taskId, isActive, isStateful);
             member.setValue(newTaskCount);
             membersByLoad.add(member); // Reinsert the updated member back into the priority queue
             return newTaskCount;
@@ -166,8 +184,10 @@ public class ProcessState {
     public void computeLoad() {
         if (capacity <= 0) {
             this.load = -1;
+            this.statelessActiveLoad = -1;
         } else {
             this.load = (double) taskCount / capacity;
+            this.statelessActiveLoad = (double) (activeTaskCount - statefulActiveTaskCount) / capacity;
         }
     }
 

@@ -203,6 +203,16 @@ class ControllerConfigurationValidatorTest {
   }
 
   @Test
+  def testNullClientMetricsConfigValue(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    config.put(ClientMetricsConfigs.INTERVAL_MS_CONFIG, "2000")
+    config.put(ClientMetricsConfigs.MATCH_CONFIG, null)
+    assertEquals("Null value not supported for client metrics configs: match",
+      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
+        new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap())).getMessage)
+  }
+
+  @Test
   def testInvalidGroupConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
     config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")

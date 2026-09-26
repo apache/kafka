@@ -18,7 +18,7 @@
 package org.apache.kafka.server.share.session;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.share.CachedSharePartition;
 
 import java.util.ArrayList;
@@ -89,7 +89,7 @@ public class ShareSession {
         return partitionMap.size();
     }
 
-    public synchronized Boolean isEmpty() {
+    public synchronized boolean isEmpty() {
         return partitionMap.isEmpty();
     }
 
@@ -137,11 +137,11 @@ public class ShareSession {
         return previousSize != -1 ? cachedSize - previousSize : cachedSize;
     }
 
-    public static String partitionsToLogString(Collection<TopicIdPartition> partitions, Boolean traceEnabled) {
+    public static String partitionsToLogString(Collection<TopicIdPartition> partitions, boolean traceEnabled) {
         if (traceEnabled) {
-            return String.format("( %s )", String.join(", ", partitions.toString()));
+            return partitions.toString();
         }
-        return String.format("%s partition(s)", partitions.size());
+        return partitions.size() + " partition(s)";
     }
 
     public String toString() {

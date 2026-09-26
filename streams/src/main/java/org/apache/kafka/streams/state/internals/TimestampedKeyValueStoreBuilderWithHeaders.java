@@ -90,7 +90,7 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
         if (!enableCaching) {
             return inner;
         }
-        return new CachingKeyValueStore(inner, CachingKeyValueStore.CacheType.TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS);
+        return new CachingKeyValueStoreWithHeaders(inner);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {

@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.coordinator.group.api.assignor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.ApiException;
 
 /**
  * Exception thrown by {@link PartitionAssignor#assign(GroupSpec, SubscribedTopicDescriber)}}. The exception
  * is only used internally.
  */
+@InterfaceAudience.Public
 public class PartitionAssignorException extends ApiException {
 
     public PartitionAssignorException(String message) {

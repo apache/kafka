@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
 
@@ -31,6 +32,7 @@ import java.util.Optional;
  *  @param <V> The type of the result returned by this query.
  */
 @Evolving
+@InterfaceAudience.Public
 public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecordIterator<V>> {
 
     private final K key;

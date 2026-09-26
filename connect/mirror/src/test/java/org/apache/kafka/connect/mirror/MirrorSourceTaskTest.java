@@ -181,7 +181,7 @@ public class MirrorSourceTaskTest {
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
         when(consumer.poll(any())).thenReturn(consumerRecords);
 
-        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        MirrorSourceLegacyMetrics metrics = mock(MirrorSourceLegacyMetrics.class);
 
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
@@ -280,7 +280,7 @@ public class MirrorSourceTaskTest {
 
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
-        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        MirrorSourceLegacyMetrics metrics = mock(MirrorSourceLegacyMetrics.class);
 
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
@@ -310,7 +310,7 @@ public class MirrorSourceTaskTest {
 
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
-        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        MirrorSourceLegacyMetrics metrics = mock(MirrorSourceLegacyMetrics.class);
         PartitionState partitionState = new PartitionState(maxOffsetLag);
         Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
         OffsetSyncWriter offsetSyncWriter = mock(OffsetSyncWriter.class);

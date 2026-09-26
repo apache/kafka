@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -26,25 +28,36 @@ import java.util.Set;
  * Indicates that there is no stored offset for a partition and no defined offset
  * reset policy.
  */
+@InterfaceAudience.Public
 public class NoOffsetForPartitionException extends InvalidOffsetException {
 
     private static final long serialVersionUID = 1L;
 
     private final Set<TopicPartition> partitions;
 
+    /**
+     * Constructs a new NoOffsetForPartitionException for a single partition.
+     *
+     * @param partition The partition for which no offset is defined
+     */
     public NoOffsetForPartitionException(TopicPartition partition) {
         super("Undefined offset with no reset policy for partition: " + partition);
         this.partitions = Collections.singleton(partition);
     }
 
+    /**
+     * Constructs a new NoOffsetForPartitionException for multiple partitions.
+     *
+     * @param partitions The partitions for which no offset is defined
+     */
     public NoOffsetForPartitionException(Collection<TopicPartition> partitions) {
         super("Undefined offset with no reset policy for partitions: " + partitions);
         this.partitions = Set.copyOf(partitions);
     }
 
     /**
-     * returns all partitions for which no offsets are defined.
-     * @return all partitions without offsets
+     * Returns all partitions for which no offsets are defined.
+     * @return All partitions without offsets
      */
     public Set<TopicPartition> partitions() {
         return partitions;

@@ -45,8 +45,8 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
@@ -95,9 +95,6 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMo
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -109,6 +106,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -137,8 +135,18 @@ public class RecordCollectorTest {
     private final StringSerializer stringSerializer = new StringSerializer();
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
 
-    private final StreamPartitioner<String, Object> streamPartitioner =
-        (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Integer.parseInt(key) % numPartitions));
+    private final StreamPartitioner<String, Object> streamPartitioner = new StreamPartitioner<String, Object>() {
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+            return Optional.of(Collections.singleton(Integer.parseInt(key) % numPartitions));
+        }
+    };
 
     private final MockProducer<byte[], byte[]> mockProducer
         = new MockProducer<>(cluster, true, new org.apache.kafka.clients.producer.RoundRobinPartitioner(), new ByteArraySerializer(), new ByteArraySerializer());
@@ -211,38 +219,38 @@ public class RecordCollectorTest {
         double totalRecords = 0D;
         double totalBytes = 0D;
 
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+        assertEquals(totalRecords, recordsProduced.metricValue());
+        assertEquals(totalBytes, bytesProduced.metricValue());
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
         ++totalRecords;
         totalBytes += producerRecordSizeInBytes(mockProducer.history().get(0));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+        assertEquals(totalRecords, recordsProduced.metricValue());
+        assertEquals(totalBytes, bytesProduced.metricValue());
 
         collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, sinkNodeName, context);
         ++totalRecords;
         totalBytes += producerRecordSizeInBytes(mockProducer.history().get(1));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+        assertEquals(totalRecords, recordsProduced.metricValue());
+        assertEquals(totalBytes, bytesProduced.metricValue());
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
         ++totalRecords;
         totalBytes += producerRecordSizeInBytes(mockProducer.history().get(2));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+        assertEquals(totalRecords, recordsProduced.metricValue());
+        assertEquals(totalBytes, bytesProduced.metricValue());
 
         collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, sinkNodeName, context);
         ++totalRecords;
         totalBytes += producerRecordSizeInBytes(mockProducer.history().get(3));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+        assertEquals(totalRecords, recordsProduced.metricValue());
+        assertEquals(totalBytes, bytesProduced.metricValue());
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
         ++totalRecords;
         totalBytes += producerRecordSizeInBytes(mockProducer.history().get(4));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+        assertEquals(totalRecords, recordsProduced.metricValue());
+        assertEquals(totalBytes, bytesProduced.metricValue());
     }
 
     @Test
@@ -304,8 +312,14 @@ public class RecordCollectorTest {
     @Test
     public void shouldSendOnlyToEvenPartitions() {
         class EvenPartitioner implements StreamPartitioner<String, Object> {
+            @SuppressWarnings("removal")
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
                 final Set<Integer> partitions = new HashSet<>();
                 for (int i = 0; i < numPartitions; i += 2) {
                     partitions.add(i);
@@ -369,8 +383,14 @@ public class RecordCollectorTest {
     public void shouldBroadcastToAllPartitions() {
 
         class BroadcastingPartitioner implements StreamPartitioner<String, Object> {
+            @SuppressWarnings("removal")
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
                 return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
             }
         }
@@ -430,8 +450,14 @@ public class RecordCollectorTest {
     public void shouldDropAllRecords() {
 
         class DroppingPartitioner implements StreamPartitioner<String, Object> {
+            @SuppressWarnings("removal")
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
                 return Optional.of(Collections.emptySet());
             }
         }
@@ -492,7 +518,7 @@ public class RecordCollectorTest {
         assertTrue(offsets.isEmpty());
 
         assertEquals(0, mockProducer.history().size());
-        assertThat(recordsDropped.metricValue(), equalTo(9.0));
+        assertEquals(9.0, recordsDropped.metricValue());
 
         // returned offsets should not be modified
         final TopicPartition topicPartition = new TopicPartition(topic, 0);
@@ -503,8 +529,14 @@ public class RecordCollectorTest {
     public void shouldUseDefaultPartitionerViaPartitions() {
 
         class DefaultPartitioner implements StreamPartitioner<String, Object> {
+            @SuppressWarnings("removal")
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
                 return Optional.empty();
             }
         }
@@ -562,8 +594,18 @@ public class RecordCollectorTest {
     @Test
     public void shouldUseDefaultPartitionerAsPartitionReturnsEmptyOptional() {
 
-        final StreamPartitioner<String, Object> streamPartitioner =
-                (topic, key, value, numPartitions) -> Optional.empty();
+        final StreamPartitioner<String, Object> streamPartitioner = new StreamPartitioner<String, Object>() {
+            @SuppressWarnings("removal")
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+                return Optional.empty();
+            }
+        };
 
         final SinkNode<?, ?> sinkNode = new SinkNode<>(
                 sinkNodeName,
@@ -611,6 +653,18 @@ public class RecordCollectorTest {
         assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
         assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, mockProducer.history().size());
+    }
+
+    @Test
+    public void shouldPropagateHeadersToPartitioner() {
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+        @SuppressWarnings("unchecked")
+        final StreamPartitioner<String, Object> mockPartitioner = mock(StreamPartitioner.class);
+        when(mockPartitioner.partitions(topic, "3", "0", headers, 3)).thenReturn(Optional.of(Collections.singleton(0)));
+
+        collector.send(topic, "3", "0", headers, null, stringSerializer, stringSerializer, null, context, mockPartitioner);
+
+        verify(mockPartitioner).partitions(topic, "3", "0", headers, 3);
     }
 
     @Test
@@ -875,16 +929,14 @@ public class RecordCollectorTest {
                 new StringSerializer(), null, null)
         );
 
-        assertThat(expected.getCause(), instanceOf(ClassCastException.class));
-        assertThat(
-            expected.getMessage(),
-            equalTo(
-                "ClassCastException while producing data to topic topic. " +
-                    "The key serializer org.apache.kafka.common.serialization.LongSerializer " +
-                    "is not compatible to the actual key type: java.lang.String. " +
-                    "Change the default key serde in StreamConfig or provide the correct key serde via method parameters " +
-                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
-        );
+        assertInstanceOf(ClassCastException.class, expected.getCause());
+        assertEquals(
+            "ClassCastException while producing data to topic topic. " +
+                "The key serializer org.apache.kafka.common.serialization.LongSerializer " +
+                "is not compatible to the actual key type: java.lang.String. " +
+                "Change the default key serde in StreamConfig or provide the correct key serde via method parameters " +
+                "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+            expected.getMessage());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -903,16 +955,14 @@ public class RecordCollectorTest {
                 new StringSerializer(), null, null)
         );
 
-        assertThat(expected.getCause(), instanceOf(ClassCastException.class));
-        assertThat(
-            expected.getMessage(),
-            equalTo(
-                "ClassCastException while producing data to topic topic. " +
-                    "The key serializer org.apache.kafka.common.serialization.LongSerializer " +
-                    "is not compatible to the actual key type: java.lang.String. " +
-                    "Change the default key serde in StreamConfig or provide the correct key serde via method parameters " +
-                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
-        );
+        assertInstanceOf(ClassCastException.class, expected.getCause());
+        assertEquals(
+            "ClassCastException while producing data to topic topic. " +
+                "The key serializer org.apache.kafka.common.serialization.LongSerializer " +
+                "is not compatible to the actual key type: java.lang.String. " +
+                "Change the default key serde in StreamConfig or provide the correct key serde via method parameters " +
+                "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+            expected.getMessage());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -931,16 +981,14 @@ public class RecordCollectorTest {
                 (Serializer) new LongSerializer(), null, null) // need to add cast to trigger `ClassCastException`
         );
 
-        assertThat(expected.getCause(), instanceOf(ClassCastException.class));
-        assertThat(
-            expected.getMessage(),
-            equalTo(
-                "ClassCastException while producing data to topic topic. " +
-                    "The value serializer org.apache.kafka.common.serialization.LongSerializer " +
-                    "is not compatible to the actual value type: java.lang.String. " +
-                    "Change the default value serde in StreamConfig or provide the correct value serde via method parameters " +
-                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.valueSerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
-        );
+        assertInstanceOf(ClassCastException.class, expected.getCause());
+        assertEquals(
+            "ClassCastException while producing data to topic topic. " +
+                "The value serializer org.apache.kafka.common.serialization.LongSerializer " +
+                "is not compatible to the actual value type: java.lang.String. " +
+                "Change the default value serde in StreamConfig or provide the correct value serde via method parameters " +
+                "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.valueSerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+            expected.getMessage());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -959,16 +1007,14 @@ public class RecordCollectorTest {
                 (Serializer) new LongSerializer(), null, null) // need to add cast to trigger `ClassCastException`
         );
 
-        assertThat(expected.getCause(), instanceOf(ClassCastException.class));
-        assertThat(
-            expected.getMessage(),
-            equalTo(
-                "ClassCastException while producing data to topic topic. " +
-                    "The value serializer org.apache.kafka.common.serialization.LongSerializer " +
-                    "is not compatible to the actual value type: java.lang.String. " +
-                    "Change the default value serde in StreamConfig or provide the correct value serde via method parameters " +
-                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.valueSerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
-        );
+        assertInstanceOf(ClassCastException.class, expected.getCause());
+        assertEquals(
+            "ClassCastException while producing data to topic topic. " +
+                "The value serializer org.apache.kafka.common.serialization.LongSerializer " +
+                "is not compatible to the actual value type: java.lang.String. " +
+                "Change the default value serde in StreamConfig or provide the correct value serde via method parameters " +
+                "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.valueSerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+            expected.getMessage());
     }
 
     @Test
@@ -987,11 +1033,10 @@ public class RecordCollectorTest {
             StreamsException.class,
             () -> collector.send(topic, "0", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner)
         );
-        assertThat(
-            exception.getMessage(),
-            equalTo("Could not determine the number of partitions for topic '" + topic + "' for task " +
-                taskId + " due to org.apache.kafka.common.KafkaException: Kaboom!")
-        );
+        assertEquals(
+            "Could not determine the number of partitions for topic '" + topic + "' for task " +
+                taskId + " due to org.apache.kafka.common.KafkaException: Kaboom!",
+            exception.getMessage());
     }
 
     @Test
@@ -1019,7 +1064,7 @@ public class RecordCollectorTest {
             runtimeException.getClass(),
             () -> collector.send(topic, "0", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner)
         );
-        assertThat(exception.getMessage(), equalTo("Kaboom!"));
+        assertEquals("Kaboom!", exception.getMessage());
     }
 
     @Test
@@ -1140,12 +1185,11 @@ public class RecordCollectorTest {
             () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner)
         );
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+        assertEquals(
+            "Error encountered sending record to topic topic for task 0_0 due to:" +
                 "\norg.apache.kafka.common.KafkaException: KABOOM!" +
-                "\nException handler choose to FAIL the processing, no more records would be sent.")
-        );
+                "\nException handler choose to FAIL the processing, no more records would be sent.",
+            thrown.getMessage());
     }
 
     @Test
@@ -1164,12 +1208,11 @@ public class RecordCollectorTest {
 
         final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.KafkaException: KABOOM!" +
-                        "\nException handler choose to FAIL the processing, no more records would be sent.")
-        );
+        assertEquals(
+            "Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.KafkaException: KABOOM!" +
+                "\nException handler choose to FAIL the processing, no more records would be sent.",
+            thrown.getMessage());
     }
 
     @Test
@@ -1188,12 +1231,11 @@ public class RecordCollectorTest {
 
         final StreamsException thrown = assertThrows(StreamsException.class, collector::closeClean);
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.KafkaException: KABOOM!" +
-                        "\nException handler choose to FAIL the processing, no more records would be sent.")
-        );
+        assertEquals(
+            "Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.KafkaException: KABOOM!" +
+                "\nException handler choose to FAIL the processing, no more records would be sent.",
+            thrown.getMessage());
     }
 
     @Test
@@ -1215,12 +1257,11 @@ public class RecordCollectorTest {
             () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner)
         );
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
-                        "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
-        );
+        assertEquals(
+            "Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
+                "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.",
+            thrown.getMessage());
     }
 
     @Test
@@ -1239,12 +1280,11 @@ public class RecordCollectorTest {
 
         final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
-                        "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
-        );
+        assertEquals(
+            "Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
+                "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.",
+            thrown.getMessage());
     }
 
     @Test
@@ -1263,12 +1303,11 @@ public class RecordCollectorTest {
 
         final StreamsException thrown = assertThrows(StreamsException.class, collector::closeClean);
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
-                        "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
-        );
+        assertEquals(
+            "Error encountered sending record to topic topic for task 0_0 due to:" +
+                "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
+                "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.",
+            thrown.getMessage());
     }
 
     @Test
@@ -1335,10 +1374,7 @@ public class RecordCollectorTest {
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
 
         final TaskCorruptedException thrown = assertThrows(TaskCorruptedException.class, collector::flush);
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Tasks [0_0] are corrupted and hence need to be re-initialized")
-        );
+        assertEquals("Tasks [0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
 
     @Test
@@ -1363,12 +1399,11 @@ public class RecordCollectorTest {
         // With custom handler which returns FAIL, flush() throws StreamsException with TimeoutException cause
         final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+        assertEquals(
+            "Error encountered sending record to topic topic for task 0_0 due to:" +
                 "\norg.apache.kafka.common.errors.TimeoutException: KABOOM!" +
-                "\nException handler choose to FAIL the processing, no more records would be sent.")
-        );
+                "\nException handler choose to FAIL the processing, no more records would be sent.",
+            thrown.getMessage());
     }
 
     @Test
@@ -1415,17 +1450,15 @@ public class RecordCollectorTest {
 
             final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
             assertEquals(exception, thrown.getCause());
-            assertThat(
-                thrown.getMessage(),
-                equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+            assertEquals(
+                "Error encountered sending record to topic topic for task 0_0 due to:" +
                     "\njava.lang.RuntimeException: KABOOM!" +
-                    "\nException handler choose to FAIL the processing, no more records would be sent.")
-            );
+                    "\nException handler choose to FAIL the processing, no more records would be sent.",
+                thrown.getMessage());
 
-            assertThat(
-                logCaptureAppender.getMessages().get(0),
-                equalTo("test ProductionExceptionHandler returned RETRY for a non-retriable exception. Will treat it as FAIL.")
-            );
+            assertEquals(
+                "test ProductionExceptionHandler returned RETRY for a non-retriable exception. Will treat it as FAIL.",
+                logCaptureAppender.getMessages().get(0));
         }
     }
 
@@ -1481,11 +1514,10 @@ public class RecordCollectorTest {
             StreamsException.class,
             () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner)
         );
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Could not get partition information for topic topic for task 0_0." +
-                " This can happen if the topic does not exist.")
-        );
+        assertEquals(
+            "Could not get partition information for topic topic for task 0_0." +
+                " This can happen if the topic does not exist.",
+            thrown.getMessage());
     }
 
     @Test
@@ -1529,7 +1561,7 @@ public class RecordCollectorTest {
                 () -> collector.send(topic, "key", "val", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context)
             );
 
-            assertThat(error.getCause(), instanceOf(SerializationException.class));
+            assertInstanceOf(SerializationException.class, error.getCause());
         }
     }
 
@@ -1547,8 +1579,9 @@ public class RecordCollectorTest {
 
             collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
 
-            assertThat(mockProducer.history().isEmpty(), equalTo(true));
-            assertThat(
+            assertTrue(mockProducer.history().isEmpty());
+            assertEquals(
+                1.0,
                 streamsMetrics.metrics().get(new MetricName(
                     "dropped-records-total",
                     "stream-task-metrics",
@@ -1556,9 +1589,7 @@ public class RecordCollectorTest {
                     mkMap(
                         mkEntry("thread-id", Thread.currentThread().getName()),
                         mkEntry("task-id", taskId.toString())
-                    ))).metricValue(),
-                equalTo(1.0)
-            );
+                    ))).metricValue());
         }
     }
 
@@ -1801,13 +1832,13 @@ public class RecordCollectorTest {
             );
             collector.initialize();
 
-            assertThat(mockProducer.history().isEmpty(), equalTo(true));
+            assertTrue(mockProducer.history().isEmpty());
             final StreamsException error = assertThrows(
                 StreamsException.class,
                 () -> collector.send(topic, true, "val", null, 0, null, (Serializer) errorSerializer, stringSerializer, sinkNodeName, context)
             );
 
-            assertThat(error.getCause(), instanceOf(ClassCastException.class));
+            assertInstanceOf(ClassCastException.class, error.getCause());
         }
     }
 
@@ -1847,7 +1878,7 @@ public class RecordCollectorTest {
             final RecordCollector collector = newRecordCollector(productionExceptionHandler);
             collector.initialize();
 
-            assertThat(mockProducer.history().isEmpty(), equalTo(true));
+            assertTrue(mockProducer.history().isEmpty());
             assertThrows(
                 StreamsException.class,
                 () ->

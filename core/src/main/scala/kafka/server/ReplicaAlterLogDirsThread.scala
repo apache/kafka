@@ -26,6 +26,7 @@ import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncr
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap

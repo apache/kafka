@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
@@ -25,12 +26,13 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -55,7 +57,6 @@ import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,14 +80,9 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -169,36 +165,32 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> getBytesStore() {
         switch (schemaType()) {
             case WindowSchemaWithIndex:
-                return new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         storeName,
-                        METRICS_SCOPE,
                         retention,
-                        segmentInterval,
-                        true
+                        true,
+                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case WindowSchemaWithoutIndex:
-                return new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         storeName,
-                        METRICS_SCOPE,
                         retention,
-                        segmentInterval,
-                        false
+                        false,
+                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case SessionSchemaWithIndex:
-                return new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                        storeName,
-                        METRICS_SCOPE,
-                        retention,
-                        segmentInterval,
-                        true
+                return new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
+                    storeName,
+                    retention,
+                    true,
+                    new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case SessionSchemaWithoutIndex:
-                return new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                        storeName,
-                        METRICS_SCOPE,
-                        retention,
-                        segmentInterval,
-                        false
+                return new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
+                    storeName,
+                    retention,
+                    false,
+                    new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             default:
                 throw new IllegalStateException("Unknown SchemaType: " + schemaType());
@@ -854,28 +846,28 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), expectedValue4);
 
         // Record expired as timestampFromRawKey = 1000 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value1 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value1 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key1, windows[0].start(), windows[0].end());
         assertNull(value1);
 
         // Record expired as timestampFromRawKey = 1000 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value2 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value2 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key1, windows[1].start(), windows[1].end());
         assertNull(value2);
 
         // expired record
         // timestampFromRawKey = 1500 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value3 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value3 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key2, windows[2].start(), windows[2].end());
         assertNull(value3);
 
         // only non-expired record
         // timestampFromRawKey = 60,000 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value4 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value4 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key3, windows[3].start(), windows[3].end());
         assertEquals(Bytes.wrap(value4), Bytes.wrap(expectedValue4));
 
-        final byte[] noValue = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] noValue = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key3, 2000, 3000);
         assertNull(noValue);
     }
@@ -902,7 +894,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         // Fetch point
         assertEquals(
             Collections.singletonList(KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L)),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 100L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(100L, 100L))
         );
 
         // Fetch partial boundary
@@ -911,7 +903,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 200L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(100L, 200L))
         );
 
         // Fetch partial
@@ -920,11 +912,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(99L, 201L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(99L, 201L))
         );
 
         // Fetch partial
-        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(101L, 199L)) {
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(101L, 199L)) {
             assertTrue(toListAndCloseIterator(values).isEmpty());
         }
 
@@ -935,7 +927,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L),
                 KeyValue.pair(new Windowed<>(keyC, sessionWindows[2]), 200L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 300L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(100L, 300L))
         );
 
         // Fetch all
@@ -945,13 +937,13 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L),
                 KeyValue.pair(new Windowed<>(keyC, sessionWindows[2]), 200L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(99L, 301L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(99L, 301L))
         );
 
         // Fetch all
         assertEquals(
             Collections.singletonList(KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(101L, 299L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(101L, 299L))
         );
     }
 
@@ -970,7 +962,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             bytesStore.putIndex(serializedKey1, new byte[0]);
 
             byte[] value = bytesStore.getIndex(serializedKey1);
-            assertThat(Bytes.wrap(value), is(Bytes.wrap(new byte[0])));
+            assertEquals(Bytes.wrap(new byte[0]), Bytes.wrap(value));
 
             final Bytes serializedKey0 = serializeKey(new Windowed<>(keyA, windows[0]));
             bytesStore.put(serializedKey0, serializeValue(10L));
@@ -1005,7 +997,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
             // Dangling index should be deleted.
             value = bytesStore.getIndex(serializedKey1);
-            assertThat(value, is(nullValue()));
+            assertNull(value);
         }
     }
 
@@ -1055,7 +1047,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             // Index should also be removed.
             final Bytes indexKey = serializeKeyForIndex(new Windowed<>("a", windows[0]));
             final byte[] value = bytesStore.getIndex(indexKey);
-            assertThat(value, is(nullValue()));
+            assertNull(value);
         }
     }
 
@@ -1216,15 +1208,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         bytesStore.init(context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
-        assertThat(
-            results,
-            equalTo(
-                asList(
-                    KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
-                    KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
-                )
-            )
-        );
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L)),
+            results);
 
         segments.close();
     }
@@ -1248,15 +1236,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         bytesStore.init(context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
-        assertThat(
-            results,
-            equalTo(
-                asList(
-                    KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
-                    KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
-                )
-            )
-        );
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L)),
+            results);
 
         segments.close();
     }
@@ -1372,9 +1356,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         // after restoration, only non expired segments should be returned which is one as actual from is 59001
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.all());
         assertEquals(expected, results);
-        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions(""), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions(""), hasEntry(0, 3L));
+        assertNotNull(bytesStore.getPosition());
+        assertNotNull(bytesStore.getPosition().getPartitionPositions(""));
+        assertEquals(3L, bytesStore.getPosition().getPartitionPositions("").get(0));
     }
 
     @Test
@@ -1409,11 +1393,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.all());
         assertEquals(expected, results);
-        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("A"), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("A"), hasEntry(0, 3L));
-        assertThat(bytesStore.getPosition().getPartitionPositions("B"), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("B"), hasEntry(0, 2L));
+        assertNotNull(bytesStore.getPosition());
+        assertNotNull(bytesStore.getPosition().getPartitionPositions("A"));
+        assertEquals(3L, bytesStore.getPosition().getPartitionPositions("A").get(0));
+        assertNotNull(bytesStore.getPosition().getPartitionPositions("B"));
+        assertEquals(2L, bytesStore.getPosition().getPartitionPositions("B").get(0));
     }
 
     @Test
@@ -1453,8 +1437,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.all());
         assertEquals(expected, results);
-        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("A"), hasEntry(0, 2L));
+        assertNotNull(bytesStore.getPosition());
+        assertEquals(2L, bytesStore.getPosition().getPartitionPositions("A").get(0));
     }
 
     @Test
@@ -1475,7 +1459,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
         bytesStore.restoreAllInternal(getChangelogRecordsWithoutHeaders());
-        assertThat(bytesStore.getPosition(), is(Position.emptyPosition()));
+        assertEquals(Position.emptyPosition(), bytesStore.getPosition());
     }
 
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
@@ -1588,8 +1572,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig)
         );
-        final Time time = Time.SYSTEM;
-        context.setSystemTimeMs(time.milliseconds());
         bytesStore.init(context, bytesStore);
 
         // write a record to advance stream time, with a high enough timestamp
@@ -1624,15 +1606,189 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             )
         ));
         assertEquals(1.0, dropTotal.metricValue());
-        assertNotEquals(0.0, dropRate.metricValue());
+        // exactly one record was dropped, over the rate's default un-elapsed sampling window of
+        // (metrics.num.samples - 1) * metrics.sample.window.ms == 30s. The delta is generous because the
+        // window also grows by however long the store work takes between recording and reading the
+        // metric; it still separates one dropped record from none (0.0) and from two (0.06666).
+        assertEquals(
+            1.0 / 30.0,
+            ((Number) dropRate.metricValue()).doubleValue(),
+            0.005d,
+            "dropped-records-rate should reflect the single dropped record over the ~30s sampling window"
+        );
 
         bytesStore.close();
+    }
+
+    @Test
+    public void shouldMigrateExistingPositionFromFile() {
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(stateDir, storeName + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+        final AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> bytesStore = getBytesStore();
+
+        // store.init migrates the position from the legacy checkpoint file into the store.
+        bytesStore.init(context, bytesStore);
+        assertEquals(position, bytesStore.getPosition());
+        bytesStore.close();
+    }
+
+    @Test
+    public void shouldRestoreMergedPositionFromMultipleSegmentsAfterRestart() {
+        final AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> bytesStore = getBytesStore();
+        // 0 segments initially.
+        bytesStore.init(context, bytesStore);
+
+        // Writes record to different partitions
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[2])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[3])), serializeValue(10));
+        final Position expected = Position.fromMap(mkMap(mkEntry("t1", mkMap(mkEntry(0, 2L), mkEntry(1, 3L)))));
+
+        // Each open segment should share the same position.
+        for (final KeyValueSegment segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
+
+        // Persist the merged position and simulate a full store restart.
+        bytesStore.commit(Map.of());
+        bytesStore.segments.writePosition();
+        bytesStore.close();
+        bytesStore.init(context, bytesStore);
+
+        // The store-level position should be restored from the merged position.
+        assertEquals(expected, bytesStore.getPosition());
+
+        // Restored segments should all have the same merged position.
+        for (final KeyValueSegment segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
     }
 
     private Set<String> segmentDirs() {
         final File windowDir = new File(stateDir, storeName);
 
         return Set.of(Objects.requireNonNull(windowDir.list()));
+    }
+
+    @Test
+    public void readCommittedShouldHideStagedWritesUntilCommit() {
+        initTransactional();
+        final String key = "a";
+        final Bytes storeKey = serializeKey(new Windowed<>(key, windows[0]));
+
+        bytesStore.put(storeKey, serializeValue(10L));
+        bytesStore.commit(Map.of());
+
+        // Stage an overwrite that is not yet committed.
+        bytesStore.put(storeKey, serializeValue(50L));
+
+        // Point get: READ_UNCOMMITTED sees the staged value; READ_COMMITTED sees the last committed value.
+        assertEquals(50L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_UNCOMMITTED).get(storeKey)));
+        assertEquals(10L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).get(storeKey)));
+
+        // Range fetch (exercises SegmentIterator's isolation routing) must respect the same visibility.
+        assertEquals(
+            List.of(KeyValue.pair(new Windowed<>(key, windows[0]), 50L)),
+            toListAndCloseIterator(timeOrdered().readOnly(IsolationLevel.READ_UNCOMMITTED).fetch(Bytes.wrap(key.getBytes()), 0, windows[0].start())));
+        assertEquals(
+            List.of(KeyValue.pair(new Windowed<>(key, windows[0]), 10L)),
+            toListAndCloseIterator(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).fetch(Bytes.wrap(key.getBytes()), 0, windows[0].start())));
+    }
+
+    @Test
+    public void commitShouldMakeStagedWritesVisibleToReadCommitted() {
+        initTransactional();
+        final Bytes storeKey = serializeKey(new Windowed<>("a", windows[0]));
+
+        bytesStore.put(storeKey, serializeValue(50L));
+        // Before commit, READ_COMMITTED cannot see the staged write.
+        assertNull(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).get(storeKey));
+
+        bytesStore.commit(Map.of());
+
+        // After commit, both isolation levels converge on the now-durable value.
+        assertEquals(50L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).get(storeKey)));
+        assertEquals(50L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_UNCOMMITTED).get(storeKey)));
+    }
+
+    @Test
+    public void stagedWritesShouldNotAdvanceCommittedPositionUntilCommit() {
+        initTransactional();
+
+        context.setRecordContext(new ProcessorRecordContext(0, 1L, 0, "input", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(10L));
+        bytesStore.commit(Map.of());
+
+        context.setRecordContext(new ProcessorRecordContext(0, 5L, 0, "input", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("b", windows[0])), serializeValue(20L));
+
+        // committed position stays at the last committed offset; the merged position reflects the staged write.
+        assertEquals(Map.of(0, 1L), bytesStore.getCommittedPosition().getPartitionPositions("input"));
+        assertEquals(Map.of(0, 5L), bytesStore.getPosition().getPartitionPositions("input"));
+
+        bytesStore.commit(Map.of());
+        assertEquals(Map.of(0, 5L), bytesStore.getCommittedPosition().getPartitionPositions("input"));
+    }
+
+    @Test
+    public void approximateNumUncommittedBytesShouldReflectStagedWrites() {
+        initTransactional();
+        assertEquals(0, bytesStore.approximateNumUncommittedBytes());
+
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(10L));
+        final long staged = bytesStore.approximateNumUncommittedBytes();
+        assertTrue(staged > 0, "a staged write should contribute uncommitted bytes");
+
+        bytesStore.commit(Map.of());
+        // commit flushes the staged data, so uncommitted bytes drop below the staged size (a small residual remains, as for any RocksDBStore).
+        assertTrue(bytesStore.approximateNumUncommittedBytes() < staged, "commit should flush staged writes");
+    }
+
+    @Test
+    public void nonTransactionalStoreShouldReadIdenticallyAcrossIsolationLevels() {
+        // before() already initialised the store under a non-transactional context.
+        final Bytes storeKey = serializeKey(new Windowed<>("a", windows[0]));
+        bytesStore.put(storeKey, serializeValue(10L));
+
+        assertEquals(10L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_UNCOMMITTED).get(storeKey)));
+        assertEquals(10L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).get(storeKey)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private AbstractRocksDBTimeOrderedSegmentedBytesStore<KeyValueSegment> timeOrdered() {
+        return (AbstractRocksDBTimeOrderedSegmentedBytesStore<KeyValueSegment>) bytesStore;
+    }
+
+    private void initTransactional() {
+        // Re-open under a transactional EOS context so writes stage until commit().
+        bytesStore.close();
+        bytesStore = getBytesStore();
+        context = getTransactionalEOSProcessorContext();
+        bytesStore.init(context, bytesStore);
+    }
+
+    private InternalMockProcessorContext<?, ?> getTransactionalEOSProcessorContext() {
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
+        streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        streamsProps.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        return new InternalMockProcessorContext<>(
+                stateDir,
+                Serdes.String(),
+                Serdes.Long(),
+                new MockRecordCollector(),
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                new StreamsConfig(streamsProps));
+    }
+
+    private Long deserializeValue(final byte[] value) {
+        return new LongDeserializer().deserialize("", value);
     }
 
     private Bytes serializeKey(final Windowed<String> key) {
@@ -1647,9 +1803,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
             if (changeLog) {
-                return WindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
+                return WindowKeySchema.toStoreKeyBinary(key, seq, new RecordHeaders(), stateSerdes);
             }
-            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
+            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, seq, new RecordHeaders(), stateSerdes);
         } else if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
             if (changeLog) {
                 return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
@@ -1663,7 +1819,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     private Bytes serializeKeyForIndex(final Windowed<String> key) {
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (getIndexSchema() instanceof KeyFirstWindowKeySchema) {
-            return KeyFirstWindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
+            return KeyFirstWindowKeySchema.toStoreKeyBinary(key, 0, new RecordHeaders(), stateSerdes);
         } else if (getIndexSchema() instanceof KeyFirstSessionKeySchema) {
             return Bytes.wrap(KeyFirstSessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
         } else {

@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -116,11 +115,6 @@ public class FindCoordinatorResponse extends AbstractResponse {
         return data.toString();
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
-
     public List<FindCoordinatorResponseData.Coordinator> coordinators() {
         if (!data.coordinators().isEmpty())
             return data.coordinators();
@@ -132,7 +126,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
                     .setNodeId(data.nodeId())
                     .setHost(data.host())
                     .setPort(data.port());
-            return Collections.singletonList(coordinator);
+            return List.of(coordinator);
         }
     }
 
@@ -148,7 +142,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
 
     public static FindCoordinatorResponse prepareResponse(Errors error, String key, Node node) {
         FindCoordinatorResponseData data = new FindCoordinatorResponseData();
-        data.setCoordinators(Collections.singletonList(
+        data.setCoordinators(List.of(
             prepareCoordinatorResponse(error, key, node)
         ));
         return new FindCoordinatorResponse(data);

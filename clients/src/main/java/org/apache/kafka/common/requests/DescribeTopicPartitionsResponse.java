@@ -52,11 +52,6 @@ public class DescribeTopicPartitionsResponse extends AbstractResponse {
     }
 
     @Override
-    public boolean shouldClientThrottle(short version) {
-        return true;
-    }
-
-    @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         data.topics().forEach(topicResponse -> {

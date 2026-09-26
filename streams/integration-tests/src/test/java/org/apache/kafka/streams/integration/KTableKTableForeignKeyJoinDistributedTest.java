@@ -32,6 +32,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -39,11 +40,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -67,7 +68,7 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     @BeforeAll
-    public static void startCluster() throws IOException, InterruptedException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
     }
@@ -121,11 +122,12 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     }
 
     @AfterEach
-    public void after() {
+    public void after() throws InterruptedException {
         client1.close(Duration.ofSeconds(60));
         client2.close(Duration.ofSeconds(60));
         quietlyCleanStateAfterTest(CLUSTER, client1);
         quietlyCleanStateAfterTest(CLUSTER, client2);
+        CLUSTER.deleteTopics(LEFT_TABLE, RIGHT_TABLE, OUTPUT);
     }
 
     public Properties getStreamsConfiguration(final String safeTestName) {
@@ -157,11 +159,15 @@ public class KTableKTableForeignKeyJoinDistributedTest {
                 .to(OUTPUT);
     }
 
-    @Test
-    public void shouldBeInitializedWithDefaultSerde(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldBeInitializedWithDefaultSerde(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         final String safeTestName = safeUniqueTestName(testInfo);
         final Properties streamsConfiguration1 = getStreamsConfiguration(safeTestName);
         final Properties streamsConfiguration2 = getStreamsConfiguration(safeTestName);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration1, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration2, withHeaders);
 
         //Each streams client needs to have it's own StreamsBuilder in order to simulate
         //a truly distributed run

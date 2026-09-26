@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
 import java.util.List;
 
 public class DescribeTopicPartitionsRequest extends AbstractRequest {
@@ -83,7 +82,7 @@ public class DescribeTopicPartitionsRequest extends AbstractRequest {
                 .setName(topic.name())
                 .setErrorCode(error.code())
                 .setIsInternal(false)
-                .setPartitions(Collections.emptyList())
+                .setPartitions(List.of())
             );
         }
         responseData.setThrottleTimeMs(throttleTimeMs);

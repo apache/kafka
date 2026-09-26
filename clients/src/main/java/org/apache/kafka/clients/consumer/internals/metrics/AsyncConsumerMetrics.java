@@ -22,10 +22,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Value;
 
-import java.util.Arrays;
-
-public class AsyncConsumerMetrics implements AutoCloseable {
-    private final Metrics metrics;
+public class AsyncConsumerMetrics extends AbstractConsumerMetricsManager {
 
     public static final String TIME_BETWEEN_NETWORK_THREAD_POLL_SENSOR_NAME = "time-between-network-thread-poll";
     public static final String APPLICATION_EVENT_QUEUE_SIZE_SENSOR_NAME = "application-event-queue-size";
@@ -49,7 +46,11 @@ public class AsyncConsumerMetrics implements AutoCloseable {
     private final Sensor unsentRequestsQueueTimeSensor;
 
     public AsyncConsumerMetrics(Metrics metrics, String groupName) {
-        this.metrics = metrics;
+        this(new MetricsLedger(metrics), groupName);
+    }
+
+    private AsyncConsumerMetrics(MetricsLedger metrics, String groupName) {
+        super(metrics);
         this.timeBetweenNetworkThreadPollSensor = metrics.sensor(TIME_BETWEEN_NETWORK_THREAD_POLL_SENSOR_NAME);
         this.timeBetweenNetworkThreadPollSensor.add(
             metrics.metricName(
@@ -236,21 +237,5 @@ public class AsyncConsumerMetrics implements AutoCloseable {
 
     public void recordBackgroundEventQueueProcessingTime(long processingTime) {
         this.backgroundEventQueueProcessingTimeSensor.record(processingTime);
-    }
-
-    @Override
-    public void close() {
-        Arrays.asList(
-            timeBetweenNetworkThreadPollSensor.name(),
-            applicationEventQueueSizeSensor.name(),
-            applicationEventQueueTimeSensor.name(),
-            applicationEventQueueProcessingTimeSensor.name(),
-            applicationEventExpiredSizeSensor.name(),
-            backgroundEventQueueSizeSensor.name(),
-            backgroundEventQueueTimeSensor.name(),
-            backgroundEventQueueProcessingTimeSensor.name(),
-            unsentRequestsQueueSizeSensor.name(),
-            unsentRequestsQueueTimeSensor.name()
-        ).forEach(metrics::removeSensor);
     }
 }

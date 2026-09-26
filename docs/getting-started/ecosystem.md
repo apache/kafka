@@ -1,6 +1,6 @@
 ---
 title: Ecosystem
-description: 
+description: Discover tools and integrations that extend Kafka beyond the main distribution.
 weight: 4
 tags: ['kafka', 'docs']
 aliases: 

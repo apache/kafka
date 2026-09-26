@@ -25,12 +25,14 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
 public class StreamThreadStateStoreProvider {
@@ -45,7 +47,7 @@ public class StreamThreadStateStoreProvider {
     public <T> List<T> stores(final StoreQueryParameters storeQueryParams) {
         final StreamThread.State state = streamThread.state();
         if (state == StreamThread.State.DEAD) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final String storeName = storeQueryParams.storeName();
@@ -65,10 +67,10 @@ public class StreamThreadStateStoreProvider {
                         task.store(storeName) != null &&
                         storeName.equals(task.store(storeName).name())) {
                         final T typedStore = validateAndCastStores(task.store(storeName), queryableStoreType, storeName, task.id());
-                        return Collections.singletonList(typedStore);
+                        return List.of(typedStore);
                     }
                 }
-                return Collections.emptyList();
+                return List.of();
             } else {
                 final List<T> list = new ArrayList<>();
                 for (final Task task : tasks) {
@@ -103,13 +105,27 @@ public class StreamThreadStateStoreProvider {
                             " because the store is not open. " +
                             "The state store may have migrated to another instance.");
             }
-            if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-                return (T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store);
+            if (store instanceof TimestampedKeyValueStoreWithHeaders) {
+                if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                    return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<?, ?>) store, ValueConverters.extractValueFromHeaders());
+                } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedKeyValueStoreType) {
+                    return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<?, ?>) store, ValueConverters.extractValueAndTimestampFromHeaders());
+                }
+            } else if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<?, ?>) store, ValueConverters.extractValue());
+            } else if (store instanceof TimestampedWindowStoreWithHeaders) {
+                if (queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
+                    return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<?, ?>) store, ValueConverters.extractValueFromHeaders());
+                } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedWindowStoreType) {
+                    return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<?, ?>) store, ValueConverters.extractValueAndTimestampFromHeaders());
+                }
             } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
-                return (T) new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store);
-            } else {
-                return (T) store;
+                return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStore<?, ?>) store, ValueConverters.extractValue());
+            } else if (store instanceof SessionStoreWithHeaders && queryableStoreType instanceof QueryableStoreTypes.SessionStoreType) {
+                return (T) new ReadOnlySessionStoreFacade<>((SessionStoreWithHeaders<?, ?>) store);
             }
+
+            return (T) store;
         } else {
             throw new InvalidStateStoreException(
                 "Cannot get state store " + storeName +

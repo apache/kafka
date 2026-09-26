@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Map;
 
 /**
  * Options for {@link Admin#deleteRecords(Map, DeleteRecordsOptions)}.
  */
+@InterfaceAudience.Public
 public class DeleteRecordsOptions extends AbstractOptions<DeleteRecordsOptions> {
 
 }

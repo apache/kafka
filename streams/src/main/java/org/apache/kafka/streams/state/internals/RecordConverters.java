@@ -17,14 +17,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public final class RecordConverters {
@@ -33,7 +28,7 @@ public final class RecordConverters {
     private static final RecordConverter RAW_TO_TIMESTAMED_INSTANCE = record -> {
         final byte[] rawValue = record.value();
         final long timestamp = record.timestamp();
-        final byte[] recordValue = rawValue == null ? null :
+        final byte[] recordValueWithTimestamp = rawValue == null ? null :
             ByteBuffer.allocate(8 + rawValue.length)
                 .putLong(timestamp)
                 .put(rawValue)
@@ -45,9 +40,9 @@ public final class RecordConverters {
             timestamp,
             record.timestampType(),
             record.serializedKeySize(),
-            record.serializedValueSize(),
+            recordValueWithTimestamp != null ? recordValueWithTimestamp.length : 0,
             record.key(),
-            recordValue,
+            recordValueWithTimestamp,
             record.headers(),
             record.leaderEpoch()
         );
@@ -57,7 +52,7 @@ public final class RecordConverters {
         final byte[] rawValue = record.value();
 
         // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
-        final byte[] recordValue = reconstructFromRaw(
+        final byte[] recordValueWithTimestampAndHeaders = reconstructFromRaw(
             rawValue,
             record.timestamp(),
             record.headers()
@@ -70,9 +65,9 @@ public final class RecordConverters {
             record.timestamp(),
             record.timestampType(),
             record.serializedKeySize(),
-            record.serializedValueSize(),
+            recordValueWithTimestampAndHeaders != null ? recordValueWithTimestampAndHeaders.length : 0,
             record.key(),
-            recordValue,
+            recordValueWithTimestampAndHeaders,
             record.headers(),
             record.leaderEpoch()
         );
@@ -80,6 +75,34 @@ public final class RecordConverters {
 
     public static RecordConverter rawValueToHeadersValue() {
         return RAW_TO_WITH_HEADERS_INSTANCE;
+    }
+
+    private static final RecordConverter RAW_TO_SESSION_WITH_HEADERS_INSTANCE = record -> {
+        final byte[] rawValue = record.value();
+
+        // Format: [headersSize(varint)][headersBytes][aggregation] (no timestamp)
+        final byte[] recordValueWithHeaders = reconstructSessionFromRaw(
+            rawValue,
+            record.headers()
+        );
+
+        return new ConsumerRecord<>(
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            record.timestamp(),
+            record.timestampType(),
+            record.serializedKeySize(),
+            recordValueWithHeaders != null ? recordValueWithHeaders.length : 0,
+            record.key(),
+            recordValueWithHeaders,
+            record.headers(),
+            record.leaderEpoch()
+        );
+    };
+
+    public static RecordConverter rawValueToSessionHeadersValue() {
+        return RAW_TO_SESSION_WITH_HEADERS_INSTANCE;
     }
 
     // privatize the constructor so the class cannot be instantiated (only used for its static members)
@@ -91,6 +114,32 @@ public final class RecordConverters {
 
     public static RecordConverter identity() {
         return IDENTITY_INSTANCE;
+    }
+
+    /**
+     * Reconstructs the AggregationWithHeaders format from raw value bytes and headers (no timestamp).
+     * Used during state restoration from changelog topics for session stores.
+     *
+     * @param rawValue the raw aggregation bytes
+     * @param headers the headers
+     * @return the serialized AggregationWithHeaders format
+     */
+    static byte[] reconstructSessionFromRaw(final byte[] rawValue, final Headers headers) {
+        if (rawValue == null) {
+            return null;
+        }
+
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
+
+        final int payloadSize = preSerializedHeaders.requiredBufferSizeForHeaders + rawValue.length;
+
+        // Format: [headersSize(varint)][headersBytes][value]
+        final ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(preSerializedHeaders.requiredBufferSizeForHeaders) + payloadSize);
+        ByteUtils.writeVarint(preSerializedHeaders.requiredBufferSizeForHeaders, buffer);
+
+        return HeadersSerializer.serialize(preSerializedHeaders, buffer)
+            .put(rawValue)
+            .array();
     }
 
     /**
@@ -106,23 +155,18 @@ public final class RecordConverters {
         if (rawValue == null) {
             return null;
         }
-        final byte[] rawTimestamp;
-        try (LongSerializer timestampSerializer = new LongSerializer()) {
-            rawTimestamp = timestampSerializer.serialize("", timestamp);
-        }
-        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
 
-        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             final DataOutputStream out = new DataOutputStream(baos)) {
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
 
-            ByteUtils.writeVarint(rawHeaders.length, out);
-            out.write(rawHeaders);
-            out.write(rawTimestamp);
-            out.write(rawValue);
+        final int payloadSize = preSerializedHeaders.requiredBufferSizeForHeaders + 8 + rawValue.length;
 
-            return baos.toByteArray();
-        } catch (final IOException e) {
-            throw new SerializationException("Failed to reconstruct ValueTimestampHeaders", e);
-        }
+        // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
+        final ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(preSerializedHeaders.requiredBufferSizeForHeaders) + payloadSize);
+        ByteUtils.writeVarint(preSerializedHeaders.requiredBufferSizeForHeaders, buffer);
+
+        return HeadersSerializer.serialize(preSerializedHeaders, buffer)
+            .putLong(timestamp)
+            .put(rawValue)
+            .array();
     }
 }

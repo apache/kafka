@@ -37,12 +37,12 @@ public class UnifierTest {
     @Test
     public void testAddNewField() throws Exception {
         new Unifier(toMessage("{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
-                "'validVersions': '0', 'flexibleVersions': '0+', " +
+                "'validVersions': '0', 'flexibleVersions': '0+', 'headerVersions': {'0+': '2'}, " +
                 "'fields': [" +
                 "{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}" +
                 "]}"),
             toMessage("{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
-                "'validVersions': '0-1', 'flexibleVersions': '0+', " +
+                "'validVersions': '0-1', 'flexibleVersions': '0+', 'headerVersions': {'0+': '2'}, " +
                 "'fields': [" +
                 "{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
                 "{'name': 'ControllerId', 'type': 'int32', 'versions': '1+'}" +
@@ -51,15 +51,15 @@ public class UnifierTest {
 
     static final MessageSpec TOP_LEVEL_MESSAGE_1 = new MessageSpec("TopLevelMessage",
             "0-2", null, null, null, MessageSpecType.DATA, Collections.emptyList(),
-            "0+", Collections.emptyList(), false);
+            "0+", null, Collections.emptyList(), false);
 
     static final MessageSpec TOP_LEVEL_MESSAGE_2 = new MessageSpec("TopLevelMessage",
             "0-4", null, null, null, MessageSpecType.DATA, Collections.emptyList(),
-            "0+", Collections.emptyList(), false);
+            "0+", null, Collections.emptyList(), false);
 
     static final MessageSpec TOP_LEVEL_MESSAGE_2_DROPPING_V0 = new MessageSpec("TopLevelMessage",
             "1-4", null, null, null, MessageSpecType.DATA, Collections.emptyList(),
-            "0+", Collections.emptyList(), false);
+            "0+", null, Collections.emptyList(), false);
 
     @Test
     public void testFieldTypesDoNotMatch() throws Exception {

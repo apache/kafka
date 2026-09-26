@@ -262,8 +262,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             int brokerToBeUncleanShutdown = topicPartitionInfo.elr().get(0).id();
             var broker = clusterInstance.brokers().values().stream().filter(b -> b.config().brokerId() == brokerToBeUncleanShutdown)
                 .findFirst().get();
-            List<File> dirs = new ArrayList<>();
-            broker.logManager().liveLogDirs().foreach(dirs::add);
+            List<File> dirs = new ArrayList<>(broker.logManager().liveLogDirs());
             assertEquals(1, dirs.size());
             CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.get(0).toString());
             assertTrue(handler.exists());
@@ -322,8 +321,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             Set<Integer> initialReplicaSet = initialReplicas.stream().map(node -> node.id()).collect(Collectors.toSet());
             clusterInstance.brokers().forEach((id, broker) -> {
                 if (initialReplicaSet.contains(id)) {
-                    List<File> dirs = new ArrayList<>();
-                    broker.logManager().liveLogDirs().foreach(dirs::add);
+                    List<File> dirs = new ArrayList<>(broker.logManager().liveLogDirs());
                     assertEquals(1, dirs.size());
                     CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.get(0).toString());
                     assertDoesNotThrow(handler::delete);

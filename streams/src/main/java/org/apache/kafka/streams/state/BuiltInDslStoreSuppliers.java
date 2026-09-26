@@ -16,15 +16,19 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreWithHeadersSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionHeadersBytesStoreSupplier;
 
 /**
  * Collection of builtin {@link DslStoreSuppliers} for Kafka Streams. Today we
  * support RocksDb and InMemory stores out of the box.
  */
+@InterfaceAudience.Public
 public class BuiltInDslStoreSuppliers {
 
     public static final DslStoreSuppliers ROCKS_DB = new RocksDBDslStoreSuppliers();
@@ -53,39 +57,76 @@ public class BuiltInDslStoreSuppliers {
 
         @Override
         public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
+            final DslStoreFormat storeFormat = params.dslStoreFormat();
             if (params.emitStrategy().type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
-                return RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
+                final boolean withHeaders = (storeFormat == DslStoreFormat.HEADERS);
+                if (!withHeaders) {
+                    return RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
                         params.name(),
                         params.retentionPeriod(),
                         params.windowSize(),
                         params.retainDuplicates(),
-                        params.isSlidingWindow());
+                        params.isSlidingWindow()
+                    );
+                } else {
+                    return RocksDbIndexedTimeOrderedWindowBytesStoreWithHeadersSupplier.create(
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates(),
+                        params.isSlidingWindow()
+                    );
+                }
             }
 
-            if (params.isTimestamped()) {
-                return Stores.persistentTimestampedWindowStore(
+            final DslStoreFormat format = (storeFormat == null) ? DslStoreFormat.TIMESTAMPED : storeFormat;
+            switch (format) {
+                case HEADERS:
+                    return Stores.persistentTimestampedWindowStoreWithHeaders(
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates()
+                    );
+                case TIMESTAMPED:
+                    return Stores.persistentTimestampedWindowStore(
                         params.name(),
                         params.retentionPeriod(),
                         params.windowSize(),
                         params.retainDuplicates());
-            } else {
-                return Stores.persistentWindowStore(
+                case PLAIN:
+                    return Stores.persistentWindowStore(
                         params.name(),
                         params.retentionPeriod(),
                         params.windowSize(),
                         params.retainDuplicates());
+                default:
+                    throw new IllegalStateException("Unsupported DslStoreFormat: " + format +
+                        ". Expected one of: HEADERS, TIMESTAMPED, or PLAIN");
             }
         }
 
         @Override
         public SessionBytesStoreSupplier sessionStore(final DslSessionParams params) {
             if (params.emitStrategy().type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
-                return new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                if (params.storeFormat() == DslStoreFormat.HEADERS) {
+                    return new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(
                         params.name(),
                         params.retentionPeriod().toMillis(),
-                        true);
+                        true
+                    );
+                } else {
+                    return new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                        params.name(),
+                        params.retentionPeriod().toMillis(),
+                        true
+                    );
+                }
             }
 
+            if (params.storeFormat() == DslStoreFormat.HEADERS) {
+                return Stores.persistentSessionStoreWithHeaders(params.name(), params.retentionPeriod());
+            }
             return Stores.persistentSessionStore(params.name(), params.retentionPeriod());
         }
     }

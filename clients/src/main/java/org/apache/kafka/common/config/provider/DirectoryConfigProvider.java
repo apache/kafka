@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.config.provider;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.AllowedPaths;
@@ -32,14 +34,13 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Collections.emptyMap;
-
 /**
  * An implementation of {@link ConfigProvider} based on a directory of files.
  * Property keys correspond to the names of the regular (i.e. non-directory)
  * files in a directory given by the path parameter.
  * Property values are taken from the file contents corresponding to each key.
  */
+@InterfaceAudience.Public
 public class DirectoryConfigProvider implements ConfigProvider {
 
     private static final Logger log = LoggerFactory.getLogger(DirectoryConfigProvider.class);
@@ -87,7 +88,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
             throw new IllegalStateException("The provider has not been configured yet.");
         }
 
-        Map<String, String> map = emptyMap();
+        Map<String, String> map = Map.of();
 
         if (path != null && !path.isEmpty()) {
             Path dir = allowedPaths.parseUntrustedPath(path);

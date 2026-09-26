@@ -43,8 +43,8 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
@@ -455,11 +455,9 @@ public class MirrorSourceConnector extends SourceConnector {
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
         // get source and target topics with respective partition counts
         Map<String, Long> sourceTopicToPartitionCounts = knownSourceTopicPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
-                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting()));
         Map<String, Long> targetTopicToPartitionCounts = knownTargetTopicPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
-                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting()));
 
         Set<String> knownSourceTopics = sourceTopicToPartitionCounts.keySet();
         Set<String> knownTargetTopics = targetTopicToPartitionCounts.keySet();
@@ -720,7 +718,16 @@ public class MirrorSourceConnector extends SourceConnector {
         String source = replicationPolicy.topicSource(topic);
         if (source == null) {
             return false;
-        } else if (source.equals(sourceAndTarget.target())) {
+        }
+
+        final boolean condition;
+        if (replicationPolicy instanceof IdentityReplicationPolicy) {
+            condition = source.equals(sourceAndTarget.target());
+        } else {
+            condition = source.equals(sourceAndTarget.source()) || source.equals(sourceAndTarget.target());
+        }
+
+        if (condition) {
             return true;
         } else {
             String upstreamTopic = replicationPolicy.upstreamTopic(topic);

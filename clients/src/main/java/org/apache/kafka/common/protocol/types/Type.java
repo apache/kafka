@@ -19,8 +19,8 @@ package org.apache.kafka.common.protocol.types;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.internal.BaseRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
@@ -287,7 +287,7 @@ public abstract class Type {
             if (item instanceof Integer)
                 return (Integer) item;
             else
-                throw new SchemaException(item + " is not an a Integer (encoding an unsigned short)");
+                throw new SchemaException(item + " is not an Integer (encoding an unsigned short)");
         }
 
         @Override

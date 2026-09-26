@@ -57,6 +57,7 @@ public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
         return "DynamicTopicClusterQuotaPublisher " + nodeType + " id=" + nodeId;
     }
 
+    @SuppressWarnings("removal")
     @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
         try {

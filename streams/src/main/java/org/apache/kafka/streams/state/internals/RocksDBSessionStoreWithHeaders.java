@@ -16,17 +16,21 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 
 /**
  * RocksDB-backed session store with support for record headers.
  * <p>
- * This store extends {@link RocksDBSessionStore} and overrides
- * {@code query()} to disable IQv2 for header-aware stores.
+ * This store extends {@link RocksDBSessionStore} and relies on its inherited IQv2 query handling
+ * (via {@code StoreQueryUtils}); header-aware value (de)serialization is performed at the metered
+ * layer.
+ * <p>
+ * There is deliberately no {@code query()} override to gate query types: the metered wrapper
+ * ({@code MeteredSessionStoreWithHeaders}) intercepts and deserializes every query that would
+ * otherwise be served from this store's raw header-format bytes, delegating downward only queries
+ * that {@code StoreQueryUtils} rejects as {@code UNKNOWN_QUERY_TYPE}. So raw header-format value
+ * bytes are never returned directly to a caller; teaching {@code StoreQueryUtils} to serve a new
+ * query type from session stores would require matching interception at the metered layer.
  * <p>
  * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytes]
  *
@@ -34,12 +38,7 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
  */
 class RocksDBSessionStoreWithHeaders extends RocksDBSessionStore implements HeadersBytesStore {
 
-    RocksDBSessionStoreWithHeaders(final SegmentedBytesStore bytesStore) {
+    RocksDBSessionStoreWithHeaders(final AbstractRocksDBSegmentedBytesStore<?> bytesStore) {
         super(bytesStore);
-    }
-
-    @Override
-    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
-        throw new UnsupportedOperationException("Querying stores with headers is not supported");
     }
 }
