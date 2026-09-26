@@ -27,13 +27,13 @@ import java.util.List;
 
 public class ShareConsumerMetadata extends Metadata {
     private final boolean allowAutoTopicCreation;
-    private final SubscriptionState subscription;
+    private final ShareSubscriptionState subscription;
 
     public ShareConsumerMetadata(long refreshBackoffMs,
                                  long refreshBackoffMaxMs,
                                  long metadataExpireMs,
                                  boolean allowAutoTopicCreation,
-                                 SubscriptionState subscription,
+                                 ShareSubscriptionState subscription,
                                  LogContext logContext,
                                  ClusterResourceListeners clusterResourceListeners) {
         super(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, logContext, clusterResourceListeners);
@@ -42,7 +42,7 @@ public class ShareConsumerMetadata extends Metadata {
     }
 
     public ShareConsumerMetadata(ConsumerConfig config,
-                                 SubscriptionState subscriptions,
+                                 ShareSubscriptionState subscriptions,
                                  LogContext logContext,
                                  ClusterResourceListeners clusterResourceListeners) {
         this(config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
@@ -63,8 +63,7 @@ public class ShareConsumerMetadata extends Metadata {
      */
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
-        List<String> topics = new ArrayList<>();
-        topics.addAll(subscription.metadataTopics());
+        List<String> topics = new ArrayList<>(subscription.metadataTopics());
         return MetadataRequest.Builder.forTopicNames(topics, allowAutoTopicCreation);
     }
 

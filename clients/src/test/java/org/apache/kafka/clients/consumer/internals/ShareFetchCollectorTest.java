@@ -58,7 +58,6 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createShareFetchMetricsManager;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -78,7 +77,7 @@ public class ShareFetchCollectorTest {
     private final TopicIdPartition topicAPartition1 = new TopicIdPartition(topicAPartition0.topicId(), 1, "topic-a");
     private LogContext logContext;
 
-    private SubscriptionState subscriptions;
+    private ShareSubscriptionState subscriptions;
     private ShareFetchConfig shareFetchConfig;
     private ShareConsumerMetadata metadata;
     private ShareFetchBuffer fetchBuffer;
@@ -270,13 +269,12 @@ public class ShareFetchCollectorTest {
     @MethodSource("testErrorInInitializeSource")
     public void testErrorInInitializeDoesNotLoseRecordsFromEarlierPartitions(RuntimeException expectedException) {
         buildDependencies();
-        subscriptions.subscribe(Set.of(topicAPartition0.topic()));
+        subscriptions.subscribeToShareGroup(Set.of(topicAPartition0.topic()));
         subscriptions.assignFromSubscribed(Set.of(topicAPartition0.topicPartition(), topicAPartition1.topicPartition()));
 
         // Create a ShareFetchCollector that fails on ShareCompletedFetch initialization for partition 1 only.
         fetchCollector = new ShareFetchCollector<>(logContext,
                 metadata,
-                subscriptions,
                 shareFetchConfig,
                 deserializers) {
 
@@ -320,7 +318,6 @@ public class ShareFetchCollectorTest {
         // Create a ShareFetchCollector that fails on ShareCompletedFetch initialization.
         fetchCollector = new ShareFetchCollector<>(logContext,
                 metadata,
-                subscriptions,
                 shareFetchConfig,
                 deserializers) {
 
@@ -424,7 +421,7 @@ public class ShareFetchCollectorTest {
         partitionSet.add(topicAPartition0.topicPartition());
         shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(shareFetchMetricsManager, partitionSet);
 
-        subscriptions = createSubscriptionState(config, logContext);
+        subscriptions = new ShareSubscriptionState(logContext);
         shareFetchConfig = new ShareFetchConfig(config);
 
         metadata = new ShareConsumerMetadata(
@@ -438,7 +435,6 @@ public class ShareFetchCollectorTest {
         fetchCollector = new ShareFetchCollector<>(
                 logContext,
                 metadata,
-                subscriptions,
                 shareFetchConfig,
                 deserializers);
         fetchBuffer = new ShareFetchBuffer(logContext);
@@ -446,7 +442,7 @@ public class ShareFetchCollectorTest {
     }
 
     private void subscribeAndAssign(TopicIdPartition tp) {
-        subscriptions.subscribe(Set.of(tp.topic()));
+        subscriptions.subscribeToShareGroup(Set.of(tp.topic()));
         subscriptions.assignFromSubscribed(Set.of(tp.topicPartition()));
     }
 

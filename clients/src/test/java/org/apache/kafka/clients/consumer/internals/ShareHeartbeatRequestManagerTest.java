@@ -66,6 +66,7 @@ public class ShareHeartbeatRequestManagerTest
     // methods. The subclass setUp() assigns the same mock to super.membershipManager so
     // inherited tests see the same instance.
     private ShareMembershipManager membershipManager;
+    private ShareSubscriptionState subscriptions;
     private ShareHeartbeatRequestManager.HeartbeatState heartbeatState;
 
     public ShareHeartbeatRequestManagerTest() {
@@ -77,7 +78,8 @@ public class ShareHeartbeatRequestManagerTest
         time = new MockTime();
         pollTimer = spy(time.timer(DEFAULT_MAX_POLL_INTERVAL_MS));
         coordinatorRequestManager = mock(CoordinatorRequestManager.class);
-        subscriptions = mock(SubscriptionState.class);
+        subscriptions = mock(ShareSubscriptionState.class);
+        super.subscriptions = subscriptions;
         backgroundEventHandler = mock(BackgroundEventHandler.class);
         membershipManager = mock(ShareMembershipManager.class);
         super.membershipManager = membershipManager;
@@ -228,7 +230,6 @@ public class ShareHeartbeatRequestManagerTest
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
         when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptions.hasRebalanceListener()).thenReturn(false);
         mockStableMemberData();
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
@@ -239,7 +240,7 @@ public class ShareHeartbeatRequestManagerTest
 
         // Join the group and subscribe to a topic, but the response has not yet been received
         String topic = "topic1";
-        subscriptions.subscribe(Set.of(topic));
+        subscriptions.subscribeToShareGroup(Set.of(topic));
         when(subscriptions.subscription()).thenReturn(Set.of(topic));
         mockRejoiningMemberData();
         data = heartbeatState.buildRequestData();

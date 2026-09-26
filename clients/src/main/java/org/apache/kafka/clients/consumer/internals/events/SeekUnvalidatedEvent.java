@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Optional;
 
 /**
- * Event to perform {@link SubscriptionState#seekUnvalidated(TopicPartition, SubscriptionState.FetchPosition)}
+ * Event to perform {@link ConsumerSubscriptionState#seekUnvalidated(TopicPartition, ConsumerSubscriptionState.FetchPosition)}
  * in the background thread. This can avoid race conditions when subscription state is updated.
  */
 public class SeekUnvalidatedEvent extends CompletableApplicationEvent<Void> {

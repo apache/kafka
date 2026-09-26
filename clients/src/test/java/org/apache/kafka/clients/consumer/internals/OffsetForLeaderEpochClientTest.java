@@ -66,8 +66,8 @@ public class OffsetForLeaderEpochClientTest {
 
     @Test
     public void testUnexpectedEmptyResponse() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
-        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> positionMap = new HashMap<>();
+        positionMap.put(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(1),
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
@@ -86,8 +86,8 @@ public class OffsetForLeaderEpochClientTest {
 
     @Test
     public void testOkResponse() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
-        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> positionMap = new HashMap<>();
+        positionMap.put(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(1),
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
@@ -108,8 +108,8 @@ public class OffsetForLeaderEpochClientTest {
 
     @Test
     public void testUnauthorizedTopic() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
-        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> positionMap = new HashMap<>();
+        positionMap.put(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(1),
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
@@ -127,8 +127,8 @@ public class OffsetForLeaderEpochClientTest {
 
     @Test
     public void testRetriableError() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
-        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> positionMap = new HashMap<>();
+        positionMap.put(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(1),
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
@@ -153,7 +153,7 @@ public class OffsetForLeaderEpochClientTest {
     private void buildDependencies(AutoOffsetResetStrategy offsetResetStrategy) {
         LogContext logContext = new LogContext();
         Time time = new MockTime(1);
-        SubscriptionState subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(logContext, offsetResetStrategy);
         Metadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);

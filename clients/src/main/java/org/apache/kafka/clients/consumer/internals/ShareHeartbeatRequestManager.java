@@ -62,7 +62,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             final Time time,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
-            final SubscriptionState subscriptions,
+            final ShareSubscriptionState subscriptions,
             final ShareMembershipManager membershipManager,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
@@ -197,12 +197,12 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
      * is important to ensure that reconciliation completes successfully.
      */
     static class HeartbeatState {
-        private final SubscriptionState subscriptions;
+        private final ShareSubscriptionState subscriptions;
         private final ShareMembershipManager shareMembershipManager;
         private final SentFields sentFields;
 
         public HeartbeatState(
-                final SubscriptionState subscriptions,
+                final ShareSubscriptionState subscriptions,
                 final ShareMembershipManager shareMembershipManager) {
             this.subscriptions = subscriptions;
             this.shareMembershipManager = shareMembershipManager;

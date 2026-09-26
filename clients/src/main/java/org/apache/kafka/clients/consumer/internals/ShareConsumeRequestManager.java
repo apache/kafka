@@ -89,7 +89,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final LogContext logContext;
     private final String groupId;
     private final ShareConsumerMetadata metadata;
-    private final SubscriptionState subscriptions;
+    private final ShareSubscriptionState subscriptions;
     private final ShareFetchConfig shareFetchConfig;
     protected final ShareFetchBuffer shareFetchBuffer;
     private final ShareAcknowledgementEventHandler acknowledgeEventHandler;
@@ -117,7 +117,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                final LogContext logContext,
                                final String groupId,
                                final ShareConsumerMetadata metadata,
-                               final SubscriptionState subscriptions,
+                               final ShareSubscriptionState subscriptions,
                                final ShareFetchConfig shareFetchConfig,
                                final ShareFetchBuffer shareFetchBuffer,
                                final ShareAcknowledgementEventHandler acknowledgeEventHandler,
@@ -169,7 +169,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         Map<Node, ShareSessionHandler> handlerMap = new HashMap<>();
         Cluster cluster = metadata.fetch();
         Map<String, Uuid> topicIds = metadata.topicIds();
-        for (TopicPartition partition : partitionsToFetch()) {
+        for (TopicPartition partition : subscriptions.fetchablePartitions()) {
             TopicIdPartition tip = shareSessionTopicIdMap.get(partition);
             if (tip == null) {
                 Uuid topicId = topicIds.get(partition.topic());
@@ -198,7 +198,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
 
         Set<Integer> missingNodes = new HashSet<>();
-        for (TopicPartition partition : partitionsToFetch()) {
+        for (TopicPartition partition : subscriptions.fetchablePartitions()) {
             TopicIdPartition tip = shareSessionTopicIdMap.get(partition);
             if (tip == null) {
                 continue;
@@ -1329,10 +1329,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             return null;
         }
         return new TopicIdPartition(topicId, partitionIndex, topicName);
-    }
-
-    private List<TopicPartition> partitionsToFetch() {
-        return subscriptions.fetchablePartitions(tp -> true);
     }
 
     public ShareSessionHandler sessionHandler(int node) {

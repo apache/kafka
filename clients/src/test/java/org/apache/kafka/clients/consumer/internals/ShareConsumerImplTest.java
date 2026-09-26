@@ -163,14 +163,14 @@ public class ShareConsumerImplTest {
                 time,
                 (a, b, c, d, e, f, g, h, i) -> applicationEventHandler,
                 a -> backgroundEventReaper,
-                (a, b, c, d, e) -> fetchCollector,
+                (a, b, c, d) -> fetchCollector,
                 acknowledgementEventQueue,
                 backgroundEventQueue
         );
     }
 
     private ShareConsumerImpl<String, String> newConsumer(
-        SubscriptionState subscriptions
+        ShareSubscriptionState subscriptions
     ) {
         return newConsumer(
                 mock(ShareFetchBuffer.class),
@@ -182,7 +182,7 @@ public class ShareConsumerImplTest {
 
     private ShareConsumerImpl<String, String> newConsumer(
             ShareFetchBuffer fetchBuffer,
-            SubscriptionState subscriptions,
+            ShareSubscriptionState subscriptions,
             String groupId,
             String clientId,
             String acknowledgementMode
@@ -215,7 +215,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testSuccessfulStartupShutdown() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
@@ -253,7 +253,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testWakeupBeforeCallingPoll() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         final String topicName = "foo";
@@ -271,7 +271,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testControlRecordsOnEmptyFetch() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         // Set up subscription
@@ -308,7 +308,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testWakeupAfterEmptyFetch() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         final String topicName = "foo";
@@ -327,7 +327,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testWakeupAfterNonEmptyFetch() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         final String topicName = "foo";
@@ -354,7 +354,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testFailOnClosedConsumer() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
@@ -368,7 +368,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testShouldSendOneShareFetchEventPerPoll() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         // Set up test data
@@ -394,7 +394,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testUnsubscribeWithTopicAuthorizationException() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
@@ -405,7 +405,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testCloseWithInvalidTopicException() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException(Set.of("!test-topic"))));
@@ -416,7 +416,7 @@ public class ShareConsumerImplTest {
     @Test
     public void testExplicitModeUnacknowledgedRecords() {
         // Set up consumer with explicit acknowledgement mode
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(
                 mock(ShareFetchBuffer.class),
                 subscriptions,
@@ -497,7 +497,7 @@ public class ShareConsumerImplTest {
     @Test
     public void testExplicitModeRenewAndAcknowledgeOnPoll() {
         // Set up consumer with explicit acknowledgement mode
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(
             mock(ShareFetchBuffer.class),
             subscriptions,
@@ -585,7 +585,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testCloseWithTopicAuthorizationException() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
@@ -594,7 +594,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testStopFindCoordinatorOnClose() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         // Set up the expected successful completion of close events
@@ -613,7 +613,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testVerifyApplicationEventOnShutdown() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
@@ -675,7 +675,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testSubscribeGeneratesEvent() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         String topic = "topic1";
@@ -688,7 +688,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testUnsubscribeGeneratesUnsubscribeEvent() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
@@ -700,7 +700,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testSubscribeToEmptyListActsAsUnsubscribe() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
@@ -800,7 +800,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         final TopicPartition tp = new TopicPartition("topic", 0);
@@ -830,18 +830,18 @@ public class ShareConsumerImplTest {
     @Test
     public void testPollDoesNotAddNewSharePollEventWhenOneIsAlreadyInFlight() {
         ShareFetchBuffer fetchBuffer = mock(ShareFetchBuffer.class);
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(fetchBuffer, subscriptions, "group-id", "client-id", "implicit");
 
         TopicPartition tp = new TopicPartition("topic1", 0);
-        subscriptions.assignFromUser(Collections.singleton(tp));
-        subscriptions.seek(tp, 0);
+        subscriptions.subscribeToShareGroup(Collections.singleton(tp.topic()));
+        subscriptions.assignFromSubscribed(Collections.singleton(tp));
 
         // Keep pollForFetches from spinning by making it "wait" and advance MockTime.
         doReturn(100L).when(applicationEventHandler).maximumTimeToWait();
         doAnswer(invocation -> {
             Timer pollTimer = invocation.getArgument(0, Timer.class);
-            ((MockTime) time).sleep(pollTimer.remainingMs());
+            time.sleep(pollTimer.remainingMs());
             return null;
         }).when(fetchBuffer).awaitNotEmpty(any(Timer.class));
 
@@ -861,7 +861,7 @@ public class ShareConsumerImplTest {
     @ParameterizedTest
     @EnumSource(value = Errors.class, names = {"TOPIC_AUTHORIZATION_FAILED", "GROUP_AUTHORIZATION_FAILED", "INVALID_TOPIC_EXCEPTION"})
     public void testCloseWithBackgroundQueueErrorsAfterUnsubscribe(Errors error) {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
 
         // Complete the acknowledge on close event successfully
@@ -1085,7 +1085,7 @@ public class ShareConsumerImplTest {
         assertEquals("No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
     }
 
-    private void completeShareSubscriptionChangeApplicationEventSuccessfully(SubscriptionState subscriptions, List<String> topics) {
+    private void completeShareSubscriptionChangeApplicationEventSuccessfully(ShareSubscriptionState subscriptions, List<String> topics) {
         doAnswer(invocation -> {
             ShareSubscriptionChangeEvent event = invocation.getArgument(0);
             subscriptions.subscribeToShareGroup(new HashSet<>(topics));
@@ -1094,7 +1094,7 @@ public class ShareConsumerImplTest {
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareSubscriptionChangeEvent.class));
     }
 
-    private void completeShareUnsubscribeApplicationEventSuccessfully(SubscriptionState subscriptions) {
+    private void completeShareUnsubscribeApplicationEventSuccessfully(ShareSubscriptionState subscriptions) {
         doAnswer(invocation -> {
             ShareUnsubscribeEvent event = invocation.getArgument(0);
             subscriptions.unsubscribe();
