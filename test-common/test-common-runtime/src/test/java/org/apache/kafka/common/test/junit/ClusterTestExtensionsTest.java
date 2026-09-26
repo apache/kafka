@@ -301,10 +301,9 @@ public class ClusterTestExtensionsTest {
         }
     )
     public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
+        String testTopic = "testTopic";
+        clusterInstance.createTopic(testTopic, 1, (short) 1);
         try (Admin admin = clusterInstance.admin()) {
-            String testTopic = "testTopic";
-            admin.createTopics(List.of(new NewTopic(testTopic, 1, (short) 1)));
-            clusterInstance.waitTopicCreation(testTopic, 1);
             admin.deleteTopics(List.of(testTopic));
             clusterInstance.waitTopicDeletion(testTopic);
             Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
@@ -382,14 +381,10 @@ public class ClusterTestExtensionsTest {
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 1)
     public void testBrokerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         final String topicName = "topic";
-        try (Admin admin = cluster.admin();
-             Producer<String, String> producer = cluster.producer(Map.of(
+        cluster.createTopic(topicName, 1, (short) 1);
+        try (Producer<String, String> producer = cluster.producer(Map.of(
                  ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
                  ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()))) {
-            admin.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
-
-            cluster.waitTopicCreation(topicName, 1);
-
             cluster.brokers().values().forEach(broker -> {
                 broker.shutdown();
                 broker.awaitShutdown();

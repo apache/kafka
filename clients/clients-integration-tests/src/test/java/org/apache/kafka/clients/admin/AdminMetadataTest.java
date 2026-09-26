@@ -277,11 +277,9 @@ public class AdminMetadataTest {
 
     @ClusterTest
     public void testDescribeTopicsWithOptionPartitionSizeLimitPerResponse() throws Exception {
+        String testTopic = "test-topic";
+        clusterInstance.createTopic(testTopic, 3, (short) 1);
         try (Admin admin = clusterInstance.admin()) {
-            String testTopic = "test-topic";
-            admin.createTopics(List.of(new NewTopic(testTopic, 3, (short) 1))).all().get();
-            clusterInstance.waitTopicCreation(testTopic, 3);
-
             Map<String, TopicDescription> topics = admin.describeTopics(List.of(testTopic),
                     new DescribeTopicsOptions().partitionSizeLimitPerResponse(1)).allTopicNames().get();
             assertEquals(1, topics.size());
@@ -307,11 +305,9 @@ public class AdminMetadataTest {
      */
     @ClusterTest
     public void testDescribeNonExistingTopic() throws Exception {
+        String existingTopic = "existing-topic";
+        clusterInstance.createTopic(existingTopic, 1, (short) 1);
         try (Admin admin = clusterInstance.admin()) {
-            String existingTopic = "existing-topic";
-            admin.createTopics(List.of(new NewTopic(existingTopic, 1, (short) 1))).all().get();
-            clusterInstance.waitTopicCreation(existingTopic, 1);
-
             String nonExistingTopic = "non-existing";
             Map<String, KafkaFuture<TopicDescription>> results =
                     admin.describeTopics(List.of(nonExistingTopic, existingTopic)).topicNameValues();

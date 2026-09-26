@@ -117,8 +117,7 @@ public class DescribeAuthorizedOperationsTest {
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD));
              Admin user1 = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD))
         ) {
-            admin.createTopics(List.of(new NewTopic("topic1", 1, (short) 1)));
-            clusterInstance.waitTopicCreation("topic1", 1);
+            clusterInstance.createTopic("topic1", 1, (short) 1);
 
             // create consumers to avoid group not found error
             TopicPartition tp = new TopicPartition("topic1", 0);
@@ -189,12 +188,8 @@ public class DescribeAuthorizedOperationsTest {
         String topic2 = "topic2";
         setupSecurity(clusterInstance);
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD))) {
-            admin.createTopics(List.of(
-                new NewTopic(topic1, 1, (short) 1),
-                new NewTopic(topic2, 1, (short) 1)
-            ));
-            clusterInstance.waitTopicCreation(topic1, 1);
-            clusterInstance.waitTopicCreation(topic2, 1);
+            clusterInstance.createTopic(topic1, 1, (short) 1);
+            clusterInstance.createTopic(topic2, 1, (short) 1);
         }
 
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD))) {
