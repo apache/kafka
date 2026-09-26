@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignment
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.image.MetadataImage;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,13 +52,23 @@ public class CommonAssignorTests {
     private static final String MEMBER_B = "B";
     private static final String MEMBER_C = "C";
 
+    @FunctionalInterface
+    private interface TriFunction<A, B, C, R> {
+        R apply(A a, B b, C c);
+    }
+
     /**
      * Tests that an assignor reuses the same assignment maps when the assignment is unchanged.
+     *
      * @param assignor         The assignor.
      * @param subscriptionType The subscription type.
      * @param rackAware        Whether to test with rack awareness.
      */
-    public static void testAssignmentReuse(PartitionAssignor assignor, SubscriptionType subscriptionType, boolean rackAware) {
+    public static void testAssignmentReuse(
+        PartitionAssignor assignor,
+        SubscriptionType subscriptionType,
+        boolean rackAware
+    ) {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 2)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 5)
@@ -130,13 +141,136 @@ public class CommonAssignorTests {
     }
 
     /**
-     * Tests that an assignor produces the same assignment when the members are iterated in
-     * different orders.
+     * Tests that an assignor maintains stickiness when the iteration order of members changes.
+     * This does not test that the assignor is deterministic, only that an assignment is sticky once
+     * computed.
+     *
      * @param assignor         The assignor.
      * @param subscriptionType The subscription type.
      * @param rackAware        Whether to test with rack awareness.
      */
-    public static void testReassignmentStickiness(PartitionAssignor assignor, SubscriptionType subscriptionType, boolean rackAware) {
+    public static void testIterationOrderStickiness(
+        PartitionAssignor assignor,
+        SubscriptionType subscriptionType,
+        boolean rackAware
+    ) {
+        testStickiness(
+            assignor,
+            subscriptionType,
+            (permutation, memberIds, assignments) -> {
+                // Return the same (memberId, rack, assignment) tuples in different orders.
+                Map<String, MemberSubscriptionAndAssignmentImpl> members = new LinkedHashMap<>();
+                for (int index : permutation) {
+                    members.put(memberIds.get(index), new MemberSubscriptionAndAssignmentImpl(
+                        // We want there to be multiple valid assignments, otherwise we aren't
+                        // really testing stickiness. Only give a single member a rack, so that the
+                        // other members are interchangeable.
+                        rackAware && index == 1 ? Optional.of("rack1") : Optional.empty(),
+                        Optional.empty(),
+                        Set.of(TOPIC_1_UUID, TOPIC_2_UUID, TOPIC_3_UUID),
+                        assignments.get(index)
+                    ));
+                }
+                return members;
+            }
+        );
+    }
+
+    /**
+     * Tests that an assignor maintains stickiness when static members are replaced,
+     * ie. members change their member id while keeping the same instance id.
+     *
+     * @param assignor         The assignor.
+     * @param subscriptionType The subscription type.
+     * @param rackAware        Whether to test with rack awareness.
+     */
+    public static void testStaticMemberReplacementStickiness(
+        PartitionAssignor assignor,
+        SubscriptionType subscriptionType,
+        boolean rackAware
+    ) {
+        List<String> instanceIds = List.of("instance1", "instance2", "instance3");
+
+        testStickiness(
+            assignor,
+            subscriptionType,
+            (permutation, memberIds, assignments) -> {
+                // Return the same (instanceId, rack, assignment) tuples with different member ids.
+                // When appending members, the member ids follow the permutation order while
+                // everything else is in a fixed order.
+                Map<String, MemberSubscriptionAndAssignmentImpl> members = new LinkedHashMap<>();
+                for (int i = 0; i < permutation.size(); i++) {
+                    int index = permutation.get(i);
+                    members.put(memberIds.get(index), new MemberSubscriptionAndAssignmentImpl(
+                        // We want there to be multiple valid assignments, otherwise we aren't
+                        // really testing stickiness. Only give a single instance id a rack, so that
+                        // the other members are interchangeable.
+                        rackAware && i == 1 ? Optional.of("rack1") : Optional.empty(),
+                        Optional.of(instanceIds.get(i)),
+                        Set.of(TOPIC_1_UUID, TOPIC_2_UUID, TOPIC_3_UUID),
+                        assignments.get(i)
+                    ));
+                }
+                return members;
+            }
+        );
+    }
+
+    /**
+     * Tests that an assignor maintains stickiness when member ids are swapped around.
+     * An assignor that passes this test will likely maintain stickiness when a single member is
+     * removed and replaced with a new member and generally during scale up and scale down, as
+     * members are added and removed.
+     *
+     * @param assignor         The assignor.
+     * @param subscriptionType The subscription type.
+     * @param rackAware        Whether to test with rack awareness.
+     */
+    public static void testMemberReplacementStickiness(
+        PartitionAssignor assignor,
+        SubscriptionType subscriptionType,
+        boolean rackAware
+    ) {
+        testStickiness(
+            assignor,
+            subscriptionType,
+            (permutation, memberIds, assignments) -> {
+                // Return the same (rack, assignment) tuples with different member ids.
+                // When appending members, the member ids follow the permutation order while
+                // everything else is in a fixed order.
+                Map<String, MemberSubscriptionAndAssignmentImpl> members = new LinkedHashMap<>();
+                for (int i = 0; i < permutation.size(); i++) {
+                    int index = permutation.get(i);
+                    members.put(memberIds.get(index), new MemberSubscriptionAndAssignmentImpl(
+                        // We want there to be multiple valid assignments, otherwise we aren't
+                        // really testing stickiness. Only give a single instance id a rack, so that
+                        // the other members are interchangeable.
+                        rackAware && i == 1 ? Optional.of("rack1") : Optional.empty(),
+                        Optional.empty(),
+                        Set.of(TOPIC_1_UUID, TOPIC_2_UUID, TOPIC_3_UUID),
+                        assignments.get(i)
+                    ));
+                }
+                return members;
+            }
+        );
+    }
+
+    /**
+     * Tests that an assignor does not change the assignment under different permutations of
+     * members.
+     * @param assignor         The assignor.
+     * @param subscriptionType The subscription type.
+     * @param membersFactory   Builds the members map from a list of integers representing a
+     *                         permutation, a list of member ids and a list of assignments. Each
+     *                         assignment in the list is the assignment of the member at the same
+     *                         position in the member ids list under the no-op permutation.
+     */
+    private static void testStickiness(
+        PartitionAssignor assignor,
+        SubscriptionType subscriptionType,
+        TriFunction<List<Integer>, List<String>, List<Assignment>, Map<String, MemberSubscriptionAndAssignmentImpl>> membersFactory
+    ) {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 2)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 5)
@@ -148,28 +282,13 @@ public class CommonAssignorTests {
             new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
-        members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            Set.of(TOPIC_1_UUID, TOPIC_2_UUID, TOPIC_3_UUID),
-            Assignment.EMPTY
-        ));
-        members.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
-            // We want there to be multiple valid assignments, otherwise we aren't really
-            // testing stickiness. Only give a single member a rack, so that the other members
-            // are interchangeable.
-            rackAware ? Optional.of("rack1") : Optional.empty(),
-            Optional.empty(),
-            Set.of(TOPIC_1_UUID, TOPIC_2_UUID, TOPIC_3_UUID),
-            Assignment.EMPTY
-        ));
-        members.put(MEMBER_C, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            Set.of(TOPIC_1_UUID, TOPIC_2_UUID, TOPIC_3_UUID),
-            Assignment.EMPTY
-        ));
+        List<String> memberIds = List.of(MEMBER_A, MEMBER_B, MEMBER_C);
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = membersFactory.apply(
+            List.of(0, 1, 2),
+            memberIds,
+            List.of(Assignment.EMPTY, Assignment.EMPTY, Assignment.EMPTY)
+        );
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
@@ -182,32 +301,25 @@ public class CommonAssignorTests {
             subscribedTopicMetadata
         );
 
-        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        firstAssignment.members().forEach((memberId, memberAssignment) ->
-            expectedAssignment.put(memberId, memberAssignment.partitions())
-        );
+        List<Assignment> assignments = new ArrayList<>();
+        for (String memberId : memberIds) {
+            assignments.add(new Assignment(firstAssignment.members().get(memberId).partitions()));
+        }
 
-        // Try running the assignor with the members in different orders. The assignment should be
-        // the same every time.
-        List<List<String>> memberIdOrders = List.of(
-            List.of(MEMBER_A, MEMBER_B, MEMBER_C),
-            List.of(MEMBER_A, MEMBER_C, MEMBER_B),
-            List.of(MEMBER_B, MEMBER_A, MEMBER_C),
-            List.of(MEMBER_B, MEMBER_C, MEMBER_A),
-            List.of(MEMBER_C, MEMBER_A, MEMBER_B),
-            List.of(MEMBER_C, MEMBER_B, MEMBER_A)
+        // Run the assignor under different permutations.
+        // The assignment should be unchanged every time.
+        List<List<Integer>> permutations = List.of(
+            List.of(0, 1, 2),
+            List.of(0, 2, 1),
+            List.of(1, 0, 2),
+            List.of(1, 2, 0),
+            List.of(2, 0, 1),
+            List.of(2, 1, 0)
         );
-        for (List<String> memberIdOrder : memberIdOrders) {
-            Map<String, MemberSubscriptionAndAssignmentImpl> membersWithAssignment = new LinkedHashMap<>();
-            for (String memberId : memberIdOrder) {
-                MemberSubscriptionAndAssignmentImpl memberSubscriptionAndAssignment = members.get(memberId);
-                membersWithAssignment.put(memberId, new MemberSubscriptionAndAssignmentImpl(
-                    memberSubscriptionAndAssignment.rackId(),
-                    memberSubscriptionAndAssignment.instanceId(),
-                    memberSubscriptionAndAssignment.subscribedTopicIds(),
-                    new Assignment(firstAssignment.members().get(memberId).partitions())
-                ));
-            }
+        for (List<Integer> permutation : permutations) {
+            Map<String, MemberSubscriptionAndAssignmentImpl> membersWithAssignment =
+                membersFactory.apply(permutation, memberIds, assignments);
+
             GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
                 membersWithAssignment,
                 subscriptionType,
@@ -219,7 +331,11 @@ public class CommonAssignorTests {
                 subscribedTopicMetadata
             );
 
-            // The second assignment should be the same as the first
+            // The assignment should be unchanged from the one that went in.
+            Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+            membersWithAssignment.forEach((memberId, member) ->
+                expectedAssignment.put(memberId, member.partitions())
+            );
             assertAssignment(expectedAssignment, secondAssignment);
         }
     }
