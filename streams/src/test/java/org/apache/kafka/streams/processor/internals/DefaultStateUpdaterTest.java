@@ -36,6 +36,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.InOrder;
 
 import java.time.Duration;
@@ -1673,6 +1674,37 @@ class DefaultStateUpdaterTest {
 
         verifyExceptionsAndFailedTasks();
         verifyCheckpointTasks(task1, task2, task3, task4);
+    }
+
+    @Test
+    @Timeout(30)
+    public void shouldWaitForStateUpdaterThreadToStopWhenTheCallingThreadIsInterrupted() throws Exception {
+        final StreamTask statefulTask = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0))
+            .inState(State.RESTORING).build();
+        // make the updater thread take a moment to finish its shutdown, so that giving up on the
+        // join would leave it running
+        doAnswer(invocation -> {
+            Thread.sleep(500L);
+            return null;
+        }).when(changelogReader).clear();
+
+        stateUpdater.add(statefulTask);
+        stateUpdater.start();
+        verifyUpdatingTasks(statefulTask);
+
+        final boolean interruptStatusRestored;
+        try {
+            Thread.currentThread().interrupt();
+            stateUpdater.shutdown(Duration.ofMinutes(1));
+            interruptStatusRestored = Thread.currentThread().isInterrupted();
+        } finally {
+            Thread.interrupted();
+        }
+
+        assertTrue(interruptStatusRestored, "shutdown should restore the interrupt status for the caller");
+        // the updater thread must have run to completion before shutdown() returned, otherwise the
+        // caller would close the tasks it left behind while it is still running
+        assertThrows(IllegalStateException.class, stateUpdater::start);
     }
 
     @Test
