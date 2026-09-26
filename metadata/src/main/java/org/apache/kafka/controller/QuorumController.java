@@ -919,7 +919,7 @@ public final class QuorumController implements Controller {
                 while (true) {
                     numBatches++;
                     int endIndex = startIndex + maxRecordsPerBatch;
-                    if (endIndex > records.size()) {
+                    if (endIndex >= records.size()) {
                         long offset = appender.apply(records.subList(startIndex, records.size()));
                         if (log.isTraceEnabled()) {
                             log.trace("Appended {} record(s) in {} batch(es), ending with offset {}.",
