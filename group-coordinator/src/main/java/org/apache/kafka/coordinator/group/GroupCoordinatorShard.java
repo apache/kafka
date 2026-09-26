@@ -560,11 +560,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context                The request context.
      * @param request                The actual JoinGroup request.
      * @param responseFuture         The join group response future.
-     * @param topologyCleanupHandled Whether streams-topology cleanup has already run (or is not
-     *                               needed) for this request.
+     * @param topologyCleanupHandled True if an empty streams group can be converted to a
+     *                               classic group right away: its topology was already deleted
+     *                               from the plugin, or no plugin is configured.
      *
-     * @return A Result whose response signals whether the join must be deferred for streams-topology
-     *         cleanup, and a list of records to update the state machine.
+     * @return A Result with a list of records to update the state machine. Its response is
+     *         true if the group is an empty streams group whose topology must first be deleted
+     *         from the plugin. In that case nothing is changed, and the caller must delete the
+     *         topology and call again with {@code topologyCleanupHandled = true}.
      */
     public CoordinatorResult<Boolean, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
@@ -991,13 +994,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Return the streams groups on this shard eligible for plugin-side topology cleanup: empty
-     * (no live members), no committed offsets and no pending transactional offsets, and a
-     * {@code StoredDescriptionTopologyEpoch != -1}. The cleanup cycle marks each candidate
-     * UNCERTAIN at the latest state before the plugin delete and smart-finalizes afterwards, so a
-     * concurrent {@code setTopology} that has since advanced the field is re-solicited rather than
-     * silently undone by a stale plugin delete — the observed epoch is not needed downstream, so
-     * only the group-id set is returned.
+     * Returns the IDs of the streams groups on this shard whose topology should be deleted from
+     * the plugin. A group qualifies if it has no members, no committed or pending transactional
+     * offsets, and a {@code StoredDescriptionTopologyEpoch} other than NONE ({@code -1}).
+     *
+     * <p>Only IDs are returned, not the epochs seen here. Before calling the plugin, the
+     * cleanup cycle checks each group's latest state again, so the epochs from this scan are
+     * not needed.
      *
      * <p>This sweep relies on the regular offset-expiration cycle to have already tombstoned
      * expired offsets, so the eligibility check itself only asks "does this group still have any
@@ -1021,7 +1024,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 StreamsGroup streamsGroup = (StreamsGroup) group;
                 if (!streamsGroup.isEmpty(committedOffset)) continue;
                 int storedEpoch = streamsGroup.storedDescriptionTopologyEpoch(committedOffset);
-                // -2 (UNCERTAIN) falls through: a half-finished push/delete may have left plugin data.
+                // Keep UNCERTAIN (-2): a push or delete that did not finish may have left data in the plugin.
                 if (storedEpoch == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) continue;
                 if (!offsetMetadataManager.groupHasNoOffsets(groupId, committedOffset)) continue;
                 eligible.add(groupId);
@@ -1034,7 +1037,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Shard entry point for the {@code -2} (UNCERTAIN) barrier write. See
+     * Sets the group's stored topology epoch to UNCERTAIN ({@code -2}) before a plugin call. See
      * {@link GroupMetadataManager#markStoredDescriptionTopologyEpochUncertain(String, boolean)}.
      */
     public CoordinatorResult<Boolean, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertain(
@@ -1045,7 +1048,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Batched UNCERTAIN(-2) barrier write for the cleanup cycle. See
+     * Sets the stored topology epoch to UNCERTAIN ({@code -2}) for a batch of groups before the
+     * cleanup cycle deletes their topologies. See
      * {@link GroupMetadataManager#markStoredDescriptionTopologyEpochUncertainBatch(Set)}.
      */
     public CoordinatorResult<Set<String>, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertainBatch(
@@ -1055,7 +1059,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Smart finalize after {@code plugin.deleteTopology} for the cleanup cycle. See
+     * Sets the final stored topology epoch after the cleanup cycle deletes the groups'
+     * topologies from the plugin. See
      * {@link GroupMetadataManager#finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(Set)}.
      */
     public CoordinatorResult<Void, CoordinatorRecord> finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(

@@ -543,23 +543,26 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     }
 
     /**
-     * @return true while the window armed by {@link #throttleConversionDelete} is in effect for
-     *         the group, i.e. a recent classic-join conversion delete failed and the join path
-     *         must not re-invoke the plugin yet.
+     * @return true if the back-off window set by {@link #throttleConversionDelete} is still
+     *         active for the group. When it is, a classic JoinGroup must not call
+     *         {@code deleteTopology} on the plugin yet.
      */
     private boolean isConversionDeleteThrottled(String groupId) {
         return backoff.isActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
     }
 
     /**
-     * Arm (or continue) the back-off chain that throttles the classic-join conversion delete
-     * against a failing plugin. On {@code REBALANCE_IN_PROGRESS} the classic client retries the
-     * join immediately (no client-side back-off), so without this window a broken plugin would
-     * be hit with {@code deleteTopology} in a tight loop. Keyed at
-     * {@link StreamsGroup#STORED_TOPOLOGY_EPOCH_UNCERTAIN} — the group's stored epoch after the
-     * barrier write and never a real push epoch — so heartbeat/push windows are not disturbed;
-     * a stale real-epoch entry left from before the group emptied is replaced. The window is
-     * dropped by {@link #clearBackoffGroup} when a conversion or cleanup-cycle delete succeeds.
+     * Starts a back-off window after {@code deleteTopology} fails during a classic JoinGroup.
+     *
+     * <p>Background: when a classic consumer joins an empty streams group, the group is
+     * converted to a classic group. Before that, the broker must delete the group's topology
+     * from the plugin. If the delete fails, the join fails with {@code REBALANCE_IN_PROGRESS}.
+     * The client retries right away, so without this window a broken plugin would receive
+     * {@code deleteTopology} calls in a tight loop.
+     *
+     * <p>The window is tagged with epoch {@link StreamsGroup#STORED_TOPOLOGY_EPOCH_UNCERTAIN},
+     * which never matches a real topology epoch, so it does not throttle heartbeats or pushes.
+     * {@link #clearBackoffGroup} removes it once a delete succeeds.
      */
     private void throttleConversionDelete(String groupId) {
         backoff.armIfNotActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
