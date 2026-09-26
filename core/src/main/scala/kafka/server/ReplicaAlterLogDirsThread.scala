@@ -186,8 +186,7 @@ class ReplicaAlterLogDirsThread(name: String,
    * implemented in AbstractFetcherThread.getOffsetTruncationState. The local fetch carries the
    * future replica's latest epoch as the last fetched epoch, so if the current replica truncates
    * (e.g. while the future replica is offline), the divergence is detected on the next fetch and
-   * the future replica truncates to the largest common log prefix for the topic partition. A future
-   * replica without any leader epoch truncates to its initial fetch offset via the high watermark path.
+   * the future replica truncates to the largest common log prefix for the topic partition.
    */
   override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
