@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.RaftVoterEndpoint;
+import org.apache.kafka.clients.admin.RemoveRaftVoterOptions;
 import org.apache.kafka.clients.admin.RemoveRaftVoterResult;
 import org.apache.kafka.clients.admin.UnregisterControllerResult;
 import org.apache.kafka.common.Uuid;
@@ -287,6 +288,30 @@ public class MetadataQuorumCommandUnitTest {
         }
     }
 
+    @Test
+    public void testAddControllerByIdDryRun() {
+        List<String> outputs = List.of(
+            ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
+                    "add-controller",
+                    "--controller-id", "5",
+                    "--dry-run"))).split("\n"));
+        assertTrue(outputs.contains("DRY RUN of adding KRaft controller 5"),
+            "Failed to find expected output in stdout: " + outputs);
+    }
+
+    @Test
+    public void testRemoveControllerWithoutDirectoryIdDryRun() {
+        List<String> outputs = List.of(
+            ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
+                    "remove-controller",
+                    "--controller-id", "3",
+                    "--dry-run"))).split("\n"));
+        assertTrue(outputs.contains("DRY RUN of removing KRaft controller 3"),
+            "Failed to find expected output in stdout: " + outputs);
+    }
+
     private static final int REMOVE_CONTROLLER_ID = 2;
     private static final String REMOVE_DIRECTORY_ID_STRING = "_KWDkTahTVaiVVVTaugNew";
     private static final Uuid REMOVE_DIRECTORY_ID = Uuid.fromString(REMOVE_DIRECTORY_ID_STRING);
@@ -310,7 +335,9 @@ public class MetadataQuorumCommandUnitTest {
         Admin admin = mock(Admin.class);
         RemoveRaftVoterResult removeResult = mock(RemoveRaftVoterResult.class);
         when(removeResult.all()).thenReturn(removeRaftVoterFuture);
-        when(admin.removeRaftVoter(REMOVE_CONTROLLER_ID, REMOVE_DIRECTORY_ID)).thenReturn(removeResult);
+        when(admin.removeRaftVoter(REMOVE_CONTROLLER_ID,
+            new RemoveRaftVoterOptions().setVoterDirectoryId(Optional.of(REMOVE_DIRECTORY_ID)))
+        ).thenReturn(removeResult);
         if (unregisterControllerFuture != null) {
             UnregisterControllerResult unregisterResult = mock(UnregisterControllerResult.class);
             when(unregisterResult.all()).thenReturn(unregisterControllerFuture);

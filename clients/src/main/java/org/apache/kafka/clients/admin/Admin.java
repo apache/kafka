@@ -1911,16 +1911,22 @@ public interface Admin extends AutoCloseable {
     /**
      * Add a new voter node to the KRaft metadata quorum.
      *
-     * @param voterId           The node ID of the voter.
-     * @param voterDirectoryId  The directory ID of the voter.
-     * @param endpoints         The endpoints that the new voter has.
+     * <p>
+     * This is a convenience method which allows the active controller to derive the
+     * voter's directory ID and endpoints from its in-memory state. It is not idempotent:
+     * if multiple observers have the same node ID, the request may fail because the
+     * target voter cannot be identified unambiguously.
+     *
+     * <p>
+     * To validate the target voter or override the derived values, use
+     * {@link #addRaftVoter(int, AddRaftVoterOptions)} with
+     * {@link AddRaftVoterOptions#setVoterDirectoryId(Optional)} or
+     * {@link AddRaftVoterOptions#setEndpoints(Set)}.
+     *
+     * @param voterId The node ID of the voter to add.
      */
-    default AddRaftVoterResult addRaftVoter(
-        int voterId,
-        Uuid voterDirectoryId,
-        Set<RaftVoterEndpoint> endpoints
-    ) {
-        return addRaftVoter(voterId, voterDirectoryId, endpoints, new AddRaftVoterOptions());
+    default AddRaftVoterResult addRaftVoter(int voterId) {
+        return addRaftVoter(voterId, new AddRaftVoterOptions());
     }
 
     /**
@@ -1933,29 +1939,96 @@ public interface Admin extends AutoCloseable {
      * will fail with {@link InconsistentClusterIdException}.
      * If not provided, the cluster id check is skipped.
      *
+     * <p>
+     * If {@link AddRaftVoterOptions#voterDirectoryId()} is empty, the active controller
+     * derives the voter's directory ID from its in-memory observer state. If
+     * {@link AddRaftVoterOptions#endpoints()} is empty, the active controller derives
+     * the voter's endpoints from its in-memory state.
+     *
+     * <p>
+     * This operation is not idempotent when the directory ID is omitted: if multiple
+     * observers have the same node ID, the target voter cannot be identified
+     * unambiguously and the request will fail.
+     *
+     * <p>
+     * To validate the target voter or override the derived values, use
+     * {@link AddRaftVoterOptions#setVoterDirectoryId(Optional)} and
+     * {@link AddRaftVoterOptions#setEndpoints(Set)}.
+     *
+     * @param voterId  The node ID of the voter to add.
+     * @param options  Additional options for the operation.
+     */
+    AddRaftVoterResult addRaftVoter(int voterId, AddRaftVoterOptions options);
+
+    /**
+     * Add a new voter node to the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param endpoints         The endpoints that the new voter has.
+     * @deprecated Since 4.5. Use {@link #addRaftVoter(int, AddRaftVoterOptions)} instead.
+     * This method will be removed in Apache Kafka 5.0.
+     */
+    @Deprecated(since = "4.5", forRemoval = true)
+    default AddRaftVoterResult addRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        Set<RaftVoterEndpoint> endpoints
+    ) {
+        return addRaftVoter(
+            voterId,
+            new AddRaftVoterOptions()
+                .setVoterDirectoryId(Optional.of(voterDirectoryId))
+                .setEndpoints(endpoints)
+        );
+    }
+
+    /**
+     * Add a new voter node to the KRaft metadata quorum.
+     *
+     * <p>
+     * When this overload is used, the {@code voterDirectoryId} and {@code endpoints}
+     * arguments take precedence over any corresponding values in {@code options}.
+     *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      * @param endpoints         The endpoints that the new voter has.
      * @param options           Additional options for the operation, including optional cluster ID.
+     * @deprecated Since 4.5. Use {@link #addRaftVoter(int, AddRaftVoterOptions)} instead.
+     * This method will be removed in Apache Kafka 5.0.
      */
-    AddRaftVoterResult addRaftVoter(
+    @Deprecated(since = "4.5", forRemoval = true)
+    default AddRaftVoterResult addRaftVoter(
         int voterId,
         Uuid voterDirectoryId,
         Set<RaftVoterEndpoint> endpoints,
         AddRaftVoterOptions options
-    );
+    ) {
+        return addRaftVoter(
+            voterId,
+            new AddRaftVoterOptions()
+                .setClusterId(options.clusterId())
+                .setVoterDirectoryId(Optional.of(voterDirectoryId))
+                .setEndpoints(endpoints)
+                .timeoutMs(options.timeoutMs())
+        );
+    }
 
     /**
      * Remove a voter node from the KRaft metadata quorum.
      *
-     * @param voterId           The node ID of the voter.
-     * @param voterDirectoryId  The directory ID of the voter.
+     * <p>
+     * This is a convenience method which allows the active controller to derive the
+     * voter's directory ID from the current voter set.
+     *
+     * <p> Note: Since 4.2.0, if {@code controller.quorum.auto.join.enable} is set to true the controller
+     * must be shutdown before removing the controller from the voter set to prevent the removed
+     * controller from automatically joining again.
+     *
+     * @param voterId The node ID of the voter to remove.
      */
-    default RemoveRaftVoterResult removeRaftVoter(
-        int voterId,
-        Uuid voterDirectoryId
-    ) {
-        return removeRaftVoter(voterId, voterDirectoryId, new RemoveRaftVoterOptions());
+    default RemoveRaftVoterResult removeRaftVoter(int voterId) {
+        return removeRaftVoter(voterId, new RemoveRaftVoterOptions());
     }
 
     /**
@@ -1968,6 +2041,46 @@ public interface Admin extends AutoCloseable {
      * will fail with {@link InconsistentClusterIdException}.
      * If not provided, the cluster id check is skipped.
      *
+     * <p>
+     * If {@link RemoveRaftVoterOptions#voterDirectoryId()} is empty, the active controller
+     * derives the voter's directory ID from the current voter set. Otherwise, the provided
+     * directory ID is used to identify the voter.
+     *
+     * <p> Note: Since 4.2.0, if {@code controller.quorum.auto.join.enable} is set to true the controller
+     * must be shutdown before removing the controller from the voter set to prevent the removed
+     * controller from automatically joining again.
+     *
+     * @param voterId  The node ID of the voter to remove.
+     * @param options  Additional options for the operation.
+     */
+    RemoveRaftVoterResult removeRaftVoter(int voterId, RemoveRaftVoterOptions options);
+
+    /**
+     * Remove a voter node from the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @deprecated Since 4.5. Use {@link #removeRaftVoter(int, RemoveRaftVoterOptions)} instead.
+     * This method will be removed in Apache Kafka 5.0.
+     */
+    @Deprecated(since = "4.5", forRemoval = true)
+    default RemoveRaftVoterResult removeRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId
+    ) {
+        return removeRaftVoter(
+            voterId,
+            new RemoveRaftVoterOptions().setVoterDirectoryId(Optional.of(voterDirectoryId))
+        );
+    }
+
+    /**
+     * Remove a voter node from the KRaft metadata quorum.
+     *
+     * <p>
+     * When this overload is used, the {@code voterDirectoryId} argument takes precedence
+     * over any corresponding value in {@code options}.
+     *
      * <p> Note: Since 4.2.0, if {@code controller.quorum.auto.join.enable} is set to true the controller
      * must be shutdown before removing the controller from the voter set to prevent the removed
      * controller from automatically joining again.
@@ -1975,12 +2088,23 @@ public interface Admin extends AutoCloseable {
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      * @param options           Additional options for the operation, including optional cluster ID.
+     * @deprecated Since 4.5. Use {@link #removeRaftVoter(int, RemoveRaftVoterOptions)} instead.
+     * This method will be removed in Apache Kafka 5.0.
      */
-    RemoveRaftVoterResult removeRaftVoter(
+    @Deprecated(since = "4.5", forRemoval = true)
+    default RemoveRaftVoterResult removeRaftVoter(
         int voterId,
         Uuid voterDirectoryId,
         RemoveRaftVoterOptions options
-    );
+    ) {
+        return removeRaftVoter(
+            voterId,
+            new RemoveRaftVoterOptions()
+                .setClusterId(options.clusterId())
+                .setVoterDirectoryId(Optional.of(voterDirectoryId))
+                .timeoutMs(options.timeoutMs())
+        );
+    }
 
     /**
      * Describe some share groups in the cluster.

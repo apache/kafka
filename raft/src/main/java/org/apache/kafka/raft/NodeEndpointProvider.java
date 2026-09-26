@@ -14,31 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
-
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceAudience;
-import org.apache.kafka.common.annotation.InterfaceStability;
+package org.apache.kafka.raft;
 
 /**
- * The result of {@link org.apache.kafka.clients.admin.Admin#removeRaftVoter(int, org.apache.kafka.clients.admin.RemoveRaftVoterOptions)}.
+ * An interface for looking up the registered endpoints of a node by its node ID.
  *
- * The API of this class is evolving, see {@link Admin} for details.
+ * <p>This is used by the Raft layer to derive controller endpoints from an external
+ * registry (such as the cluster metadata image) when processing
+ * {@code AddRaftVoterRequest} v2+ with an empty listener set.
  */
-@InterfaceStability.Stable
-@InterfaceAudience.Public
-public class RemoveRaftVoterResult {
-    private final KafkaFuture<Void> result;
-
-    RemoveRaftVoterResult(KafkaFuture<Void> result) {
-        this.result = result;
-    }
+@FunctionalInterface
+public interface NodeEndpointProvider {
 
     /**
-     * Returns a future that completes when the voter has been removed.
+     * Returns the {@link Endpoints} registered for the given node ID, or
+     * {@link Endpoints#empty()} if the node is not known.
+     *
+     * @param nodeId the ID of the node whose endpoints are requested
      */
-    public KafkaFuture<Void> all() {
-        return result;
-    }
+    Endpoints endpointsOf(int nodeId);
 
+    /**
+     * A no-op provider that always returns {@link Endpoints#empty()}.
+     */
+    NodeEndpointProvider NOOP = __ -> Endpoints.empty();
 }
