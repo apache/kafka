@@ -137,7 +137,8 @@ public class SaslMultiMechanismConsumerTest {
     }
 
     @ClusterTest(
-        brokerSecurityProtocol = SecurityProtocol.SASL_SSL
+        brokerSecurityProtocol = SecurityProtocol.SASL_SSL,
+        skipJaasFileSetup = true
     )
     public void testClassicConsumerMultipleBrokerMechanisms() throws InterruptedException {
         testMultipleBrokerMechanisms(Map.of(
@@ -146,7 +147,8 @@ public class SaslMultiMechanismConsumerTest {
     }
 
     @ClusterTest(
-        brokerSecurityProtocol = SecurityProtocol.SASL_SSL
+        brokerSecurityProtocol = SecurityProtocol.SASL_SSL,
+        skipJaasFileSetup = true
     )
     public void testAsyncConsumerMultipleBrokerMechanisms() throws InterruptedException {
         testMultipleBrokerMechanisms(Map.of(

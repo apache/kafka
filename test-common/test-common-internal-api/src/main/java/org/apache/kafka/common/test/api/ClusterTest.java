@@ -58,4 +58,7 @@ public @interface ClusterTest {
     String[] tags() default {};
     ClusterFeature[] features() default {};
     boolean standalone() default false;
+    // Set to true when the test supplies its own JAAS login config, so the cluster
+    // does not auto-generate a PLAIN-only JAAS file that would replace it.
+    boolean skipJaasFileSetup() default false;
 }

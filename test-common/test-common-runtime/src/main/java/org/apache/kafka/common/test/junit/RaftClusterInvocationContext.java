@@ -383,6 +383,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach(builder::setConfigProp);
                 builder.setStandalone(clusterConfig.standalone());
+                builder.setSkipJaasFileSetup(clusterConfig.skipJaasFileSetup());
                 this.clusterTestKit = builder.build();
                 this.clusterTestKit.format();
             }
