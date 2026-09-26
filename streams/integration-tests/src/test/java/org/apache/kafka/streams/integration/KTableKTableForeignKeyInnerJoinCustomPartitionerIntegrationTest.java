@@ -73,8 +73,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.st
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -213,7 +212,9 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
         for (final KafkaStreams stream: kafkaStreamsList) {
             stream.setUncaughtExceptionHandler(e -> {
-                assertThat(e.getCause().getMessage(), equalTo("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set"));
+                assertEquals(
+                    "The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set",
+                    e.getCause().getMessage());
                 return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
             });
         }
@@ -246,7 +247,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
             OUTPUT,
             expectedResult.size()));
 
-        assertThat(expectedResult, equalTo(result));
+        assertEquals(expectedResult, result);
     }
 
     private Properties getStreamsConfig(final String testName) {

@@ -61,9 +61,8 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 @Timeout(600)
@@ -120,9 +119,9 @@ public class ConsistencyVectorIntegrationTest {
             produceValueRange();
 
             // Assert that all messages in the first batch were processed in a timely manner
-            assertThat(
-                "Did not process all message in time.",
-                semaphore.tryAcquire(NUMBER_OF_MESSAGES, 120, TimeUnit.SECONDS), is(equalTo(true))
+            assertTrue(
+                semaphore.tryAcquire(NUMBER_OF_MESSAGES, 120, TimeUnit.SECONDS),
+                "Did not process all message in time."
             );
 
             // Assert that both active and standby have the same position bound
@@ -155,13 +154,10 @@ public class ConsistencyVectorIntegrationTest {
                 stateQueryResult.getPartitionResults().get(0);
             if (queryResult.isSuccess() && queryResult.getResult() != null) {
                 // invariant: each value is also at the equivalent offset
-                assertThat(
-                    "Result:" + queryResult,
+                assertEquals(
+                    Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult()),
                     queryResult.getPosition(),
-                    is(
-                        Position.emptyPosition()
-                                .withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult())
-                    )
+                    "Result:" + queryResult
                 );
 
                 if (queryResult.getResult() == NUMBER_OF_MESSAGES - 1) {

@@ -1227,6 +1227,8 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, 10007, () => config.logIndexIntervalBytes)
         case TopicConfig.MAX_MESSAGE_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10008, () => config.messageMaxBytes)
+        case TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG =>
+          assertDynamic(kafkaConfigProp, 20000, () => config.maxDecompressedMessageBytes)
         case TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10015L, () => config.logMessageTimestampBeforeMaxMs)
         case TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG =>
@@ -1937,16 +1939,16 @@ class KafkaConfigTest {
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols.asScala.toSet)
 
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,streams")
     val config2 = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.CLASSIC, GroupType.STREAMS), config2.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.STREAMS), config2.groupCoordinatorRebalanceProtocols.asScala.toSet)
 
     // Including "share" is also OK
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
     val config3 = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config3.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config3.groupCoordinatorRebalanceProtocols.asScala.toSet)
   }
 
   @Test

@@ -712,6 +712,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         record = null;
         closeTaskSensor.record();
         partitionsToResume.clear();
+        consumedOffsets.clear();
 
         transitionTo(State.CLOSED);
     }

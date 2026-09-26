@@ -518,7 +518,7 @@ public class StreamsGroupCommandTest {
         Admin adminClient = mock(KafkaAdminClient.class);
         String groupId = "foo-group";
         String topic = "topic";
-        List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", groupId, "--reset-offsets", "--input-topic", "topic:3", "--to-latest"));
+        List<String> args = new ArrayList<>(List.of("--bootstrap-server", "localhost:9092", "--group", groupId, "--reset-offsets", "--input-topic", "topic:3", "--to-latest"));
         
         when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));

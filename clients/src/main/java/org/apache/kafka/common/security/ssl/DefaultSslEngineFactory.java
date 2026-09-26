@@ -48,7 +48,6 @@ import java.security.cert.CertificateFactory;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
@@ -387,7 +386,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             try {
                 return Files.getLastModifiedTime(Paths.get(path)).toMillis();
             } catch (IOException e) {
-                log.error("Modification time of key store could not be obtained: " + path, e);
+                log.error("Modification time of key store could not be obtained: {}", path, e);
                 return null;
             }
         }
@@ -426,11 +425,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     static class PemStore implements SecurityStore {
         private static final PemParser CERTIFICATE_PARSER = new PemParser("CERTIFICATE");
         private static final PemParser PRIVATE_KEY_PARSER = new PemParser("PRIVATE KEY");
-        private static final List<KeyFactory> KEY_FACTORIES = Arrays.asList(
-                keyFactory("RSA"),
-                keyFactory("DSA"),
-                keyFactory("EC")
-        );
+        private static final List<KeyFactory> KEY_FACTORIES = keyFactories(List.of("RSA", "DSA", "EC"));
 
         private final char[] keyPassword;
         private final KeyStore keyStore;
@@ -458,6 +453,18 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         @Override
         public boolean modified() {
             return false;
+        }
+
+        static List<KeyFactory> keyFactories(List<String> algorithms) {
+            List<KeyFactory> keyFactories = new ArrayList<>();
+            for (String algorithm : algorithms) {
+                try {
+                    keyFactories.add(KeyFactory.getInstance(algorithm));
+                } catch (Exception e) {
+                    log.info("Could not create key factory for algorithm {}", algorithm, e);
+                }
+            }
+            return keyFactories;
         }
 
         private KeyStore createKeyStoreFromPem(String privateKeyPem, String certChainPem, char[] keyPassword) {
@@ -523,6 +530,10 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
                 keySpec = keyInfo.getKeySpec(cipher);
             }
 
+            if (KEY_FACTORIES.isEmpty()) {
+                throw new InvalidConfigurationException("No key factories available to load private key");
+            }
+
             InvalidKeySpecException firstException = null;
             for (KeyFactory factory : KEY_FACTORIES) {
                 try {
@@ -535,13 +546,6 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             throw new InvalidConfigurationException("Private key could not be loaded", firstException);
         }
 
-        private static KeyFactory keyFactory(String algorithm) {
-            try {
-                return KeyFactory.getInstance(algorithm);
-            } catch (Exception e) {
-                throw new InvalidConfigurationException("Could not create key factory for algorithm " + algorithm, e);
-            }
-        }
     }
 
     /**

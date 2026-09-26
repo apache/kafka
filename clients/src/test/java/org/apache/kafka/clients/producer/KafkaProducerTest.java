@@ -727,10 +727,7 @@ public class KafkaProducerTest {
             });
 
             // Close producer should not complete until send succeeds
-            try {
-                future.get(100, TimeUnit.MILLISECONDS);
-                fail("Close completed without waiting for send");
-            } catch (java.util.concurrent.TimeoutException expected) { /* ignore */ }
+            assertThrows(java.util.concurrent.TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS), "Close completed without waiting for send");
 
             // Ensure send has started
             client.waitForRequests(1, 1000);
@@ -2016,14 +2013,15 @@ public class KafkaProducerTest {
         properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        Time time = new MockTime(1);
+        // No auto-tick: the sender thread would otherwise burn the max.block.ms budget
+        // that sendOffsetsToTransaction shares between the metadata refresh and TxnOffsetCommit.
+        Time time = new MockTime();
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
         ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
 
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
 
-        Node node = metadata.fetch().nodes().get(0);
         client.setNodeApiVersions(NodeApiVersions.create());
         NodeApiVersions nodeApiVersions = new NodeApiVersions(NodeApiVersions.create().allSupportedApiVersions().values(),
             Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
@@ -2038,8 +2036,6 @@ public class KafkaProducerTest {
         client.setNodeApiVersions(nodeApiVersions);
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
-
-        client.throttle(node, 5000);
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
