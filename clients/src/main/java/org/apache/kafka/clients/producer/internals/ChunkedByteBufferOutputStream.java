@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import java.nio.ByteBuffer;
@@ -27,24 +28,25 @@ import java.util.List;
  * re-allocated buffer. Chunks are supplied by the caller (initial chunks via the constructor,
  * additional chunks via {@link #addBuffers(List)}).
  * <p>
- * Current/temporary behavior:
- * <ul>
- * <li>The stream does not grow on its own: a write whose size exceeds the remaining free bytes
- *     across all attached chunks throws {@link IllegalStateException}, so the caller must attach
- *     enough chunks before any such write.
- *     TODO: KAFKA-20579 (automatic mid-write growth for compression support).</li>
- * <li>{@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer},
- *     flattening all chunks into a new buffer with an extra copy.
- *     TODO: KAFKA-20580 (remove the extra copy on send, scatter-gather send).</li>
- * </ul>
+ * The stream grows on its own: when a write runs past the attached chunks it attaches one more chunk,
+ * taken from the pool without blocking and falling back to a heap-allocated chunk when the pool has no
+ * remaining chunks in the middle of a write (a partially written record can neither be rolled back nor blocked on).
+ * Heap-allocated chunks are tracked separately (in {@link poolAllocatedChunks}) from pool-owned ones so they are
+ * never returned to the pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
+ * <p>
+ * {@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer}, flattening
+ * all chunks into a new buffer with an extra copy.
+ * TODO: KAFKA-20580 (remove the extra copy on send, scatter-gather send).
  */
 public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     private final List<ByteBuffer> chunks;
+    private final List<ByteBuffer> poolAllocatedChunks;
     private final int chunkSize;
     private final BufferPool pool;
     private ByteBuffer currentChunk;
     private int currentChunkIndex;
+    private int fallbackAllocations;
     // Set once the stream is closed for appends via close(); no further writes or addBuffers are allowed.
     private boolean closed;
     // Single-buffer view produced by flatten() and cached here so repeat buffer() calls
@@ -66,6 +68,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         this.chunkSize = chunkSize;
         this.pool = pool;
         this.chunks = new ArrayList<>(initialChunks);
+        this.poolAllocatedChunks = new ArrayList<>(initialChunks);
         this.currentChunk = this.chunks.get(0);
         this.currentChunkIndex = 0;
     }
@@ -158,8 +161,28 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     private void advanceToNextChunk() {
         if (currentChunkIndex + 1 >= chunks.size()) {
-            // TODO: KAFKA-20579. With compression support, grow here instead of throwing.
-            throw new IllegalStateException("write exceeded the stream's remaining chunk capacity");
+            ByteBuffer next = null;
+            try {
+                List<ByteBuffer> chunk = pool.allocateChunks(chunkSize, 0);
+                next = chunk.get(0);
+            } catch (BufferExhaustedException e) {
+                // No chunks remaining in pool — leave next null so we take the heap fallback
+            } catch (InterruptedException e) {
+                // The acquire is non-blocking (0 ms), so this only fires when the calling thread
+                // was already interrupted. Preserve the interrupt flag and, as with an exhausted
+                // pool, leave next null so we take the heap fallback below
+                Thread.currentThread().interrupt();
+            }
+            if (next != null) {
+                chunks.add(next);
+                poolAllocatedChunks.add(next);
+            } else {
+                // Heap fallback: the pool could not satisfy the allocation without blocking, but the
+                // in-flight record can neither be rolled back nor blocked on, so allocate on the heap
+                // to guarantee forward progress
+                chunks.add(ByteBuffer.allocate(chunkSize));
+                fallbackAllocations++;
+            }
         }
         currentChunkIndex++;
         currentChunk = chunks.get(currentChunkIndex);
@@ -174,6 +197,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         ensureWritable();
         validateChunkCapacities(newChunks, chunkSize);
         chunks.addAll(newChunks);
+        poolAllocatedChunks.addAll(newChunks);
     }
 
     /**
@@ -237,13 +261,30 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         if (currentChunk == null)  // already deallocated; nothing attached
             return;
         List<ByteBuffer> unused = chunks.subList(currentChunkIndex + 1, chunks.size());
-        if (pool != null) {
-            for (ByteBuffer chunk : unused)
+        for (ByteBuffer chunk : unused) {
+            boolean poolOwned = removeByIdentity(poolAllocatedChunks, chunk);
+            if (poolOwned && pool != null)
                 pool.deallocate(chunk);
         }
         // Remove the released chunks from `chunks`, so they are
         // not deallocated again on batch completion.
         unused.clear();
+    }
+
+    /**
+     * Removes the first element identical ({@code ==}) to {@code target} from {@code list}, returning
+     * whether it was present. Uses reference identity rather than {@link Object#equals} because
+     * {@link ByteBuffer#equals} compares contents, which would match the wrong chunk (e.g. two empty
+     * chunks compare equal).
+     */
+    private static boolean removeByIdentity(List<ByteBuffer> list, ByteBuffer target) {
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i) == target) {
+                list.remove(i);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -298,6 +339,15 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
+     * Number of chunks that had to be allocated from the heap because the pool was exhausted
+     * mid-record. Zero on the normal path; a non-zero value means the producer transiently exceeded
+     * buffer.memory to guarantee forward progress. Exposed for metrics and tests.
+     */
+    int fallbackAllocations() {
+        return fallbackAllocations;
+    }
+
+    /**
      * Total bytes available across the current chunk and every queued (not-yet-active) chunk.
      */
     @Override
@@ -325,8 +375,9 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         ensureNotDeallocated();
         // A single write can be split across several chunks, so the required bytes needn't be
         // contiguous: only the total free space matters. Advancing here would waste the tail of the
-        // current chunk, so writes advance lazily and this only validates.
-        // TODO: review with KAFKA-20579, but growth support should belong in advanceToNextChunk, not here.
+        // current chunk, so writes advance lazily and this only validates. Automatic growth lives in
+        // advanceToNextChunk; this method only checks the currently attached chunks (the accumulator
+        // uses it to decide when to attach extension chunks up front).
         if (requiredBytes > remaining())
             throw new IllegalStateException("required " + requiredBytes
                 + " bytes but only " + remaining() + " remaining across the attached chunks");
@@ -337,11 +388,12 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     void deallocate(BufferPool pool) {
         if (pool != null) {
-            for (ByteBuffer chunk : chunks) {
+            for (ByteBuffer chunk : poolAllocatedChunks) {
                 pool.deallocate(chunk);
             }
         }
         chunks.clear();
+        poolAllocatedChunks.clear();
         currentChunk = null;
         currentChunkIndex = -1;
         flattenedBuffer = null;

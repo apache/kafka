@@ -27,7 +27,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
-import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
@@ -47,7 +46,6 @@ import java.util.List;
  * <p>
  * See {@link #append} and {@link #tryAppend} for how batches are created and grown.
  * <p>
- * TODO: support compressed data (with mid-record growth); the constructor rejects compression for now.
  */
 public class ChunkedRecordAccumulator extends RecordAccumulator {
 
@@ -79,11 +77,6 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
             throw new IllegalArgumentException("bufferPool must serve "
                     + BufferPool.AllocationMode.INCREMENTAL + " allocation, but serves "
                     + bufferPool.allocationMode());
-        // TODO: drop this once the incremental strategy supports compressed data (with the
-        //   mid-record growth fallback for compressor overshoot).
-        if (compression.type() != CompressionType.NONE)
-            throw new UnsupportedOperationException(
-                    "Compression is not yet supported with the incremental buffer.memory allocation strategy");
         this.chunkedFree = bufferPool;
     }
 
@@ -188,10 +181,10 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     nowMs = time.milliseconds();
                 } else if (appendResult.needsNewBatch() && newBatch == null) {
                     // The open batch is done (e.g., full, closed) so start a new one. Size it for
-                    // this first record with the same estimator the full strategy uses
-                    // (RecordAccumulator.append), but reserve only enough for the record rather than
-                    // a whole batch.size.
-                    // TODO: review when compression is supported.
+                    // this first record only (not a whole batch.size), to the uncompressed upper bound
+                    // the first-record capacity check in ChunkedProducerBatch.tryAppend demands. For a
+                    // compressed batch this is only a heuristic (that check is skipped for it): any
+                    // compressor overshoot is absorbed by the stream growing mid-write.
                     int newBatchSize = AbstractRecords.estimateSizeInBytesUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
                     long remainingTimeToBlock = remainingTimeToBlockMs(deadlineMs);
@@ -255,8 +248,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // so bufferStream was allocated (this iteration or carried from a prior one).
                     if (newBatch == null)
                         throw new IllegalStateException("needsNewBatch path reached without an allocated buffer stream");
-                    // Reuse the new-batch size estimate as the write-limit basis.
-                    // TODO: review when compression is supported.
+                    // Reuse the new-batch size estimate as the write-limit basis; fullness checks in
+                    // MemoryRecordsBuilder already fold in the estimated compression ratio.
                     final NewBatchBuffer pendingNewBatch = newBatch;
                     appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(pendingNewBatch.stream, pendingNewBatch.firstAppendSize), nowMs);

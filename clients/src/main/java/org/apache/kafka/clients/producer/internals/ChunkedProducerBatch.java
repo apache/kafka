@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 
 import java.nio.ByteBuffer;
@@ -74,13 +75,20 @@ public class ChunkedProducerBatch extends ProducerBatch {
      * {@code ChunkedRecordAccumulator.tryAppend}, which evaluates {@link #extensionBytesNeeded}
      * itself and attaches chunks before retrying, so repeating the check for those would size the
      * record a second time on every append for no added safety.
+     * <p>
+     * The check applies only to uncompressed batches, where the pre-size and the demand are the same
+     * upper bound. For a compressed batch the demand scales with the topic's compression ratio
+     * estimate, which can exceed 1.0 for incompressible data and can change between pre-sizing and
+     * batch creation, so the pre-size is only a heuristic; any overshoot is absorbed by the stream
+     * growing mid-write (see {@link ChunkedByteBufferOutputStream}).
      *
      * @return the record's future, or null if the batch is at its batch-size limit
-     * @throws IllegalStateException if the stream was not pre-sized to hold the batch's first record
+     * @throws IllegalStateException if the uncompressed stream was not pre-sized to hold the batch's first record
      */
     @Override
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        if (recordCount == 0 && extensionBytesNeeded(timestamp, key, value, headers) != 0)
+        if (recordCount == 0 && recordsBuilder.compression().type() == CompressionType.NONE
+                && extensionBytesNeeded(timestamp, key, value, headers) != 0)
             throw new IllegalStateException(
                     "Unexpected append to a chunked batch whose chunks lack capacity for the record; " +
                             "the stream should have been pre-sized for the batch's first record");
