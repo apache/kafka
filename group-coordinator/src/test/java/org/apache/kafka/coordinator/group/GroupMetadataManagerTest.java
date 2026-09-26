@@ -23733,6 +23733,10 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions))
+                .setTopicPartitionCounts(List.of(
+                    new StreamsGroupHeartbeatResponseData.TopicPartitionCount()
+                        .setTopic("foo")
+                        .setPartitionCount(2)))
                 .setStatus(List.of())
                 .setTaskOffsetIntervalMs(60_000)
                 .setAcceptableRecoveryLag(10_000),
@@ -23748,6 +23752,7 @@ public class GroupMetadataManagerTest {
                         .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
 
         assertNull(result.response().data().partitionsByUserEndpoint());
+        assertNull(result.response().data().topicPartitionCounts());
     }
 
     @Test
@@ -23841,6 +23846,14 @@ public class GroupMetadataManagerTest {
         List<Integer> member2Partitions = new ArrayList<>(member2Topic.partitions());
         Collections.sort(member2Partitions);
         assertEquals(List.of(2, 3), member2Partitions);
+
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.TopicPartitionCount()
+                .setTopic("foo")
+                .setPartitionCount(4)),
+            result.response().data().topicPartitionCounts(),
+            "Partition counts must include every source-topic partition, not only those currently advertised on endpoints"
+        );
     }
 
     @Test
