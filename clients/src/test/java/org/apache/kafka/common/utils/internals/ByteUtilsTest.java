@@ -397,6 +397,19 @@ public class ByteUtilsTest {
     }
 
     @Test
+    public void testReadUnsignedVarintRejectsOverflow() {
+        byte[] overflowEncoding = new byte[] {xFF, xFF, xFF, xFF, 0x1F};
+        InputStream in = new ByteArrayInputStream(overflowEncoding);
+        assertThrows(IllegalArgumentException.class, () -> {
+            ByteUtils.readUnsignedVarint(ByteBuffer.wrap(overflowEncoding));
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            ByteUtils.readUnsignedVarint(in);
+        });
+        assertEquals(-1, ByteUtils.readUnsignedVarint(ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, 0x0F})));
+    }
+
+    @Test
     public void testCorrectnessReadUnsignedVarint() {
         // The old well-known implementation for readUnsignedVarint
         Function<ByteBuffer, Integer> simpleImplementation = (ByteBuffer buffer) -> {
