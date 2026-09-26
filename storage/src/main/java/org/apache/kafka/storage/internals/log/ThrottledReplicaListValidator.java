@@ -27,19 +27,44 @@ public class ThrottledReplicaListValidator implements Validator {
     private ThrottledReplicaListValidator() { }
 
     public static void ensureValidString(String name, String value) {
-        INSTANCE.ensureValid(name, List.of(value.split(",")));
+        INSTANCE.ensureValid(name, List.of(value.split(",", -1)));
     }
 
     @Override
     public void ensureValid(String name, Object value) {
         if (value instanceof java.util.List<?>) {
             List<String> proposed = ((List<?>) value).stream().map(element -> element.toString().trim()).toList();
-            if (!(proposed.stream().allMatch(s -> s.matches("([0-9]+:[0-9]+)?"))
-                    || String.join("", proposed).equals("*")))
+            if (!(proposed.equals(List.of("*")) || isValidReplicaList(proposed)))
                 throw new ConfigException(name, value, name +
                     " must be the literal '*' or a list of replicas in the following format: [partitionId]:[brokerId],[partitionId]:[brokerId],...");
         } else
             throw new ConfigException(name, value, name + " must be a List but was " + value.getClass().getName());
+    }
+
+    private static boolean isValidReplicaList(List<String> proposed) {
+        boolean foundEmptyEntry = false;
+        for (String replica : proposed) {
+            if (replica.isEmpty()) {
+                foundEmptyEntry = true;
+            } else if (foundEmptyEntry || !isValidReplica(replica)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isValidReplica(String replica) {
+        if (!replica.matches("[0-9]+:[0-9]+"))
+            return false;
+
+        String[] replicaIds = replica.split(":");
+        try {
+            Integer.parseInt(replicaIds[0]);
+            Integer.parseInt(replicaIds[1]);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     @Override

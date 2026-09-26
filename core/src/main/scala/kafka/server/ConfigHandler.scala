@@ -132,7 +132,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       case "*" => ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq
       case _ => configValue.trim
         .split(",")
-        .map(_.split(":"))
+        .map(_.trim.split(":"))
         .filter(_ (1).toInt == brokerId) //Filter this replica
         .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
