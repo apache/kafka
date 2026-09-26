@@ -80,6 +80,7 @@ public class TimingWheelExpirationService implements ExpirationService {
             try {
                 timer.advanceClock(WORK_TIMEOUT_MS);
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 throw new RuntimeException(e);
             }
         }

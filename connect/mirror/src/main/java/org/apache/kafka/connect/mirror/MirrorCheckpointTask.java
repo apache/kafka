@@ -324,6 +324,7 @@ public class MirrorCheckpointTask extends SourceTask {
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
             } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
                 log.error("Error querying for consumer group {} on cluster {}.", group, targetClusterAlias, ie);
             } catch (ExecutionException ee) {
                 // check for non-existent new consumer upstream which will be identified during the offset sync-up

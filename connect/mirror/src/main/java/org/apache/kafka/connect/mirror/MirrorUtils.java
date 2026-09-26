@@ -277,7 +277,7 @@ public final class MirrorUtils {
             admin.createTopics(Set.of(topicDescription), args).values().get(topicName).get();
             log.info("Created topic '{}'", topicName);
         } catch (InterruptedException e) {
-            Thread.interrupted();
+            Thread.currentThread().interrupt();
             throw new ConnectException("Interrupted while attempting to create/find topic '" + topicName + "'", e);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
