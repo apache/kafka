@@ -17,25 +17,47 @@
 
 package org.apache.kafka.common.test;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.authorizer.AclCreateResult;
+import org.apache.kafka.server.authorizer.AclDeleteResult;
+import org.apache.kafka.server.authorizer.Action;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import org.apache.kafka.server.authorizer.AuthorizationResult;
+import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
+import org.apache.kafka.server.config.ReplicationConfigs;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -174,6 +196,150 @@ public class KafkaClusterTestKitTest {
             assertNotNull(cluster.nonFatalFaultHandler(), "Non-fatal fault handler should not be null");
         } catch (Exception e) {
             fail("Failed to initialize cluster", e);
+        }
+    }
+
+    @Test
+    @Tag("integration")
+    @Timeout(120)
+    public void testCreateClusterAndClose() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+        }
+    }
+
+    @Test
+    @Tag("integration")
+    @Timeout(120)
+    public void testCreateClusterAndRestartBrokerNode() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            var broker = cluster.brokers().values().iterator().next();
+            broker.shutdown();
+            broker.startup();
+        }
+    }
+
+    @Test
+    @Tag("integration")
+    @Timeout(120)
+    public void testCreateClusterAndWaitForBrokerInRunningState() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                "Broker never made it to RUNNING state.");
+            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
+                "RaftManager was not initialized.");
+            try (Admin admin = cluster.admin()) {
+                assertEquals(cluster.nodes().clusterId(),
+                    admin.describeCluster().clusterId().get());
+            }
+        }
+    }
+
+    @Test
+    @Tag("integration")
+    @Timeout(120)
+    public void testClusterWithLowerCaseListeners() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setBrokerListenerName(new ListenerName("external"))
+                .setNumControllerNodes(3)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.brokers().forEach((brokerId, broker) -> {
+                assertEquals(List.of("external://localhost:0"), broker.config().get(SocketServerConfigs.LISTENERS_CONFIG));
+                assertEquals("external", broker.config().get(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG));
+                assertEquals("external:PLAINTEXT,CONTROLLER:PLAINTEXT", broker.config().get(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG));
+            });
+            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                "Broker never made it to RUNNING state.");
+            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
+                "RaftManager was not initialized.");
+            try (Admin admin = cluster.admin()) {
+                assertEquals(cluster.nodes().clusterId(),
+                    admin.describeCluster().clusterId().get());
+            }
+        }
+    }
+
+    @Test
+    @Tag("integration")
+    @Timeout(120)
+    public void testAuthorizerFailureFoundInControllerStartup() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumControllerNodes(3).build())
+            .setConfigProp("authorizer.class.name", BadAuthorizer.class.getName())
+            .build()) {
+            cluster.format();
+            ExecutionException exception = assertThrows(ExecutionException.class,
+                cluster::startup);
+            assertEquals("java.lang.IllegalStateException: test authorizer exception",
+                exception.getMessage());
+            cluster.fatalFaultHandler().setIgnore(true);
+        }
+    }
+
+    public static class BadAuthorizer implements Authorizer {
+        // Default constructor needed for reflection object creation
+        public BadAuthorizer() {
+        }
+
+        @Override
+        public Map<Endpoint, ? extends CompletionStage<Void>> start(AuthorizerServerInfo serverInfo) {
+            throw new IllegalStateException("test authorizer exception");
+        }
+
+        @Override
+        public List<AuthorizationResult> authorize(AuthorizableRequestContext requestContext, List<Action> actions) {
+            return null;
+        }
+
+        @Override
+        public List<? extends CompletionStage<AclCreateResult>> createAcls(AuthorizableRequestContext requestContext,
+            List<AclBinding> aclBindings) {
+            return null;
+        }
+
+        @Override
+        public List<? extends CompletionStage<AclDeleteResult>> deleteAcls(AuthorizableRequestContext requestContext,
+            List<AclBindingFilter> aclBindingFilters) {
+            return null;
+        }
+
+        @Override
+        public Iterable<AclBinding> acls(AclBindingFilter filter) {
+            return null;
+        }
+
+        @Override
+        public void close() throws IOException {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
         }
     }
 }
