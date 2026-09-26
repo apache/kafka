@@ -55,7 +55,7 @@ public class DescribeClusterResult {
     /**
      * Returns a future which yields the current controller node.
      * <p>
-     * When using {@link AdminClientConfig#BOOTSTRAP_SERVERS_CONFIG}, the controller refer to a random broker.
+     * When using {@link AdminClientConfig#BOOTSTRAP_SERVERS_CONFIG}, the controller refers to a random broker.
      * When using {@link AdminClientConfig#BOOTSTRAP_CONTROLLERS_CONFIG}, it refers to the current voter leader.
      */
     public KafkaFuture<Node> controller() {
