@@ -637,10 +637,10 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
                 fetcher.clearBufferedDataForUnassignedPartitions(partitions);
 
-                // make sure the offsets of topic partitions the consumer is unsubscribing from
-                // are committed since there will be no following rebalance
+                // Best-effort async auto-commit for previously-assigned partitions.
+                // assign() does not block waiting for the commit to complete.
                 if (coordinator != null)
-                    this.coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
+                    this.coordinator.maybeAutoCommitOffsetsAsync();
 
                 log.info("Assigned to partition(s): {}", partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
                 if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
