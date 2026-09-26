@@ -1613,7 +1613,9 @@ public class SaslAuthenticatorTest {
          * original token with a new one.
          */
         delay(1000L);
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        AssertionFailedError e =  assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertTrue(e.getMessage().contains("No disconnects should have occurred"), 
+            "Expected disconnection failure, but got: " + e.getMessage());
         server.verifyReauthenticationMetrics(0, 1);
     }
 
@@ -1733,7 +1735,9 @@ public class SaslAuthenticatorTest {
          * to sleep long enough so that the next write will trigger a re-authentication.
          */
         delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        AssertionFailedError e = assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertTrue(e.getMessage().contains("No disconnects should have occurred"), 
+            "Expected disconnection failure, but got: " + e.getMessage());
         server.verifyAuthenticationMetrics(1, 0);
         server.verifyReauthenticationMetrics(0, 1);
     }
