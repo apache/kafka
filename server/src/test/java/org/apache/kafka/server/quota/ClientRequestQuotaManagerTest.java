@@ -16,21 +16,103 @@
  */
 package org.apache.kafka.server.quota;
 
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.management.ManagementFactory;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
     private final ClientQuotaManagerConfig config = new ClientQuotaManagerConfig();
 
     private static double millisToPercent(double millis) {
         return millis * 1000 * 1000 * ClientRequestQuotaManager.NANOS_TO_PERCENTAGE_PER_SECOND;
+    }
+
+    @Test
+    public void testRequestQuotaUtilization() {
+        ClientRequestQuotaManager clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", Optional.empty());
+        String user = "ANONYMOUS";
+        String clientId = "test-client";
+        ClientQuotaEntity.ConfigEntity userEntity = new ClientQuotaManager.UserEntity(user);
+        ClientQuotaEntity.ConfigEntity clientEntity = new ClientQuotaManager.ClientIdEntity(clientId);
+
+        try {
+            clientRequestQuotaManager.updateQuota(
+                    Optional.of(userEntity),
+                    Optional.of(clientEntity),
+                    Optional.of(Quota.upperBound(50))
+            );
+
+            maybeRecord(clientRequestQuotaManager, user, clientId, 400);
+            Map<String, String> tags = Map.of("user", user, "client-id", clientId);
+            KafkaMetric requestTimeMetric = metrics.metric(metrics.metricName("request-time", QuotaType.REQUEST.toString(), tags));
+            KafkaMetric utilizationMetric = metrics.metric(metrics.metricName(
+                    "quota-utilization",
+                    QuotaType.REQUEST.toString(),
+                    tags
+            ));
+            assertNotNull(utilizationMetric);
+            assertEquals(requestTimeMetric.metricName().tags(), utilizationMetric.metricName().tags());
+            double requestTime = (Double) requestTimeMetric.metricValue();
+            assertEquals(requestTime / 50 * 100, (Double) utilizationMetric.metricValue(), 0.001);
+            assertEquals(80, (Double) utilizationMetric.metricValue(), 0.001);
+        } finally {
+            clientRequestQuotaManager.shutdown();
+        }
+    }
+
+    @Test
+    public void testRequestQuotaUtilizationJmxAttribute() throws Exception {
+        Metrics jmxMetrics = new Metrics(new MetricConfig(), List.of(new JmxReporter()), time);
+        ClientRequestQuotaManager clientRequestQuotaManager = new ClientRequestQuotaManager(config, jmxMetrics, time, "", Optional.empty());
+        String user = "ANONYMOUS";
+        String clientId = "test-client";
+        Map<String, String> tags = Map.of("user", user, "client-id", clientId);
+
+        try {
+            clientRequestQuotaManager.updateQuota(
+                    Optional.of(new ClientQuotaManager.UserEntity(user)),
+                    Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)),
+                    Optional.of(Quota.upperBound(50))
+            );
+            maybeRecord(clientRequestQuotaManager, user, clientId, 400);
+
+            KafkaMetric rateMetric = jmxMetrics.metric(jmxMetrics.metricName("request-time", QuotaType.REQUEST.toString(), tags));
+            assertNotNull(rateMetric);
+            ObjectName objectName = new ObjectName(":type=Request,user=" + user + ",client-id=" + clientId);
+            MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
+            assertTrue(Arrays.stream(mbeanServer.getMBeanInfo(objectName).getAttributes())
+                    .anyMatch(attr -> attr.getName().equals("quota-utilization")));
+            assertEquals("double", Arrays.stream(mbeanServer.getMBeanInfo(objectName).getAttributes())
+                    .filter(attr -> attr.getName().equals("quota-utilization"))
+                    .findFirst()
+                    .orElseThrow()
+                    .getType());
+
+            double requestTime = (Double) mbeanServer.getAttribute(objectName, "request-time");
+            double utilization = (Double) mbeanServer.getAttribute(objectName, "quota-utilization");
+            assertEquals(requestTime / 50 * 100, utilization, 0.001);
+        } finally {
+            clientRequestQuotaManager.shutdown();
+            jmxMetrics.close();
+        }
     }
 
     @Test
