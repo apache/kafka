@@ -31,9 +31,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
     - name: Set up Python 3.10
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
       with:
         python-version: "3.10"
     - name: Install dependencies
@@ -49,7 +49,7 @@ jobs:
         python prepare_docker_official_image_source.py -type=$IMAGE_TYPE -v=$KAFKA_VERSION
     - name: Upload Docker Official Image Artifact
       if: success()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: ${{ github.event.inputs.kafka_version }}
         path: docker/docker_official_images/${{ github.event.inputs.kafka_version }}
