@@ -67,7 +67,7 @@ type: docs
   * Includes fixes for several critical Kafka Streams bugs that could cause a `StreamThread` to die after task corruption, task recycling, or state updater timeouts ([KAFKA-20808](https://issues.apache.org/jira/browse/KAFKA-20808), [KAFKA-20827](https://issues.apache.org/jira/browse/KAFKA-20827), [KAFKA-20721](https://issues.apache.org/jira/browse/KAFKA-20721)).
   * Includes a fix for a group coordinator bug in which a consumer group downgrade could leave the group in an invalid state when the classic group metadata is very large ([KAFKA-20845](https://issues.apache.org/jira/browse/KAFKA-20845)).
   * Includes a fix for a client telemetry bug in which metrics could be sent to a stale broker IP address after a broker address change ([KAFKA-20393](https://issues.apache.org/jira/browse/KAFKA-20393)).
-  * Includes a fix for a `NullPointerException` in `MetadataCache#toCluster` that could crash request handling ([KAFKA-20746](https://issues.apache.org/jira/browse/KAFKA-20746)).
+  * Includes a fix for a `NullPointerException` in `MetadataCache#toCluster` that stopped a custom `ClientQuotaCallback` (`client.quota.callback.class`) from receiving cluster metadata updates ([KAFKA-20746](https://issues.apache.org/jira/browse/KAFKA-20746)).
 
 ## Upgrading to 4.3.1
 
