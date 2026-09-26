@@ -52,6 +52,7 @@ import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PR
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.{Processor, SocketServerConfigs}
 import org.apache.kafka.raft.MetadataLogConfig
@@ -340,6 +341,20 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     reporters.foreach { reporter =>
       reporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 2000)
     }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testGroupCoordinatorAssignmentIntervalUsingConfigProvider(groupProtocol: String): Unit = {
+    val assignmentIntervalVal = f"$${file:group.consumer.assignment.interval.ms:updinterval}"
+
+    val updatedProps = new Properties
+    updatedProps.setProperty("config.providers", "file")
+    updatedProps.setProperty("config.providers.file.class", "kafka.server.MockFileConfigProvider")
+    updatedProps.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, assignmentIntervalVal)
+
+    alterConfigsAsync(servers, adminClients.head, updatedProps, perBrokerConfig = true).all.get()
+    waitForConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "2000")
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)

@@ -826,13 +826,13 @@ public class GroupCoordinatorConfig {
             props
         );
 
-        clampDynamicIntConfig(props, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        clampDynamicIntConfig(groupCoordinatorConfig, props, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.getInt(CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
             groupCoordinatorConfig.getInt(CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
-        clampDynamicIntConfig(props, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        clampDynamicIntConfig(groupCoordinatorConfig, props, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.getInt(SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
             groupCoordinatorConfig.getInt(SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
-        clampDynamicIntConfig(props, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        clampDynamicIntConfig(groupCoordinatorConfig, props, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.getInt(STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG),
             groupCoordinatorConfig.getInt(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
     }
@@ -841,21 +841,22 @@ public class GroupCoordinatorConfig {
      * Clamp a config value to [min, max]. A WARN log is emitted on adjustment.
      * No-op when the key is absent from props.
      *
-     * @param props   The properties to modify in place.
-     * @param key     The config key.
-     * @param min     The minimum allowed value (inclusive).
-     * @param max     The maximum allowed value (inclusive).
+     * @param groupCoordinatorConfig The parsed config, used to read the config-provider-resolved value.
+     * @param props                  The properties to modify in place.
+     * @param key                    The config key.
+     * @param min                    The minimum allowed value (inclusive).
+     * @param max                    The maximum allowed value (inclusive).
      */
     private static void clampDynamicIntConfig(
+        AbstractConfig groupCoordinatorConfig,
         Map<String, String> props,
         String key,
         int min,
         int max
     ) {
-        Object rawValue = props.get(key);
-        if (rawValue == null) return;
+        if (!props.containsKey(key)) return;
 
-        int value = Integer.parseInt(rawValue.toString());
+        int value = groupCoordinatorConfig.getInt(key);
         if (value < min) {
             LOG.warn("The config '{}' has value {} which is below the " +
                     "allowed minimum {}. The effective value will be capped to {}.",
