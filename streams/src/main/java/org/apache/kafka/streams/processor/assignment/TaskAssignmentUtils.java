@@ -628,7 +628,7 @@ public final class TaskAssignmentUtils {
 
     /**
      *
-     * @return the traffic cost of assigning this {@code task} to the client {@code streamsState}.
+     * @return the traffic cost of assigning a task with the given {@code topicPartitions} to a client in {@code clientRack}.
      */
     private static int getCrossRackTrafficCost(final Set<TaskTopicPartition> topicPartitions,
                                                final String clientRack,

@@ -170,7 +170,7 @@ public class RackAwareTaskAssignor {
     }
 
     /**
-     * This function populates the {@code racksForPartition} parameter passed into the function by using both
+     * This function populates the {@code racksForPartition} field by using both
      * the {@code Cluster} metadata as well as the {@code internalTopicManager} for topics that have stale
      * information.
      *
