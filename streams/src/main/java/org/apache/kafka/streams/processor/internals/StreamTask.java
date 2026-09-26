@@ -1041,9 +1041,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private Map<TopicPartition, Long> checkpointableOffsets() {
         final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>(recordCollector.offsets());
-        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-            checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
-        }
+        // The consumed offset wins over the produced offset: for a source-topic changelog the store is
+        // filled by consuming the partition, so the consumed offset is what was applied to the store.
+        checkpointableOffsets.putAll(consumedOffsets);
 
         log.debug("Checkpointable offsets {}", checkpointableOffsets);
 
