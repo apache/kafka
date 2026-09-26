@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -58,6 +59,49 @@ public class RequestHeaderTest {
         assertEquals(11, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
+    }
+
+    @Test
+    public void testRequestHeaderV3() {
+        // OffsetDelete v1 uses the v3 request header.
+        short apiVersion = 1;
+        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, apiVersion, "", 10);
+        assertEquals(3, header.headerVersion());
+
+        // The client instance ID is tagged, so a v3 header which leaves it unset is the size of a v2 header.
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
+        assertEquals(11, buffer.remaining());
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header, deserialized);
+        assertEquals(Uuid.ZERO_UUID, deserialized.data().clientInstanceId());
+    }
+
+    @Test
+    public void testRequestHeaderV3WithClientInstanceId() {
+        Uuid clientInstanceId = Uuid.randomUuid();
+        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 1, "", clientInstanceId, 10);
+        assertEquals(3, header.headerVersion());
+        assertEquals(clientInstanceId, header.clientInstanceId());
+
+        // The 10 bytes of header fields, plus the tagged field's count, tag, size and 16-byte UUID.
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
+        assertEquals(29, buffer.remaining());
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header, deserialized);
+        assertEquals(clientInstanceId, deserialized.clientInstanceId());
+    }
+
+    @Test
+    public void testClientInstanceIdIsUnsetBelowTheV3Header() {
+        // OffsetDelete v0 uses the v1 request header, which has no ClientInstanceId field, so the header
+        // leaves the ID unset as its default, ZERO_UUID.
+        RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, (short) 0, "", Uuid.randomUuid(), 10);
+        assertEquals(1, header.headerVersion());
+        assertEquals(Uuid.ZERO_UUID, header.clientInstanceId());
+
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
+        assertEquals(10, buffer.remaining());
+        assertEquals(header, RequestHeader.parse(buffer));
     }
 
     @Test

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -69,6 +70,7 @@ public class MockClient implements KafkaClient {
 
     }
 
+    private final Uuid clientInstanceId = Uuid.randomUuid();
     private int correlation;
     private Runnable wakeupHook;
     private boolean advanceTimeDuringPoll;
@@ -573,7 +575,7 @@ public class MockClient implements KafkaClient {
                                           boolean expectResponse,
                                           int requestTimeoutMs,
                                           RequestCompletionHandler callback) {
-        return new ClientRequest(nodeId, requestBuilder, correlation++, "mockClientId", createdTimeMs,
+        return new ClientRequest(nodeId, requestBuilder, correlation++, "mockClientId", clientInstanceId, createdTimeMs,
                 expectResponse, requestTimeoutMs, callback);
     }
 

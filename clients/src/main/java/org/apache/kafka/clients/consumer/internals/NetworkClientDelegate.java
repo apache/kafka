@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -479,6 +480,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final Metadata metadata,
                                                            final ConsumerConfig config,
                                                            final ApiVersions apiVersions,
+                                                           final Uuid clientInstanceId,
                                                            final Metrics metrics,
                                                            final Sensor throttleTimeSensor,
                                                            final ClientTelemetrySender clientTelemetrySender,
@@ -490,6 +492,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             protected NetworkClientDelegate create() {
                 KafkaClient client = ClientUtils.createNetworkClient(config,
                         config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                        clientInstanceId,
                         metrics,
                         CONSUMER_METRIC_GROUP_PREFIX,
                         logContext,

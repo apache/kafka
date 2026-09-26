@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.RebootstrapRequiredException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
@@ -42,6 +44,7 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.OffsetDeleteRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
@@ -196,6 +199,59 @@ public class NetworkClientTest {
             ClientDnsLookup.USE_ALL_DNS_IPS,
             CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
             CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
+    }
+
+    @Test
+    public void testClientInstanceIdIsSentInTheV3RequestHeader() {
+        Uuid clientInstanceId = Uuid.randomUuid();
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", clientInstanceId, Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), null,
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false);
+        // OffsetDelete v1 uses the v3 request header, while v0 does not.
+        ClientRequest request = client.newClientRequest(node.idString(),
+                new OffsetDeleteRequest.Builder(new OffsetDeleteRequestData()), time.milliseconds(), true);
+        assertEquals(clientInstanceId, request.makeHeader((short) 1).clientInstanceId());
+        assertEquals(Uuid.ZERO_UUID, request.makeHeader((short) 0).clientInstanceId());
+    }
+
+    @Test
+    public void testClientInstanceIdIsRequired() {
+        assertThrows(NullPointerException.class, () -> new NetworkClient(metadataUpdater, null, selector, "mock", null,
+                Integer.MAX_VALUE, reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), null,
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
+    }
+
+    @Test
+    public void testShortConstructorsGenerateClientInstanceId() {
+        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
+        assertGeneratedClientInstanceId(new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
+        assertGeneratedClientInstanceId(new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
+        assertGeneratedClientInstanceId(new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), null, new LogContext(),
+                MetadataRecoveryStrategy.NONE, false));
+        assertGeneratedClientInstanceId(new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
+    }
+
+    private static void assertGeneratedClientInstanceId(NetworkClient client) {
+        // OffsetDelete v1 uses the v3 request header.
+        Uuid clientInstanceId = client.newClientRequest("0", new OffsetDeleteRequest.Builder(new OffsetDeleteRequestData()), 0, true)
+                .makeHeader((short) 1).clientInstanceId();
+        // KIP-1313 does not permit a reserved UUID; Uuid.randomUuid never returns one.
+        assertFalse(Uuid.RESERVED.contains(clientInstanceId));
     }
 
     @Test
@@ -1214,7 +1270,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
@@ -1275,7 +1331,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
@@ -1328,7 +1384,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
@@ -1437,7 +1493,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
             reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
             defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), mockClientTelemetrySender,
@@ -1556,7 +1612,7 @@ public class NetworkClientTest {
         ManualMetadataUpdater updater = new ManualMetadataUpdater(Collections.singletonList(staleNode));
 
         NetworkClient testClient = new NetworkClient(
-                updater, null, capturingSelector, "test-client",
+                updater, null, capturingSelector, "test-client", Uuid.randomUuid(),
                 Integer.MAX_VALUE,
                 0L, 0L,   // reconnectBackoffMs = 0 for instant reconnect
                 64 * 1024, 64 * 1024,

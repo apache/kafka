@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ClientInstanceIdCapture;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
@@ -30,6 +31,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegateInstanceIdCapture;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -4487,5 +4489,27 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         public static void resetCounters() {
             CLOSE_COUNT.set(0);
         }
+    }
+
+    private Map<String, Object> clientInstanceIdConfigs(GroupProtocol groupProtocol) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group");
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
+        return configs;
+    }
+
+    @Test
+    public void testClassicConsumerPassesTheClientInstanceIdToTheNetworkClient() {
+        Map<String, Object> configs = clientInstanceIdConfigs(GroupProtocol.CLASSIC);
+        ClientInstanceIdCapture.assertGenerated(
+            () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
+    }
+
+    @Test
+    public void testAsyncConsumerPassesTheClientInstanceIdToTheNetworkClient() {
+        Map<String, Object> configs = clientInstanceIdConfigs(GroupProtocol.CONSUMER);
+        NetworkClientDelegateInstanceIdCapture.assertGenerated(
+            () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 }

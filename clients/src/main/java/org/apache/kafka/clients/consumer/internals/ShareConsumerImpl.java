@@ -284,12 +284,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new ShareFetchBuffer(logContext);
+            Uuid clientInstanceId = Uuid.randomUuid();
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
                     time,
                     logContext,
                     metadata,
                     config,
                     apiVersions,
+                    clientInstanceId,
                     metrics,
                     shareFetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),

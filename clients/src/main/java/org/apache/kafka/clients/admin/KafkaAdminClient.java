@@ -614,9 +614,11 @@ public class KafkaAdminClient extends AdminClient {
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
 
+            Uuid clientInstanceId = Uuid.randomUuid();
             networkClient = ClientUtils.createNetworkClient(config,
                 bootstrapAddressesToUse,
                 clientId,
+                clientInstanceId,
                 metrics,
                 "admin-client",
                 logContext,

@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -80,6 +81,7 @@ public final class ConsumerUtils {
     private static final Logger log = LoggerFactory.getLogger(ConsumerUtils.class);
 
     public static ConsumerNetworkClient createConsumerNetworkClient(ConsumerConfig config,
+                                                                    Uuid clientInstanceId,
                                                                     Metrics metrics,
                                                                     LogContext logContext,
                                                                     ApiVersions apiVersions,
@@ -90,6 +92,7 @@ public final class ConsumerUtils {
                                                                     ClientTelemetrySender clientTelemetrySender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
                 config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                clientInstanceId,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX,
                 logContext,
