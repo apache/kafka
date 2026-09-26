@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.record.internal;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -44,8 +47,10 @@ import static org.apache.kafka.common.record.internal.RecordBatch.NO_TIMESTAMP;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FileLogInputStreamTest {
@@ -252,6 +257,72 @@ public class FileLogInputStreamTest {
             assertGenericRecordBatchData(args, firstBatch, 0L, 100L, firstBatchRecord);
 
             assertNull(logInputStream.nextBatch());
+        }
+    }
+
+    // compressed v2 batches skip the record body; uncompressed and legacy batches fully decode it
+    @ParameterizedTest
+    @ArgumentsSource(FileLogInputStreamArgumentsProvider.class)
+    public void testSkipKeyValueIteration(Args args) throws IOException {
+        Compression compression = args.compression;
+        byte magic = args.magic;
+        if (compression.type() == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+            return;
+
+        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
+            SimpleRecord[] records = new SimpleRecord[]{
+                new SimpleRecord(3241324L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(234280L, null, "2".getBytes()),
+                new SimpleRecord(8234020L, "e".getBytes(), null)
+            };
+            fileRecords.append(MemoryRecords.withRecords(magic, 0L, compression, CREATE_TIME, records));
+            fileRecords.flush();
+
+            // legacy uncompressed batches hold one record each, so walk every batch in the file
+            int index = 0;
+            for (FileChannelRecordBatch batch : fileRecords.batches()) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+                    while (iterator.hasNext()) {
+                        Record record = iterator.next();
+                        SimpleRecord expected = records[index];
+                        assertEquals(index, record.offset());
+                        assertEquals(magic == MAGIC_VALUE_V0 ? NO_TIMESTAMP : expected.timestamp(), record.timestamp());
+                        if (magic >= MAGIC_VALUE_V2 && batch.isCompressed()) {
+                            assertInstanceOf(PartialDefaultRecord.class, record);
+                            assertEquals(expected.key() == null ? -1 : expected.key().remaining(), record.keySize());
+                            assertEquals(expected.value() == null ? -1 : expected.value().remaining(), record.valueSize());
+                            assertThrows(UnsupportedOperationException.class, record::key);
+                            assertThrows(UnsupportedOperationException.class, record::value);
+                            assertThrows(UnsupportedOperationException.class, record::headers);
+                        } else {
+                            assertEquals(expected.key(), record.key());
+                            assertEquals(expected.value(), record.value());
+                        }
+                        index++;
+                    }
+                }
+            }
+            assertEquals(records.length, index);
+        }
+    }
+
+    @Test
+    public void testSkipKeyValueIteratorEnforcesConfiguredMaxRecordBodySize() throws IOException {
+        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
+            fileRecords.append(MemoryRecords.withRecords(MAGIC_VALUE_V2, 0L, Compression.gzip().build(), CREATE_TIME,
+                new SimpleRecord(10L, "key".getBytes(), new byte[1000])));
+            fileRecords.flush();
+
+            FileChannelRecordBatch batch = new FileLogInputStream(fileRecords, 0, fileRecords.sizeInBytes()).nextBatch();
+            assertNotNull(batch);
+
+            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 10_000)) {
+                assertEquals(0L, iterator.next().offset());
+            }
+            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 100)) {
+                InvalidRecordException e = assertThrows(InvalidRecordException.class, iterator::next);
+                assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
+            }
         }
     }
 
