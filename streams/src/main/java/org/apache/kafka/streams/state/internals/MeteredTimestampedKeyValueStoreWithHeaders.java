@@ -672,7 +672,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer,
             final boolean returnPlainValue
         ) {
-            super(iter, sensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
+            super(iter, sensor, iteratorDurationSensor, time, iteratorTracker);
             this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
             this.returnPlainValue = returnPlainValue;
         }
@@ -747,7 +747,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final Sensor sensor,
             final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer
         ) {
-            super(iter, sensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
+            super(iter, sensor, iteratorDurationSensor, time, iteratorTracker);
             this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
         }
 
@@ -781,7 +781,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final KeyValueIterator<Bytes, byte[]> iter,
             final Sensor sensor
         ) {
-            super(iter, sensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
+            super(iter, sensor, iteratorDurationSensor, time, iteratorTracker);
         }
 
         @Override
