@@ -108,10 +108,14 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
     protected abstract String metricGroupName();
 
     protected void createHeartbeatRequestStateWithZeroHeartbeatInterval() {
+        createHeartbeatRequestStateWithHeartbeatInterval(0);
+    }
+
+    protected void createHeartbeatRequestStateWithHeartbeatInterval(final long heartbeatIntervalMs) {
         heartbeatRequestState = spy(new HeartbeatRequestState(
             logContext,
             time,
-            0,
+            heartbeatIntervalMs,
             DEFAULT_RETRY_BACKOFF_MS,
             DEFAULT_RETRY_BACKOFF_MAX_MS,
             DEFAULT_HEARTBEAT_JITTER_MS)

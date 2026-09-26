@@ -136,6 +136,50 @@ public class ShareHeartbeatRequestManagerTest
         recreateHeartbeatRequestManager();
     }
 
+    /**
+     * A heartbeat request is in flight and the heartbeat timer is already expired. That happens both
+     * while the very first heartbeat is in flight, when the interval is still unknown (it is initialised
+     * to 0 and only learned from the first heartbeat response), and later on, when a response takes
+     * longer than the interval. In that window no heartbeat can be sent until the in-flight one
+     * completes, so both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
+     * {@link AbstractHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay;
+     * returning 0 causes a busy loop in the consumer network thread and the application thread until the in-flight
+     * request completes, which can be as long as request.timeout.ms when the coordinator is unreachable.
+     */
+    @ParameterizedTest
+    @ValueSource(longs = {0, 5000})
+    public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin(final long heartbeatIntervalMs) {
+        createHeartbeatRequestStateWithHeartbeatInterval(heartbeatIntervalMs);
+        // The member keeps joining for both intervals, so the heartbeat below is sent without waiting for
+        // the interval and the total simulated time stays under max.poll.interval.ms.
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        if (heartbeatIntervalMs > 0) {
+            // A known interval means a successful heartbeat response was already received.
+            heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
+        }
+
+        NetworkClientDelegate.PollResult firstResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, firstResult.unsentRequests.size(),
+            "A heartbeat should be sent as soon as the coordinator is known");
+
+        // Deliberately do not complete the request, so it stays in flight while the heartbeat timer expires.
+        time.sleep(heartbeatIntervalMs + 1);
+
+        NetworkClientDelegate.PollResult secondResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, secondResult.unsentRequests.size(),
+            "No heartbeat should be sent while another one is in flight");
+        assertTrue(secondResult.timeUntilNextPollMs > 0,
+            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy loop; got "
+                + secondResult.timeUntilNextPollMs);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, secondResult.timeUntilNextPollMs);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy loop; got " + result);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
+    }
+
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.SHARE_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
