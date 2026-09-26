@@ -393,10 +393,8 @@ public class JaasContextTest {
     }
 
     private void checkInvalidConfiguration(String jaasConfigProp) throws IOException {
-        assertThrows(SecurityException.class, () -> {
-            writeConfiguration(JaasContext.Type.SERVER.name(), jaasConfigProp);
-            configurationEntry(JaasContext.Type.SERVER, null);
-        }, "Invalid JAAS configuration file didn't throw exception");
+        writeConfiguration(JaasContext.Type.SERVER.name(), jaasConfigProp);
+        assertThrows(SecurityException.class, () -> configurationEntry(JaasContext.Type.SERVER, null), "Invalid JAAS configuration file didn't throw exception");
         assertThrows(IllegalArgumentException.class, () -> configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp), "Invalid JAAS configuration property didn't throw exception");
 
     }
