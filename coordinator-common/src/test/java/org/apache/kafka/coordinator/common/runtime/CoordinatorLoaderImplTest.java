@@ -50,6 +50,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
+import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -202,6 +203,53 @@ class CoordinatorLoaderImplTest {
             verify(coordinator).updateLastWrittenOffset(7L);
             verify(coordinator).updateLastWrittenOffset(8L);
             verify(coordinator).updateLastCommittedOffset(0L);
+        }
+    }
+
+    @Test
+    void testLoadingRecordsFromPreallocatedSegment() throws Exception {
+        TopicPartition tp = new TopicPartition("foo", 0);
+        UnifiedLog log = mock(UnifiedLog.class);
+        Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
+        Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(2L);
+        Deserializer<Map.Entry<String, String>> serde = new StringKeyValueDeserializer();
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
+
+        MemoryRecords records = MemoryRecords.withRecords(
+            0,
+            Compression.NONE,
+            new SimpleRecord("k1".getBytes(), "v1".getBytes()),
+            new SimpleRecord("k2".getBytes(), "v2".getBytes())
+        );
+
+        // A preallocated segment is physically longer than the records appended to it, and the
+        // region past its logical end reads back as zeros. The file is preallocated well beyond
+        // the records so that a read which is not bounded to the slice runs into that region.
+        try (FileRecords segment = FileRecords.open(tempFile(), false, 4096, true);
+             CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
+                 Time.SYSTEM,
+                 partitionLogSupplier,
+                 partitionLogEndOffsetSupplier,
+                 serde,
+                 1000,
+                 CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
+             )) {
+            segment.append(records);
+
+            when(log.logStartOffset()).thenReturn(0L);
+            when(log.highWatermark()).thenReturn(0L);
+            when(log.read(0L, 1000, FetchIsolation.LOG_END, true)).thenReturn(new FetchDataInfo(
+                new LogOffsetMetadata(0),
+                segment.slice(0, segment.sizeInBytes())
+            ));
+
+            CoordinatorLoader.LoadSummary summary = loader.load(tp, coordinator).get(10, TimeUnit.SECONDS);
+            assertNotNull(summary);
+            assertEquals(2, summary.numRecords());
+            assertEquals(records.sizeInBytes(), summary.numBytes());
+
+            verify(coordinator).replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k1", "v1"));
+            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k2", "v2"));
         }
     }
 
