@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -36,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,6 +62,7 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+    private boolean failOnDataLossAndTopicReset = false;
 
     public MirrorSourceTask() {}
 
@@ -74,6 +78,14 @@ public class MirrorSourceTask extends SourceTask {
         this.offsetSyncWriter = offsetSyncWriter;
     }
 
+    // for testing
+    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceLegacyMetrics metrics, String sourceClusterAlias,
+                     ReplicationPolicy replicationPolicy,
+                     OffsetSyncWriter offsetSyncWriter, boolean failOnDataLossAndTopicReset) {
+        this(consumer, metrics, sourceClusterAlias, replicationPolicy, offsetSyncWriter);
+        this.failOnDataLossAndTopicReset = failOnDataLossAndTopicReset;
+    }
+
     @Override
     public void start(Map<String, String> props) {
         MirrorSourceTaskConfig config = new MirrorSourceTaskConfig(props);
@@ -87,7 +99,14 @@ public class MirrorSourceTask extends SourceTask {
         if (config.emitOffsetSyncsEnabled()) {
             offsetSyncWriter = new OffsetSyncWriter(config);
         }
-        consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
+        failOnDataLossAndTopicReset = config.dataLossAndTopicResetDetectionEnabled();
+        Map<String, Object> consumerConfig = config.sourceConsumerConfig("replication-consumer");
+        if (failOnDataLossAndTopicReset) {
+            // Without this, the underlying consumer silently resets to the earliest offset on
+            // truncation or topic reset, masking the very conditions this task needs to detect.
+            consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+        }
+        consumer = MirrorUtils.newConsumer(consumerConfig);
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         initializeConsumer(taskTopicPartitions);
 
@@ -162,6 +181,12 @@ public class MirrorSourceTask extends SourceTask {
                 log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
                 return sourceRecords;
             }
+        } catch (OffsetOutOfRangeException e) {
+            if (failOnDataLossAndTopicReset) {
+                throw classifyOffsetOutOfRange(e);
+            }
+            log.warn("Failure during poll.", e);
+            return null;
         } catch (WakeupException e) {
             return null;
         } catch (KafkaException e) {
@@ -176,6 +201,36 @@ public class MirrorSourceTask extends SourceTask {
         }
     }
  
+    // visible for testing
+    RuntimeException classifyOffsetOutOfRange(OffsetOutOfRangeException e) {
+        Map<TopicPartition, Long> outOfRangeOffsets = e.offsetOutOfRangePartitions();
+        Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(outOfRangeOffsets.keySet());
+        boolean dataLossDetected = false;
+        for (Map.Entry<TopicPartition, Long> entry : outOfRangeOffsets.entrySet()) {
+            TopicPartition topicPartition = entry.getKey();
+            long requestedOffset = entry.getValue();
+            long earliestOffset = earliestOffsets.getOrDefault(topicPartition, 0L);
+            if (earliestOffset > 0) {
+                dataLossDetected = true;
+                log.error("Data loss detected replicating {}->{}: requested offset {} for {} is no longer " +
+                        "available (earliest available offset is {}). Records were likely purged by the " +
+                        "source topic's retention policy before they could be replicated.",
+                        sourceClusterAlias, topicPartition.topic(), requestedOffset, topicPartition, earliestOffset);
+            } else {
+                log.error("Topic reset detected replicating {}->{}: requested offset {} for {} is no longer " +
+                        "available and the earliest available offset is 0, indicating the source topic was " +
+                        "deleted and recreated.",
+                        sourceClusterAlias, topicPartition.topic(), requestedOffset, topicPartition);
+            }
+        }
+        if (dataLossDetected) {
+            return new DataLossException("Detected unreplicated data loss for partitions "
+                    + outOfRangeOffsets.keySet() + " while replicating from " + sourceClusterAlias, e);
+        }
+        return new TopicResetException("Detected topic reset for partitions "
+                + outOfRangeOffsets.keySet() + " while replicating from " + sourceClusterAlias, e);
+    }
+
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
@@ -228,9 +283,16 @@ public class MirrorSourceTask extends SourceTask {
                 .filter(this::isUncommitted).count());
 
         topicPartitionOffsets.forEach((topicPartition, offset) -> {
-            // Do not call seek on partitions that don't have an existing offset committed.
             if (isUncommitted(offset)) {
-                log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
+                if (failOnDataLossAndTopicReset) {
+                    // auto.offset.reset is set to "none" in this mode, so the consumer won't pick a
+                    // starting position on its own; seek to earliest manually to preserve the same
+                    // starting behavior as the default configuration.
+                    log.trace("No committed offset for topicPartition: {}; seeking to earliest offset.", topicPartition);
+                    consumer.seekToBeginning(Collections.singletonList(topicPartition));
+                } else {
+                    log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
+                }
                 return;
             }
             long nextOffsetToCommittedOffset = offset + 1L;
