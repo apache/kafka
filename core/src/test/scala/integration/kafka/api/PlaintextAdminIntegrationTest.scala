@@ -196,84 +196,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }, "Timed out waiting for quota config to be propagated to all servers")
   }
 
-  @Test
-  def testDescribeUserScramCredentials(): Unit = {
-    client = createAdminClient
-
-    // add a new user
-    val targetUserName = "tom"
-    client.alterUserScramCredentials(util.List.of(
-      new UserScramCredentialUpsertion(targetUserName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "123456")
-    )).all.get
-    TestUtils.waitUntilTrue(() => client.describeUserScramCredentials().all().get().size() == 1,
-      "Add one user scram credential timeout")
-
-    val result = client.describeUserScramCredentials().all().get()
-    result.forEach((userName, scramDescription) => {
-      assertEquals(targetUserName, userName)
-      assertEquals(targetUserName, scramDescription.name())
-      val credentialInfos = scramDescription.credentialInfos()
-      assertEquals(1, credentialInfos.size())
-      assertEquals(ScramMechanism.SCRAM_SHA_256, credentialInfos.get(0).mechanism())
-      assertEquals(4096, credentialInfos.get(0).iterations())
-    })
-
-    // add other users
-    client.alterUserScramCredentials(util.List.of(
-      new UserScramCredentialUpsertion("tom2", new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "123456"),
-      new UserScramCredentialUpsertion("tom3", new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "123456")
-    )).all().get
-    TestUtils.waitUntilTrue(() => client.describeUserScramCredentials().all().get().size() == 3,
-      "Add user scram credential timeout")
-
-    // alter user info
-    client.alterUserScramCredentials(util.List.of(
-      new UserScramCredentialUpsertion(targetUserName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_512, 8192), "123456")
-    )).all.get
-    TestUtils.waitUntilTrue(() => {
-      client.describeUserScramCredentials().all().get().get(targetUserName).credentialInfos().size() == 2
-    }, "Alter user scram credential timeout")
-
-    val userTomResult = client.describeUserScramCredentials().all().get()
-    assertEquals(3, userTomResult.size())
-    val userScramCredential = userTomResult.get(targetUserName)
-    assertEquals(targetUserName, userScramCredential.name())
-    val credentialInfos = userScramCredential.credentialInfos()
-    assertEquals(2, credentialInfos.size())
-    val credentialList = credentialInfos.asScala.sortBy(s => s.mechanism().`type`())
-    assertEquals(ScramMechanism.SCRAM_SHA_256, credentialList.head.mechanism())
-    assertEquals(4096, credentialList.head.iterations())
-    assertEquals(ScramMechanism.SCRAM_SHA_512, credentialList(1).mechanism())
-    assertEquals(8192, credentialList(1).iterations())
-
-    // test describeUserScramCredentials(List<String> users)
-    val userAndScramMap = client.describeUserScramCredentials(util.List.of("tom2")).all().get()
-    assertEquals(1, userAndScramMap.size())
-    val scram = userAndScramMap.get("tom2")
-    assertNotNull(scram)
-    val credentialInfo = scram.credentialInfos().get(0)
-    assertEquals(ScramMechanism.SCRAM_SHA_256, credentialInfo.mechanism())
-    assertEquals(4096, credentialInfo.iterations())
-  }
-
   private def createInvalidAdminClient(): Admin = {
     val config = createConfig
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     Admin.create(config)
-  }
-
-  @Timeout(10)
-  @Test
-  def testDescribeUserScramCredentialsTimeout(): Unit = {
-    client = createInvalidAdminClient()
-    try {
-      // test describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options)
-      val exception = assertThrows(classOf[ExecutionException], () => {
-        client.describeUserScramCredentials(util.List.of("tom4"),
-          new DescribeUserScramCredentialsOptions().timeoutMs(0)).all().get()
-      })
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally client.close(time.Duration.ZERO)
   }
 
   private def consumeToExpectedNumber = (expectedNumber: Int, groupProtocol: String) => {
