@@ -61,6 +61,17 @@ type: docs
   * `group.consumer.assignors` now fails broker startup with a `ConfigException` when two configured assignors resolve to the same name, for example a built-in listed both by its name and by its class name, or a custom assignor reusing the name of another configured assignor. Such a configuration used to pass startup validation and fail later during group coordinator loading. For further details, please refer to [KAFKA-20843](https://issues.apache.org/jira/browse/KAFKA-20843).
   * `telemetry.max.bytes` now also bounds the size of a client's *decompressed* telemetry payload, not just its compressed wire size (this decompressed-size check was introduced in 4.3.1). A push whose decompressed size exceeds this limit is rejected with the retryable `TELEMETRY_TOO_LARGE` error, so the client retries at its normal push interval; previously this was misreported as `INVALID_RECORD`, which permanently disabled telemetry for that client instance. If clients hit this limit, for example after upgrading from 4.3.0, consider raising `telemetry.max.bytes`, since typical metric formats can decompress to many times their compressed size. For further details, please refer to [KAFKA-21076](https://issues.apache.org/jira/browse/KAFKA-21076).
 
+## Upgrading to 4.3.2
+
+### Notable changes in 4.3.2
+
+  * Includes a fix for a critical tiered storage bug in which size-based retention could delete data that was still within retention from both local and remote tiers after a leader election ([KAFKA-20732](https://issues.apache.org/jira/browse/KAFKA-20732)).
+  * Includes a fix for a Kafka Streams issue in which the state directory could be cleaned prematurely under [KIP-1035](https://cwiki.apache.org/confluence/x/uYvOEg), forcing a from-scratch restore ([KAFKA-20805](https://issues.apache.org/jira/browse/KAFKA-20805)).
+  * Includes fixes for several critical Kafka Streams bugs that could cause a `StreamThread` to die after task corruption, task recycling, or state updater timeouts ([KAFKA-20808](https://issues.apache.org/jira/browse/KAFKA-20808), [KAFKA-20827](https://issues.apache.org/jira/browse/KAFKA-20827), [KAFKA-20721](https://issues.apache.org/jira/browse/KAFKA-20721)).
+  * Includes a fix for a group coordinator bug in which a consumer group downgrade could leave the group in an invalid state when the classic group metadata is very large ([KAFKA-20845](https://issues.apache.org/jira/browse/KAFKA-20845)).
+  * Includes a fix for a client telemetry bug in which metrics could be sent to a stale broker IP address after a broker address change ([KAFKA-20393](https://issues.apache.org/jira/browse/KAFKA-20393)).
+  * Includes a fix for a `NullPointerException` in `MetadataCache#toCluster` that stopped a custom `ClientQuotaCallback` (`client.quota.callback.class`) from receiving cluster metadata updates ([KAFKA-20746](https://issues.apache.org/jira/browse/KAFKA-20746)).
+
 ## Upgrading to 4.3.1
 
 ### Notable changes in 4.3.1
