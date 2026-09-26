@@ -1124,6 +1124,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * they will delay the sending of messages from other threads. If you want to execute blocking or computationally
      * expensive callbacks it is recommended to use your own {@link java.util.concurrent.Executor} in the callback body
      * to parallelize processing.
+     * When invoked from the producer I/O thread, {@code send()} does not wait for metadata or buffer space:
+     * if either is unavailable, the send fails through the callback and returned future. Failure callbacks may
+     * execute synchronously, so retries should not recursively invoke {@code send()} from a failure callback.
      *
      * @param record   The record to send. If the topic or the partition specified in it cannot be found
      *                 in metadata within {@code max.block.ms}, the returned future will time out when retrieved.
@@ -1181,18 +1184,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throwIfProducerClosed();
             throwIfInPreparedState();
 
+            // Sender cannot update metadata or release completed batches while it is executing this call.
+            long maxWaitMs = Thread.currentThread() == this.ioThread ? 0 : maxBlockTimeMs;
             // first make sure the metadata for the topic is available
             long nowMs = time.milliseconds();
             ClusterAndWaitTime clusterAndWaitTime;
             try {
-                clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), nowMs, maxBlockTimeMs);
+                clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), nowMs, maxWaitMs);
             } catch (KafkaException e) {
                 if (metadata.isClosed())
                     throw new KafkaException("Producer closed while send in progress", e);
                 throw e;
             }
             nowMs += clusterAndWaitTime.waitedOnMetadataMs;
-            long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
+            long remainingWaitMs = Math.max(0, maxWaitMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
             try {
