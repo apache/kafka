@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -377,12 +378,15 @@ public class MirrorMakerConfigTest {
                 "config.providers", "fake",
                 "config.providers.fake.class", FailingGetConfigProvider.class.getName()));
 
+            // the constructor instantiates its own FailingGetConfigProvider and must close it too
+            assertEquals(1, FailingGetConfigProvider.CLOSED_COUNT.get());
+
             assertThrows(RuntimeException.class,
                 () -> mirrorConfig.transform(Map.of("ssl.key.password", "${fake:secret:password}")));
 
-            assertTrue(FailingGetConfigProvider.closed);
+            assertEquals(2, FailingGetConfigProvider.CLOSED_COUNT.get());
         } finally {
-            FailingGetConfigProvider.closed = false;
+            FailingGetConfigProvider.CLOSED_COUNT.set(0);
         }
     }
 
@@ -410,7 +414,7 @@ public class MirrorMakerConfigTest {
     }
 
     public static class FailingGetConfigProvider implements ConfigProvider {
-        static volatile boolean closed;
+        static final AtomicInteger CLOSED_COUNT = new AtomicInteger();
 
         @Override
         public void configure(Map<String, ?> props) {
@@ -418,7 +422,7 @@ public class MirrorMakerConfigTest {
 
         @Override
         public void close() {
-            closed = true;
+            CLOSED_COUNT.incrementAndGet();
         }
 
         @Override
