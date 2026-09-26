@@ -18,6 +18,11 @@
 package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -26,6 +31,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -65,5 +72,46 @@ public class StandardAclTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testKafkaPrincipalIsCached() {
+        StandardAcl acl = new StandardAcl(
+            ResourceType.TOPIC, "foo", PatternType.LITERAL,
+            "User:alice", "*", AclOperation.READ, AclPermissionType.ALLOW);
+        assertSame(acl.kafkaPrincipal(), acl.kafkaPrincipal());
+    }
+
+    @Test
+    public void testKafkaPrincipalParsing() {
+        StandardAcl acl = new StandardAcl(
+            ResourceType.TOPIC, "foo", PatternType.LITERAL,
+            "User:alice", "*", AclOperation.READ, AclPermissionType.ALLOW);
+        assertEquals("User", acl.kafkaPrincipal().getPrincipalType());
+        assertEquals("alice", acl.kafkaPrincipal().getName());
+    }
+
+    @Test
+    public void testKafkaPrincipalWildcard() {
+        StandardAcl acl = new StandardAcl(
+            ResourceType.CLUSTER, "kafka-cluster", PatternType.LITERAL,
+            "User:*", "*", AclOperation.ALTER, AclPermissionType.ALLOW);
+        assertEquals("User", acl.kafkaPrincipal().getPrincipalType());
+        assertEquals("*", acl.kafkaPrincipal().getName());
+    }
+
+    @Test
+    public void testKafkaPrincipalCacheIsBounded() {
+        int principalsToCreate = StandardAcl.principalCacheBound() + 500;
+        for (int i = 0; i < principalsToCreate; i++) {
+            StandardAcl acl = new StandardAcl(
+                ResourceType.TOPIC, "foo", PatternType.LITERAL,
+                "User:cache-bound-test-" + i, "*", AclOperation.READ, AclPermissionType.ALLOW);
+            KafkaPrincipal p = acl.kafkaPrincipal();
+            assertEquals("User", p.getPrincipalType());
+            assertEquals("cache-bound-test-" + i, p.getName());
+        }
+        assertTrue(StandardAcl.principalCacheSize() <= StandardAcl.principalCacheBound(),
+            "Principal cache grew past its bound: size=" + StandardAcl.principalCacheSize());
     }
 }
