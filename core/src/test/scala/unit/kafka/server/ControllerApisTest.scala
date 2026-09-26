@@ -1315,6 +1315,21 @@ class ControllerApisTest {
     assertTrue(exception.getMessage.contains("needs ALTER permission"))
   }
 
+  @Test
+  def testDescribeDelegationTokenIsNotExposedOnTheControllerListener(): Unit = {
+    // ControllerApis.handle has no case for DESCRIBE_DELEGATION_TOKEN, so advertising it on the
+    // controller listener would make the controller answer UNKNOWN_SERVER_ERROR for an API it just
+    // told the client it supported. Keep the two in sync: either add a handler or leave it off.
+    assertFalse(ApiKeys.apisForListener(ListenerType.CONTROLLER).contains(ApiKeys.DESCRIBE_DELEGATION_TOKEN))
+    assertTrue(ApiKeys.apisForListener(ListenerType.BROKER).contains(ApiKeys.DESCRIBE_DELEGATION_TOKEN))
+  }
+
+  @Test
+  def testDescribeUserScramCredentialsIsNotExposedOnTheControllerListener(): Unit = {
+    assertFalse(ApiKeys.apisForListener(ListenerType.CONTROLLER).contains(ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS))
+    assertTrue(ApiKeys.apisForListener(ListenerType.BROKER).contains(ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS))
+  }
+
   @AfterEach
   def tearDown(): Unit = {
     quotasNeverThrottleControllerMutations.shutdown()
