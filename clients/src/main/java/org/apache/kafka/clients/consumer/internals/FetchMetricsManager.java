@@ -26,7 +26,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -52,7 +51,7 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
     private final Sensor recordsLead;
 
     private int assignmentId = 0;
-    private Set<TopicPartition> assignedPartitions = Collections.emptySet();
+    private Set<TopicPartition> assignedPartitions = Set.of();
 
     @SuppressWarnings("this-escape")
     public FetchMetricsManager(Metrics metrics, FetchMetricsRegistry metricsRegistry) {

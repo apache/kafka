@@ -114,32 +114,32 @@ public interface AdminApiHandler<K, V> {
         public static <K, V> ApiResult<K, V> completed(K key, V value) {
             return new ApiResult<>(
                 Collections.singletonMap(key, value),
-                Collections.emptyMap(),
-                Collections.emptyList()
+                Map.of(),
+                List.of()
             );
         }
 
         public static <K, V> ApiResult<K, V> failed(K key, Throwable t) {
             return new ApiResult<>(
-                Collections.emptyMap(),
-                Collections.singletonMap(key, t),
-                Collections.emptyList()
+                Map.of(),
+                Map.of(key, t),
+                List.of()
             );
         }
 
         public static <K, V> ApiResult<K, V> unmapped(List<K> keys) {
             return new ApiResult<>(
-                Collections.emptyMap(),
-                Collections.emptyMap(),
+                Map.of(),
+                Map.of(),
                 keys
             );
         }
 
         public static <K, V> ApiResult<K, V> empty() {
             return new ApiResult<>(
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyList()
+                Map.of(),
+                Map.of(),
+                List.of()
             );
         }
     }
@@ -165,7 +165,7 @@ public interface AdminApiHandler<K, V> {
 
         @Override
         public final Collection<RequestAndKeys<K>> buildRequest(int brokerId, Set<K> keys) {
-            return Collections.singleton(new RequestAndKeys<>(buildBatchedRequest(brokerId, keys), keys));
+            return Set.of(new RequestAndKeys<>(buildBatchedRequest(brokerId, keys), keys));
         }
     }
 
@@ -181,7 +181,7 @@ public interface AdminApiHandler<K, V> {
         @Override
         public final Collection<RequestAndKeys<K>> buildRequest(int brokerId, Set<K> keys) {
             return keys.stream()
-                .map(key -> new RequestAndKeys<>(buildSingleRequest(brokerId, key), Collections.singleton(key)))
+                .map(key -> new RequestAndKeys<>(buildSingleRequest(brokerId, key), Set.of(key)))
                 .collect(Collectors.toSet());
         }
 

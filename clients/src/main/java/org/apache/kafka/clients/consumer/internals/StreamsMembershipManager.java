@@ -41,7 +41,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -80,9 +79,9 @@ public class StreamsMembershipManager implements RequestManager {
         public static final long NONE_EPOCH = -1;
         public static final LocalAssignment NONE = new LocalAssignment(
             NONE_EPOCH,
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
             false
         );
 
@@ -657,8 +656,8 @@ public class StreamsMembershipManager implements RequestManager {
      * Clear the assigned partitions in the member subscription, pending assignments and metadata cache.
      */
     private void clearTaskAndPartitionAssignment() {
-        subscriptionState.assignFromSubscribed(Collections.emptySet());
-        notifyAssignmentChange(Collections.emptySet());
+        subscriptionState.assignFromSubscribed(Set.of());
+        notifyAssignmentChange(Set.of());
         currentAssignment = LocalAssignment.NONE;
         targetAssignment = LocalAssignment.NONE;
     }
@@ -1028,7 +1027,7 @@ public class StreamsMembershipManager implements RequestManager {
                 transitionTo(MemberState.UNSUBSCRIBED);
             }
             subscriptionState.unsubscribe();
-            notifyAssignmentChange(Collections.emptySet());
+            notifyAssignmentChange(Set.of());
             return CompletableFuture.completedFuture(null);
         }
 

@@ -341,11 +341,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
 
         public PollResult(final UnsentRequest unsentRequest) {
-            this(Collections.singletonList(unsentRequest));
+            this(List.of(unsentRequest));
         }
 
         public PollResult(final long timeUntilNextPollMs) {
-            this(timeUntilNextPollMs, Collections.emptyList());
+            this(timeUntilNextPollMs, List.of());
         }
     }
 

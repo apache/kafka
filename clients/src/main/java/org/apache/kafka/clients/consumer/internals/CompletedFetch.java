@@ -42,7 +42,6 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -264,7 +263,7 @@ public class CompletedFetch {
                     + "continue consumption.", cachedRecordException);
 
         if (isConsumed)
-            return Collections.emptyList();
+            return List.of();
 
         List<ConsumerRecord<K, V>> records = new ArrayList<>();
 

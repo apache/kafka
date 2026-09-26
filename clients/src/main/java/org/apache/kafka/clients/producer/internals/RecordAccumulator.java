@@ -51,7 +51,6 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1082,7 +1081,7 @@ public class RecordAccumulator {
      */
     public Map<Integer, List<ProducerBatch>> drain(MetadataSnapshot metadataSnapshot, Set<Node> nodes, int maxSize, long now) {
         if (nodes.isEmpty())
-            return Collections.emptyMap();
+            return Map.of();
 
         Map<Integer, List<ProducerBatch>> batches = new HashMap<>();
         for (Node node : nodes) {

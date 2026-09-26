@@ -202,7 +202,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
                     .findFirst();
             if (matchingConsumer.isPresent()) {
                 String consumer = matchingConsumer.get();
-                assignmentStates.forEach(t -> assign(consumer, Collections.singletonList(new TopicPartition(t.topic, p)), t, assignment));
+                assignmentStates.forEach(t -> assign(consumer, List.of(new TopicPartition(t.topic, p)), t, assignment));
 
                 if (assignmentStates.stream().noneMatch(t -> t.maxAssignable(consumer) > 0)) {
                     remainingConsumers.remove(consumer);
@@ -265,7 +265,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
                     allPartitionRacks.addAll(racks);
                 });
             } else {
-                partitionRacks = Collections.emptyMap();
+                partitionRacks = Map.of();
             }
 
             needsRackAwareAssignment = useRackAwareAssignment(allConsumerRacks, allPartitionRacks, partitionRacks);

@@ -94,7 +94,7 @@ public class TopicMetadataFetcher {
     private Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest.Builder request, Timer timer) {
         // Save the round trip if no topics are requested.
         if (!request.isAllTopics() && request.emptyTopicList())
-            return Collections.emptyMap();
+            return Map.of();
 
         long attempts = 0L;
         do {
