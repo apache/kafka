@@ -663,7 +663,7 @@ public class StreamThreadTest {
             topologyMetadata,
             PROCESS_ID, CLIENT_ID, new LogContext(""),
             new AtomicInteger(), new AtomicLong(Long.MAX_VALUE), new LinkedList<>(),
-            null, HANDLER, null,
+            null, HANDLER, null, Long.MAX_VALUE,
             Optional.of(streamsRebalanceData), mock(StreamsMetadataState.class), null, -1L
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
         thread.setState(State.STARTING);
@@ -731,7 +731,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final TopicPartition tp = new TopicPartition("topic", 0);
         when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L);
         when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(tp));
@@ -758,7 +758,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final TopicPartition pausedByBytes = new TopicPartition("topic", 0);
         // runOnce 1 stays above the cap (pause fires); runOnce 2 drops below it (resume fires).
         // The trailing 100L covers any extra reads from the top-of-loop resume check.
@@ -787,7 +787,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final TopicPartition stillOwned = new TopicPartition("topic", 0);
         final TopicPartition revoked = new TopicPartition("topic", 1);
         // runOnce 1 stays above the cap (pause both, both still assigned); runOnce 2 drops below it,
@@ -818,7 +818,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TaskManager taskManager = mockTaskManager();
         final TopicPartition pausedByBytes = new TopicPartition("topic", 0);
         when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L, 100L);
         when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(pausedByBytes));
@@ -1972,6 +1972,7 @@ public class StreamThreadTest {
             streamsMetadataState,
             0,
             -1L,
+            Long.MAX_VALUE,
             stateDirectory,
             new MockStateRestoreListener(),
             new MockStandbyUpdateListener(),

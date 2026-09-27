@@ -1051,7 +1051,7 @@ public class InternalTopologyBuilderTest {
                 config,
                 topologyOverrides)
         );
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(15));
+        assertEquals(15, topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize);
     }
 
     @Test
@@ -1070,7 +1070,7 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
             new TopologyConfig("my-topology", config, topologyOverrides)
         );
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(15));
+        assertEquals(15, topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize);
     }
 
     @SuppressWarnings("deprecation")
