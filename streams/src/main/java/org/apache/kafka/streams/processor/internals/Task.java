@@ -208,7 +208,7 @@ public interface Task {
     }
 
     default Set<TopicPartition> getNonEmptyTopicPartitions() {
-        return Collections.emptySet();
+        return Set.of();
     }
 
     /**
