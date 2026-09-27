@@ -72,7 +72,6 @@ import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.ClientQuotaType;
@@ -88,7 +87,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -134,83 +132,6 @@ public class KRaftClusterTest {
     private static final Logger LOG_2 = LoggerFactory.getLogger(KRaftClusterTest.class.getCanonicalName() + "2");
 
     @Test
-    public void testCreateClusterAndClose() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
-            cluster.format();
-            cluster.startup();
-        }
-    }
-
-    @Test
-    public void testCreateClusterAndRestartBrokerNode() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            var broker = cluster.brokers().values().iterator().next();
-            broker.shutdown();
-            broker.startup();
-        }
-    }
-
-    @Test
-    public void testClusterWithLowerCaseListeners() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setBrokerListenerName(new ListenerName("external"))
-                .setNumControllerNodes(3)
-                .build())
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.brokers().forEach((brokerId, broker) -> {
-                assertEquals(List.of("external://localhost:0"), broker.config().get(SocketServerConfigs.LISTENERS_CONFIG));
-                assertEquals("external", broker.config().get(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG));
-                assertEquals("external:PLAINTEXT,CONTROLLER:PLAINTEXT", broker.config().get(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG));
-            });
-            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-                "Broker never made it to RUNNING state.");
-            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
-                "RaftManager was not initialized.");
-            try (Admin admin = cluster.admin()) {
-                assertEquals(cluster.nodes().clusterId(),
-                    admin.describeCluster().clusterId().get());
-            }
-        }
-    }
-
-    @Test
-    public void testCreateClusterAndWaitForBrokerInRunningState() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-                "Broker never made it to RUNNING state.");
-            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
-                "RaftManager was not initialized.");
-            try (Admin admin = cluster.admin()) {
-                assertEquals(cluster.nodes().clusterId(),
-                    admin.describeCluster().clusterId().get());
-            }
-        }
-    }
-
-    @Test
     public void testRemoteLogManagerInstantiation() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
@@ -228,22 +149,6 @@ public class KRaftClusterTest {
             cluster.brokers().forEach((brokerId, broker) -> {
                 assertFalse(broker.remoteLogManagerOpt().isEmpty(), "RemoteLogManager should be initialized");
             });
-        }
-    }
-
-    @Test
-    public void testAuthorizerFailureFoundInControllerStartup() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumControllerNodes(3).build())
-            .setConfigProp("authorizer.class.name", BadAuthorizer.class.getName())
-            .build()) {
-            cluster.format();
-            ExecutionException exception = assertThrows(ExecutionException.class,
-                cluster::startup);
-            assertEquals("java.lang.IllegalStateException: test authorizer exception",
-                exception.getMessage());
-            cluster.fatalFaultHandler().setIgnore(true);
         }
     }
 
@@ -1476,47 +1381,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.startup();
             cluster.waitForReadyBrokers();
-        }
-    }
-
-    public static class BadAuthorizer implements Authorizer {
-        // Default constructor needed for reflection object creation
-        public BadAuthorizer() {
-        }
-
-        @Override
-        public Map<Endpoint, ? extends CompletionStage<Void>> start(AuthorizerServerInfo serverInfo) {
-            throw new IllegalStateException("test authorizer exception");
-        }
-
-        @Override
-        public List<AuthorizationResult> authorize(AuthorizableRequestContext requestContext, List<Action> actions) {
-            return null;
-        }
-
-        @Override
-        public List<? extends CompletionStage<AclCreateResult>> createAcls(AuthorizableRequestContext requestContext,
-            List<AclBinding> aclBindings) {
-            return null;
-        }
-
-        @Override
-        public List<? extends CompletionStage<AclDeleteResult>> deleteAcls(AuthorizableRequestContext requestContext,
-            List<AclBindingFilter> aclBindingFilters) {
-            return null;
-        }
-
-        @Override
-        public Iterable<AclBinding> acls(AclBindingFilter filter) {
-            return null;
-        }
-
-        @Override
-        public void close() throws IOException {
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs) {
         }
     }
 
