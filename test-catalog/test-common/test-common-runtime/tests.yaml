@@ -2,6 +2,11 @@ org.apache.kafka.common.test.AdminUtilsTest:
 - testFetchOrWaitForLeader
 - testFetchOrWaitForLeaderTimesOut
 org.apache.kafka.common.test.KafkaClusterTestKitTest:
+- testAuthorizerFailureFoundInControllerStartup
+- testClusterWithLowerCaseListeners
+- testCreateClusterAndClose
+- testCreateClusterAndRestartBrokerNode
+- testCreateClusterAndWaitForBrokerInRunningState
 - testCreateClusterFormatAndCloseWithMultipleLogDirs
 - testCreateClusterWithBadNumDisksThrows
 - testCreateClusterWithBadNumOfBrokers

@@ -303,15 +303,10 @@ org.apache.kafka.server.ForwardingManagerTest:
 org.apache.kafka.server.KRaftClusterTest:
 - testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir
 - testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir
-- testAuthorizerFailureFoundInControllerStartup
-- testClusterWithLowerCaseListeners
 - testControllerFailover
-- testCreateClusterAndClose
 - testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation
 - testCreateClusterAndPerformReassignment
-- testCreateClusterAndRestartBrokerNode
 - testCreateClusterAndRestartControllerNode
-- testCreateClusterAndWaitForBrokerInRunningState
 - testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer
 - testCreateClusterWithAdvertisedPortZero
 - testDescribeQuorumRequestToBrokers
