@@ -19871,6 +19871,72 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupHeartbeatWithEmptyTargetSubtopologiesDoesNotBumpEpoch() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 3)
+            .buildCoordinatorMetadataImage();
+        long groupMetadataHash = computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+        ));
+        TasksTuple targetAssignment = new TasksTuple(
+            Map.of(subtopology1, Set.of(0, 1, 2)),
+            Map.of(subtopology1, Set.of()),
+            Map.of(subtopology1, Set.of())
+        );
+
+        // Replay a target containing empty entries, as may have been persisted before the fix.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(metadataImage)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                    .build())
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withTargetAssignment(memberId, targetAssignment)
+                .withTargetAssignmentEpoch(10)
+                .withMetadataHash(groupMetadataHash)
+                .withValidatedTopologyEpoch(0)
+                .withLastAssignmentConfigs(Map.of("num.standby.replicas", "0"))
+            )
+            .build();
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(targetAssignment, group.targetAssignment().get(memberId));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setRebalanceTimeoutMs(1500)
+                .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopologyId(subtopology1)
+                    .setPartitions(List.of(0, 1, 2))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertEquals(Errors.NONE.code(), result.response().data().errorCode());
+        assertEquals(10, result.response().data().memberEpoch());
+        assertEquals(List.of(), result.records());
+        assertEquals(10, group.groupEpoch());
+        assertEquals(10, group.assignmentEpoch());
+    }
+
+    @Test
     public void testStreamsGroupKeepsNoRefinedAssignmentWhenWarmupsAreDisabled() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();

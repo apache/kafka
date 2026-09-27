@@ -214,6 +214,99 @@ public class TasksTupleTest {
     }
 
     @Test
+    public void testSameTasksWithEmptySubtopologies() {
+        assertTrue(new TasksTuple(
+            Map.of(SUBTOPOLOGY_1, Set.of()), Map.of(), Map.of()
+        ).sameTasks(TasksTupleWithEpochs.EMPTY));
+        assertTrue(new TasksTuple(
+            Map.of(), Map.of(SUBTOPOLOGY_1, Set.of()), Map.of()
+        ).sameTasks(TasksTupleWithEpochs.EMPTY));
+        assertTrue(new TasksTuple(
+            Map.of(), Map.of(), Map.of(SUBTOPOLOGY_1, Set.of())
+        ).sameTasks(TasksTupleWithEpochs.EMPTY));
+
+        assertTrue(TasksTuple.EMPTY.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of()), Map.of(), Map.of()
+        )));
+        assertTrue(TasksTuple.EMPTY.sameTasks(new TasksTupleWithEpochs(
+            Map.of(), Map.of(SUBTOPOLOGY_1, Set.of()), Map.of()
+        )));
+        assertTrue(TasksTuple.EMPTY.sameTasks(new TasksTupleWithEpochs(
+            Map.of(), Map.of(), Map.of(SUBTOPOLOGY_1, Set.of())
+        )));
+    }
+
+    @Test
+    public void testSameTasksWithEmptyAndNonEmptySubtopologies() {
+        TasksTuple tuple = new TasksTuple(
+            Map.of(SUBTOPOLOGY_1, Set.of(1, 2), SUBTOPOLOGY_2, Set.of()),
+            Map.of(SUBTOPOLOGY_2, Set.of(3), SUBTOPOLOGY_3, Set.of()),
+            Map.of(SUBTOPOLOGY_3, Set.of(4), SUBTOPOLOGY_1, Set.of())
+        );
+
+        assertTrue(tuple.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(1, 5, 2, 7)),
+            Map.of(SUBTOPOLOGY_2, Set.of(3)),
+            Map.of(SUBTOPOLOGY_3, Set.of(4))
+        )));
+
+        // Empty entries on either side do not change the tasks being compared.
+        assertTrue(tuple.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(1, 5, 2, 7), SUBTOPOLOGY_3, Map.of()),
+            Map.of(SUBTOPOLOGY_2, Set.of(3), SUBTOPOLOGY_1, Set.of()),
+            Map.of(SUBTOPOLOGY_3, Set.of(4), SUBTOPOLOGY_2, Set.of())
+        )));
+    }
+
+    @Test
+    public void testSameTasksWithTasksPresentInOnlyOneTuple() {
+        assertFalse(new TasksTuple(
+            Map.of(SUBTOPOLOGY_1, Set.of(1)), Map.of(), Map.of()
+        ).sameTasks(TasksTupleWithEpochs.EMPTY));
+        assertFalse(new TasksTuple(
+            Map.of(), Map.of(SUBTOPOLOGY_1, Set.of(1)), Map.of()
+        ).sameTasks(TasksTupleWithEpochs.EMPTY));
+        assertFalse(new TasksTuple(
+            Map.of(), Map.of(), Map.of(SUBTOPOLOGY_1, Set.of(1))
+        ).sameTasks(TasksTupleWithEpochs.EMPTY));
+
+        assertFalse(TasksTuple.EMPTY.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(1, 5)), Map.of(), Map.of()
+        )));
+        assertFalse(TasksTuple.EMPTY.sameTasks(new TasksTupleWithEpochs(
+            Map.of(), Map.of(SUBTOPOLOGY_1, Set.of(1)), Map.of()
+        )));
+        assertFalse(TasksTuple.EMPTY.sameTasks(new TasksTupleWithEpochs(
+            Map.of(), Map.of(), Map.of(SUBTOPOLOGY_1, Set.of(1))
+        )));
+    }
+
+    @Test
+    public void testSameTasksWithEmptySubtopologiesFromTargetAssignmentRecord() {
+        StreamsGroupTargetAssignmentMemberValue record = new StreamsGroupTargetAssignmentMemberValue()
+            .setActiveTasks(List.of(
+                new StreamsGroupTargetAssignmentMemberValue.TaskIds()
+                    .setSubtopologyId(SUBTOPOLOGY_1)
+                    .setPartitions(List.of(1)),
+                new StreamsGroupTargetAssignmentMemberValue.TaskIds()
+                    .setSubtopologyId(SUBTOPOLOGY_2)
+                    .setPartitions(List.of())
+            ))
+            .setStandbyTasks(List.of(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
+                .setSubtopologyId(SUBTOPOLOGY_1)
+                .setPartitions(List.of())))
+            .setWarmupTasks(List.of(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
+                .setSubtopologyId(SUBTOPOLOGY_1)
+                .setPartitions(List.of())));
+
+        TasksTuple tuple = TasksTuple.fromTargetAssignmentRecord(record);
+
+        assertTrue(tuple.sameTasks(new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(1, 5)), Map.of(), Map.of()
+        )));
+    }
+
+    @Test
     public void testIsEmpty() {
         TasksTuple emptyTuple = new TasksTuple(Map.of(), Map.of(), Map.of());
         assertTrue(emptyTuple.isEmpty());
