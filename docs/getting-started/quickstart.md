@@ -237,7 +237,7 @@ KTable<String, Long> wordCounts = textLines
 wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.Long()));
 ```
 
-The [Kafka Streams demo](/documentation/streams/quickstart) and the [app development tutorial](/43/documentation/streams/tutorial) demonstrate how to code and run such a streaming application from start to finish. 
+The [Kafka Streams demo](/{version}/streams/quickstart) and the [app development tutorial](/{version}/streams/tutorial) demonstrate how to code and run such a streaming application from start to finish.
 
 ## Step 8: Terminate the Kafka environment
 
