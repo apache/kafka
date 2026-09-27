@@ -25,6 +25,7 @@ import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
@@ -34,7 +35,9 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
 import java.util.List;
@@ -52,7 +55,9 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createMemberMetadataAndState;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -206,8 +211,8 @@ public class TargetAssignmentBuilderTest {
             12345L
         );
 
-        String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
-        String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6);
+        String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 7);
+        String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 7);
 
         context.addGroupMember("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2, 3),
@@ -262,8 +267,8 @@ public class TargetAssignmentBuilderTest {
             12345L
         );
 
-        String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
-        String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6);
+        String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 7);
+        String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 7);
 
         context.addGroupMember("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2, 3),
@@ -331,8 +336,8 @@ public class TargetAssignmentBuilderTest {
             12345L
         );
 
-        String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
-        String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6);
+        String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 7);
+        String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 7);
 
         context.addGroupMember("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2),
@@ -404,6 +409,95 @@ public class TargetAssignmentBuilderTest {
     }
 
     
+    @ParameterizedTest
+    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
+    public void testRejectsUnknownSubtopology(TaskRole role) {
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext("group", 2, 12345L);
+        context.addGroupMember("member-1", TasksTuple.EMPTY);
+        context.prepareMemberAssignment("member-1", mkTasksTuple(role, mkTasks("unknown", 0)));
+
+        assertThrows(TaskAssignorException.class, context::build);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ACTIVE,-1", "ACTIVE,2", "STANDBY,-1", "STANDBY,2"})
+    public void testRejectsInvalidPartition(TaskRole role, int partitionId) {
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext("group", 2, 12345L);
+        String subtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 2);
+        context.addGroupMember("member-1", TasksTuple.EMPTY);
+        context.prepareMemberAssignment("member-1", mkTasksTuple(role, mkTasks(subtopologyId, partitionId)));
+
+        assertThrows(TaskAssignorException.class, context::build);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"process-1", "process-2"})
+    public void testRejectsDuplicateActiveTask(String secondProcessId) {
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext("group", 2, 12345L);
+        String subtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 1);
+        TasksTuple tasks = mkTasksTuple(TaskRole.ACTIVE, mkTasks(subtopologyId, 0));
+        context.addGroupMember("member-1", tasks, "process-1");
+        context.addGroupMember("member-2", TasksTuple.EMPTY, secondProcessId);
+        context.prepareMemberAssignment("member-1", tasks);
+        context.prepareMemberAssignment("member-2", tasks);
+
+        assertThrows(TaskAssignorException.class, context::build);
+    }
+
+    @Test
+    public void testRejectsActiveAndStandbyOnSameMember() {
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext("group", 2, 12345L);
+        String subtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 1);
+        Map<String, Set<Integer>> tasks = Map.of(subtopologyId, Set.of(0));
+        context.addGroupMember("member-1", TasksTuple.EMPTY);
+        context.prepareMemberAssignment("member-1", new TasksTuple(tasks, tasks, Map.of()));
+
+        assertThrows(TaskAssignorException.class, context::build);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
+    public void testRejectsReplicaOverlapWithinProcess(TaskRole firstRole) {
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext("group", 2, 12345L);
+        String subtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 1);
+        context.addGroupMember("member-1", TasksTuple.EMPTY);
+        context.addGroupMember("member-2", TasksTuple.EMPTY);
+        context.prepareMemberAssignment("member-1", mkTasksTuple(firstRole, mkTasks(subtopologyId, 0)));
+        context.prepareMemberAssignment("member-2", mkTasksTuple(TaskRole.STANDBY, mkTasks(subtopologyId, 0)));
+
+        assertThrows(TaskAssignorException.class, context::build);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
+    public void testAllowsReplicaOnDifferentProcess(TaskRole firstRole) {
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext("group", 2, 12345L);
+        String subtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 1);
+        TasksTuple firstTasks = mkTasksTuple(firstRole, mkTasks(subtopologyId, 0));
+        TasksTuple standbyTasks = mkTasksTuple(TaskRole.STANDBY, mkTasks(subtopologyId, 0));
+        context.addGroupMember("member-1", TasksTuple.EMPTY, "process-1");
+        context.addGroupMember("member-2", TasksTuple.EMPTY, "process-2");
+        context.prepareMemberAssignment("member-1", firstTasks);
+        context.prepareMemberAssignment("member-2", standbyTasks);
+
+        TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
+        assertEquals(Map.of("member-1", firstTasks, "member-2", standbyTasks), result.targetAssignment());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
+    public void testAllowsOmittedMember(TaskRole taskRole) {
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext("group", 2, 12345L);
+        String subtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 2);
+        TasksTuple retainedTasks = mkTasksTuple(taskRole, mkTasks(subtopologyId, 0));
+        TasksTuple previousTasks = mkTasksTuple(taskRole, mkTasks(subtopologyId, 1));
+        context.addGroupMember("member-1", retainedTasks);
+        context.addGroupMember("member-2", previousTasks);
+        context.prepareMemberAssignment("member-1", retainedTasks);
+
+        assertDoesNotThrow(context::build);
+    }
+
     public static class TargetAssignmentBuilderTestContext {
 
         private final String groupId;
@@ -427,14 +521,23 @@ public class TargetAssignmentBuilderTest {
             this.groupId = groupId;
             this.groupEpoch = groupEpoch;
             this.assignmentTimestamp = assignmentTimestamp;
+            when(assignor.name()).thenReturn("test-assignor");
         }
 
         public void addGroupMember(
             String memberId,
             TasksTuple targetTasks
         ) {
+            addGroupMember(memberId, targetTasks, "processId");
+        }
+
+        public void addGroupMember(
+            String memberId,
+            TasksTuple targetTasks,
+            String processId
+        ) {
             StreamsGroupMember.Builder memberBuilder = new StreamsGroupMember.Builder(memberId);
-            memberBuilder.setProcessId("processId");
+            memberBuilder.setProcessId(processId);
             memberBuilder.setClientTags(Map.of());
             memberBuilder.setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090));
             memberBuilder.setInstanceId(null);

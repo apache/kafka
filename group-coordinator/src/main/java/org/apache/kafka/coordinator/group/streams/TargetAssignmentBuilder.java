@@ -27,6 +27,8 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorExcep
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.ArrayList;
@@ -279,6 +281,8 @@ public class TargetAssignmentBuilder {
             }
         });
 
+        validateAssignment(newTargetAssignment);
+
         // Bump the target assignment epoch.
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
             groupId,
@@ -287,6 +291,72 @@ public class TargetAssignmentBuilder {
         ));
 
         return new TargetAssignmentResult(records, newTargetAssignment);
+    }
+
+    private void validateAssignment(Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> assignment) {
+        // The builder produces empty assignments when the topology is not ready.
+        if (!topology.isReady()) {
+            return;
+        }
+
+        final Map<String, ConfiguredSubtopology> subtopologies = topology.subtopologies().orElseThrow();
+        final Map<TaskId, String> activeOwners = new HashMap<>();
+        final Map<String, Map<TaskId, String>> processOwners = new HashMap<>();
+
+        assignment.forEach((memberId, memberAssignment) -> {
+            final String processId = members.get(memberId).processId();
+            final Map<TaskId, String> ownersOnProcess = processOwners.computeIfAbsent(processId, ignored -> new HashMap<>());
+
+            for (TaskRole role : List.of(TaskRole.ACTIVE, TaskRole.STANDBY)) {
+                final Map<String, Set<Integer>> tasks = role == TaskRole.ACTIVE
+                    ? memberAssignment.activeTasks() : memberAssignment.standbyTasks();
+
+                tasks.forEach((subtopologyId, partitions) -> {
+                    // Both active and standby tasks must reference a subtopology in the configured topology.
+                    ConfiguredSubtopology subtopology = subtopologies.get(subtopologyId);
+                    if (subtopology == null) {
+                        throw new TaskAssignorException(String.format(
+                            "Assignor '%s' assigned %s tasks %s for unknown subtopology '%s' to member '%s' (process '%s').",
+                            assignor.name(), role, partitions, subtopologyId, memberId, processId
+                        ));
+                    }
+
+                    for (int partitionId : partitions) {
+                        final TaskId taskId = new TaskId(subtopologyId, partitionId);
+                        // Task partitions are numbered from zero up to the subtopology's task count, exclusive.
+                        if (partitionId < 0 || partitionId >= subtopology.numberOfTasks()) {
+                            throw new TaskAssignorException(String.format(
+                                "Assignor '%s' assigned %s task '%s' with partition outside [0, %d) to member '%s' (process '%s').",
+                                assignor.name(), role, taskId, subtopology.numberOfTasks(), memberId, processId
+                            ));
+                        }
+
+                        // A task may have only one active owner in the entire group, even across different processes.
+                        if (role == TaskRole.ACTIVE) {
+                            final String previousOwner = activeOwners.get(taskId);
+                            if (previousOwner != null) {
+                                throw new TaskAssignorException(String.format(
+                                    "Assignor '%s' assigned active task '%s' to both member '%s' (process '%s') and member '%s' (process '%s').",
+                                    assignor.name(), taskId, previousOwner, members.get(previousOwner).processId(), memberId, processId
+                                ));
+                            }
+                            activeOwners.put(taskId, memberId);
+                        }
+
+                        // A process may hold a task only once: reject active/standby overlap and duplicate standbys.
+                        // This also rejects assigning both roles to the same member.
+                        String previousOwner = ownersOnProcess.get(taskId);
+                        if (previousOwner != null) {
+                            throw new TaskAssignorException(String.format(
+                                "Assignor '%s' assigned task '%s' more than once to process '%s' (members '%s' and '%s', active or standby).",
+                                assignor.name(), taskId, processId, previousOwner, memberId
+                            ));
+                        }
+                        ownersOnProcess.put(taskId, memberId);
+                    }
+                });
+            }
+        });
     }
 
     private TasksTuple newMemberAssignment(
