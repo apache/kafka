@@ -252,7 +252,7 @@ public class FineGrainedAutoResetIntegrationTest {
     private void commitInvalidOffsets() {
         final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(TestUtils.consumerConfig(
             CLUSTER.bootstrapServers(),
-            "commit_invalid_offset_app", // Having a separate application id to avoid waiting for last test poll interval timeout.
+            streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
             StringDeserializer.class,
             StringDeserializer.class));
 
