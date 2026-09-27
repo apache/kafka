@@ -22,10 +22,12 @@ import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigHandler, KafkaConfig}
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, GROUP, TOPIC}
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.storage.internals.log.LogConfig
 
 
 class DynamicConfigPublisher(
@@ -64,6 +66,9 @@ class DynamicConfigPublisher(
                   info(s"Updating topic ${resource.name()} with new configuration : " +
                     toLoggableProps(resource, props).mkString(","))
                   topicConfigHandler.processConfigChanges(resource.name(), props)
+                  LogConfig.topicMessageTimestampAfterMaxMsWarning(resource.name(),
+                    Utils.propsToStringMap(delta.image().configs().configProperties(resource)),
+                    Utils.propsToStringMap(props), conf.logMessageTimestampType).ifPresent(msg => warn(msg))
                 } catch {
                   case t: Throwable => faultHandler.handleFault("Error updating topic " +
                     s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +

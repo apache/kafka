@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -33,6 +34,7 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.metadata.properties.PropertiesUtils;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.FileLock;
@@ -47,6 +49,7 @@ import org.apache.kafka.test.TestUtils;
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,6 +78,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -1584,5 +1588,42 @@ public class LogManagerTest {
         assertTrue(LogManager.isStrayReplica(List.of(), 0, log));
         assertTrue(LogManager.isStrayReplica(List.of(1, 2, 3), 0, log));
         assertFalse(LogManager.isStrayReplica(List.of(0, 1, 2), 0, log));
+    }
+
+    @Test
+    public void testWarnWhenMessageTimestampAfterMaxMsExceedsDefault() throws Exception {
+        LogConfig raised = new LogConfig(Map.of(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.MAX_VALUE));
+        LogConfig raisedWithOtherChange = new LogConfig(Map.of(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.MAX_VALUE,
+                TopicConfig.RETENTION_MS_CONFIG, 1000L));
+        LogConfig raisedWithLogAppendTime = new LogConfig(Map.of(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.MAX_VALUE,
+                TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"));
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(LogManager.class)) {
+            // The storage test log4j2 config turns logging off, so enable WARN for LogManager explicitly.
+            appender.setClassLogger(LogManager.class, Level.WARN);
+            LongSupplier warnings = () -> appender.getMessages(Level.WARN).stream()
+                    .filter(m -> m.contains(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG))
+                    .count();
+
+            // Startup with a raised default: warns.
+            LogManager raisedLogManager = LogTestUtils.createLogManager(List.of(TestUtils.tempDirectory()), raised,
+                    new MockConfigRepository(), time, 1, INITIAL_TASK_DELAY_MS);
+            raisedLogManager.startup(Set.of());
+            raisedLogManager.shutdown();
+            assertEquals(1, warnings.getAsLong());
+
+            // Dynamic update from the default to a raised value: warns.
+            logManager.reconfigureDefaultLogConfig(raised);
+            assertEquals(2, warnings.getAsLong());
+            // Unrelated update with the value unchanged: no repeated warning.
+            logManager.reconfigureDefaultLogConfig(raisedWithOtherChange);
+            assertEquals(2, warnings.getAsLong());
+            // LogAppendTime ignores the value: no warning.
+            logManager.reconfigureDefaultLogConfig(raisedWithLogAppendTime);
+            assertEquals(2, warnings.getAsLong());
+            // Switching back to CreateTime makes the raised value take effect: warns.
+            logManager.reconfigureDefaultLogConfig(raised);
+            assertEquals(3, warnings.getAsLong());
+        }
     }
 }
