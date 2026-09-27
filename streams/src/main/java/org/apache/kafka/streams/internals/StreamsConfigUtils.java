@@ -109,19 +109,12 @@ public class StreamsConfigUtils {
         return -1;
     }
 
-    // Always returns a usable bytes cap so memory stays bounded (KIP-770). Only when the legacy
-    // config alone is set do we fall through to the new config's default; the legacy per-partition
-    // record cap still applies in parallel via getBufferedRecordsPerPartition.
+    // Always returns a usable bytes cap so memory stays bounded (KIP-770). When only the legacy config is set,
+    // the new config's default applies and the legacy per-partition record cap still applies in parallel via
+    // getBufferedRecordsPerPartition, which also logs the warning for the case where both configs are set.
     @SuppressWarnings("deprecation")
     public static long getInputBufferMaxBytes(final StreamsConfig config) {
-        if (config.originals().containsKey(BUFFERED_RECORDS_PER_PARTITION_CONFIG) && config.originals().containsKey(INPUT_BUFFER_MAX_BYTES_CONFIG)) {
-            LOG.warn("Both deprecated config {} and the new config {} are set, hence {} is ignored and {} will be used instead to keep memory usage under control.",
-                BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                INPUT_BUFFER_MAX_BYTES_CONFIG,
-                BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                INPUT_BUFFER_MAX_BYTES_CONFIG);
-            return config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG);
-        } else if (config.originals().containsKey(BUFFERED_RECORDS_PER_PARTITION_CONFIG)) {
+        if (config.originals().containsKey(BUFFERED_RECORDS_PER_PARTITION_CONFIG) && !config.originals().containsKey(INPUT_BUFFER_MAX_BYTES_CONFIG)) {
             LOG.warn("Deprecated config {} is set. The new config {} (default {}) is applied to bound memory usage; " +
                     "we suggest setting {} explicitly as {} will be removed in the future.",
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG,
@@ -129,7 +122,6 @@ public class StreamsConfigUtils {
                 config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG),
                 INPUT_BUFFER_MAX_BYTES_CONFIG,
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-            return config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG);
         }
         return config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG);
     }

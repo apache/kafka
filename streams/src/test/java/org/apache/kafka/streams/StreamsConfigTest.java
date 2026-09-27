@@ -35,6 +35,7 @@ import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -1633,6 +1634,25 @@ public class StreamsConfigTest {
         assertEquals(100L, getInputBufferMaxBytes(config));
         // deprecated per-partition path is disabled when both are set
         assertEquals(-1, getBufferedRecordsPerPartition(config));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldWarnOnceWhenBothBufferConfigsAreSet() {
+        props.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, 100L);
+        props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 10);
+        final StreamsConfig config = new StreamsConfig(props);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfigUtils.class)) {
+            appender.setClassLogger(StreamsConfigUtils.class, Level.WARN);
+
+            getInputBufferMaxBytes(config);
+            getBufferedRecordsPerPartition(config);
+
+            final List<String> warnings = appender.getMessages().stream()
+                .filter(msg -> msg.contains("Both deprecated config"))
+                .collect(Collectors.toList());
+            assertEquals(1, warnings.size(), "Expected the both-set warning exactly once, got: " + appender.getMessages());
+        }
     }
 
     @SuppressWarnings("deprecation")

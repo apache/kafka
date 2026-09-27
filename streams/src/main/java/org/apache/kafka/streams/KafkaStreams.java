@@ -1467,11 +1467,7 @@ public class KafkaStreams implements AutoCloseable {
         return divisor == 0 ? totalMax : totalMax / divisor;
     }
 
-    // Pass through -1L unchanged so StreamThread can tell the bytes guard is disabled.
     private long bufferSizePerThread(final int numStreamThreads) {
-        if (inputBufferMaxBytes == -1L) {
-            return -1L;
-        }
         if (numStreamThreads == 0) {
             return inputBufferMaxBytes;
         }

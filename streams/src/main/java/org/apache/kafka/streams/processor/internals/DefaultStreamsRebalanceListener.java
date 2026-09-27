@@ -125,6 +125,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         } finally {
             tasksLostSensor.record(time.milliseconds() - start);
         }
+        streamThread.clearBufferOverflowTracking();
     }
 
     private StreamsRebalanceData.Assignment deduplicateTasks(final StreamsRebalanceData.Assignment assignment) {

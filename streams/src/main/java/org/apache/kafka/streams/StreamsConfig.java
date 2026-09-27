@@ -464,7 +464,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
     /** {@code buffered.records.per.partition}
-     * @deprecated Since 4.4. Use {@link #INPUT_BUFFER_MAX_BYTES_CONFIG "input.buffer.max.bytes"} instead. */
+     * @deprecated Since 4.5. Use {@link #INPUT_BUFFER_MAX_BYTES_CONFIG "input.buffer.max.bytes"} instead. */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";

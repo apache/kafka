@@ -620,6 +620,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void resumePollingForPartitionsWithAvailableSpace() {
+        resumePollingForPartitionsWithAvailableSpace(Set.of());
+    }
+
+    // StreamThread passes the partitions its bytes guard paused: it owns their resume, and resuming them here
+    // would undo that pause every iteration when both guards are active (only the deprecated config set).
+    void resumePollingForPartitionsWithAvailableSpace(final Set<TopicPartition> excludedPartitions) {
+        partitionsToResume.removeAll(excludedPartitions);
         if (!partitionsToResume.isEmpty()) {
             mainConsumer.resume(partitionsToResume);
             partitionsToResume.clear();
@@ -821,7 +828,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 record.topic(), record.partition(), record.offset());
 
             // Only the legacy count-mode resumes here; in bytes-mode StreamThread owns pause/resume,
-            // so resuming per-task would undo its thread-wide pause and cause churn.
+            // so resuming per-task would undo its thread-wide pause and cause churn. When both are active,
+            // resumePollingForPartitionsWithAvailableSpace skips the partitions the bytes guard paused.
             // headRecordIsCorrupted() catches a queue whose only remaining records are corrupted —
             // size() never drops below the legacy threshold, so without this we'd stay paused forever.
             if (maxBufferedSize != UNDEFINED_MAX_BUFFERED_SIZE

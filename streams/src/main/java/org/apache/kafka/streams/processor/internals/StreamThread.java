@@ -373,12 +373,9 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Optional<StreamsRebalanceData> streamsRebalanceData;
     private final StreamsMetadataState streamsMetadataState;
 
-    // -1L means the bytes guard is off; the legacy per-partition pause in StreamTask owns it instead.
-    static final long UNDEFINED_INPUT_BUFFER_MAX_BYTES = -1L;
-
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
-    private final AtomicLong maxBufferSizeInBytes = new AtomicLong(UNDEFINED_INPUT_BUFFER_MAX_BYTES);
+    private final AtomicLong maxBufferSizeInBytes = new AtomicLong();
 
     // Tracked separately so we don't resume partitions paused by rebalance settle / offset reset.
     private final Set<TopicPartition> partitionsPausedForBufferOverflow = new HashSet<>();
@@ -1236,10 +1233,12 @@ public class StreamThread extends Thread implements ProcessingThread {
         partitionsPausedForBufferOverflow.removeAll(revokedPartitions);
     }
 
+    // All tasks are gone (streams-protocol onAllTasksLost), so no tracked partition is ours to resume.
+    void clearBufferOverflowTracking() {
+        partitionsPausedForBufferOverflow.clear();
+    }
+
     private void maybeResumePartitionsPausedForBufferOverflow() {
-        if (maxBufferSizeInBytes.get() == UNDEFINED_INPUT_BUFFER_MAX_BYTES) {
-            return;
-        }
         if (partitionsPausedForBufferOverflow.isEmpty()) {
             return;
         }
@@ -1247,7 +1246,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             // defensive copy — we clear the tracking set right after.
             final Set<TopicPartition> toResume = new HashSet<>(partitionsPausedForBufferOverflow);
             toResume.retainAll(mainConsumer.assignment());
-            log.info("Buffered records size is at or below {}. Resuming partitions paused by buffer overflow {}",
+            // closeDirtyAndRevive keeps a corrupted task's partitions assigned but removes the task and pauses them
+            // for offset reset; resuming them would break the reset and poll records getActiveTask cannot route.
+            toResume.retainAll(taskManager.activeInitializedInputPartitions());
+            log.debug("Buffered records size is at or below {}. Resuming partitions paused by buffer overflow {}",
                 maxBufferSizeInBytes.get(), toResume);
             mainConsumer.resume(toResume);
             partitionsPausedForBufferOverflow.clear();
@@ -1278,7 +1280,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         now = startMs;
 
         final long pollLatency;
-        taskManager.resumePollingForPartitionsWithAvailableSpace();
+        // skip partitions the bytes guard paused, so the legacy per-partition resume cannot undo that pause
+        // when both guards are active (only the deprecated buffered.records.per.partition set).
+        taskManager.resumePollingForPartitionsWithAvailableSpace(partitionsPausedForBufferOverflow);
         // resume here too (mirrors runOnceWithProcessingThreads) so a drain outside a processing
         // state still resumes paused partitions.
         maybeResumePartitionsPausedForBufferOverflow();
@@ -1441,7 +1445,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         now = startMs;
 
         final long pollLatency;
-        taskManager.resumePollingForPartitionsWithAvailableSpace();
+        // skip partitions the bytes guard paused (see runOnceWithoutProcessingThreads)
+        taskManager.resumePollingForPartitionsWithAvailableSpace(partitionsPausedForBufferOverflow);
         // processor threads drain async, so the bytes-guard resume check runs here each iteration.
         maybeResumePartitionsPausedForBufferOverflow();
         pollLatency = pollPhase();
@@ -1583,14 +1588,14 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         // soft cap — read isn't atomic across tasks, so small overshoots are fine.
         final long bufferSize = taskManager.getInputBufferSizeInBytes();
-        if (maxBufferSizeInBytes.get() != UNDEFINED_INPUT_BUFFER_MAX_BYTES && bufferSize > maxBufferSizeInBytes.get()) {
+        if (bufferSize > maxBufferSizeInBytes.get()) {
             // pause only non-empty partitions; pausing empty ones risks ordering deadlock (KAFKA-13152).
             // copy first — nonEmptyPartitions may be immutable, and pausing an unassigned partition
             // throws, so intersect with assignment (mirrors resume side).
             final Set<TopicPartition> nonEmptyPartitions = new HashSet<>(taskManager.nonEmptyPartitions());
             nonEmptyPartitions.retainAll(mainConsumer.assignment());
             if (!nonEmptyPartitions.isEmpty()) {
-                log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
+                log.debug("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
                     bufferSize, maxBufferSizeInBytes.get(), nonEmptyPartitions);
                 mainConsumer.pause(nonEmptyPartitions);
                 partitionsPausedForBufferOverflow.addAll(nonEmptyPartitions);

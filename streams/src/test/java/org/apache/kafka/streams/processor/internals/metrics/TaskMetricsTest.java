@@ -156,7 +156,7 @@ public class TaskMetricsTest {
                             totalBytesDescription
                     )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 

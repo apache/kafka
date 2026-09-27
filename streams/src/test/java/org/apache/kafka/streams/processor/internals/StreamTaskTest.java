@@ -1378,6 +1378,44 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotResumePartitionsExcludedByTheBytesGuard() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig("100"));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        // five records exceed the legacy cap of three, so both partitions are paused
+        task.addRecords(partition1, asList(
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 30),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 40),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 50)
+        ));
+        task.addRecords(partition2, asList(
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 15),
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 25),
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 35),
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 45),
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 55)
+        ));
+        assertEquals(Set.of(partition1, partition2), consumer.paused());
+
+        // two records from each partition bring both queues back to the cap, so both qualify for resume
+        for (int i = 0; i < 4; i++) {
+            assertTrue(task.process(0L));
+        }
+        assertEquals(2, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+
+        // partition1 is also paused by the StreamThread bytes guard, which owns its resume
+        task.resumePollingForPartitionsWithAvailableSpace(Set.of(partition1));
+
+        assertEquals(Set.of(partition1), consumer.paused());
+    }
+
+    @Test
     public void shouldResumePartitionWhenSkippingOverRecordsWithInvalidTs() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
