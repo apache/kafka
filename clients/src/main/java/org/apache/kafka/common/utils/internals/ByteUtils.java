@@ -281,7 +281,7 @@ public final class ByteUtils {
                         result |= tmp << 21;
                     } else {
                         result |= (tmp & 127) << 21;
-                        result |= (tmp = (byte) in.read()) << 28;                      
+                        result |= (tmp = (byte) in.read()) << 28;
                         if (tmp < 0 || tmp > 0x0F) {
                             throw illegalVarintException(result);
                         }
