@@ -126,7 +126,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testListOffsetsRequest_Success() throws ExecutionException, InterruptedException {
+    public void testListOffsetsRequestSuccess() throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -144,7 +144,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testListOffsetsWaitingForMetadataUpdate_Timeout() {
+    public void testListOffsetsWaitingForMetadataUpdateTimeout() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -232,7 +232,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testListOffsetsWaitingForMetadataUpdate_RetrySucceeds() throws ExecutionException,
+    public void testListOffsetsWaitingForMetadataUpdateRetrySucceeds() throws ExecutionException,
             InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
@@ -322,7 +322,7 @@ public class OffsetsRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("retriableErrors")
-    public void testRequestFailsWithRetriableError_RetrySucceeds(Errors error) throws ExecutionException, InterruptedException {
+    public void testRequestFailsWithRetriableErrorRetrySucceeds(Errors error) throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -404,7 +404,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testRequestPartiallyFailsWithRetriableError_RetrySucceeds() throws ExecutionException, InterruptedException {
+    public void testRequestPartiallyFailsWithRetriableErrorRetrySucceeds() throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
         timestampsToSearch.put(TEST_PARTITION_1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
         timestampsToSearch.put(TEST_PARTITION_2, ListOffsetsRequest.EARLIEST_TIMESTAMP);
@@ -519,7 +519,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testRequestFailedResponse_NonRetriableAuthError() {
+    public void testRequestFailedResponseNonRetriableAuthError() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -548,7 +548,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testRequestFailedResponse_NonRetriableErrorTimeout() {
+    public void testRequestFailedResponseNonRetriableErrorTimeout() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -580,7 +580,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testRequestFails_AuthenticationException() {
+    public void testRequestFailsAuthenticationException() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
@@ -633,13 +633,13 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testResetPositionsSuccess_NoLeaderEpochInResponse() {
+    public void testResetPositionsSuccessNoLeaderEpochInResponse() {
         testResetPositionsSuccessWithLeaderEpoch(Metadata.LeaderAndEpoch.noLeaderOrEpoch());
         verify(metadata, never()).updateLastSeenEpochIfNewer(any(), anyInt());
     }
 
     @Test
-    public void testResetPositionsSuccess_LeaderEpochInResponse() {
+    public void testResetPositionsSuccessLeaderEpochInResponse() {
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1),
                 Optional.of(5));
         testResetPositionsSuccessWithLeaderEpoch(leaderAndEpoch);
