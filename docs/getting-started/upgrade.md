@@ -71,6 +71,7 @@ type: docs
   * Includes a fix for a group coordinator bug in which a consumer group downgrade could leave the group in an invalid state when the classic group metadata is very large ([KAFKA-20845](https://issues.apache.org/jira/browse/KAFKA-20845)).
   * Includes a fix for a client telemetry bug in which metrics could be sent to a stale broker IP address after a broker address change ([KAFKA-20393](https://issues.apache.org/jira/browse/KAFKA-20393)).
   * Includes a fix for a `NullPointerException` in `MetadataCache#toCluster` that stopped a custom `ClientQuotaCallback` (`client.quota.callback.class`) from receiving cluster metadata updates ([KAFKA-20746](https://issues.apache.org/jira/browse/KAFKA-20746)).
+  * Protocol message readers now limit array and collection allocations when decoding messages. Arrays and collections with more than 1,000,000 elements and flexible-version tagged-field sections with more than 10,000 fields are rejected before allocation. Arrays and collections are initially allocated with a capacity no greater than 1,000 and grow as needed during decoding.
 
 ## Upgrading to 4.3.1
 
