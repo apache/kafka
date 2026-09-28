@@ -112,6 +112,20 @@ Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been remove
   * A new dynamic broker configuration `follower.fetch.last.tiered.offset.enable` (default: `false`) has been added. When enabled on a cluster with tiered storage, a newly added follower replica that has no local data will skip directly to the earliest pending upload offset on the leader, avoiding re-fetching data that is already stored in remote storage. This reduces bootstrap time significantly for large tiered-storage topics. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
   * The `ListOffsets` API has been extended to version 11, adding support for the `EARLIEST_PENDING_UPLOAD_TIMESTAMP` (-6) timestamp type. This allows clients to query the earliest offset on the leader that has not yet been uploaded to tiered storage. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
 
+## Upgrading to 4.2.2
+
+### Notable changes in 4.2.2
+
+  * Includes a fix for `ListDeserializer` silently deserializing a corrupted entry when the input is truncated mid-entry ([KAFKA-20769](https://issues.apache.org/jira/browse/KAFKA-20769)).
+  * Includes a fix for an exactly-once semantics issue where the checkpoint file written at restoration completion could persist through the `RUNNING` state, causing the state store wipe to be skipped after an unclean crash ([KAFKA-20685](https://issues.apache.org/jira/browse/KAFKA-20685)).
+  * Includes a fix for a deadlock in `KafkaStreams.removeStreamThread` when it races with a concurrent `REPLACE_THREAD` uncaught-exception handler ([KAFKA-20873](https://issues.apache.org/jira/browse/KAFKA-20873)).
+  * Includes a fix for consumer group downgrades that could leave the group's on-disk coordinator state permanently unloadable when the group's classic member metadata is very large ([KAFKA-20845](https://issues.apache.org/jira/browse/KAFKA-20845)).
+  * Includes a fix for the `record-e2e-latency-max` metric only measuring consumption latency instead of the full end-to-end latency (consumption plus processing delay) documented in [KIP-613](https://cwiki.apache.org/confluence/display/KAFKA/KIP-613%3A+Add+end-to-end+latency+metrics+to+Streams) ([KAFKA-14597](https://issues.apache.org/jira/browse/KAFKA-14597)).
+  * Includes a fix for a high CPU loop on the consumer after a failed re-authentication ([KAFKA-20253](https://issues.apache.org/jira/browse/KAFKA-20253)).
+  * Includes a fix for consumer groups accepting new classic-protocol members even when `group.consumer.migration.policy=disabled`, which could leave a group permanently stuck in a mixed-protocol state ([KAFKA-20640](https://issues.apache.org/jira/browse/KAFKA-20640)).
+  * Includes a fix for `AdminClient` APIs routed through the partition-leader cache (`listOffsets`, `deleteRecords`, `describeProducers`, `abortTransaction`) blocking for the full `default.api.timeout.ms` instead of failing fast when a cached leader has left the cluster ([KAFKA-20673](https://issues.apache.org/jira/browse/KAFKA-20673)).
+  * Bumped jackson-databind ([KAFKA-21004](https://issues.apache.org/jira/browse/KAFKA-21004), [KAFKA-20773](https://issues.apache.org/jira/browse/KAFKA-20773), [KAFKA-20767](https://issues.apache.org/jira/browse/KAFKA-20767)), lz4-java ([KAFKA-20936](https://issues.apache.org/jira/browse/KAFKA-20936)), and jline ([KAFKA-20815](https://issues.apache.org/jira/browse/KAFKA-20815)) to address reported CVEs.
+
 ## Upgrading to 4.2.1
 
 ### Notable changes in 4.2.1
