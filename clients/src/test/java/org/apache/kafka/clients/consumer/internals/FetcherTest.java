@@ -179,7 +179,7 @@ public class FetcherTest {
     private final ApiVersions apiVersions = new ApiVersions();
     private int fetchSize = 1000;
     private MockTime time = new MockTime(1);
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private FetchMetricsRegistry metricsRegistry;
     private FetchMetricsManager metricsManager;
@@ -292,7 +292,7 @@ public class FetcherTest {
     @Test
     public void testCloseShouldBeIdempotent() {
         LogContext logContext = new LogContext();
-        buildDependencies(new MetricConfig(), Long.MAX_VALUE, new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST), logContext);
+        buildDependencies(new MetricConfig(), Long.MAX_VALUE, new ConsumerSubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST), logContext);
         FetchConfig fetchConfig = new FetchConfig(minBytes, maxBytes, maxWaitMs, fetchSize, Integer.MAX_VALUE,
             true, CommonClientConfigs.DEFAULT_CLIENT_RACK, IsolationLevel.READ_UNCOMMITTED);
         var fetcher = new Fetcher<>(logContext, consumerClient, metadata, subscriptions, fetchConfig,
@@ -956,7 +956,7 @@ public class FetcherTest {
 
         buffer.flip();
 
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
 
         // normal fetch
         assertEquals(1, sendFetches());
@@ -985,7 +985,7 @@ public class FetcherTest {
 
     private void seekAndConsumeRecord(ByteBuffer responseBuffer, long toOffset) {
         // Seek to skip the bad record and fetch again.
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(toOffset, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(toOffset, Optional.empty(), metadata.currentLeader(tp0)));
         // Should not throw exception after the seek.
         collectFetch();
         assertEquals(1, sendFetches());
@@ -1447,13 +1447,13 @@ public class FetcherTest {
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
         // #1 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         // #2 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekUnvalidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
 
@@ -1479,13 +1479,13 @@ public class FetcherTest {
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
         // #1 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         // #2 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekUnvalidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
 
@@ -1868,7 +1868,7 @@ public class FetcherTest {
         assertEquals(2, fetchRecords().get(tp0).size());
 
         subscriptions.assignFromUser(Set.of(tp0, tp1));
-        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekUnvalidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         assertEquals(1, sendFetches());
         partitions = new HashMap<>();
@@ -2753,8 +2753,8 @@ public class FetcherTest {
         buildFetcher(2);
 
         assignFromUser(Set.of(tp0, tp1));
-        subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
-        subscriptions.seekValidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekValidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekValidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         // Fetch some records and establish an incremental fetch session.
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions1 = new LinkedHashMap<>();
@@ -2834,7 +2834,7 @@ public class FetcherTest {
             topicPartitions.add(new TopicPartition(topicName, i));
 
         LogContext logContext = new LogContext();
-        buildDependencies(new MetricConfig(), Long.MAX_VALUE, new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST), logContext);
+        buildDependencies(new MetricConfig(), Long.MAX_VALUE, new ConsumerSubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST), logContext);
 
         IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
 
@@ -3214,7 +3214,7 @@ public class FetcherTest {
 
         // Seek
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.currentLeader(tp0).leader, Optional.of(1));
-        subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1), leaderAndEpoch));
+        subscriptions.seekValidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(1), leaderAndEpoch));
 
         // Check for truncation, this should cause tp0 to go into validation
         OffsetFetcher offsetFetcher = new OffsetFetcher(new LogContext(),
@@ -3861,7 +3861,7 @@ public class FetcherTest {
                                      IsolationLevel isolationLevel,
                                      long metadataExpireMs) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, offsetResetStrategy);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(logContext, offsetResetStrategy);
         buildFetcher(metricConfig, keyDeserializer, valueDeserializer, maxPollRecords, isolationLevel, metadataExpireMs,
                 subscriptionState, logContext);
     }
@@ -3872,7 +3872,7 @@ public class FetcherTest {
                                      int maxPollRecords,
                                      IsolationLevel isolationLevel,
                                      long metadataExpireMs,
-                                     SubscriptionState subscriptionState,
+                                     ConsumerSubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
         FetchConfig fetchConfig = new FetchConfig(
@@ -3907,7 +3907,7 @@ public class FetcherTest {
 
     private void buildDependencies(MetricConfig metricConfig,
                                    long metadataExpireMs,
-                                   SubscriptionState subscriptionState,
+                                   ConsumerSubscriptionState subscriptionState,
                                    LogContext logContext) {
         time = new MockTime(1);
         subscriptions = subscriptionState;

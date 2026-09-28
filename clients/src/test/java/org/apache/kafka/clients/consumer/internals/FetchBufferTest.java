@@ -63,7 +63,7 @@ public class FetchBufferTest {
     private final Set<TopicPartition> allPartitions = partitions(topicAPartition0, topicAPartition1, topicAPartition2);
     private LogContext logContext;
 
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
 
     private FetchMetricsManager metricsManager;
 

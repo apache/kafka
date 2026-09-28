@@ -82,10 +82,10 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
     protected LogContext logContext;
     protected Timer pollTimer;
     protected CoordinatorRequestManager coordinatorRequestManager;
-    protected SubscriptionState subscriptions;
+    protected AbstractSubscriptionState subscriptions;
     protected BackgroundEventHandler backgroundEventHandler;
     protected HeartbeatRequestState heartbeatRequestState;
-    protected AbstractMembershipManager<R> membershipManager;
+    protected AbstractMembershipManager<R, ?> membershipManager;
     protected AbstractHeartbeatRequestManager<R> heartbeatRequestManager;
     protected Metrics metrics;
 

@@ -109,7 +109,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics coordinatorMetrics;
     private final RebalanceCallbackMetricsManager rebalanceCallbackMetricsManager;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
     private final int autoCommitIntervalMs;
@@ -171,7 +171,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                ConsumerNetworkClient client,
                                List<ConsumerPartitionAssignor> assignors,
                                ConsumerMetadata metadata,
-                               SubscriptionState subscriptions,
+                               ConsumerSubscriptionState subscriptions,
                                Metrics metrics,
                                String metricGrpPrefix,
                                Time time,
@@ -206,7 +206,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                ConsumerNetworkClient client,
                                List<ConsumerPartitionAssignor> assignors,
                                ConsumerMetadata metadata,
-                               SubscriptionState subscriptions,
+                               ConsumerSubscriptionState subscriptions,
                                Metrics metrics,
                                String metricGrpPrefix,
                                Time time,
@@ -289,7 +289,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     // package private for testing
-    SubscriptionState subscriptionState() {
+    ConsumerSubscriptionState subscriptionState() {
         return this.subscriptions;
     }
 
@@ -1602,7 +1602,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final int version;
         private final Map<String, List<PartitionRackInfo>> partitionsPerTopic;
 
-        private MetadataSnapshot(Optional<String> clientRack, SubscriptionState subscription, Cluster cluster, int version) {
+        private MetadataSnapshot(Optional<String> clientRack, ConsumerSubscriptionState subscription, Cluster cluster, int version) {
             Map<String, List<PartitionRackInfo>> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.metadataTopics()) {
                 List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);

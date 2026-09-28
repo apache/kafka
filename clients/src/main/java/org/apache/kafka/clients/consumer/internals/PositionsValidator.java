@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static java.util.Objects.requireNonNull;
 
 /**
- * As named, this class validates positions in the {@link SubscriptionState} based on current {@link ConsumerMetadata}
+ * As named, this class validates positions in the {@link ConsumerSubscriptionState} based on current {@link ConsumerMetadata}
  * version. It maintains just enough shared state to determine when it can avoid costly inter-thread communication
  * in the {@link Consumer#poll(Duration)} method.
  *
@@ -48,7 +48,7 @@ public class PositionsValidator {
     private final Logger log;
     private final Time time;
     private final ConsumerMetadata metadata;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
 
     /**
      * Exception that occurred while validating positions, that will be propagated on the next
@@ -62,7 +62,7 @@ public class PositionsValidator {
 
     public PositionsValidator(LogContext logContext,
                               Time time,
-                              SubscriptionState subscriptions,
+                              ConsumerSubscriptionState subscriptions,
                               ConsumerMetadata metadata) {
         this.log = requireNonNull(logContext).logger(getClass());
         this.time = requireNonNull(time);
@@ -74,7 +74,7 @@ public class PositionsValidator {
      * This method is called by the background thread in response to {@link AsyncPollEvent} and
      * {@link CheckAndUpdatePositionsEvent}.
      */
-    Map<TopicPartition, SubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate(ApiVersions apiVersions) {
+    Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate(ApiVersions apiVersions) {
         maybeThrowError();
 
         // Validate each partition against the current leader and epoch
@@ -128,8 +128,8 @@ public class PositionsValidator {
      *         value to ensure that it is not stale
      *     </li>
      *     <li>
-     *         Checks that all positions are in the {@link SubscriptionState.FetchStates#FETCHING} state
-     *         ({@link SubscriptionState#hasAllFetchPositions()})
+     *         Checks that all positions are in the {@link ConsumerSubscriptionState.FetchStates#FETCHING} state
+     *         ({@link ConsumerSubscriptionState#hasAllFetchPositions()})
      *     </li>
      * </ol>
      *

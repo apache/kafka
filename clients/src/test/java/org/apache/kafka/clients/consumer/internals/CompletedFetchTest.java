@@ -214,7 +214,7 @@ public class CompletedFetchTest {
     private CompletedFetch newCompletedFetch(long fetchOffset,
                                              FetchResponseData.PartitionData partitionData) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptions = new SubscriptionState(logContext, AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(logContext, AutoOffsetResetStrategy.NONE);
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry();
         FetchMetricsManager metrics = new FetchMetricsManager(new Metrics(), metricsRegistry);
         FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(TP));

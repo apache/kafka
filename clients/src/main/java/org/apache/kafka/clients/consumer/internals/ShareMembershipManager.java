@@ -74,7 +74,7 @@ import java.util.concurrent.CompletableFuture;
  * </ol>
  *
  */
-public class ShareMembershipManager extends AbstractMembershipManager<ShareGroupHeartbeatResponse> {
+public class ShareMembershipManager extends AbstractMembershipManager<ShareGroupHeartbeatResponse, ShareSubscriptionState> {
 
     /**
      * Rack ID of the member, if specified.
@@ -84,7 +84,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     public ShareMembershipManager(LogContext logContext,
                                   String groupId,
                                   String rackId,
-                                  SubscriptionState subscriptions,
+                                  ShareSubscriptionState subscriptions,
                                   Metadata metadata,
                                   Time time,
                                   Metrics metrics) {
@@ -101,7 +101,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     ShareMembershipManager(LogContext logContext,
                            String groupId,
                            String rackId,
-                           SubscriptionState subscriptions,
+                           ShareSubscriptionState subscriptions,
                            Metadata metadata,
                            Time time,
                            ShareRebalanceMetricsManager metricsManager) {
@@ -152,7 +152,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     @Override
     protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
                                                                SortedSet<TopicPartition> addedPartitions) {
-        subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions.topicPartitions(), addedPartitions);
+        subscriptions.assignFromSubscribed(assignedPartitions.topicPartitions());
         notifyAssignmentChange(assignedPartitions.topicPartitions());
         return CompletableFuture.completedFuture(null);
     }
