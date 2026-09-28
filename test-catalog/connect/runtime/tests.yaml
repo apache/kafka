@@ -675,6 +675,9 @@ org.apache.kafka.connect.runtime.WorkerTest:
 - testStartAndStopConnector
 - testStartConnectorFailure
 - testStartTaskFailure
+- testStartTaskFailureAfterConverterWrappingClosesConverterPlugins
+- testStartTaskFailureDuringConverterCreationClosesAlreadyCreatedConverter
+- testStartTaskFailureWhenWrappingConverterClosesRawConverter
 - testStartTaskWithTooManyTaskConfigsAndMaxEnforced
 - testStartTaskWithTooManyTaskConfigsButMaxNotEnforced
 - testStopInvalidConnector
@@ -1016,10 +1019,14 @@ org.apache.kafka.connect.runtime.isolation.PluginUtilsTest:
 - testThirdPartyClasses
 - testTransformsClasses
 org.apache.kafka.connect.runtime.isolation.PluginsTest:
+- newConfigProviderShouldCloseConfigProviderWhenConfigureFails
 - newConfigProviderShouldConfigureWithPluginClassLoader
 - newConnectorShouldInstantiateWithPluginClassLoader
+- newConverterShouldCloseConverterWhenConfigureFails
 - newConverterShouldConfigureWithPluginClassLoader
+- newHeaderConverterShouldCloseHeaderConverterWhenConfigureFails
 - newHeaderConverterShouldConfigureWithPluginClassLoader
+- newInternalConverterShouldCloseConverterWhenConfigureFails
 - newPluginShouldInstantiateWithPluginClassLoader
 - newPluginShouldServiceLoadWithPluginClassLoader
 - newPluginsShouldConfigureWithPluginClassLoader

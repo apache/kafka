@@ -84,6 +84,7 @@ org.apache.kafka.connect.mirror.MirrorMakerConfigTest:
 - testInvalidSecurityProtocol
 - testLazyConfigResolution
 - testReplicationConfigProperties
+- testTransformClosesConfigProvidersWhenGetFails
 - testWorkerConfigs
 org.apache.kafka.connect.mirror.MirrorMetricsTest:
 - testCheckpointTags

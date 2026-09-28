@@ -3763,6 +3763,9 @@ org.apache.kafka.common.config.AbstractConfigTest:
 - testAutomaticConfigProvidersWithFullClassName
 - testClassConfigs
 - testConfigProviderConfigurationWithConfigParams
+- testConfigProvidersClosedWhenGetThrows
+- testConfigProvidersClosedWhenLaterProviderClassNotFound
+- testConfigProvidersClosedWhenLaterProviderConfigureThrows
 - testConfigProvidersPropsAsParam
 - testConfiguredInstances
 - testConfiguredInstancesClosedOnFailure
@@ -5851,6 +5854,11 @@ org.apache.kafka.common.utils.UtilsTest:
 - testEntriesWithPrefix
 - testFileAsStringNamedPipe
 - testFileAsStringSimpleFile
+- testFlushPathIfExistsSwallowsNoSuchFileException
+- testFlushPathThrowsForMissingPath
+- testFlushPathWithExistingDirectory
+- testFlushPathWithExistingFile
+- testFlushPathWithNullIsNoOp
 - testFormatAddress
 - testFormatBytes
 - testGetHostInvalid
