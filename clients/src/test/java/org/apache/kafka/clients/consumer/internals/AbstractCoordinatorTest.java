@@ -1197,6 +1197,46 @@ public class AbstractCoordinatorTest {
         assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
     }
 
+    @Test
+    public void testStaticMemberKeepsMemberIdWhenPollTimeoutExpiresAfterSyncGroup() {
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, REBALANCE_TIMEOUT_MS,
+            Optional.of("groupInstanceId"), Optional.empty());
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        // The application thread joins the group and returns from poll() before the SyncGroup is answered.
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        assertFalse(coordinator.joinGroupIfNeeded(mockTime.timer(0)));
+        consumerClient.pollNoWakeup();
+        assertEquals(1, mockClient.inFlightRequestCount());
+
+        // The heartbeat thread handles the SyncGroup response while the application thread is busy.
+        mockClient.respond(syncGroupResponse(Errors.NONE));
+        consumerClient.pollNoWakeup();
+        assertEquals(new AbstractCoordinator.Generation(1, memberId, PROTOCOL_NAME), coordinator.generation());
+
+        // The application thread then stalls past the poll timeout, and the heartbeat thread resets the
+        // generation. The static member keeps its member id.
+        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "consumer poll timeout has expired.");
+        assertEquals(memberId, coordinator.generation().memberId);
+
+        // On the next poll(), the application thread finds the completed join and the reset generation.
+        // The static member must rejoin with its member id, so that the coordinator does not treat the
+        // rejoin as a new instance that could fence this member.
+        mockClient.prepareResponse(body -> body instanceof JoinGroupRequest
+                && memberId.equals(((JoinGroupRequest) body).data().memberId()),
+            joinGroupFollowerResponse(2, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        boolean joined = false;
+        for (int i = 0; i < 10 && !joined; i++) {
+            joined = coordinator.joinGroupIfNeeded(mockTime.timer(0));
+        }
+        assertTrue(joined);
+        assertEquals(new AbstractCoordinator.Generation(2, memberId, PROTOCOL_NAME), coordinator.generation());
+    }
+
     private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId)  {
         checkLeaveGroupRequestSent(groupInstanceId, CloseOptions.GroupMembershipOperation.DEFAULT, Optional.empty());
     }

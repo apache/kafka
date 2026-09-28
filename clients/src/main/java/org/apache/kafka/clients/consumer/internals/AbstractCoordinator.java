@@ -522,7 +522,9 @@ public abstract class AbstractCoordinator implements Closeable {
                             "modified by heartbeat thread to %s/%s before the rebalance callback triggered",
                             generationSnapshot, stateSnapshot);
 
-                    resetStateAndRejoin(reason, true);
+                    // A static member keeps the member id that the heartbeat thread left in place, so that
+                    // the rejoin is not treated as a new instance that could fence this member (KAFKA-20985).
+                    resetStateAndRejoin(reason, isDynamicMember());
                     resetJoinGroupFuture();
                 }
             } else {
