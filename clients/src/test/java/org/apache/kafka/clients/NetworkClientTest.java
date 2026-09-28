@@ -218,6 +218,7 @@ public class NetworkClientTest {
 
     @Test
     public void testClientInstanceIdIsRequired() {
+        // Pass a null client instance ID, which the constructor should reject
         assertThrows(NullPointerException.class, () -> new NetworkClient(metadataUpdater, null, selector, "mock", null,
                 Integer.MAX_VALUE, reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,

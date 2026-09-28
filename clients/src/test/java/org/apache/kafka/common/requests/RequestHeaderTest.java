@@ -62,7 +62,7 @@ public class RequestHeaderTest {
     }
 
     @Test
-    public void testRequestHeaderV3() {
+    public void testRequestHeaderV3WithoutClientInstanceId() {
         // OffsetDelete v1 uses the v3 request header.
         short apiVersion = 1;
         RequestHeader header = new RequestHeader(ApiKeys.OFFSET_DELETE, apiVersion, "", 10);
