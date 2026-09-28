@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
@@ -257,6 +258,78 @@ public class ChunkedRecordAccumulatorTest {
             assertArrayEquals(value, readBytes(record.value()));
 
             accum.deallocate(batch);
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * The opposite of an estimate above 1.0: a topic whose compression ratio estimate is far below 1.0
+     * but whose data doesn't compress. The batch's fullness checks trust the estimate, so the batch admits
+     * many times batch.size of uncompressed data, and the compressor then writes roughly all of it. That
+     * overshoot must be absorbed by mid-write growth (mostly as the compressor flushes on close), first from
+     * the pool and, once the pool has no chunks left, from the heap. Either way the batch must decode back
+     * to every record appended, and every pool chunk (and only those) must go back to the pool.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "gzip, false", "snappy, false", "lz4, false", "zstd, false",
+        "gzip, true", "snappy, true", "lz4, true", "zstd, true"
+    })
+    public void testIncompressibleDataWithLowCompressionRatioEstimateGrowsPastBatchSize(String codec,
+                                                                                      boolean constrainedPool) throws Exception {
+        int chunkSize = 256;
+        int batchSize = 8192;
+        // The constrained pool covers the chunks the appends reserve from the estimate, but not the growth.
+        long totalMemory = (constrainedPool ? 32L : 1024L) * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(batchSize, compression, pool);
+        // Read by the batch on construction, so it must be set before the first append.
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
+        try {
+            // Random bytes don't compress, totalling several times batch.size.
+            int recordCount = 100;
+            Random random = new Random(42);
+            List<byte[]> values = new ArrayList<>();
+            for (int i = 0; i < recordCount; i++) {
+                byte[] value = new byte[500];
+                random.nextBytes(value);
+                values.add(value);
+                accum.append(topic, partition1, i, key, value, Record.EMPTY_HEADERS, null,
+                        maxBlockTimeMs, time.milliseconds(), cluster);
+            }
+
+            // The estimate let every record into the one batch.
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            ProducerBatch batch = dq.peekFirst();
+            assertNotNull(batch);
+            assertEquals(recordCount, batch.recordCount);
+
+            // Compressors buffer internally, so much of the growth happens as they flush on close.
+            batch.close();
+            MemoryRecords records = batch.records();
+            assertTrue(records.sizeInBytes() > 4 * batchSize,
+                    "the compressed batch should be several times batch.size, but was " + records.sizeInBytes());
+            int i = 0;
+            for (Record r : records.records()) {
+                assertArrayEquals(values.get(i), readBytes(r.value()));
+                i++;
+            }
+            assertEquals(recordCount, i, "all appended records must be present");
+
+            ChunkedByteBufferOutputStream stream = (ChunkedByteBufferOutputStream) batch.recordsBuilder.bufferStream();
+            if (constrainedPool)
+                assertTrue(stream.fallbackAllocations() > 0, "growth past the pool should have fallen back to the heap");
+            else
+                assertEquals(0, stream.fallbackAllocations());
+
+            // Every pool chunk returns to the pool, and no heap fallback chunk is added to it.
+            accum.deallocate(batch);
+            assertEquals(totalMemory, pool.availableMemory());
         } finally {
             CompressionRatioEstimator.resetEstimation(topic);
             accum.close();
