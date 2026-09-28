@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -376,6 +377,40 @@ class RemoteTopicCrudTest {
             var error2 = assertFutureThrows(InvalidConfigurationException.class, admin.incrementalAlterConfigs(configs).all());
             assertTrue(Objects.requireNonNull(error2).getMessage().contains("Tiered Storage functionality is disabled in the broker"));
         }
+    }
+
+    @ClusterTest
+    void testClusterWideDisablementOfTieredStorageWithEnabledTieredTopic() throws Exception {
+        var topicConfig = Map.of(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
+        try (var admin = cluster.admin()) {
+            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor)
+                .configs(topicConfig))).all().get();
+        }
+        cluster.waitTopicCreation(testTopicName, numPartitions);
+
+        for (int brokerId : cluster.brokerIds()) {
+            cluster.restartBroker(brokerId, Map.of(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, false));
+        }
+        TestUtils.waitForCondition(() -> cluster.firstFatalException().isPresent() || cluster.firstNonFatalException().isPresent(),
+            "Expected an exception when tiered storage is disabled for a topic with remote storage enabled");
+        var exception = cluster.firstFatalException().or(() -> cluster.firstNonFatalException()).orElseThrow();
+        assertTrue(exception.getCause() instanceof ConfigException);
+    }
+
+    @ClusterTest
+    void testClusterWithoutTieredStorageStartsSuccessfullyIfTopicWithTieringDisabled() throws Exception {
+        var topicConfig = Map.of(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
+        try (var admin = cluster.admin()) {
+            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor)
+                .configs(topicConfig))).all().get();
+        }
+        cluster.waitTopicCreation(testTopicName, numPartitions);
+
+        for (int brokerId : cluster.brokerIds()) {
+            cluster.restartBroker(brokerId, Map.of(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, false));
+        }
+        cluster.waitForReadyBrokers();
+        assertTrue(cluster.firstFatalException().isEmpty());
     }
 
     @ClusterTest
