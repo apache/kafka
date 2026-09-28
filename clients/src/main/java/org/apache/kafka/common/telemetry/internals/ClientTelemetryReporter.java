@@ -726,6 +726,21 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 return Optional.empty();
             }
 
+            /*
+             Per KIP-714, the payload must not exceed the maximum size the broker advertised in the
+             subscription. The broker bounds the payload it decompresses by that value, and metrics
+             compress well, so the serialized size is the limit a push actually hits. It is checked
+             before compressing, so that the outcome does not depend on which compression type
+             happened to be available. Sending an oversized payload anyway would only be rejected
+             with TELEMETRY_TOO_LARGE, hence skip the push instead.
+            */
+            if (payload.getSerializedSize() > localSubscription.telemetryMaxBytes()) {
+                log.warn("Skipping telemetry push as the serialized payload for {} metrics is {} bytes,"
+                        + " which exceeds the maximum of {} bytes accepted by the broker",
+                    metricsCount, payload.getSerializedSize(), localSubscription.telemetryMaxBytes());
+                return skipOversizedPush(localSubscription, terminating);
+            }
+
             CompressionType compressionType = ClientTelemetryUtils.preferredCompressionType(localSubscription.acceptedCompressionTypes(), unsupportedCompressionTypes);
             ByteBuffer compressedPayload;
             try {
@@ -751,23 +766,15 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
 
             /*
-             Per KIP-714, the payload must not exceed the maximum size the broker advertised in the
-             subscription. Sending it anyway would only be rejected with TELEMETRY_TOO_LARGE, hence
-             skip the push and re-fetch the subscription, which may narrow the requested metrics or
-             raise the limit, before attempting the next push.
+             The broker applies the same limit to the compressed bytes it receives. Compression
+             normally shrinks the payload well below it, but it can add framing to a payload that
+             already sits close to the limit, so the size on the wire is verified too.
             */
             if (compressedPayload.remaining() > localSubscription.telemetryMaxBytes()) {
                 log.warn("Skipping telemetry push as the {} compressed payload for {} metrics is {} bytes,"
                         + " which exceeds the maximum of {} bytes accepted by the broker", compressionType,
                     metricsCount, compressedPayload.remaining(), localSubscription.telemetryMaxBytes());
-
-                if (!terminating) {
-                    if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
-                        log.warn("Unable to transition state after skipping oversized telemetry push from state {}", state);
-                    }
-                    updateErrorResult(localSubscription.pushIntervalMs(), time.milliseconds());
-                }
-                return Optional.empty();
+                return skipOversizedPush(localSubscription, terminating);
             }
 
             AbstractRequest.Builder<?> requestBuilder = new PushTelemetryRequest.Builder(
@@ -779,6 +786,26 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     .setMetrics(compressedPayload), true);
 
             return Optional.of(requestBuilder);
+        }
+
+        /**
+         * Skips a push whose payload the broker would reject as too large, leaving the sender in a
+         * state from which the next attempt can happen. Re-fetching the subscription may pick up a
+         * narrowed metric set or a raised limit. A terminating push has nothing to retry and no valid
+         * transition back, so its state is left for {@link #close()} to finish.
+         *
+         * @param localSubscription the subscription the skipped push was built for
+         * @param terminating whether the skipped push was the terminating one
+         * @return always {@link Optional#empty()}, as no request is sent
+         */
+        private Optional<Builder<?>> skipOversizedPush(ClientTelemetrySubscription localSubscription, boolean terminating) {
+            if (!terminating) {
+                if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
+                    log.warn("Unable to transition state after skipping oversized telemetry push from state {}", state);
+                }
+                updateErrorResult(localSubscription.pushIntervalMs(), time.milliseconds());
+            }
+            return Optional.empty();
         }
 
         /**
