@@ -21,7 +21,10 @@ import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A {@link ByteBufferOutputStream} backed by a linked list of fixed-size chunks instead of a single
@@ -31,7 +34,7 @@ import java.util.List;
  * The stream grows on its own: when a write runs past the attached chunks it attaches one more chunk,
  * taken from the pool without blocking and falling back to a heap-allocated chunk when the pool has no
  * remaining chunks in the middle of a write (a partially written record can neither be rolled back nor blocked on).
- * Heap-allocated chunks are tracked separately (in {@link poolAllocatedChunks}) from pool-owned ones so they are
+ * Only pool-owned chunks are tracked in {@code poolAllocatedChunks}, so heap-allocated fallback chunks are
  * never returned to the pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
  * <p>
  * {@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer}, flattening
@@ -41,7 +44,8 @@ import java.util.List;
 public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     private final List<ByteBuffer> chunks;
-    private final List<ByteBuffer> poolAllocatedChunks;
+    // Identity-based: ByteBuffer#equals compares contents, so e.g. two empty chunks would compare equal.
+    private final Set<ByteBuffer> poolAllocatedChunks;
     private final int chunkSize;
     private final BufferPool pool;
     private ByteBuffer currentChunk;
@@ -68,7 +72,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         this.chunkSize = chunkSize;
         this.pool = pool;
         this.chunks = new ArrayList<>(initialChunks);
-        this.poolAllocatedChunks = new ArrayList<>(initialChunks);
+        this.poolAllocatedChunks = Collections.newSetFromMap(new IdentityHashMap<>());
+        this.poolAllocatedChunks.addAll(initialChunks);
         this.currentChunk = this.chunks.get(0);
         this.currentChunkIndex = 0;
     }
@@ -262,29 +267,13 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
             return;
         List<ByteBuffer> unused = chunks.subList(currentChunkIndex + 1, chunks.size());
         for (ByteBuffer chunk : unused) {
-            boolean poolOwned = removeByIdentity(poolAllocatedChunks, chunk);
+            boolean poolOwned = poolAllocatedChunks.remove(chunk);
             if (poolOwned && pool != null)
                 pool.deallocate(chunk);
         }
         // Remove the released chunks from `chunks`, so they are
         // not deallocated again on batch completion.
         unused.clear();
-    }
-
-    /**
-     * Removes the first element identical ({@code ==}) to {@code target} from {@code list}, returning
-     * whether it was present. Uses reference identity rather than {@link Object#equals} because
-     * {@link ByteBuffer#equals} compares contents, which would match the wrong chunk (e.g. two empty
-     * chunks compare equal).
-     */
-    private static boolean removeByIdentity(List<ByteBuffer> list, ByteBuffer target) {
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i) == target) {
-                list.remove(i);
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
