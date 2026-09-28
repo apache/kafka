@@ -312,10 +312,26 @@ public class ByteUtilsTest {
     }
 
     @Test
-    public void testInvalidVarint() {
-        // varint encoding has one overflow byte
+    public void testInvalidVarint() throws IOException {
+        // varint encoding has one overflow byte (6-byte sequence)
         ByteBuffer buf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, xFF, x01});
         assertThrows(IllegalArgumentException.class, () -> ByteUtils.readVarint(buf));
+
+        // unused bits set in the 5th byte (bits 5-7 must be zero for a valid 32-bit varint)
+        byte[] unusedBitsEncoding = new byte[] {xFF, xFF, xFF, xFF, 0x1F};
+        assertThrows(IllegalArgumentException.class,
+                () -> ByteUtils.readUnsignedVarint(ByteBuffer.wrap(unusedBitsEncoding)));
+        assertThrows(IllegalArgumentException.class,
+                () -> ByteUtils.readUnsignedVarint(new ByteArrayInputStream(unusedBitsEncoding)));
+
+        // boundary: 0x10 in the 5th byte has bit 4 set and is also invalid
+        byte[] bit4Encoding = new byte[] {xFF, xFF, xFF, xFF, 0x10};
+        assertThrows(IllegalArgumentException.class,
+                () -> ByteUtils.readUnsignedVarint(ByteBuffer.wrap(bit4Encoding)));
+        assertThrows(IllegalArgumentException.class,
+                () -> ByteUtils.readUnsignedVarint(new ByteArrayInputStream(bit4Encoding)));
+
+        assertEquals(-1, ByteUtils.readUnsignedVarint(ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, 0x0F})));
     }
 
     @Test
@@ -394,19 +410,6 @@ public class ByteUtilsTest {
             assertArrayEquals(expected.array(), actual.array(), "Implementations do not match for integer=" + i);
             actual.clear();
         }
-    }
-
-    @Test
-    public void testReadUnsignedVarintRejectsOverflow() {
-        byte[] overflowEncoding = new byte[] {xFF, xFF, xFF, xFF, 0x1F};
-        InputStream in = new ByteArrayInputStream(overflowEncoding);
-        assertThrows(IllegalArgumentException.class, () -> {
-            ByteUtils.readUnsignedVarint(ByteBuffer.wrap(overflowEncoding));
-        });
-        assertThrows(IllegalArgumentException.class, () -> {
-            ByteUtils.readUnsignedVarint(in);
-        });
-        assertEquals(-1, ByteUtils.readUnsignedVarint(ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, 0x0F})));
     }
 
     @Test
