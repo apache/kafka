@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -65,12 +66,12 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * @param initialChunks pre-allocated chunks. Must be non-empty and each chunk's capacity must
      *                      equal {@code chunkSize}
      * @param chunkSize     the size of each chunk in bytes
-     * @param pool          the buffer pool used for deallocation
+     * @param pool          the buffer pool that growth allocates from and chunks are returned to; must not be null
      */
     public ChunkedByteBufferOutputStream(List<ByteBuffer> initialChunks, int chunkSize, BufferPool pool) {
         validateInitialChunks(initialChunks, chunkSize);
         this.chunkSize = chunkSize;
-        this.pool = pool;
+        this.pool = Objects.requireNonNull(pool, "pool must not be null");
         this.chunks = new ArrayList<>(initialChunks);
         this.poolAllocatedChunks = Collections.newSetFromMap(new IdentityHashMap<>());
         this.poolAllocatedChunks.addAll(initialChunks);
@@ -267,8 +268,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
             return;
         List<ByteBuffer> unused = chunks.subList(currentChunkIndex + 1, chunks.size());
         for (ByteBuffer chunk : unused) {
-            boolean poolOwned = poolAllocatedChunks.remove(chunk);
-            if (poolOwned && pool != null)
+            if (poolAllocatedChunks.remove(chunk))
                 pool.deallocate(chunk);
         }
         // Remove the released chunks from `chunks`, so they are
@@ -376,10 +376,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * Returns all pool-allocated chunks to the buffer pool. Called at batch completion.
      */
     void deallocate(BufferPool pool) {
-        if (pool != null) {
-            for (ByteBuffer chunk : poolAllocatedChunks) {
-                pool.deallocate(chunk);
-            }
+        for (ByteBuffer chunk : poolAllocatedChunks) {
+            pool.deallocate(chunk);
         }
         chunks.clear();
         poolAllocatedChunks.clear();
