@@ -368,7 +368,7 @@ public class RackAwareTaskAssignor {
      * If we set {@code trafficCost} to a larger number, we are more likely to compute an assignment with less
      * cross rack traffic. However, tasks may be shuffled a lot across clients. If we set {@code nonOverlapCost}
      * to a larger number, we are more likely to compute an assignment with similar to input assignment. However,
-     * cross rack traffic can be higher. In extreme case, if we set {@code nonOverlapCost} to 0 and @{code trafficCost}
+     * cross rack traffic can be higher. In extreme case, if we set {@code nonOverlapCost} to 0 and {@code trafficCost}
      * to a positive value, the computed assignment will be minimum for cross rack traffic. If we set {@code trafficCost} to 0,
      * and {@code nonOverlapCost} to a positive value, the computed assignment should be the same as input
      * @param activeTasks Tasks to reassign if needed. They must be assigned already in clientStates

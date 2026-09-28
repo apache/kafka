@@ -275,7 +275,7 @@ public final class TaskAssignmentUtils {
      * Setting {@code nonOverlapCost} to a larger number increases the affinity of tasks to their intended client
      * and reduces the amount by which the rack-aware optimization can shuffle tasks around, at the cost of higher
      * cross-rack traffic.
-     * In an extreme case, if we set {@code nonOverlapCost} to 0 and @{code trafficCost} to a positive value,
+     * In an extreme case, if we set {@code nonOverlapCost} to 0 and {@code trafficCost} to a positive value,
      * the resulting assignment will have an absolute minimum of cross rack traffic. If we set {@code trafficCost} to 0,
      * and {@code nonOverlapCost} to a positive value, the resulting assignment will be identical to the input assignment.
      * <p>
@@ -379,7 +379,7 @@ public final class TaskAssignmentUtils {
      * Setting {@code nonOverlapCost} to a larger number increases the affinity of tasks to their intended client
      * and reduces the amount by which the rack-aware optimization can shuffle tasks around, at the cost of higher
      * cross-rack traffic.
-     * In an extreme case, if we set {@code nonOverlapCost} to 0 and @{code trafficCost} to a positive value,
+     * In an extreme case, if we set {@code nonOverlapCost} to 0 and {@code trafficCost} to a positive value,
      * the resulting assignment will have an absolute minimum of cross rack traffic. If we set {@code trafficCost} to 0,
      * and {@code nonOverlapCost} to a positive value, the resulting assignment will be identical to the input assignment.
      * <p>
@@ -645,8 +645,8 @@ public final class TaskAssignmentUtils {
 
     /**
      *
-     * @return whether the rack information is valid, and the {@code StreamsConfig#RACK_AWARE_ASSIGNMENT_STRATEGY_NONE}
-     *         is set.
+     * @return whether the rack aware assignment strategy is not {@code StreamsConfig#RACK_AWARE_ASSIGNMENT_STRATEGY_NONE},
+     *         the rack aware traffic cost and non-overlap cost are both configured, and the rack information is valid.
      */
     private static boolean canPerformRackAwareOptimization(final ApplicationState applicationState,
                                                            final RackAwareOptimizationParams optimizationParams,
