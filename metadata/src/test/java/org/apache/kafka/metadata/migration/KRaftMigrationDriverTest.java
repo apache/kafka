@@ -800,6 +800,13 @@ public class KRaftMigrationDriverTest {
 
     @Test
     public void testZkWriteSnapshotTimeMsIsRecorded() throws Exception {
+        AtomicInteger deltaTime = new AtomicInteger(0);
+        mockTime = new MockTime(1) {
+            public long nanoseconds() {
+                // Add a delay between subsequent invocations of nanoseconds to ensure a recordable time delta exists between the start and end times.
+                return System.nanoTime() - NANOSECONDS.convert(990, MILLISECONDS) + NANOSECONDS.convert(deltaTime.getAndIncrement(), MILLISECONDS);
+            }
+        };
         setupTopicDualWrite((driver, migrationClient, topicClient, configClient) -> {
             MetadataImage image = new MetadataImage(
                 MetadataProvenance.EMPTY,
