@@ -25757,7 +25757,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupMemberMetadataTombstoneNotExisting() {
+    public void testReplayStreamsGroupMemberMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -25774,7 +25774,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupMemberMetadataTombstoneExisting() {
+    public void testReplayStreamsGroupMemberMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
@@ -25813,7 +25813,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupEpochTombstoneNotExisting() {
+    public void testReplayStreamsGroupMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -25824,7 +25824,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupEpochTombstoneExisting() {
+    public void testReplayStreamsGroupMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
@@ -25897,7 +25897,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTargetAssignmentMemberTombstoneNonExisting() {
+    public void testReplayStreamsGroupTargetAssignmentMemberTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -25939,7 +25939,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneNotExisting() {
+    public void testReplayStreamsGroupTargetAssignmentMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -25951,6 +25951,22 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Create the group by replaying a value record.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        assertEquals(10, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
+
+        // Replay the tombstone. It should reset both the epoch and the timestamp.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
+        assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
@@ -26006,7 +26022,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupCurrentMemberAssignmentTombstoneNotExisting() {
+    public void testReplayStreamsGroupCurrentMemberAssignmentTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26082,7 +26098,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTopologyTombstoneNotExists() {
+    public void testReplayStreamsGroupTopologyTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26099,7 +26115,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTopologyTombstoneExists() {
+    public void testReplayStreamsGroupTopologyTombstoneExisting() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroup(
                 new StreamsGroupBuilder("foo", 10)
