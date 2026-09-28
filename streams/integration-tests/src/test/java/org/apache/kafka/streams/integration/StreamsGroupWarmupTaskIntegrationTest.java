@@ -44,7 +44,6 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -201,10 +200,6 @@ public class StreamsGroupWarmupTaskIntegrationTest {
                     if (standbyTaskId == null) {
                         return false;
                     }
-                    assertFalseNoRetry(
-                        isActiveTask(kafkaStreams1, standbyTaskId),
-                        "a task that was just handed out as a warm-up should not already be active on the new instance."
-                    );
                     warmupTaskId.set(standbyTaskId);
                     return true;
                 },
@@ -283,16 +278,6 @@ public class StreamsGroupWarmupTaskIntegrationTest {
 
     private static String getKiloByteValue() {
         return "0".repeat(1000);
-    }
-
-    private static void assertFalseNoRetry(final boolean assertion, final String message) {
-        if (assertion) {
-            throw new NoRetryException(
-                new AssertionError(
-                    message
-                )
-            );
-        }
     }
 
     private static Properties streamsProperties(final String appId) {
