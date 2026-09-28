@@ -14946,11 +14946,17 @@ public class GroupMetadataManagerTest {
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
         assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
 
+        // The consumer group is no longer subscribed to its topics.
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(fooTopicName));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(barTopicName));
+
         // Simulate a failed write to the log.
         context.rollback();
 
         // The group is reverted back to the consumer group.
         assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
+        assertEquals(Set.of(groupId), context.groupMetadataManager.groupsSubscribedToTopic(fooTopicName));
+        assertEquals(Set.of(groupId), context.groupMetadataManager.groupsSubscribedToTopic(barTopicName));
     }
 
     @Test

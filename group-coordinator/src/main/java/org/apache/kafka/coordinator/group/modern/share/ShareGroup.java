@@ -208,6 +208,10 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      */
     public void removeMember(String memberId) {
         ShareGroupMember oldMember = members.remove(memberId);
+        // When the group coordinator loads concurrently with compaction, intermediate tombstone
+        // records can be missed, so the member metadata tombstone is treated as authoritative and
+        // the member's target assignment is removed with the member.
+        removeTargetAssignment(memberId);
         maybeUpdateSubscribedTopicNames(oldMember, null);
         maybeUpdateGroupState();
         maybeUpdateGroupSubscriptionType();
