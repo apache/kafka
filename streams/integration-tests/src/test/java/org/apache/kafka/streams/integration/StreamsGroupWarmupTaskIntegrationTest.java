@@ -19,11 +19,9 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -32,6 +30,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.streams.AssignmentRefinerImpl;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TaskMetadata;
@@ -54,8 +53,12 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -69,6 +72,8 @@ import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Streams group protocol (KIP-1071) analog of {@link HighAvailabilityTaskAssignorIntegrationTest}: proves that
@@ -126,7 +131,9 @@ public class StreamsGroupWarmupTaskIntegrationTest {
             new TopicPartition(storeChangelog, 1)
         );
 
-        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, 2, 2, inputTopic, storeChangelog);
+        CLUSTER.deleteAllTopics();
+        CLUSTER.createTopic(inputTopic, 2, 2);
+        CLUSTER.createTopic(storeChangelog, 2, 2, Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT));
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(inputTopic, materializedFunction.apply(storeName));
@@ -142,18 +149,10 @@ public class StreamsGroupWarmupTaskIntegrationTest {
             kafkaStreams0.start();
 
             // sanity check: just make sure we actually wrote all the input records
-            TestUtils.waitForCondition(
-                () -> getEndOffsetSum(inputTopicPartitions, consumer) == numberOfRecords,
-                120_000L,
-                () -> "Input records haven't all been written to the input topic: " + getEndOffsetSum(inputTopicPartitions, consumer)
-            );
+            waitForTopicSize(inputTopicPartitions, consumer, numberOfRecords, "input topic");
 
             // wait until all the input records are in the changelog
-            TestUtils.waitForCondition(
-                () -> getEndOffsetSum(changelogTopicPartitions, consumer) == numberOfRecords,
-                120_000L,
-                () -> "Input records haven't all been written to the changelog: " + getEndOffsetSum(changelogTopicPartitions, consumer)
-            );
+            waitForTopicSize(changelogTopicPartitions, consumer, numberOfRecords, "changelog");
 
             final AtomicLong instance1TotalRestored = new AtomicLong(-1);
             final AtomicLong instance1NumRestored = new AtomicLong(-1);
@@ -171,20 +170,16 @@ public class StreamsGroupWarmupTaskIntegrationTest {
                                             final String storeName,
                                             final long batchEndOffset,
                                             final long numRestored) {
-                    instance1NumRestored.accumulateAndGet(
-                        numRestored,
-                        (prev, restored) -> prev == -1 ? restored : prev + restored
-                    );
+                    // this test's topology/scale-out shape guarantees exactly one task ever warms up on
+                    // kafkaStreams1, so a plain set is sufficient (see findStandbyTaskId's own "at most one" check).
+                    instance1NumRestored.set(numRestored);
                 }
 
                 @Override
                 public void onRestoreEnd(final TopicPartition topicPartition,
                                          final String storeName,
                                          final long totalRestored) {
-                    instance1TotalRestored.accumulateAndGet(
-                        totalRestored,
-                        (prev, restored) -> prev == -1 ? restored : prev + restored
-                    );
+                    instance1TotalRestored.set(totalRestored);
                     restoreCompleteLatch.countDown();
                 }
             });
@@ -218,6 +213,13 @@ public class StreamsGroupWarmupTaskIntegrationTest {
                     " in any test environment, but you never know..."
             );
 
+            // the promoted task should be exclusively owned by kafkaStreams1 now; kafkaStreams0 must have
+            // relinquished it, not just kept processing it alongside kafkaStreams1.
+            assertFalse(
+                isActiveTask(kafkaStreams0, warmupTaskId.get()),
+                "kafkaStreams0 should have released " + warmupTaskId.get() + " once it was promoted to active on kafkaStreams1"
+            );
+
             restoreCompleteLatch.await();
             // We should finalize the restoration without having restored any records (because they're already in
             // the store). Otherwise, we failed to properly re-use the state from the warm-up task.
@@ -228,12 +230,16 @@ public class StreamsGroupWarmupTaskIntegrationTest {
     }
 
     private static TaskId findStandbyTaskId(final KafkaStreams streams) {
+        final List<TaskId> standbyTaskIds = new ArrayList<>();
         for (final ThreadMetadata threadMetadata : streams.metadataForLocalThreads()) {
             for (final TaskMetadata taskMetadata : threadMetadata.standbyTasks()) {
-                return taskMetadata.taskId();
+                standbyTaskIds.add(taskMetadata.taskId());
             }
         }
-        return null;
+        // this test's topology/scale-out shape (2 tasks, 1 process gaining a member) means only the one task
+        // whose target owner actually changed should ever be staged behind a warm-up.
+        assertTrue(standbyTaskIds.size() <= 1, "Expected at most one warm-up task on the new instance, got: " + standbyTaskIds);
+        return standbyTaskIds.isEmpty() ? null : standbyTaskIds.get(0);
     }
 
     private static boolean isActiveTask(final KafkaStreams streams, final TaskId taskId) {
@@ -259,11 +265,11 @@ public class StreamsGroupWarmupTaskIntegrationTest {
             )
         );
 
-        try (final Producer<String, String> producer = new KafkaProducer<>(producerProperties)) {
-            for (int i = 0; i < numberOfRecords; i++) {
-                producer.send(new ProducerRecord<>(inputTopic, String.valueOf(i), kilo));
-            }
+        final List<KeyValueTimestamp<String, String>> records = new ArrayList<>(numberOfRecords);
+        for (int i = 0; i < numberOfRecords; i++) {
+            records.add(new KeyValueTimestamp<>(String.valueOf(i), kilo, System.currentTimeMillis()));
         }
+        IntegrationTestUtils.produceSynchronously(producerProperties, false, inputTopic, Optional.empty(), records);
     }
 
     private static Properties getConsumerProperties() {
@@ -303,5 +309,21 @@ public class StreamsGroupWarmupTaskIntegrationTest {
             sum += value;
         }
         return sum;
+    }
+
+    private static void waitForTopicSize(final Set<TopicPartition> partitions,
+                                         final Consumer<String, String> consumer,
+                                         final int expectedRecords,
+                                         final String topicDescription) throws InterruptedException {
+        final AtomicLong lastSeenSize = new AtomicLong();
+        TestUtils.waitForCondition(
+            () -> {
+                final long size = getEndOffsetSum(partitions, consumer);
+                lastSeenSize.set(size);
+                return size == expectedRecords;
+            },
+            120_000L,
+            () -> "Input records haven't all been written to the " + topicDescription + ": " + lastSeenSize.get()
+        );
     }
 }
