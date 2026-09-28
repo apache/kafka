@@ -174,9 +174,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
             } catch (BufferExhaustedException e) {
                 // No chunks remaining in pool — leave next null so we take the heap fallback
             } catch (InterruptedException e) {
-                // The acquire is non-blocking (0 ms), so this only fires when the calling thread
-                // was already interrupted. Preserve the interrupt flag and, as with an exhausted
-                // pool, leave next null so we take the heap fallback below
+                // Not expected: a 0 ms acquire fails fast without waiting, so nothing can be interrupted.
+                // Kept because allocateChunks declares it; preserve the flag and take the heap fallback
                 Thread.currentThread().interrupt();
             }
             if (next != null) {

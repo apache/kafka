@@ -262,6 +262,9 @@ public class BufferPool {
      * Any failure refunds the whole reservation and signals the next waiter before the exception
      * propagates, so a failed request leaves nothing reserved.
      * <p>
+     * A {@code maxTimeToBlockMs} of 0 makes the call non-blocking: if the memory is not available right away it
+     * fails fast, without joining {@link #waiters}, releasing the lock or recording a wait time.
+     * <p>
      * Used by the incremental buffer.memory allocation strategy; the poolable size is the chunk size.
      *
      * @param totalSize        minimum total bytes of capacity required across the returned chunks
@@ -307,6 +310,10 @@ public class BufferPool {
                     // remainder comes entirely from non-pooled memory (sufficient per the check above).
                     this.nonPooledAvailableMemory -= remainingBytes;
                 }
+            } else if (maxTimeToBlockMs <= 0) {
+                // Non-blocking caller (e.g. mid-batch extension, mid-write stream growth): fail fast.
+                // Nothing has been reserved yet, so there is nothing to refund.
+                throw new BufferExhaustedException(exhaustedChunksMessage(memoryRequired, numChunks, chunkSize, maxTimeToBlockMs));
             } else {
                 // Not enough memory available, so we wait to acquire the memory needed for all the chunks.
                 // Same as allocate, but for the whole multi-chunk request. A single Condition is added to
@@ -327,10 +334,7 @@ public class BufferPool {
                         // this may be the extension path, which recovers without dropping the record, so the
                         // caller records the drop if needed.
                         remainingTimeToBlockNs -= awaitMemory(moreMemory, remainingTimeToBlockNs, false,
-                            () -> "Failed to allocate " + memoryRequired + " bytes (" + numChunks + " chunks of "
-                                + chunkSize + ") within the configured max blocking time " + maxTimeToBlockMs
-                                + " ms. Total memory: " + totalMemory() + " bytes. Available memory: "
-                                + availableMemory() + " bytes.");
+                            () -> exhaustedChunksMessage(memoryRequired, numChunks, chunkSize, maxTimeToBlockMs));
 
                         // Reuse free-list chunks first, preferring them over raw reservations: if a
                         // taken chunk covers a slot already reserved as raw bytes in an earlier
@@ -389,6 +393,13 @@ public class BufferPool {
                 releaseReservedBytes(memoryRequired);
             }
         }
+    }
+
+    private String exhaustedChunksMessage(long memoryRequired, int numChunks, int chunkSize, long maxTimeToBlockMs) {
+        return "Failed to allocate " + memoryRequired + " bytes (" + numChunks + " chunks of "
+            + chunkSize + ") within the configured max blocking time " + maxTimeToBlockMs
+            + " ms. Total memory: " + totalMemory() + " bytes. Available memory: "
+            + availableMemory() + " bytes.";
     }
 
     /**

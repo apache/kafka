@@ -29,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -126,8 +127,7 @@ public class BufferPoolChunkAllocationTest {
 
     /**
      * A request that cannot be satisfied immediately and has no time to wait takes nothing: it
-     * blocks on the wait queue before acquiring anything, so the timeout leaves pool memory
-     * untouched (no roll back needed).
+     * fails fast before acquiring anything, so pool memory is left untouched (no roll back needed).
      */
     @Test
     public void testImmediateTimeoutAcquiresNothing() throws Exception {
@@ -137,8 +137,8 @@ public class BufferPoolChunkAllocationTest {
         // Reserve one chunk so the pool has only 1 left.
         ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
 
-        // Request 2 chunks with a zero deadline. Only 1 chunk's worth is free, so the request goes
-        // to the wait queue and times out on its first wait, before taking anything.
+        // Request 2 chunks with a zero deadline. Only 1 chunk's worth is free, so the request fails
+        // fast, before taking anything.
         assertThrows(BufferExhaustedException.class, () -> p.allocateChunks(2 * chunkSize, 0));
 
         // Available memory reflects only the chunk we deliberately hold.
@@ -146,6 +146,39 @@ public class BufferPoolChunkAllocationTest {
 
         p.deallocate(held);
         assertEquals(total, p.availableMemory());
+    }
+
+    /**
+     * A zero-timeout request that cannot be satisfied immediately fails fast without waiting: it never
+     * joins the wait queue or records a wait time, and so cannot be interrupted either.
+     */
+    @Test
+    public void testZeroTimeoutFailsFastWithoutWaiting() throws Exception {
+        int chunkSize = 64;
+        AtomicInteger waitTimeRecordings = new AtomicInteger();
+        BufferPool p = new BufferPool(2L * chunkSize, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            protected void recordWaitTime(long timeNs) {
+                waitTimeRecordings.incrementAndGet();
+                super.recordWaitTime(timeNs);
+            }
+        };
+        ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
+
+        // An interrupted thread would get InterruptedException from any wait, so an exhausted-pool
+        // failure here shows the request never waited.
+        Thread.currentThread().interrupt();
+        try {
+            assertThrows(BufferExhaustedException.class, () -> p.allocateChunks(2 * chunkSize, 0));
+        } finally {
+            assertTrue(Thread.interrupted(), "the interrupt flag must be left untouched");
+        }
+        assertEquals(0, p.queued());
+        assertEquals(0, waitTimeRecordings.get());
+
+        p.deallocate(held);
+        assertEquals(2L * chunkSize, p.availableMemory());
     }
 
     /**
