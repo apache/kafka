@@ -66,6 +66,12 @@ import java.util.stream.Collectors;
  * target assignment (so the member's {@link MemberAssignmentState#warmupTasks()}, {@link MemberAssignmentState#taskOffsets()}
  * and {@link MemberAssignmentState#taskEndOffsets()} are not read here), and rack-aware placement is tracked
  * separately.
+ * <p>
+ * The assignor is not registered as a built-in assignor yet, so a group cannot select it through the group
+ * configuration {@code streams.assignor.name}. Appending it to the built-in list in {@code GroupCoordinatorConfig},
+ * which also adds its name to the default of {@code group.streams.assignors}, is deferred to a follow-up together
+ * with the optimization of the skew loop, so that the name becomes selectable only once the assignor is ready for
+ * production-sized groups.
  */
 public class BalancedTaskAssignor implements TaskAssignor {
 
