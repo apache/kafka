@@ -474,6 +474,9 @@ public class Plugins {
                 Converter.class, classLoaderUsage, scanResult.converters());
         try (LoaderSwap loaderSwap = safeLoaderSwapper().apply(plugin.getClass().getClassLoader())) {
             plugin.configure(converterConfig, isKeyConverter);
+        } catch (RuntimeException | Error e) {
+            Utils.closeQuietly(plugin, "converter");
+            throw e;
         }
         return plugin;
     }
@@ -497,10 +500,13 @@ public class Plugins {
             throw new ConnectException("Failed to load internal converter class " + className);
         }
 
-        Converter plugin;
+        Converter plugin = null;
         try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
             plugin.configure(converterConfig, isKey);
+        } catch (RuntimeException | Error e) {
+            Utils.closeQuietly(plugin, "converter");
+            throw e;
         }
         return plugin;
     }
@@ -549,6 +555,9 @@ public class Plugins {
 
         try (LoaderSwap loaderSwap = safeLoaderSwapper().apply(plugin.getClass().getClassLoader())) {
             plugin.configure(converterConfig);
+        } catch (RuntimeException | Error e) {
+            Utils.closeQuietly(plugin, "header converter");
+            throw e;
         }
         return plugin;
     }
@@ -628,6 +637,9 @@ public class Plugins {
         Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
         try (LoaderSwap loaderSwap = safeLoaderSwapper().apply(plugin.getClass().getClassLoader())) {
             plugin.configure(configProviderConfig);
+        } catch (RuntimeException | Error e) {
+            Utils.closeQuietly(plugin, "config provider");
+            throw e;
         }
         return plugin;
     }

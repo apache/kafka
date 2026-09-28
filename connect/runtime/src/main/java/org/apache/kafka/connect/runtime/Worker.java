@@ -209,13 +209,18 @@ public final class Worker {
     private WorkerConfigTransformer initConfigTransformer() {
         final List<String> providerNames = config.getList(WorkerConfig.CONFIG_PROVIDERS_CONFIG);
         Map<String, ConfigProvider> providerMap = new HashMap<>();
-        for (String providerName : providerNames) {
-            ConfigProvider configProvider = plugins.newConfigProvider(
-                    config,
-                    WorkerConfig.CONFIG_PROVIDERS_CONFIG + "." + providerName,
-                    ClassLoaderUsage.PLUGINS
-            );
-            providerMap.put(providerName, configProvider);
+        try {
+            for (String providerName : providerNames) {
+                ConfigProvider configProvider = plugins.newConfigProvider(
+                        config,
+                        WorkerConfig.CONFIG_PROVIDERS_CONFIG + "." + providerName,
+                        ClassLoaderUsage.PLUGINS
+                );
+                providerMap.put(providerName, configProvider);
+            }
+        } catch (RuntimeException | Error e) {
+            providerMap.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+            throw e;
         }
         return new WorkerConfigTransformer(this, providerMap);
     }
