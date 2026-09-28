@@ -26,6 +26,18 @@ type: docs
 -->
 
 
+## Upgrading to 4.3.2
+
+### Notable changes in 4.3.2
+
+  * Includes a fix for a critical tiered storage bug in which size-based retention could delete data that was still within retention from both local and remote tiers after a leader election ([KAFKA-20732](https://issues.apache.org/jira/browse/KAFKA-20732)).
+  * Includes a fix for a Kafka Streams issue in which the state directory could be cleaned prematurely under [KIP-1035](https://cwiki.apache.org/confluence/x/uYvOEg), forcing a from-scratch restore ([KAFKA-20805](https://issues.apache.org/jira/browse/KAFKA-20805)).
+  * Includes fixes for several critical Kafka Streams bugs that could cause a `StreamThread` to die after task corruption, task recycling, or state updater timeouts ([KAFKA-20808](https://issues.apache.org/jira/browse/KAFKA-20808), [KAFKA-20827](https://issues.apache.org/jira/browse/KAFKA-20827), [KAFKA-20721](https://issues.apache.org/jira/browse/KAFKA-20721)).
+  * Includes a fix for a group coordinator bug in which a consumer group downgrade could leave the group in an invalid state when the classic group metadata is very large ([KAFKA-20845](https://issues.apache.org/jira/browse/KAFKA-20845)).
+  * Includes a fix for a client telemetry bug in which metrics could be sent to a stale broker IP address after a broker address change ([KAFKA-20393](https://issues.apache.org/jira/browse/KAFKA-20393)).
+  * Includes a fix for a `NullPointerException` in `MetadataCache#toCluster` that stopped a custom `ClientQuotaCallback` (`client.quota.callback.class`) from receiving cluster metadata updates ([KAFKA-20746](https://issues.apache.org/jira/browse/KAFKA-20746)).
+  * Protocol message readers now limit array and collection allocations when decoding messages. Arrays and collections with more than 1,000,000 elements and flexible-version tagged-field sections with more than 10,000 fields are rejected before allocation. Arrays and collections are initially allocated with a capacity no greater than 1,000 and grow as needed during decoding.
+
 ## Upgrading to 4.3.1
 
 ### Notable changes in 4.3.1
