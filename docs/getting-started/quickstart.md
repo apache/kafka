@@ -162,7 +162,7 @@ You probably have lots of data in existing systems like relational databases or 
 
 In this quickstart we'll see how to run Kafka Connect with simple connectors that import data from a file to a Kafka topic and export data from a Kafka topic to a file. 
 
-First, make sure to add `connect-file-4.3.0.jar` to the `plugin.path` property in the Connect worker's configuration. For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory. However, it's worth noting that for production deployments using absolute paths is always preferable. See [plugin.path](../../configuration/kafka-connect-configs/#connectconfigs_plugin.path) for a detailed description of how to set this config. 
+First, make sure to add `connect-file-4.3.0.jar` to the `plugin.path` property in the Connect worker's configuration. For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory. However, it's worth noting that for production deployments using absolute paths is always preferable. See [plugin.path](/{version}/configuration/kafka-connect-configs/#connectconfigs_plugin.path) for a detailed description of how to set this config.
 
 Edit the `config/connect-standalone.properties` file, add or change the `plugin.path` configuration property match the following, and save the file: 
 
@@ -237,7 +237,7 @@ KTable<String, Long> wordCounts = textLines
 wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.Long()));
 ```
 
-The [Kafka Streams demo](/documentation/streams/quickstart) and the [app development tutorial](/43/documentation/streams/tutorial) demonstrate how to code and run such a streaming application from start to finish. 
+The [Kafka Streams demo](/{version}/streams/quickstart) and the [app development tutorial](/{version}/streams/tutorial) demonstrate how to code and run such a streaming application from start to finish.
 
 ## Step 8: Terminate the Kafka environment
 
