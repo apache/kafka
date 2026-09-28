@@ -532,6 +532,22 @@ kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount
 
 0
 </td> </tr>  
+
+<tr>
+<td>
+
+Number of partitions led by this broker that have late ongoing transactions.
+</td>
+<td>
+
+kafka.server:type=ReplicaManager,name=PartitionsWithLateTransactionsCount
+</td>
+<td>
+
+0
+</td> </tr>
+
+
 <tr>  
 <td>
 
