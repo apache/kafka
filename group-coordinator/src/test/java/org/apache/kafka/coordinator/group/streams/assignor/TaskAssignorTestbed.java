@@ -80,7 +80,12 @@ final class TaskAssignorTestbed {
 
     static final long DEFAULT_BASE_SEED = 42L;
     static final List<String> TAG_KEYS = List.of("region", "zone", "rack");
-    static final String HOST_TAG = "host";
+    /**
+     * A tag whose value is unique per process, as a host name is. Replicas of one task never share a process, so
+     * this key cannot separate them any further and the tag metrics report it as n/a; it checks that the assignor
+     * copes with such a key and that it does not disturb the other keys.
+     */
+    private static final String HOST_TAG = "host";
 
     private static final String SEED_PROPERTY = "streams.assignor.fuzz.seed";
     private static final String SEED_ENVIRONMENT_VARIABLE = "STREAMS_ASSIGNOR_FUZZ_SEED";
@@ -97,7 +102,7 @@ final class TaskAssignorTestbed {
      */
     enum Profile {
         /**
-         * Hits the logical corners: fewer processes than copies, tag values exhausted, quota boundaries, load ties.
+         * Hits the logical corners: fewer processes than replicas, tag values exhausted, uneven shares, load ties.
          * Small enough that a failure prints every assignment.
          */
         SMALL {
@@ -147,7 +152,7 @@ final class TaskAssignorTestbed {
         },
         /**
          * Production shape: tens to over a hundred processes with a few large ones, sized so that members hold a
-         * few active tasks each and the quota leaves room for balancing decisions; one or two tags with about three
+         * few active tasks each, which leaves balancing decisions room; one or two tags with about three
          * values each so tag dimensions rarely run out, standbys mostly 1. Occasionally adds a host tag whose value
          * is unique per process.
          */
@@ -221,6 +226,7 @@ final class TaskAssignorTestbed {
 
         abstract int valuesPerTag(Random random);
 
+        /** Whether the scenario adds {@link #HOST_TAG} to its tag keys. */
         abstract boolean hostTag(Random random);
 
         abstract int standbyReplicas(Random random);
@@ -300,72 +306,81 @@ final class TaskAssignorTestbed {
     }
 
     /**
-     * Runs the assignor, feeding each result back as the previous assignment, until the result converges or
-     * {@link #MAX_CONVERGENCE_ITERATIONS} is reached. Not converging is graded, not failed: the coordinator runs the
-     * assignor once per rebalance, so it only means the next rebalance will move tasks again. {@code before} is the
-     * state before the change that triggered this rebalance; the last result is graded against it, and so is the
-     * tag-blind assignment of the same input when the scenario has client tags.
+     * One rebalance: the assignor runs on the scenario's input until its output reproduces itself, and the converged
+     * result is graded against {@code before}, the state before the change that triggered the rebalance. When the
+     * scenario has client tags, the same input is then assigned tag-blind through the same loop and the tag-related
+     * rows of that result are added, so the effect and the cost of rack-aware standby task assignment can be read
+     * off the same rebalance. The scenario ends up holding the tag-aware result.
      */
     private void converge(final Scenario scenario, final AssignmentMetrics.Summary summary, final Scenario.Baseline before) {
         // Reported in the first heartbeat after a restart and gone once the members hold an assignment again.
         final Map<String, Set<TaskId>> reportedTasks = scenario.reportedTasksByProcess();
-        for (int iteration = 1; iteration <= MAX_CONVERGENCE_ITERATIONS; iteration++) {
-            final GroupAssignment result = assignor.assign(scenario.groupSpec(scenario.tagKeys), scenario.topology);
+        final Scenario.Input input = scenario.input();
+        final Converged real = converge(scenario, before, reportedTasks, scenario.tagKeys, "");
+        final Map<String, OptionalDouble> metrics = new LinkedHashMap<>(real.metrics());
+        if (scenario.tagKeys.isEmpty()) {
+            metrics.putAll(AssignmentMetrics.tagBlindRows(metrics, false));
+        } else {
+            scenario.restore(input);
+            final Converged tagBlind = converge(scenario, before, reportedTasks, List.of(), " tag-blind");
+            metrics.putAll(AssignmentMetrics.tagBlindRows(tagBlind.metrics(), true));
+            scenario.feedBack(real.result());
+        }
+        summary.add(metrics);
+        scenario.history.append(real.converged() ? "  converged after " + real.rounds() + " rounds: " : "  not converged within " + MAX_CONVERGENCE_ITERATIONS + " rounds: ")
+            .append(AssignmentMetrics.format(metrics)).append('\n');
+    }
+
+    /** The result of a convergence loop, {@code rounds} being the assignments that changed something before it. */
+    private record Converged(GroupAssignment result, boolean converged, int rounds, Map<String, OptionalDouble> metrics) {
+    }
+
+    /**
+     * Runs the assignor, feeding each result back as the previous assignment, until the result converges or
+     * {@link #MAX_CONVERGENCE_ITERATIONS} is reached. Not converging is graded, not failed: the coordinator runs the
+     * assignor once per rebalance, so it only means the next rebalance will move tasks again. Every result passes
+     * {@link AssignmentInvariants} and the registered checks; the last one is graded. {@code label} marks the run in
+     * the history.
+     */
+    private Converged converge(
+        final Scenario scenario,
+        final Scenario.Baseline before,
+        final Map<String, Set<TaskId>> reportedTasks,
+        final List<String> rackAwareAssignmentTags,
+        final String label
+    ) {
+        for (int iteration = 1; ; iteration++) {
+            GroupAssignment result = null;
+            final boolean converged;
+            final boolean last;
             try {
+                result = assignor.assign(scenario.groupSpec(rackAwareAssignmentTags), scenario.topology);
                 AssignmentInvariants.assertValid(scenario, result);
-            } catch (final AssertionError e) {
-                scenario.history.append("  iteration ").append(iteration).append(" input: ").append(format(scenario.previousAssignment)).append('\n')
-                    .append("  iteration ").append(iteration).append(" FAILED: ").append(result == null ? "null" : format(result.members())).append('\n');
-                throw e;
-            }
-            final boolean converged = result.members().equals(scenario.previousAssignment);
-            final boolean last = converged || iteration == MAX_CONVERGENCE_ITERATIONS;
-            try {
+                converged = result.members().equals(scenario.previousAssignment);
+                last = converged || iteration == MAX_CONVERGENCE_ITERATIONS;
                 for (final AssignmentCheck check : checks) {
                     check.check(scenario, result, last);
                 }
-            } catch (final AssertionError e) {
-                scenario.history.append("  iteration ").append(iteration).append(" input: ").append(format(scenario.previousAssignment)).append('\n')
-                    .append("  iteration ").append(iteration).append(" FAILED: ").append(format(result.members())).append('\n');
+            } catch (final AssertionError | RuntimeException e) {
+                scenario.history.append("  iteration ").append(iteration).append(label).append(" input: ").append(format(scenario.previousAssignment)).append('\n')
+                    .append("  iteration ").append(iteration).append(label).append(" FAILED: ").append(result == null ? String.valueOf(e) : format(result.members())).append('\n');
                 throw e;
             }
             if (scenario.profile.fullHistory()) {
-                scenario.history.append("  iteration ").append(iteration).append(": ").append(format(result.members())).append('\n');
+                scenario.history.append("  iteration ").append(iteration).append(label).append(": ").append(format(result.members())).append('\n');
             }
             if (last) {
+                final int rounds = iteration - 1;
                 final Map<String, OptionalDouble> metrics = new LinkedHashMap<>();
                 for (final AssignmentGrader grader : graders) {
                     metrics.putAll(grader.grade(scenario, result, before, reportedTasks));
                 }
-                metrics.put("rounds to converge", OptionalDouble.of(iteration));
-                metrics.put("not converged", OptionalDouble.of(converged ? 0 : 1));
-                metrics.putAll(tagBlindRows(scenario, before, reportedTasks, metrics));
+                metrics.putAll(AssignmentMetrics.convergenceRows(rounds, converged));
                 scenario.feedBack(result);
-                summary.add(metrics);
-                scenario.history.append(converged ? "  converged after " : "  not converged within ").append(iteration)
-                    .append(": ").append(AssignmentMetrics.format(metrics)).append('\n');
-                return;
+                return new Converged(result, converged, rounds, metrics);
             }
             scenario.feedBack(result);
         }
-    }
-
-    /**
-     * The tag-related rows of {@link AssignmentMetrics} for the same input assigned with {@code rackAwareAssignmentTags}
-     * empty, so the effect and the cost of rack-aware standby task assignment can be read off the same rebalance.
-     * Empty rows when the scenario has no client tags. Must run before the real result is fed back.
-     */
-    private Map<String, OptionalDouble> tagBlindRows(
-        final Scenario scenario,
-        final Scenario.Baseline before,
-        final Map<String, Set<TaskId>> reportedTasks,
-        final Map<String, OptionalDouble> realRows
-    ) {
-        if (scenario.tagKeys.isEmpty()) {
-            return AssignmentMetrics.tagBlindRows(realRows, false);
-        }
-        final GroupAssignment tagBlind = assignor.assign(scenario.groupSpec(List.of()), scenario.topology);
-        return AssignmentMetrics.tagBlindRows(AssignmentMetrics.grade(scenario, tagBlind, before, reportedTasks), true);
     }
 
     static Set<TaskId> toTaskIds(final Map<String, Set<Integer>> tasks) {
@@ -581,6 +596,7 @@ final class TaskAssignorTestbed {
             final Map<String, String> tags = new HashMap<>();
             for (final String key : tagKeys) {
                 if (key.equals(HOST_TAG)) {
+                    // The process id stands in for the host name: one value per process, never missing.
                     tags.put(key, processId);
                 } else if (random.nextInt(10) != 0) {
                     // A process occasionally misses a tag, as a client without that config would.
@@ -649,6 +665,20 @@ final class TaskAssignorTestbed {
 
         Baseline baseline() {
             return new Baseline(previousAssignment, Map.copyOf(memberToProcess));
+        }
+
+        /** What the members hold and report when the assignor runs, so the same input can be assigned again. */
+        record Input(Map<String, MemberAssignment> previousAssignment, Map<String, Map<String, Map<Integer, Long>>> reportedOffsets) {
+        }
+
+        Input input() {
+            return new Input(previousAssignment, Map.copyOf(reportedOffsets));
+        }
+
+        void restore(final Input input) {
+            previousAssignment = input.previousAssignment();
+            reportedOffsets.clear();
+            reportedOffsets.putAll(input.reportedOffsets());
         }
 
         /** The stateful tasks each process currently reports offsets for, as a restarted process does for the state on its disk. */

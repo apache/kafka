@@ -177,6 +177,17 @@ final class AssignmentMetrics {
     }
 
     /**
+     * Rows of the convergence loop: {@code rounds} is the number of assignments that changed something before the
+     * output reproduced itself, empty when the cap was reached without that.
+     */
+    static Map<String, OptionalDouble> convergenceRows(final int rounds, final boolean converged) {
+        final Map<String, OptionalDouble> rows = new LinkedHashMap<>();
+        rows.put("rounds to converge", converged ? OptionalDouble.of(rounds) : OptionalDouble.empty());
+        rows.put("not converged", OptionalDouble.of(converged ? 0 : 1));
+        return rows;
+    }
+
+    /**
      * One row per configured tag key in priority order, empty when the key is not graded, so every rebalance
      * returns the same rows. Only stateful tasks are graded: a stateless task has a single replica.
      */
@@ -215,7 +226,8 @@ final class AssignmentMetrics {
 
     /**
      * Distribution of each stateful task's replicas over the graded tag keys: the configured keys in priority order,
-     * without the host tag and without keys that have a single value in the group. For a task {@code t} and key
+     * without keys that have a single value in the group and without keys whose value is unique per process, since
+     * replicas of one task never share a process and so always reach distinct values. For a task {@code t} and key
      * {@code k}, {@code d} is the number of distinct values among the processes holding a replica of {@code t}
      * (a missing value adds nothing), and {@code d*} = min(replicas of {@code t}, values of {@code k} in the group)
      * is the largest {@code d} any placement can reach. Nothing is graded without standby tasks or without stateful
@@ -237,7 +249,8 @@ final class AssignmentMetrics {
         final Map<String, Set<String>> valuesInGroup = tagValuesInGroup(scenario);
         final List<String> keys = new ArrayList<>();
         for (final String key : scenario.tagKeys) {
-            if (!key.equals(TaskAssignorTestbed.HOST_TAG) && valuesInGroup.getOrDefault(key, Set.of()).size() > 1) {
+            final int values = valuesInGroup.getOrDefault(key, Set.of()).size();
+            if (values > 1 && values < processesCarrying(scenario, key)) {
                 keys.add(key);
             }
         }
@@ -282,6 +295,16 @@ final class AssignmentMetrics {
             }
         }
         return values;
+    }
+
+    private static int processesCarrying(final Scenario scenario, final String key) {
+        int count = 0;
+        for (final ProcessSpec process : scenario.processes.values()) {
+            if (process.tags.containsKey(key)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static Map<String, Set<String>> tagValuesInGroup(final Scenario scenario) {
@@ -451,14 +474,15 @@ final class AssignmentMetrics {
 
         @Override
         public String toString() {
+            int width = "metric".length();
+            for (final String name : rows.keySet()) {
+                width = Math.max(width, name.length());
+            }
+            final String nameFormat = "  %-" + width + "s ";
             final StringBuilder builder = new StringBuilder("Fuzz metrics: ").append(title).append('\n')
-                .append(String.format("  %-44s %8s %8s %8s %8s%n", "metric", "avg", "min", "max", "n"));
-            rows.forEach((name, stat) -> row(builder, name, stat));
+                .append(String.format(nameFormat, "metric")).append(String.format("%8s %8s %8s %8s%n", "avg", "min", "max", "n"));
+            rows.forEach((name, stat) -> builder.append(String.format(nameFormat, name)).append(stat).append('\n'));
             return builder.toString();
-        }
-
-        private static void row(final StringBuilder builder, final String name, final Stat stat) {
-            builder.append("  ").append(String.format("%-44s ", name)).append(stat).append('\n');
         }
     }
 
