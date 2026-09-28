@@ -112,6 +112,10 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
     /**
      * Sets the static members in the group at the time the new target assignment was computed.
      *
+     * When the static members in the group have not changed, the same map instance can be passed
+     * for both the previous and current static members to skip reconciling static member
+     * replacements.
+     *
      * @param previousStaticMembers The static members in the group at the time the new target assignment was computed.
      * @return This object.
      */
@@ -133,6 +137,10 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
 
     /**
      * Sets the current static members in the group.
+     *
+     * When the static members in the group have not changed, the same map instance can be passed
+     * for both the previous and current static members to skip reconciling static member
+     * replacements.
      *
      * @param currentStaticMembers The current static members in the group.
      * @return This object.
@@ -214,49 +222,55 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
 
         // Build map of replacement member ids for static members that have churned.
         Map<String, String> staticMemberIdRemapping = new HashMap<>();
-        for (Map.Entry<String, String> entry : previousStaticMembers.entrySet()) {
-            String instanceId = entry.getKey();
-            String oldMemberId = entry.getValue();
-            String newMemberId = currentStaticMembers.get(instanceId);
 
-            if (currentMemberIds.contains(oldMemberId)) {
-                // The old member id is still in the group. We must not create a remapping entry,
-                // otherwise we could give the same assignment to two different members.
-                continue;
-            }
+        boolean needsStaticMemberIdRemapping = previousStaticMembers != currentStaticMembers;
+        if (needsStaticMemberIdRemapping) {
+            for (Map.Entry<String, String> entry : previousStaticMembers.entrySet()) {
+                String instanceId = entry.getKey();
+                String oldMemberId = entry.getValue();
+                String newMemberId = currentStaticMembers.get(instanceId);
 
-            if (newMemberId != null) {
-                if (newTargetAssignment.containsKey(newMemberId)) {
-                    // The new member id has been in the group since before the assignment was
-                    // computed. We want to prioritize matching assignments up by member id, so
-                    // avoid creating a remapping entry. Note that we can't detect this if the
-                    // assignor omits an entry for the member but nothing bad happens in that case.
+                if (currentMemberIds.contains(oldMemberId)) {
+                    // The old member id is still in the group. We must not create a remapping entry,
+                    // otherwise we could give the same assignment to two different members.
                     continue;
                 }
 
-                log.debug("[GroupId {}] Previous static member {} with instance id {} has been replaced by {}, transferring target assignment.",
-                    groupId, oldMemberId, instanceId, newMemberId);
+                if (newMemberId != null) {
+                    if (newTargetAssignment.containsKey(newMemberId)) {
+                        // The new member id has been in the group since before the assignment was
+                        // computed. We want to prioritize matching assignments up by member id, so
+                        // avoid creating a remapping entry. Note that we can't detect this if the
+                        // assignor omits an entry for the member but nothing bad happens in that case.
+                        continue;
+                    }
 
-                staticMemberIdRemapping.put(newMemberId, oldMemberId);
-            } else {
-                log.debug("[GroupId {}] Previous static member {} with instance id {} has no replacement, discarding their target assignment.",
-                    groupId, oldMemberId, instanceId);
+                    log.debug("[GroupId {}] Previous static member {} with instance id {} has been replaced by {}, transferring target assignment.",
+                        groupId, oldMemberId, instanceId, newMemberId);
+
+                    staticMemberIdRemapping.put(newMemberId, oldMemberId);
+                } else {
+                    log.debug("[GroupId {}] Previous static member {} with instance id {} has no replacement, discarding their target assignment.",
+                        groupId, oldMemberId, instanceId);
+                }
             }
         }
 
         if (log.isDebugEnabled()) {
-            for (Map.Entry<String, String> entry : currentStaticMembers.entrySet()) {
-                String instanceId = entry.getKey();
-                String newMemberId = entry.getValue();
+            if (needsStaticMemberIdRemapping) {
+                for (Map.Entry<String, String> entry : currentStaticMembers.entrySet()) {
+                    String instanceId = entry.getKey();
+                    String newMemberId = entry.getValue();
 
-                if (newTargetAssignment.containsKey(newMemberId)) {
-                    // The member id has been in the group the whole time.
-                    continue;
-                }
+                    if (newTargetAssignment.containsKey(newMemberId)) {
+                        // The member id has been in the group the whole time.
+                        continue;
+                    }
 
-                if (!previousStaticMembers.containsKey(instanceId)) {
-                    log.debug("[GroupId {}] Current static member {} with instance id {} has no previous static member and will receive an empty target assignment.",
-                        groupId, newMemberId, instanceId);
+                    if (!previousStaticMembers.containsKey(instanceId)) {
+                        log.debug("[GroupId {}] Current static member {} with instance id {} has no previous static member and will receive an empty target assignment.",
+                            groupId, newMemberId, instanceId);
+                    }
                 }
             }
 
