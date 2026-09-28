@@ -204,13 +204,25 @@ public class GroupMetadataManagerTestContext {
     }
 
     public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toProtocols(String... protocolNames) {
+        return toProtocols(-1, protocolNames);
+    }
+
+    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toProtocols(
+        int generationId,
+        String... protocolNames
+    ) {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(0);
         List<String> topicNames = Arrays.asList("foo", "bar", "baz");
         for (int i = 0; i < protocolNames.length; i++) {
             protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
                 .setName(protocolNames[i])
                 .setMetadata(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                    List.of(topicNames.get(i % topicNames.size())))).array())
+                    List.of(topicNames.get(i % topicNames.size())),
+                    null,
+                    List.of(),
+                    generationId,
+                    Optional.empty()
+                )).array())
             );
         }
         return protocols;

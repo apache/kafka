@@ -8290,12 +8290,13 @@ public class GroupMetadataManagerTest {
         );
         ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
 
-        // Known static leader rejoin will trigger rebalance.
+        // Known static leader rejoin will trigger rebalance. The leader keeps its generation,
+        // so the rejoin is a deliberate one.
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId("group-id")
             .withGroupInstanceId("leader-instance-id")
             .withMemberId(rebalanceResult.leaderId)
-            .withDefaultProtocolTypeAndProtocols()
+            .withProtocols(GroupMetadataManagerTestContext.toProtocols(rebalanceResult.generationId, "range"))
             .withRebalanceTimeoutMs(10000)
             .build();
 
@@ -8706,12 +8707,13 @@ public class GroupMetadataManagerTest {
         );
         ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
 
-        // A static leader rejoin with known member id will trigger rebalance.
+        // A static leader rejoin with known member id will trigger rebalance. The leader keeps its
+        // generation, so the rejoin is a deliberate one.
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId("group-id")
             .withGroupInstanceId("leader-instance-id")
             .withMemberId(rebalanceResult.leaderId)
-            .withProtocolSuperset()
+            .withProtocols(GroupMetadataManagerTestContext.toProtocols(rebalanceResult.generationId, "range", "roundrobin"))
             .withRebalanceTimeoutMs(10000)
             .withSessionTimeoutMs(5000)
             .build();
@@ -8941,6 +8943,177 @@ public class GroupMetadataManagerTest {
             STABLE,
             Set.of()
         );
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testStaticMemberRejoinAfterResetWithKnownMemberIdDoesNotRebalance(boolean isLeader) throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The session timeout is 5000 ms.
+        GroupMetadataManagerTestContext.RebalanceResult rebalanceResult = context.staticMembersJoinAndRebalance(
+            "group-id",
+            "leader-instance-id",
+            "follower-instance-id"
+        );
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
+
+        String instanceId = isLeader ? "leader-instance-id" : "follower-instance-id";
+        String memberId = isLeader ? rebalanceResult.leaderId : rebalanceResult.followerId;
+        HeartbeatRequestData otherMemberHeartbeat = new HeartbeatRequestData()
+            .setGroupId("group-id")
+            .setGroupInstanceId(isLeader ? "follower-instance-id" : "leader-instance-id")
+            .setMemberId(isLeader ? rebalanceResult.followerId : rebalanceResult.leaderId)
+            .setGenerationId(rebalanceResult.generationId);
+
+        // The member stops heartbeating while it is away from the group. The other member keeps heartbeating.
+        GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(4000));
+        context.sendClassicGroupHeartbeat(otherMemberHeartbeat);
+
+        // The member reset its generation locally and rejoins with its member id. Its metadata differs
+        // from the stored one, which would trigger a rebalance for a member rejoining on purpose.
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withGroupInstanceId(instanceId)
+            .withMemberId(memberId)
+            .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
+            .build();
+
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
+            request,
+            true,
+            true
+        );
+
+        assertTrue(joinResult.records.isEmpty());
+        assertTrue(joinResult.joinFuture.isDone());
+
+        // The member gets the current generation back. The leader also gets the members so it can
+        // resume monitoring metadata, but skips the assignment.
+        JoinGroupResponseData expectedResponse = new JoinGroupResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setGenerationId(rebalanceResult.generationId)
+            .setMemberId(memberId)
+            .setLeader(rebalanceResult.leaderId)
+            .setProtocolName("range")
+            .setProtocolType("consumer")
+            .setSkipAssignment(isLeader)
+            .setMembers(isLeader ? toJoinResponseMembers(group) : List.of());
+
+        checkJoinGroupResponse(
+            expectedResponse,
+            joinResult.joinFuture.get(),
+            group,
+            STABLE,
+            isLeader ? Set.of("leader-instance-id", "follower-instance-id") : Set.of()
+        );
+        assertEquals(rebalanceResult.generationId, group.generationId());
+
+        // The session deadline set before the member went away has passed, but the rejoin started a new one.
+        context.sleep(2000);
+        context.sendClassicGroupHeartbeat(otherMemberHeartbeat);
+        assertTrue(group.hasMember(memberId));
+
+        // The member is removed if it does not heartbeat within the new session timeout.
+        context.sleep(3000);
+        assertFalse(group.hasMember(memberId));
+    }
+
+    private static Stream<Arguments> staticLeaderRejoinsWithKnownMemberIdThatRequiresRebalance() {
+        return Stream.of(
+            Arguments.of(
+                "the member kept its generation",
+                GroupMetadataManagerTestContext.toProtocols(1, "range"),
+                true
+            ),
+            Arguments.of(
+                "the JoinGroup version cannot skip the assignment",
+                GroupMetadataManagerTestContext.toProtocols("range"),
+                false
+            ),
+            Arguments.of(
+                "the subscription predates the generation id",
+                subscriptionProtocols("range", List.of("foo"), (short) 1),
+                true
+            ),
+            Arguments.of(
+                "the subscribed topics changed",
+                subscriptionProtocols("range", List.of("foo", "qux"), ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION),
+                true
+            ),
+            Arguments.of(
+                "the group's protocol is not supported anymore",
+                GroupMetadataManagerTestContext.toProtocols("roundrobin"),
+                true
+            ),
+            Arguments.of(
+                "the subscription cannot be parsed",
+                malformedProtocols("range"),
+                true
+            )
+        );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("staticLeaderRejoinsWithKnownMemberIdThatRequiresRebalance")
+    public void testStaticLeaderRejoinWithKnownMemberIdTriggersRebalance(
+        String description,
+        JoinGroupRequestProtocolCollection protocols,
+        boolean supportSkippingAssignment
+    ) throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        GroupMetadataManagerTestContext.RebalanceResult rebalanceResult = context.staticMembersJoinAndRebalance(
+            "group-id",
+            "leader-instance-id",
+            "follower-instance-id"
+        );
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withGroupInstanceId("leader-instance-id")
+            .withMemberId(rebalanceResult.leaderId)
+            .withProtocols(protocols)
+            .build();
+
+        GroupMetadataManagerTestContext.JoinResult leaderJoinResult = context.sendClassicGroupJoin(
+            request,
+            true,
+            supportSkippingAssignment
+        );
+
+        // The join takes the regular path: the leader triggers a rebalance.
+        assertTrue(leaderJoinResult.records.isEmpty());
+        assertFalse(leaderJoinResult.joinFuture.isDone());
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+    }
+
+    private static JoinGroupRequestProtocolCollection subscriptionProtocols(
+        String protocolName,
+        List<String> topics,
+        short version
+    ) {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(0);
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName(protocolName)
+            .setMetadata(ConsumerProtocol.serializeSubscription(
+                new ConsumerPartitionAssignor.Subscription(topics),
+                version
+            ).array())
+        );
+        return protocols;
+    }
+
+    private static JoinGroupRequestProtocolCollection malformedProtocols(String protocolName) {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(0);
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName(protocolName)
+            .setMetadata(new byte[]{1})
+        );
+        return protocols;
     }
 
     @Test
