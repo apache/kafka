@@ -1151,6 +1151,40 @@ public class GroupMetadataManagerTestContext {
         int rebalanceTimeoutMs,
         int sessionTimeoutMs
     ) throws Exception {
+        return staticMembersJoinAndRebalance(
+            groupId,
+            leaderInstanceId,
+            followerInstanceId,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            toProtocols("range", "roundrobin")
+        );
+    }
+
+    public RebalanceResult staticMembersJoinAndRebalance(
+        String groupId,
+        String leaderInstanceId,
+        String followerInstanceId,
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols
+    ) throws Exception {
+        return staticMembersJoinAndRebalance(
+            groupId,
+            leaderInstanceId,
+            followerInstanceId,
+            10000,
+            5000,
+            protocols
+        );
+    }
+
+    public RebalanceResult staticMembersJoinAndRebalance(
+        String groupId,
+        String leaderInstanceId,
+        String followerInstanceId,
+        int rebalanceTimeoutMs,
+        int sessionTimeoutMs,
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols
+    ) throws Exception {
         ClassicGroup group = createClassicGroup(groupId);
 
         JoinGroupRequestData joinRequest = new JoinGroupRequestBuilder()
@@ -1158,7 +1192,7 @@ public class GroupMetadataManagerTestContext {
             .withGroupInstanceId(leaderInstanceId)
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withProtocolType("consumer")
-            .withProtocolSuperset()
+            .withProtocols(protocols)
             .withRebalanceTimeoutMs(rebalanceTimeoutMs)
             .withSessionTimeoutMs(sessionTimeoutMs)
             .build();

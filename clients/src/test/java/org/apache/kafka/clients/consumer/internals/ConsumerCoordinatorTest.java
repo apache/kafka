@@ -3751,8 +3751,17 @@ public abstract class ConsumerCoordinatorTest {
             assertFalse(client.hasPendingResponses());
             assertEquals(1, client.inFlightRequestCount());
 
-            // Retry join should then succeed
-            client.respond(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
+            // Retry join should then succeed. It must carry the kept member id and signal the reset
+            // generation in the embedded subscription.
+            client.respond(body -> {
+                if (!(body instanceof JoinGroupRequest)) {
+                    return false;
+                }
+                JoinGroupRequestData join = ((JoinGroupRequest) body).data();
+                ByteBuffer metadata = ByteBuffer.wrap(join.protocols().iterator().next().metadata());
+                return memberId.equals(join.memberId())
+                    && ConsumerProtocol.deserializeSubscription(metadata).generationId().orElse(-1) == -1;
+            }, joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(partitions, Errors.NONE));
 
             res = coordinator.joinGroupIfNeeded(time.timer(3000));

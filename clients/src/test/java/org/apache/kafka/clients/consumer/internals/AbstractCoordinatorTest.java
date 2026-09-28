@@ -1172,6 +1172,31 @@ public class AbstractCoordinatorTest {
         assertTrue(coordinator.rejoinNeededOrPending());
     }
 
+    @Test
+    public void testStaticMemberResetsMemberIdWhenLeaveGroupIsSent() {
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE,
+            Optional.of("groupInstanceId"), Optional.empty());
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+        coordinator.ensureActiveGroup();
+
+        mockClient.prepareResponse(body -> body instanceof LeaveGroupRequest, leaveGroupResponse(List.of(
+            new MemberResponse()
+                .setMemberId(memberId)
+                .setGroupInstanceId("groupInstanceId")
+                .setErrorCode(Errors.NONE.code())
+        )));
+
+        RequestFuture<Void> future = coordinator.maybeLeaveGroup(
+            CloseOptions.GroupMembershipOperation.LEAVE_GROUP, "test static member leaving");
+
+        // An explicit LeaveGroup removes the static member from the group, so its member id is reset.
+        assertNotNull(future);
+        assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+    }
+
     private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId)  {
         checkLeaveGroupRequestSent(groupInstanceId, CloseOptions.GroupMembershipOperation.DEFAULT, Optional.empty());
     }
