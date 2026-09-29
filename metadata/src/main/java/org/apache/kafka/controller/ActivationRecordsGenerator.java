@@ -27,6 +27,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class ActivationRecordsGenerator {
@@ -120,6 +121,7 @@ public class ActivationRecordsGenerator {
         Consumer<String> activationMessageConsumer,
         long transactionStartOffset,
         boolean zkMigrationEnabled,
+        Set<Integer> stillZkRegisteredBrokerIds,
         FeatureControlManager featureControl,
         MetadataVersion metadataVersion
     ) {
@@ -182,10 +184,17 @@ public class ActivationRecordsGenerator {
                         // This can happen if controller leadership transfers to a controller with migrations enabled
                         // after another controller had finalized the migration. For example, during a rolling restart
                         // of the controller quorum during which the migration config is being set to false.
-                        logMessageBuilder
-                            .append("Completing the ZK migration since this controller was configured with ")
-                            .append("'zookeeper.metadata.migration.enable' set to 'false'. ");
-                        records.add(ZkMigrationState.POST_MIGRATION.toRecord());
+                        if (!stillZkRegisteredBrokerIds.isEmpty()) {
+                            logMessageBuilder
+                                .append("Staying in ZK migration mode even though 'zookeeper.metadata.migration.enable' set to 'false' because the following broker(s) are still registered as ZK brokers: ")
+                                .append(stillZkRegisteredBrokerIds)
+                                .append(". These brokers must be migrated to KRaft before the controller can finalize the migration.");
+                        } else {
+                            logMessageBuilder
+                                .append("Completing the ZK migration since this controller was configured with ")
+                                .append("'zookeeper.metadata.migration.enable' set to 'false'. ");
+                            records.add(ZkMigrationState.POST_MIGRATION.toRecord());
+                        }
                     } else {
                         // This log message is used in zookeeper_migration_test.py
                         logMessageBuilder
@@ -224,6 +233,7 @@ public class ActivationRecordsGenerator {
         boolean isEmpty,
         long transactionStartOffset,
         boolean zkMigrationEnabled,
+        Set<Integer> stillZkRegisteredBrokerIds,
         BootstrapMetadata bootstrapMetadata,
         FeatureControlManager featureControl
     ) {
@@ -232,7 +242,7 @@ public class ActivationRecordsGenerator {
                 bootstrapMetadata, bootstrapMetadata.metadataVersion());
         } else {
             return recordsForNonEmptyLog(activationMessageConsumer, transactionStartOffset, zkMigrationEnabled,
-                featureControl, featureControl.metadataVersion());
+                stillZkRegisteredBrokerIds, featureControl, featureControl.metadataVersion());
         }
     }
 }
