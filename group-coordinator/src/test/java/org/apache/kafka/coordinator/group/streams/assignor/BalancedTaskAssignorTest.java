@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -317,19 +319,30 @@ public class BalancedTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotAssignAnyStandbysWithInsufficientCapacity() {
-        // A single process cannot hold a standby of its own active tasks; the assignor warns and carries on.
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(
-                members("member1", "process1", "member2", "process1"),
-                AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)
-            ),
-            statefulTopology(4, SUBTOPOLOGY_1)
-        );
+    public void shouldNotAssignAnyStandbysWithInsufficientCapacityAndLogTheShortfallOnce() {
+        // A single process cannot hold a standby of its own active tasks. The assignor carries on and reports the
+        // shortfall in one INFO line for the whole assignment, not in one warning per task.
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(BalancedTaskAssignor.class)) {
+            appender.setClassLogger(BalancedTaskAssignor.class, Level.INFO);
+            final GroupAssignment result = assignor.assign(
+                new GroupSpecImpl(
+                    members("member1", "process1", "member2", "process1"),
+                    AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)
+                ),
+                statefulTopology(4, SUBTOPOLOGY_1)
+            );
 
-        assertEquals(2, activeTaskCount(result, "member1"));
-        assertEquals(2, activeTaskCount(result, "member2"));
-        assertNoStandbyTasks(result);
+            assertEquals(2, activeTaskCount(result, "member1"));
+            assertEquals(2, activeTaskCount(result, "member2"));
+            assertNoStandbyTasks(result);
+            assertEquals(List.of(), appender.getMessages(Level.WARN));
+            final List<String> infoMessages = appender.getMessages(Level.INFO);
+            assertEquals(1, infoMessages.size(), "expected one INFO line, got " + infoMessages);
+            assertTrue(
+                infoMessages.get(0).startsWith("4 of 4 stateful tasks got fewer than the configured 1 standby replicas (4 replicas missing in total)"),
+                infoMessages.get(0)
+            );
+        }
     }
 
     @Test
@@ -416,26 +429,33 @@ public class BalancedTaskAssignorTest {
     }
 
     @Test
-    public void shouldProduceValidAndEvenAssignmentsForRandomInput() {
-        final long seed = 2026;
-        final Random random = new Random(seed);
+    public void shouldProduceValidAndLevelledAssignmentsForRandomGroupsWithPreviousAssignments() {
+        // Random processes of one to four members, random topologies and standby counts, and a random current
+        // assignment with stale and duplicate claims, so that the sticky fan-out within a process is exercised. The
+        // seeds are fixed and named in every failure. Consecutive seeds are mixed first, because the first draws of
+        // java.util.Random are correlated for seeds that differ only in their low bits.
+        for (int scenario = 0; scenario < 200; scenario++) {
+            final long seed = mix(2026L + scenario);
+            final Random random = new Random(seed);
 
-        for (int iteration = 0; iteration < 50; iteration++) {
             final int numProcesses = 1 + random.nextInt(8);
-            final int membersPerProcess = 1 + random.nextInt(4);
             final int numStatefulTasks = random.nextInt(20);
             final int numStatelessTasks = random.nextInt(20);
             final int numStandbyReplicas = random.nextInt(3);
+            final TopologyDescriber topology = new MixedTopologyDescriber(numStatefulTasks, numStatelessTasks);
 
             final Map<String, MemberMetadataAndStateImpl> members = new HashMap<>();
+            final Map<String, List<String>> membersByProcess = new TreeMap<>();
             for (int p = 0; p < numProcesses; p++) {
-                for (int m = 0; m < membersPerProcess; m++) {
-                    members.put("member" + p + "_" + m, member("process" + p));
+                final int capacity = 1 + random.nextInt(4);
+                for (int m = 0; m < capacity; m++) {
+                    final String memberId = "member" + p + "_" + m;
+                    members.put(memberId, memberWithTasks("process" + p, randomClaims(random, topology), randomClaims(random, topology)));
+                    membersByProcess.computeIfAbsent("process" + p, id -> new ArrayList<>()).add(memberId);
                 }
             }
-            final TopologyDescriber topology = new MixedTopologyDescriber(numStatefulTasks, numStatelessTasks);
-            final String context = String.format("seed=%d processes=%d membersPerProcess=%d stateful=%d stateless=%d standbys=%d",
-                seed, numProcesses, membersPerProcess, numStatefulTasks, numStatelessTasks, numStandbyReplicas);
+            final String context = String.format("seed=%d processes=%d stateful=%d stateless=%d standbys=%d members=%s",
+                seed, numProcesses, numStatefulTasks, numStatelessTasks, numStandbyReplicas, membersByProcess);
 
             final GroupAssignment result = assignor.assign(
                 new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(numStandbyReplicas)),
@@ -443,30 +463,85 @@ public class BalancedTaskAssignorTest {
             );
 
             assertAllTasksAssignedOnce(result, topology);
-            // Every process has the same capacity, so the number of active tasks per member may differ by at most one.
-            final List<Integer> activeCounts = members.keySet().stream().map(memberId -> activeTaskCount(result, memberId)).toList();
-            final int maxActive = activeCounts.stream().mapToInt(Integer::intValue).max().orElse(0);
-            final int minActive = activeCounts.stream().mapToInt(Integer::intValue).min().orElse(0);
-            assertTrue(maxActive - minActive <= 1, "Active tasks per member not even (" + context + "): " + activeCounts);
+            // Standbys are bounded by the replicas requested and the number of other processes.
+            assertStandbysAssigned(result, topology, Math.min(numStandbyReplicas, numProcesses - 1));
 
-            // Standbys are bounded by the replicas requested and the number of other processes, and never share a
-            // process with the active task or another standby of the same task.
-            final int expectedStandbys = Math.min(numStandbyReplicas, numProcesses - 1);
-            assertStandbysAssigned(result, topology, expectedStandbys);
-            for (int p = 0; p < numProcesses; p++) {
-                final String[] memberIds = new String[membersPerProcess];
-                for (int m = 0; m < membersPerProcess; m++) {
-                    memberIds[m] = "member" + p + "_" + m;
+            // Across processes, the stateful active tasks are a fixed point of the skew loop: no process can hand
+            // one of them to another without their per-member loads crossing over.
+            final Map<String, Integer> statefulActivesByProcess = new HashMap<>();
+            membersByProcess.forEach((processId, memberIds) -> statefulActivesByProcess.put(processId,
+                memberIds.stream().mapToInt(memberId -> statefulActiveTaskCount(result, memberId)).sum()));
+            for (final String source : membersByProcess.keySet()) {
+                for (final String destination : membersByProcess.keySet()) {
+                    if (!source.equals(destination)) {
+                        final long loadAfterMoveAtSource = (long) (statefulActivesByProcess.get(source) - 1) * membersByProcess.get(destination).size();
+                        final long loadAfterMoveAtDestination = (long) (statefulActivesByProcess.get(destination) + 1) * membersByProcess.get(source).size();
+                        assertTrue(loadAfterMoveAtSource < loadAfterMoveAtDestination,
+                            "a stateful task should have moved from " + source + " to " + destination + " (" + context + "): " + statefulActivesByProcess);
+                    }
                 }
-                final Map<String, Set<Integer>> actives = mergeTasks(result, true, memberIds);
-                final Map<String, Set<Integer>> standbys = mergeTasks(result, false, memberIds);
+            }
+
+            // Within a process, each round of the fan-out leaves every member at the floor or the ceiling of the
+            // process's per-member count: stateful actives on their own, then all actives, then all tasks. And no
+            // process holds a task as active and as standby.
+            membersByProcess.forEach((processId, memberIds) -> {
+                assertLevelled(memberIds.stream().map(memberId -> statefulActiveTaskCount(result, memberId)).toList(), "stateful active tasks", processId, context);
+                assertLevelled(memberIds.stream().map(memberId -> activeTaskCount(result, memberId)).toList(), "active tasks", processId, context);
+                assertLevelled(memberIds.stream().map(memberId -> activeTaskCount(result, memberId) + standbyTaskCount(result, memberId)).toList(), "tasks", processId, context);
+
+                final String[] memberIdArray = memberIds.toArray(new String[0]);
+                final Map<String, Set<Integer>> actives = mergeTasks(result, true, memberIdArray);
+                final Map<String, Set<Integer>> standbys = mergeTasks(result, false, memberIdArray);
                 for (final Map.Entry<String, Set<Integer>> entry : standbys.entrySet()) {
                     final Set<Integer> activePartitions = actives.getOrDefault(entry.getKey(), Set.of());
                     assertTrue(entry.getValue().stream().noneMatch(activePartitions::contains),
-                        "process" + p + " holds a task as active and standby (" + context + ")");
+                        processId + " holds a task as active and standby (" + context + ")");
+                }
+            });
+        }
+    }
+
+    /** SplitMix64's finalizer, so that consecutive seeds give unrelated random sequences. */
+    private static long mix(final long seed) {
+        long mixed = (seed ^ (seed >>> 30)) * 0xbf58476d1ce4e5b9L;
+        mixed = (mixed ^ (mixed >>> 27)) * 0x94d049bb133111ebL;
+        return mixed ^ (mixed >>> 31);
+    }
+
+    /**
+     * A random quarter of the topology's tasks, plus, now and then, claims on a subtopology that no longer exists
+     * and on a partition beyond the current count, as members report after a topology change.
+     */
+    private static Map<String, Set<Integer>> randomClaims(final Random random, final TopologyDescriber topology) {
+        final Map<String, Set<Integer>> claims = new HashMap<>();
+        for (final String subtopology : topology.subtopologies()) {
+            for (int partition = 0; partition < topology.maxNumInputPartitions(subtopology); partition++) {
+                if (random.nextInt(4) == 0) {
+                    claims.computeIfAbsent(subtopology, s -> new HashSet<>()).add(partition);
                 }
             }
         }
+        if (random.nextInt(5) == 0) {
+            claims.computeIfAbsent("removed-subtopology", s -> new HashSet<>()).add(random.nextInt(3));
+            claims.computeIfAbsent(SUBTOPOLOGY_1, s -> new HashSet<>()).add(topology.maxNumInputPartitions(SUBTOPOLOGY_1) + random.nextInt(3));
+        }
+        return claims;
+    }
+
+    /** Every count is the floor or the ceiling of the average, as one round of the fan-out guarantees. */
+    private static void assertLevelled(final List<Integer> counts, final String what, final String processId, final String context) {
+        final int total = counts.stream().mapToInt(Integer::intValue).sum();
+        final int floor = total / counts.size();
+        final int ceiling = (total + counts.size() - 1) / counts.size();
+        for (final int count : counts) {
+            assertTrue(count >= floor && count <= ceiling,
+                what + " per member of " + processId + " not levelled, expected " + floor + " or " + ceiling + " (" + context + "): " + counts);
+        }
+    }
+
+    private static int statefulActiveTaskCount(final GroupAssignment result, final String memberId) {
+        return result.members().get(memberId).activeTasks().getOrDefault(SUBTOPOLOGY_1, Set.of()).size();
     }
 
     private static Map<String, MemberMetadataAndStateImpl> members(final String... memberIdsAndProcessIds) {
