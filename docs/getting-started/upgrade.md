@@ -38,6 +38,7 @@ type: docs
 * Includes a fix for a high CPU loop on the consumer after a failed re-authentication ([KAFKA-20253](https://issues.apache.org/jira/browse/KAFKA-20253)).
 * Includes a fix for consumer groups accepting new classic-protocol members even when `group.consumer.migration.policy=disabled`, which could leave a group permanently stuck in a mixed-protocol state ([KAFKA-20640](https://issues.apache.org/jira/browse/KAFKA-20640)).
 * Includes a fix for `AdminClient` APIs routed through the partition-leader cache (`listOffsets`, `deleteRecords`, `describeProducers`, `abortTransaction`) blocking for the full `default.api.timeout.ms` instead of failing fast when a cached leader has left the cluster ([KAFKA-20673](https://issues.apache.org/jira/browse/KAFKA-20673)).
+* Protocol message readers now limit array and collection allocations when decoding messages. Arrays and collections with more than 1,000,000 elements and flexible-version tagged-field sections with more than 10,000 fields are rejected before allocation. Arrays and collections are initially allocated with a capacity no greater than 1,000 and grow as needed during decoding.
 * Bumped jackson-databind ([KAFKA-21004](https://issues.apache.org/jira/browse/KAFKA-21004), [KAFKA-20773](https://issues.apache.org/jira/browse/KAFKA-20773), [KAFKA-20767](https://issues.apache.org/jira/browse/KAFKA-20767)), lz4-java ([KAFKA-20936](https://issues.apache.org/jira/browse/KAFKA-20936)), and jline ([KAFKA-20815](https://issues.apache.org/jira/browse/KAFKA-20815)) to address reported CVEs.
 
 ## Upgrading to 4.2.1
