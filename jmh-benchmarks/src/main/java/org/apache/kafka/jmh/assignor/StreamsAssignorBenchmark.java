@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl
 import org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -55,13 +56,21 @@ import java.util.Optional;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Benchmarks the built-in task assignors of the streams rebalance protocol on the same grid of groups, selected
+ * with the {@code assignorType} parameter, so that their costs can be compared configuration by configuration.
+ */
 @State(Scope.Benchmark)
 @Fork(value = 1)
 @Warmup(iterations = 5)
 @Measurement(iterations = 5)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-public class StreamsBalancedAssignorBenchmark {
+public class StreamsAssignorBenchmark {
+
+    public enum AssignorType {
+        STICKY, BALANCED
+    }
 
     /**
      * The assignment type is decided based on whether all the members are assigned partitions
@@ -74,8 +83,9 @@ public class StreamsBalancedAssignorBenchmark {
     /**
      * Whether the members report offset sums for the state they hold on local disk. NONE is the behaviour of a
      * group whose clients do not report offsets, OWNED_AND_DORMANT also reports state left behind by earlier
-     * assignments. The balanced assignor does not read reported offsets; the parameter is kept so that the results
-     * can be compared side by side with {@link StreamsStickyAssignorBenchmark}.
+     * assignments, so several members compete as candidates for the same task. Only the sticky assignor reads the
+     * offsets; the balanced assignor gives the same result for both values, so run it with
+     * {@code -p reportedOffsets=NONE}.
      */
     public enum ReportedOffsets {
         NONE, OWNED_AND_DORMANT
@@ -85,6 +95,9 @@ public class StreamsBalancedAssignorBenchmark {
      * The number of members reporting a task on top of the one owning it, under OWNED_AND_DORMANT.
      */
     private static final int DORMANT_REPLICAS = 1;
+
+    @Param({"STICKY", "BALANCED"})
+    private AssignorType assignorType;
 
     @Param({"100", "1000"})
     private int memberCount;
@@ -127,7 +140,7 @@ public class StreamsBalancedAssignorBenchmark {
 
         topologyDescriber = new TopologyMetadata(metadataImage, subtopologyMap);
 
-        taskAssignor = new BalancedTaskAssignor();
+        taskAssignor = createAssignor();
 
         Map<String, StreamsGroupMember> members = createMembers();
         this.assignmentConfigs = AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(standbyReplicas);
@@ -148,6 +161,13 @@ public class StreamsBalancedAssignorBenchmark {
         }
     }
 
+    private TaskAssignor createAssignor() {
+        return switch (assignorType) {
+            case STICKY -> new StickyTaskAssignor();
+            case BALANCED -> new BalancedTaskAssignor();
+        };
+    }
+
     private Map<String, StreamsGroupMember> createMembers() {
         // In the rebalance case, we will add the last member as a trigger.
         // This is done to keep the total members count consistent with the input.
@@ -159,8 +179,12 @@ public class StreamsBalancedAssignorBenchmark {
         );
     }
 
+    /**
+     * Computes the assignment the members hold when the measured rebalance starts, with the assignor under test,
+     * and adds one member to trigger the rebalance.
+     */
     private void simulateIncrementalRebalance() {
-        GroupAssignment initialAssignment = new BalancedTaskAssignor().assign(groupSpec, topologyDescriber);
+        GroupAssignment initialAssignment = createAssignor().assign(groupSpec, topologyDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
         Map<String, MemberMetadataAndStateImpl> updatedMemberSpec = new HashMap<>();
