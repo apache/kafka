@@ -27,12 +27,16 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -55,8 +59,10 @@ import java.util.stream.Collectors;
  *     <li>Standby tasks are placed on the least loaded process that does not hold the task yet, and evened out the
  *     same way.</li>
  *     <li>Stateless active tasks fill in the gaps, going to the process with the lowest active task load.</li>
- *     <li>Within a process, the tasks are spread evenly over its members, keeping a task on the member that currently
- *     owns it where the quota allows.</li>
+ *     <li>Within a process, the tasks are spread over its members in three rounds, as the classic client spreads a
+ *     process's tasks over its stream threads: stateful active tasks, then stateless active tasks, then standby
+ *     tasks. Each round levels the members' total task counts, keeping a task on the member that currently owns it
+ *     where that does not leave another member short.</li>
  * </ol>
  * In contrast to the {@link StickyTaskAssignor}, the placement across processes does not depend on the previous
  * assignment, so the assignment stays orderly across many membership changes at the price of moving more tasks.
@@ -152,10 +158,10 @@ public class BalancedTaskAssignor implements TaskAssignor {
             if (processIterator == null || !processIterator.hasNext()) {
                 processIterator = processes.iterator();
             }
-            processIterator.next().activeTasks.add(task);
+            processIterator.next().statefulActiveTasks.add(task);
         }
 
-        balanceTasksOverProcesses(processes, process -> process.activeTasks);
+        balanceTasksOverProcesses(processes, process -> process.statefulActiveTasks);
     }
 
     private static void assignStandbyReplicaTasks(final Collection<ProcessTasks> processes,
@@ -222,7 +228,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
         for (final TaskId task : statelessTasks) {
             final ProcessTasks process = processesByActiveLoad.poll();
-            process.activeTasks.add(task);
+            process.statelessActiveTasks.add(task);
             processesByActiveLoad.add(process);
         }
     }
@@ -303,14 +309,6 @@ public class BalancedTaskAssignor implements TaskAssignor {
         return ret;
     }
 
-    private static int computeTasksPerMember(final int numberOfTasks, final int numberOfMembers) {
-        int tasksPerMember = numberOfTasks / numberOfMembers;
-        if (numberOfTasks % numberOfMembers > 0) {
-            tasksPerMember++;
-        }
-        return tasksPerMember;
-    }
-
     /**
      * The tasks placed on one process, and the members the process contributes. The assignment across processes
      * works on this level; the tasks are spread over the members only once the placement is final.
@@ -318,7 +316,8 @@ public class BalancedTaskAssignor implements TaskAssignor {
     private static final class ProcessTasks {
         private final String processId;
         private final TreeSet<String> memberIds = new TreeSet<>();
-        private final SortedSet<TaskId> activeTasks = new TreeSet<>();
+        private final SortedSet<TaskId> statefulActiveTasks = new TreeSet<>();
+        private final SortedSet<TaskId> statelessActiveTasks = new TreeSet<>();
         private final SortedSet<TaskId> standbyTasks = new TreeSet<>();
         // The member of this process that currently owns a task, used to keep the task on that member if possible.
         private final Map<TaskId, String> currentActiveOwner = new HashMap<>();
@@ -354,8 +353,12 @@ public class BalancedTaskAssignor implements TaskAssignor {
             return memberIds.size();
         }
 
+        private int activeTaskCount() {
+            return statefulActiveTasks.size() + statelessActiveTasks.size();
+        }
+
         private int assignedTaskCount() {
-            return activeTasks.size() + standbyTasks.size();
+            return activeTaskCount() + standbyTasks.size();
         }
 
         private double assignedTaskLoad() {
@@ -363,34 +366,37 @@ public class BalancedTaskAssignor implements TaskAssignor {
         }
 
         private double activeTaskLoad() {
-            return ((double) activeTasks.size()) / capacity();
+            return ((double) activeTaskCount()) / capacity();
         }
 
         private boolean hasTask(final TaskId task) {
-            return activeTasks.contains(task) || standbyTasks.contains(task);
+            return statefulActiveTasks.contains(task) || statelessActiveTasks.contains(task) || standbyTasks.contains(task);
         }
 
         /**
-         * Spreads the process's tasks evenly over its members: first the active tasks, then the standby tasks on
-         * top of them. A task stays on the member that currently owns it as long as that member is below its quota;
-         * the remaining tasks go to the least loaded member.
+         * Spreads the process's tasks over its members in three rounds, as the classic client spreads a process's
+         * tasks over its stream threads: stateful active tasks first, then stateless active tasks, then standby
+         * tasks. Each round levels the members' total task counts on top of what the previous rounds placed, so the
+         * stateful tasks are even on their own, the active tasks are even after the second round, and the standbys
+         * fill up the members with fewer active tasks. The classic client levels the standbys before the stateless
+         * tasks; the active tasks go first here, as in the {@link StickyTaskAssignor}, so that a member never
+         * processes two tasks while another only maintains standbys.
          *
          * @return The assignment of every member of this process, including members that received no task.
          */
         private Map<String, MemberAssignment> distributeTasksOverMembers() {
-            final Map<String, Integer> totalTaskCountByMember = new HashMap<>(capacity());
+            final Map<String, Integer> taskCountByMember = new HashMap<>(capacity());
             final Map<String, Set<TaskId>> activeTasksByMember = new HashMap<>(capacity());
             final Map<String, Set<TaskId>> standbyTasksByMember = new HashMap<>(capacity());
             for (final String memberId : memberIds) {
-                totalTaskCountByMember.put(memberId, 0);
+                taskCountByMember.put(memberId, 0);
                 activeTasksByMember.put(memberId, new HashSet<>());
                 standbyTasksByMember.put(memberId, new HashSet<>());
             }
 
-            distributeTasksOverMembers(activeTasks, currentActiveOwner, totalTaskCountByMember,
-                computeTasksPerMember(activeTasks.size(), capacity()), activeTasksByMember);
-            distributeTasksOverMembers(standbyTasks, currentStandbyOwner, totalTaskCountByMember,
-                computeTasksPerMember(assignedTaskCount(), capacity()), standbyTasksByMember);
+            distributeTasksOverMembers(statefulActiveTasks, currentActiveOwner, taskCountByMember, activeTasksByMember);
+            distributeTasksOverMembers(statelessActiveTasks, currentActiveOwner, taskCountByMember, activeTasksByMember);
+            distributeTasksOverMembers(standbyTasks, currentStandbyOwner, taskCountByMember, standbyTasksByMember);
 
             return memberIds.stream().collect(Collectors.toMap(
                 Function.identity(),
@@ -402,43 +408,126 @@ public class BalancedTaskAssignor implements TaskAssignor {
         }
 
         /**
-         * Distributes the tasks of one role (active or standby) over the members.
+         * Distributes the tasks of one round over the members so that every member ends the round at the same
+         * level, {@code (tasks placed so far + tasks of this round) / members}, or one above it:
+         * <ol>
+         *     <li>A task stays on the member that currently owns it as long as that member is below the level.</li>
+         *     <li>The members still below the level take the remaining tasks in turn, in member ID order, until
+         *     they reach it.</li>
+         *     <li>Fewer tasks than members are left. Each goes to a member at the level: its current owner if that
+         *     member is one of them, otherwise the next such member in ID order.</li>
+         * </ol>
+         * Keeping the sticky pass below the level, rather than one above it, is what keeps a member that joins from
+         * being left with nothing while the others keep everything.
          *
-         * @param tasksToDistribute        The tasks of this role placed on the process.
+         * @param tasksToDistribute        The tasks of this round placed on the process.
          * @param currentOwner             The member of this process that currently owns a task, if any.
-         * @param totalTaskCountByMember   The number of tasks of <em>both</em> roles each member holds so far; the
-         *                                 quota and the least-loaded choice are based on this total, and it is
-         *                                 updated as tasks are distributed.
-         * @param quota                    The number of tasks a member may hold in total before it stops keeping
-         *                                 its current tasks.
-         * @param distributedTasksByMember The tasks of this role each member receives; the output of this method.
+         * @param taskCountByMember        The number of tasks each member holds so far, over all rounds; updated as
+         *                                 tasks are distributed.
+         * @param distributedTasksByMember The tasks of this round's role each member receives; the output of this
+         *                                 method.
          */
         private void distributeTasksOverMembers(final SortedSet<TaskId> tasksToDistribute,
                                                 final Map<TaskId, String> currentOwner,
-                                                final Map<String, Integer> totalTaskCountByMember,
-                                                final int quota,
+                                                final Map<String, Integer> taskCountByMember,
                                                 final Map<String, Set<TaskId>> distributedTasksByMember) {
+            if (tasksToDistribute.isEmpty()) {
+                return;
+            }
+            int tasksPlacedSoFar = 0;
+            for (final int count : taskCountByMember.values()) {
+                tasksPlacedSoFar += count;
+            }
+            final int level = (tasksPlacedSoFar + tasksToDistribute.size()) / capacity();
+
+            // Step 1. Tasks whose owner is at the level already are remembered, so the owner can still keep them in
+            // step 3.
             final List<TaskId> unassignedTasks = new ArrayList<>();
+            final Map<TaskId, String> ownersOfSkippedTasks = new LinkedHashMap<>();
             for (final TaskId task : tasksToDistribute) {
                 final String owner = currentOwner.get(task);
-                if (owner != null && totalTaskCountByMember.get(owner) < quota) {
-                    distributedTasksByMember.get(owner).add(task);
-                    totalTaskCountByMember.merge(owner, 1, Integer::sum);
+                if (owner != null && taskCountByMember.get(owner) < level) {
+                    place(task, owner, taskCountByMember, distributedTasksByMember);
                 } else {
                     unassignedTasks.add(task);
+                    if (owner != null) {
+                        ownersOfSkippedTasks.put(task, owner);
+                    }
                 }
             }
 
-            final PriorityQueue<String> membersByLoad = new PriorityQueue<>(
-                Comparator.<String>comparingInt(totalTaskCountByMember::get).thenComparing(Comparator.naturalOrder())
-            );
-            membersByLoad.addAll(memberIds);
-            for (final TaskId task : unassignedTasks) {
-                final String member = membersByLoad.poll();
-                distributedTasksByMember.get(member).add(task);
-                totalTaskCountByMember.merge(member, 1, Integer::sum);
-                membersByLoad.add(member);
+            final int firstLeftoverTask = fillMembersBelowLevel(unassignedTasks, level, taskCountByMember, distributedTasksByMember);
+            placeLeftoverTasks(unassignedTasks.subList(firstLeftoverTask, unassignedTasks.size()), ownersOfSkippedTasks, level,
+                taskCountByMember, distributedTasksByMember);
+        }
+
+        /**
+         * Step 2 of a round: the members below the level take the unassigned tasks in turn, in member ID order,
+         * until every member has reached the level.
+         *
+         * @return The index of the first unassigned task that was not placed.
+         */
+        private int fillMembersBelowLevel(final List<TaskId> unassignedTasks,
+                                          final int level,
+                                          final Map<String, Integer> taskCountByMember,
+                                          final Map<String, Set<TaskId>> distributedTasksByMember) {
+            final Deque<String> membersToFill = new ArrayDeque<>();
+            for (final String memberId : memberIds) {
+                if (taskCountByMember.get(memberId) < level) {
+                    membersToFill.add(memberId);
+                }
             }
+            int nextTask = 0;
+            while (!membersToFill.isEmpty() && nextTask < unassignedTasks.size()) {
+                final String member = membersToFill.poll();
+                place(unassignedTasks.get(nextTask++), member, taskCountByMember, distributedTasksByMember);
+                if (taskCountByMember.get(member) < level) {
+                    membersToFill.add(member);
+                }
+            }
+            return nextTask;
+        }
+
+        /**
+         * Step 3 of a round: every member is at the level or one above it, and fewer tasks are left than there are
+         * members at the level, since every round before this one levelled its tasks the same way. Each leftover
+         * task goes to its current owner if that member is at the level, otherwise to the next member at the level
+         * in ID order.
+         */
+        private void placeLeftoverTasks(final List<TaskId> leftoverTasks,
+                                        final Map<TaskId, String> ownersOfSkippedTasks,
+                                        final int level,
+                                        final Map<String, Integer> taskCountByMember,
+                                        final Map<String, Set<TaskId>> distributedTasksByMember) {
+            final Set<String> membersAtLevel = new LinkedHashSet<>();
+            for (final String memberId : memberIds) {
+                if (taskCountByMember.get(memberId) == level) {
+                    membersAtLevel.add(memberId);
+                }
+            }
+            final List<TaskId> tasksWithoutOwnerAtLevel = new ArrayList<>();
+            for (final TaskId task : leftoverTasks) {
+                final String owner = ownersOfSkippedTasks.get(task);
+                if (owner != null && membersAtLevel.remove(owner)) {
+                    place(task, owner, taskCountByMember, distributedTasksByMember);
+                } else {
+                    tasksWithoutOwnerAtLevel.add(task);
+                }
+            }
+            for (final TaskId task : tasksWithoutOwnerAtLevel) {
+                final Iterator<String> nextMemberAtLevel = membersAtLevel.iterator();
+                final String member = nextMemberAtLevel.next();
+                nextMemberAtLevel.remove();
+                place(task, member, taskCountByMember, distributedTasksByMember);
+            }
+        }
+
+        private static void place(final TaskId task,
+                                  final String member,
+                                  final Map<String, Integer> taskCountByMember,
+                                  final Map<String, Set<TaskId>> distributedTasksByMember) {
+            distributedTasksByMember.get(member).add(task);
+            taskCountByMember.merge(member, 1, Integer::sum);
         }
     }
 }

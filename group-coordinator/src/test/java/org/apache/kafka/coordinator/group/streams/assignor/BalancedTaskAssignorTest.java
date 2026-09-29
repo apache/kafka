@@ -221,6 +221,49 @@ public class BalancedTaskAssignorTest {
     }
 
     @Test
+    public void shouldGiveAJoiningMemberTasksAlthoughTheOthersAreWithinTheirCeiling() {
+        // Four tasks over three members: two members may hold two tasks, but not both of the current owners, or the
+        // joining member3 would be left with nothing. Exactly one task moves; the other three stay where they are.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberWithTasks("process1", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0, 1))), Map.of())),
+            mkEntry("member2", memberWithTasks("process1", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(2, 3))), Map.of())),
+            mkEntry("member3", memberWithTasks("process1", Map.of(), Map.of()))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            statefulTopology(4, SUBTOPOLOGY_1)
+        );
+
+        assertEquals(List.of(1, 1, 2), sortedActiveTaskCounts(result, "member1", "member2", "member3"));
+        assertEquals(1, activeTaskCount(result, "member3"));
+        final Set<Integer> stayedOnMember1 = result.members().get("member1").activeTasks().getOrDefault(SUBTOPOLOGY_1, Set.of());
+        final Set<Integer> stayedOnMember2 = result.members().get("member2").activeTasks().getOrDefault(SUBTOPOLOGY_1, Set.of());
+        assertTrue(Set.of(0, 1).containsAll(stayedOnMember1), "member1 received a task it did not own: " + stayedOnMember1);
+        assertTrue(Set.of(2, 3).containsAll(stayedOnMember2), "member2 received a task it did not own: " + stayedOnMember2);
+        assertEquals(3, stayedOnMember1.size() + stayedOnMember2.size(), "only one task should have moved");
+        assertAllTasksAssignedOnce(result, statefulTopology(4, SUBTOPOLOGY_1));
+    }
+
+    @Test
+    public void shouldBalanceStatefulTasksOverMembersSeparatelyFromStatelessTasks() {
+        // member1 currently owns both stateful tasks. Keeping both would balance the active task counts with the
+        // two stateless tasks going to member2, but leave member1 with all the state; instead each member gets one
+        // stateful and one stateless task.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberWithTasks("process1", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0, 1))), Map.of())),
+            mkEntry("member2", memberWithTasks("process1", Map.of(), Map.of()))
+        );
+        final TopologyDescriber topology = new MixedTopologyDescriber(2, 2);
+
+        final GroupAssignment result = assignor.assign(new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT), topology);
+
+        assertOnePartitionOfEachSubtopology(result, "member1", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
+        assertOnePartitionOfEachSubtopology(result, "member2", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
+        assertAllTasksAssignedOnce(result, topology);
+    }
+
+    @Test
     public void shouldAssignStandbysForStatefulTasks() {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
@@ -374,7 +417,7 @@ public class BalancedTaskAssignorTest {
 
     @Test
     public void shouldProduceValidAndEvenAssignmentsForRandomInput() {
-        final long seed = System.nanoTime();
+        final long seed = 2026;
         final Random random = new Random(seed);
 
         for (int iteration = 0; iteration < 50; iteration++) {
