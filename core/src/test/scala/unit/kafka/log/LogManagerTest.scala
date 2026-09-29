@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicIdPartition, TopicPartition, Uuid}
@@ -1301,6 +1302,25 @@ class LogManagerTest {
       LogManager.findStrayReplicas(0,
         createLeaderAndIsrRequestForStrayDetection(Seq()),
           onDisk.map(mockLog)).toSet)
+  }
+
+  @Test
+  def testFindStrayReplicasMissingTopicId(): Unit = {
+    val topicPartition = new TopicPartition("foo", 0)
+    val log = Mockito.mock(classOf[UnifiedLog])
+    Mockito.when(log.topicId).thenReturn(Option.empty)
+    Mockito.when(log.topicPartition).thenReturn(topicPartition)
+
+    val reqData = new LeaderAndIsrRequestData()
+      .setType(AbstractControlRequest.Type.FULL.toByte)
+
+    val request = new LeaderAndIsrRequest(
+      reqData,
+      ApiKeys.LEADER_AND_ISR.latestVersion()
+    )
+
+    val strays = LogManager.findStrayReplicas(0, request, Seq(log))
+    assertEquals(Seq(topicPartition), strays.toSeq)
   }
 
   @Test
