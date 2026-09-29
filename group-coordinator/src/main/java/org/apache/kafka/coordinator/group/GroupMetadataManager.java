@@ -1509,6 +1509,7 @@ public class GroupMetadataManager {
         String groupId
     ) {
         Group group = groups.remove(groupId);
+
         // The member tombstones normally unsubscribe the group from its topics. When the group
         // coordinator loads concurrently with compaction, intermediate tombstone records can be
         // missed, so the group metadata tombstone is treated as authoritative and the group may
@@ -6301,8 +6302,7 @@ public class GroupMetadataManager {
                 log.warn("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the consumer group"
                     + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
                     groupId, group.targetAssignment().size());
-                // Copy the keys as removing the target assignments modifies the underlying map.
-                List.copyOf(group.targetAssignment().keySet()).forEach(group::removeTargetAssignment);
+                group.clearTargetAssignment();
             }
             group.setTargetAssignmentMetadata(-1, 0L);
         }
@@ -6643,8 +6643,7 @@ public class GroupMetadataManager {
                 log.warn("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the streams group"
                     + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
                     groupId, streamsGroup.targetAssignment().size());
-                // Copy the keys as removing the target assignments modifies the underlying map.
-                List.copyOf(streamsGroup.targetAssignment().keySet()).forEach(streamsGroup::removeTargetAssignment);
+                streamsGroup.clearTargetAssignment();
             }
             streamsGroup.setTargetAssignmentMetadata(-1, 0L);
         }
@@ -6787,8 +6786,7 @@ public class GroupMetadataManager {
                 log.warn("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the share group"
                     + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
                     groupId, group.targetAssignment().size());
-                // Copy the keys as removing the target assignments modifies the underlying map.
-                List.copyOf(group.targetAssignment().keySet()).forEach(group::removeTargetAssignment);
+                group.clearTargetAssignment();
             }
             group.setTargetAssignmentMetadata(-1, 0L);
         }
