@@ -536,7 +536,7 @@ kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount
 <tr>
 <td>
 
-Number of partitions led by this broker that have late ongoing transactions.
+Count of leader partitions with late transactions
 </td>
 <td>
 
