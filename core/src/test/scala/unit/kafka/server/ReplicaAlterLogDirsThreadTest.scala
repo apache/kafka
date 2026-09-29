@@ -834,7 +834,10 @@ class ReplicaAlterLogDirsThreadTest {
   }
 
   @Test
-  def shouldFetchFromInitialFetchOffsetWithoutTruncationIfFutureLogHasNoEpochs(): Unit = {
+  def shouldTruncateToInitialFetchOffsetIfFutureLogHasNoEpochs(): Unit = {
+
+    //Create a capture to track what partitions/offsets are truncated
+    val truncated: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     // Setup all the dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
@@ -876,18 +879,21 @@ class ReplicaAlterLogDirsThreadTest {
       config.replicaFetchBackoffMs)
     thread.addPartitions(Map(t1p0 -> initialFetchState(initialFetchOffset)))
 
-    // The initial fetch offset is the future log's high watermark, so the partition is ready
-    // for fetch right away without a truncation phase and without a last fetched epoch
+    // Without a leader epoch the future replica cannot detect divergence from the fetch response,
+    // so it starts in the truncating state with no last fetched epoch
     val fetchState = thread.fetchState(t1p0).get
-    assertEquals(ReplicaState.FETCHING, fetchState.state)
+    assertEquals(ReplicaState.TRUNCATING, fetchState.state)
     assertEquals(initialFetchOffset, fetchState.fetchOffset)
     assertEquals(Optional.empty, fetchState.lastFetchedEpoch)
 
     //Run it
     thread.doWork()
 
-    //We should not have truncated the future log
-    verify(partition, never()).truncateTo(ArgumentMatchers.anyLong(), anyBoolean())
+    //We should have truncated to initial fetch offset
+    verify(partition).truncateTo(truncated.capture(), isFuture = ArgumentMatchers.eq(true))
+    assertEquals(initialFetchOffset, truncated.getValue,
+      "Expected future replica to truncate to initial fetch offset if it has no leader epochs")
+    assertEquals(ReplicaState.FETCHING, thread.fetchState(t1p0).get.state)
   }
 
   @Test

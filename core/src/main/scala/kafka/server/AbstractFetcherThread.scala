@@ -108,6 +108,7 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   override def doWork(): Unit = {
+    maybeTruncate()
     maybeFetch()
   }
 
@@ -139,6 +140,38 @@ abstract class AbstractFetcherThread(name: String,
       delayPartitions(partitions, fetchBackOffMs)
     }
   }
+
+  /**
+   * Truncate the log of every partition in the truncating state to its fetch offset, which is the
+   * high watermark. A partition only enters that state when the follower has no leader epoch, i.e.
+   * its log only contains records in a message format older than v2. Divergence cannot be detected
+   * from the fetch response in that case, so the records above the high watermark, which may not
+   * have been committed, are truncated before fetching resumes.
+   */
+  private[server] def maybeTruncate(): Unit = LockUtils.inLock[Exception](partitionMapLock, () => {
+    // Collect the partitions first since truncating one of them may fail and remove it from `partitionStates`.
+    val truncatingPartitions = mutable.Set.empty[TopicPartition]
+    partitionStates.partitionStateMap.forEach { (tp, state) =>
+      if (state.isTruncating)
+        truncatingPartitions += tp
+    }
+
+    if (truncatingPartitions.nonEmpty) {
+      val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
+
+      for (tp <- truncatingPartitions) {
+        val partitionState = partitionStates.stateValue(tp)
+        if (partitionState != null) {
+          val truncationState = OffsetTruncationState(partitionState.fetchOffset)
+          info(s"Truncating partition $tp with $truncationState due to local high watermark ${partitionState.fetchOffset}")
+          if (doTruncate(tp, truncationState))
+            fetchOffsets.put(tp, truncationState)
+        }
+      }
+
+      updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
+    }
+  })
 
   private def doTruncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Boolean = {
     try {
@@ -382,15 +415,18 @@ abstract class AbstractFetcherThread(name: String,
    * partition starts fetching from `initOffset` immediately. Any divergence is detected via the
    * diverging epoch in the fetch response and handled by `truncateOnFetchResponse`.
    * 
-   * A replica without leader epochs cannot diverge in this way. In that case, `initOffset` is the
-   * high watermark, which is also the log end offset, so there is nothing to truncate.
+   * With an old message format, `latestEpoch` is empty and the fetch request carries no last
+   * fetched epoch, so the leader never replies with a diverging epoch. The Truncating state is
+   * used in that case to truncate to `initOffset`, which is the high watermark.
    */
   private def partitionFetchState(tp: TopicPartition, initialFetchState: InitialFetchState, currentState: PartitionFetchState): PartitionFetchState = {
     if (currentState != null && currentState.currentLeaderEpoch == initialFetchState.currentLeaderEpoch) {
       currentState
     } else {
+      val lastFetchedEpoch = latestEpoch(tp)
+      val state = if (lastFetchedEpoch.isPresent) ReplicaState.FETCHING else ReplicaState.TRUNCATING
       new PartitionFetchState(initialFetchState.topicId.toJava, initialFetchState.initOffset, Optional.empty(),
-        initialFetchState.currentLeaderEpoch, ReplicaState.FETCHING, latestEpoch(tp))
+        initialFetchState.currentLeaderEpoch, state, lastFetchedEpoch)
     }
   }
 
@@ -471,21 +507,21 @@ abstract class AbstractFetcherThread(name: String,
     val endOffsetForEpochOpt = endOffsetForEpoch(tp, leaderEpochOffset.leaderEpoch)
     if (endOffsetForEpochOpt.isPresent) {
       val offsetAndEpoch = endOffsetForEpochOpt.get
-      val followerEndOffset = offsetAndEpoch.offset
+      val followerEpochEndOffset = offsetAndEpoch.offset
       val followerEpoch = offsetAndEpoch.epoch()
       if (followerEpoch != leaderEpochOffset.leaderEpoch) {
         // the follower does not know about the epoch that leader replied with
         // we truncate to the end offset of the largest epoch that is smaller than the
         // epoch the leader replied with; the next fetch request carries that epoch as
         // the last fetched epoch and the leader may reply with another diverging epoch
-        val intermediateOffsetToTruncateTo = min(followerEndOffset, replicaEndOffset)
+        val intermediateOffsetToTruncateTo = min(followerEpochEndOffset, replicaEndOffset)
         info(s"Based on replica's leader epoch, leader replied with epoch ${leaderEpochOffset.leaderEpoch} " +
           s"unknown to the replica for $tp. " +
           s"Will truncate to $intermediateOffsetToTruncateTo and continue fetching with the last known epoch.")
-        OffsetTruncationState(intermediateOffsetToTruncateTo, truncationCompleted = false)
+        OffsetTruncationState(intermediateOffsetToTruncateTo)
       } else {
-        val offsetToTruncateTo = min(followerEndOffset, leaderEpochOffset.endOffset)
-        OffsetTruncationState(min(offsetToTruncateTo, replicaEndOffset), truncationCompleted = true)
+        val offsetToTruncateTo = min(followerEpochEndOffset, leaderEpochOffset.endOffset)
+        OffsetTruncationState(min(offsetToTruncateTo, replicaEndOffset))
       }
     } else {
       // The leader replied with an epoch smaller than any epoch the follower still tracks. This can
@@ -496,7 +532,7 @@ abstract class AbstractFetcherThread(name: String,
         s"below any replica's tracked epochs for $tp. " +
         s"The leader's offset only ${leaderEpochOffset.endOffset} will be used for truncation.")
 
-      OffsetTruncationState(min(leaderEpochOffset.endOffset, replicaEndOffset), truncationCompleted = true)
+      OffsetTruncationState(min(leaderEpochOffset.endOffset, replicaEndOffset))
     }
   })
 
@@ -527,7 +563,7 @@ abstract class AbstractFetcherThread(name: String,
     } else if (leaderEndOffset < replicaEndOffset) {
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
-      truncate(topicPartition, OffsetTruncationState(leaderEndOffset, truncationCompleted = true))
+      truncate(topicPartition, OffsetTruncationState(leaderEndOffset))
 
       fetcherLagStats.getAndMaybePut(topicPartition).lag = 0
       new PartitionFetchState(topicId.toJava, leaderEndOffset, Optional.of(0L), currentLeaderEpoch,
@@ -832,9 +868,7 @@ case class ClientIdTopicPartition(clientId: String, topicPartition: TopicPartiti
   override def toString: String = s"$clientId-$topicPartition"
 }
 
-case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
+case class OffsetTruncationState(offset: Long) {
 
-  def this(offset: Long) = this(offset, true)
-
-  override def toString: String = s"TruncationState(offset=$offset, completed=$truncationCompleted)"
+  override def toString: String = s"TruncationState(offset=$offset)"
 }
