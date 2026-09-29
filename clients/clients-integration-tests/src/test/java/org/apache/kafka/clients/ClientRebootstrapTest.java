@@ -55,7 +55,7 @@ public class ClientRebootstrapTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testAdminRebootstrap(ClusterInstance clusterInstance) {
+    public void testAdminRebootstrap(ClusterInstance clusterInstance) throws Exception {
         var broker0 = 0;
         var broker1 = 1;
         var timeout = 60;
@@ -63,11 +63,10 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS))).all().get();
 
             // Only the broker 1 is available for the admin client during the bootstrap.
-            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
-            assertTrue(topics.contains(TOPIC));
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(5, TimeUnit.SECONDS).contains(TOPIC), timeout * 1000, "Topic not visible after creation");
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
@@ -75,7 +74,7 @@ public class ClientRebootstrapTest {
             // The broker 1, originally cached during the bootstrap, is offline.
             // However, the broker 0 from the bootstrap list is online.
             // Should be able to list topics again.
-            topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
+            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
             assertTrue(topics.contains(TOPIC));
         }
     }
@@ -87,7 +86,7 @@ public class ClientRebootstrapTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testAdminRebootstrapDisabled(ClusterInstance clusterInstance) {
+    public void testAdminRebootstrapDisabled(ClusterInstance clusterInstance) throws Exception {
         var broker0 = 0;
         var broker1 = 1;
 
@@ -95,10 +94,9 @@ public class ClientRebootstrapTest {
 
         var admin = clusterInstance.admin(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
         try {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS))).all().get();
             // Only the broker 1 is available for the admin client during the bootstrap.
-            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS));
-            assertTrue(topics.contains(TOPIC));
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(5, TimeUnit.SECONDS).contains(TOPIC), 60 * 1000, "Topic not visible after creation");
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);

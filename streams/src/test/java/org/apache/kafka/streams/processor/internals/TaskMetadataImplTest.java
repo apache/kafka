@@ -30,10 +30,9 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TaskMetadataImplTest {
 
@@ -59,9 +58,9 @@ public class TaskMetadataImplTest {
 
     @Test
     public void shouldNotAllowModificationOfInternalStateViaGetters() {
-        assertThat(isUnmodifiable(taskMetadata.topicPartitions()), is(true));
-        assertThat(isUnmodifiable(taskMetadata.committedOffsets()), is(true));
-        assertThat(isUnmodifiable(taskMetadata.endOffsets()), is(true));
+        assertTrue(isUnmodifiable(taskMetadata.topicPartitions()));
+        assertTrue(isUnmodifiable(taskMetadata.committedOffsets()));
+        assertTrue(isUnmodifiable(taskMetadata.endOffsets()));
     }
 
     @Test
@@ -72,8 +71,8 @@ public class TaskMetadataImplTest {
             COMMITTED_OFFSETS,
             END_OFFSETS,
             TIME_CURRENT_IDLING_STARTED);
-        assertThat(taskMetadata, equalTo(same));
-        assertThat(taskMetadata.hashCode(), equalTo(same.hashCode()));
+        assertEquals(same, taskMetadata);
+        assertEquals(same.hashCode(), taskMetadata.hashCode());
     }
 
     @Test
@@ -84,8 +83,8 @@ public class TaskMetadataImplTest {
             mkMap(mkEntry(TP_1, 1000000L), mkEntry(TP_1, 2L)),
             END_OFFSETS,
             TIME_CURRENT_IDLING_STARTED);
-        assertThat(taskMetadata, equalTo(stillSameDifferCommittedOffsets));
-        assertThat(taskMetadata.hashCode(), equalTo(stillSameDifferCommittedOffsets.hashCode()));
+        assertEquals(stillSameDifferCommittedOffsets, taskMetadata);
+        assertEquals(stillSameDifferCommittedOffsets.hashCode(), taskMetadata.hashCode());
     }
 
     @Test
@@ -96,8 +95,8 @@ public class TaskMetadataImplTest {
             COMMITTED_OFFSETS,
             mkMap(mkEntry(TP_1, 1000000L), mkEntry(TP_1, 2L)),
             TIME_CURRENT_IDLING_STARTED);
-        assertThat(taskMetadata, equalTo(stillSameDifferEndOffsets));
-        assertThat(taskMetadata.hashCode(), equalTo(stillSameDifferEndOffsets.hashCode()));
+        assertEquals(stillSameDifferEndOffsets, taskMetadata);
+        assertEquals(stillSameDifferEndOffsets.hashCode(), taskMetadata.hashCode());
     }
 
     @Test
@@ -108,8 +107,8 @@ public class TaskMetadataImplTest {
             COMMITTED_OFFSETS,
             END_OFFSETS,
             Optional.empty());
-        assertThat(taskMetadata, equalTo(stillSameDifferIdlingTime));
-        assertThat(taskMetadata.hashCode(), equalTo(stillSameDifferIdlingTime.hashCode()));
+        assertEquals(stillSameDifferIdlingTime, taskMetadata);
+        assertEquals(stillSameDifferIdlingTime.hashCode(), taskMetadata.hashCode());
     }
 
     @Test
@@ -120,8 +119,8 @@ public class TaskMetadataImplTest {
             COMMITTED_OFFSETS,
             END_OFFSETS,
             TIME_CURRENT_IDLING_STARTED);
-        assertThat(taskMetadata, not(equalTo(differTaskId)));
-        assertThat(taskMetadata.hashCode(), not(equalTo(differTaskId.hashCode())));
+        assertNotEquals(differTaskId, taskMetadata);
+        assertNotEquals(differTaskId.hashCode(), taskMetadata.hashCode());
     }
 
     @Test
@@ -132,8 +131,8 @@ public class TaskMetadataImplTest {
             COMMITTED_OFFSETS,
             END_OFFSETS,
             TIME_CURRENT_IDLING_STARTED);
-        assertThat(taskMetadata, not(equalTo(differTopicPartitions)));
-        assertThat(taskMetadata.hashCode(), not(equalTo(differTopicPartitions.hashCode())));
+        assertNotEquals(differTopicPartitions, taskMetadata);
+        assertNotEquals(differTopicPartitions.hashCode(), taskMetadata.hashCode());
     }
 
     private static boolean isUnmodifiable(final Collection<?> collection) {

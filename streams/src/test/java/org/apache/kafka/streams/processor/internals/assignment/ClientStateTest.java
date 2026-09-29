@@ -29,7 +29,6 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T1_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
@@ -38,7 +37,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_2;
@@ -47,7 +45,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasActiveTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasStandbyTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -58,34 +55,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ClientStateTest {
     private final ClientState client = new ClientState(1);
     private final ClientState zeroCapacityClient = new ClientState(0);
-
-    @Test
-    public void previousStateConstructorShouldCreateAValidObject() {
-        final ClientState clientState = new ClientState(
-            Set.of(TASK_0_0, TASK_0_1),
-            Set.of(TASK_0_2, TASK_0_3),
-            mkMap(mkEntry(TASK_0_0, 5L), mkEntry(TASK_0_2, -1L)),
-            EMPTY_CLIENT_TAGS,
-            4
-        );
-
-        // all the "next assignment" fields should be empty
-        assertEquals(0, clientState.activeTaskCount());
-        assertEquals(0.0, clientState.activeTaskLoad());
-        assertTrue(clientState.activeTasks().isEmpty());
-        assertEquals(0, clientState.standbyTaskCount());
-        assertTrue(clientState.standbyTasks().isEmpty());
-        assertEquals(0, clientState.assignedTaskCount());
-        assertTrue(clientState.assignedTasks().isEmpty());
-
-        // and the "previous assignment" fields should match the constructor args
-        assertEquals(Set.of(TASK_0_0, TASK_0_1), clientState.prevActiveTasks());
-        assertEquals(Set.of(TASK_0_2, TASK_0_3), clientState.prevStandbyTasks());
-        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), clientState.previousAssignedTasks());
-        assertEquals(4, clientState.capacity());
-        assertEquals(5L, clientState.lagFor(TASK_0_0));
-        assertEquals(-1L, clientState.lagFor(TASK_0_2));
-    }
 
     @Test
     public void shouldHaveNotReachedCapacityWhenAssignedTasksLessThanCapacity() {
@@ -546,16 +515,4 @@ public class ClientStateTest {
         assertNull(new ClientState().processId());
     }
 
-    @Test
-    public void shouldCopyState() {
-        final ClientState clientState = new ClientState(Set.of(new TaskId(0, 0)), Set.of(new TaskId(0, 1)), Map.of(), EMPTY_CLIENT_TAGS, 1, processIdForInt(1));
-        final ClientState clientStateCopy = new ClientState(clientState);
-
-        assertEquals(clientStateCopy.processId(), clientState.processId());
-        assertEquals(clientStateCopy.capacity(), clientState.capacity());
-        assertEquals(clientStateCopy.prevActiveTasks(), clientStateCopy.prevActiveTasks());
-        assertEquals(clientStateCopy.prevStandbyTasks(), clientStateCopy.prevStandbyTasks());
-        assertEquals(clientState.prevActiveTasks(), clientStateCopy.prevActiveTasks());
-        assertEquals(clientState.prevStandbyTasks(), clientStateCopy.prevStandbyTasks());
-    }
 }

@@ -48,7 +48,7 @@ import java.util.Set;
  * {@link CooperativeStickyAssignor#supportedProtocols supportedProtocols()}.
  * <p>
  * IMPORTANT: if upgrading from 2.3 or earlier, you must follow a specific upgrade path in order to safely turn on
- * cooperative rebalancing. See the <a href="https://kafka.apache.org/documentation/#upgrade_240_notable">upgrade guide</a> for details.
+ * cooperative rebalancing. See the <a href="https://kafka.apache.org/39/getting-started/upgrade/#notable-changes-in-240">upgrade guide</a> for details.
  */
 @InterfaceAudience.Public
 @SuppressKafkaInternalApiUsage("KIP-1265: extends internal AbstractStickyAssignor — pending KIP review to promote the parent or refactor the assignor hierarchy")

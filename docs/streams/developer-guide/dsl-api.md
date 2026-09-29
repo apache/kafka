@@ -4675,7 +4675,7 @@ One thing to note is that suppression is just like any other Kafka Streams opera
 
 For more detailed information, see the JavaDoc on the `Suppressed` config object and [KIP-328](https://cwiki.apache.org/confluence/x/sQU0BQ "KIP-328"). 
 
-Applying processors (Processor API integration)
+## Applying processors (Processor API integration) {#applying-processors}
 
 Beyond the aforementioned  stateless and  stateful transformations, you may also leverage the Processor API from the DSL. There are a number of scenarios where this may be helpful: 
 

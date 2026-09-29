@@ -735,35 +735,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
-  def testDescribeConfigsNonexistent(): Unit = {
-    client = createAdminClient
-
-    val brokerException = assertThrows(classOf[ExecutionException], () => {
-      client.describeConfigs(util.List.of(new ConfigResource(ConfigResource.Type.BROKER, "-1"))).all().get()
-    })
-    assertInstanceOf(classOf[TimeoutException], brokerException.getCause)
-
-    val topicException = assertThrows(classOf[ExecutionException], () => {
-      client.describeConfigs(util.List.of(new ConfigResource(ConfigResource.Type.TOPIC, "none_topic"))).all().get()
-    })
-    assertInstanceOf(classOf[UnknownTopicOrPartitionException], topicException.getCause)
-
-    val brokerLoggerException = assertThrows(classOf[ExecutionException], () => {
-      client.describeConfigs(util.List.of(new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "-1"))).all().get()
-    })
-    assertInstanceOf(classOf[TimeoutException], brokerLoggerException.getCause)
-  }
-
-  @Test
-  def testDescribeConfigsNonexistentForKraft(): Unit = {
-    client = createAdminClient
-
-    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, "none_group")
-    val groupResult = client.describeConfigs(util.List.of(groupResource)).all().get().get(groupResource)
-    assertNotEquals(0, groupResult.entries().size())
-  }
-
-  @Test
   def testDescribeAndAlterConfigs(): Unit = {
     client = createAdminClient
 

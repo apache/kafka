@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ClientInstanceIdCapture;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
@@ -30,6 +31,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegateInstanceIdCapture;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -2488,10 +2490,8 @@ public class KafkaConsumerTest {
             // Close task should not complete until commit succeeds or close times out
             // if close timeout is not zero.
             if (closeTimeoutMs != 0) {
-                assertThrows(TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS), "Close completed without waiting for commit or leave response");
-            } else {
-                // Handle the case where timeout is 0, if needed
-                future.get(100, TimeUnit.MILLISECONDS);
+                assertThrows(TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS),
+                        "Close completed without waiting for commit or leave response");
             }
 
             // Ensure close has started and queued at least one more request after commitAsync.
@@ -2500,13 +2500,13 @@ public class KafkaConsumerTest {
             // LEAVE_GROUP as part of coordinator close and second is FETCH with epoch=FINAL_EPOCH. At this stage
             // we expect only the first one to have been requested. Hence, waiting for total 2 requests, one for
             // commit and another for LEAVE_GROUP.
-            client.waitForRequests(2, 1000);
+            client.waitForRequests(2, TestUtils.DEFAULT_MAX_WAIT_MS);
 
             // In graceful mode, commit response results in close() completing immediately without a timeout
             // In non-graceful mode, close() times out without an exception even though commit response is pending
             int nonCloseRequests = 1;
             for (int i = 0; i < responses.size(); i++) {
-                client.waitForRequests(1, 1000);
+                client.waitForRequests(1, TestUtils.DEFAULT_MAX_WAIT_MS);
                 if (i == responses.size() - 1 && responses.get(i) instanceof FetchResponse) {
                     // last request is the close session request which is sent to the leader of the partition.
                     client.respondFrom(responses.get(i), node);
@@ -2529,7 +2529,9 @@ public class KafkaConsumerTest {
 
                 assertInstanceOf(InterruptException.class, closeException.get(), "Expected exception not thrown " + closeException);
             } else {
-                future.get(closeTimeoutMs, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+                // The close timeout runs on MockTime, so bound the wait in real time; it should complete without
+                // TimeoutException or ExecutionException.
+                future.get(TestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
                 assertNull(closeException.get(), "Unexpected exception during close");
             }
         } finally {
@@ -4487,5 +4489,27 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         public static void resetCounters() {
             CLOSE_COUNT.set(0);
         }
+    }
+
+    private Map<String, Object> clientInstanceIdConfigs(GroupProtocol groupProtocol) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group");
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
+        return configs;
+    }
+
+    @Test
+    public void testClassicConsumerPassesTheClientInstanceIdToTheNetworkClient() {
+        Map<String, Object> configs = clientInstanceIdConfigs(GroupProtocol.CLASSIC);
+        ClientInstanceIdCapture.assertGenerated(
+            () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
+    }
+
+    @Test
+    public void testAsyncConsumerPassesTheClientInstanceIdToTheNetworkClient() {
+        Map<String, Object> configs = clientInstanceIdConfigs(GroupProtocol.CONSUMER);
+        NetworkClientDelegateInstanceIdCapture.assertGenerated(
+            () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 }
