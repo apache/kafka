@@ -258,6 +258,7 @@ import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -23040,6 +23041,96 @@ public class GroupMetadataManagerTest {
                     .setStandbyTasks(List.of())
                     .setWarmupTasks(List.of())));
         assertEquals("Failed to compute a new target assignment for epoch 2: Assignment failed.", e.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"member-1", "member-2"})
+    public void testStreamsInvalidTargetAssignmentPreservesPreviousAssignment(String heartbeatMemberId) {
+        String groupId = "fooup";
+        String memberId1 = "member-1";
+        String memberId2 = "member-2";
+        String subtopologyId = "subtopology1";
+        String topicName = "foo";
+        Uuid topicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopologyId).setSourceTopics(List.of(topicName))
+        ));
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, 1)
+            .buildCoordinatorMetadataImage();
+        long metadataHash = computeGroupHash(Map.of(topicName, computeTopicHash(topicName, metadataImage)));
+
+        TasksTuple activeTasks = TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopologyId, 0));
+        Map<String, TasksTuple> previousAssignment = Map.of(
+            memberId1, activeTasks,
+            memberId2, TasksTuple.EMPTY
+        );
+        StreamsGroupMember member1 = streamsGroupMemberBuilderWithDefaults(memberId1)
+            .setProcessId("process-1")
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                TaskAssignmentTestUtil.mkTasks(subtopologyId, 0)))
+            .build();
+        StreamsGroupMember member2 = streamsGroupMemberBuilderWithDefaults(memberId2)
+            .setProcessId("process-2")
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .build();
+
+        MockTaskAssignor assignor = new MockTaskAssignor("custom");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withTargetAssignment(memberId1, activeTasks)
+                .withTargetAssignment(memberId2, TasksTuple.EMPTY)
+                .withTargetAssignmentEpoch(10)
+                .withTargetAssignmentTimestamp(12345L)
+                .withMetadataHash(metadataHash)
+                .withValidatedTopologyEpoch(0)
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .build();
+
+        // Simulate a faulty custom assignor that assigns the same active task to both members.
+        // Member 1 already owns the task and retains it in the new target assignment.
+        assignor.prepareGroupAssignment(Map.of(memberId1, activeTasks, memberId2, activeTasks));
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        long lastWrittenOffset = context.lastWrittenOffset;
+        assertEquals(StreamsGroup.StreamsGroupState.STABLE, group.state());
+
+        // A rack change triggers a new assignment on a regular heartbeat.
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(heartbeatMemberId)
+            .setMemberEpoch(10)
+            .setRackId("new-rack");
+        UnknownServerException exception = assertThrows(UnknownServerException.class, () ->
+            context.streamsGroupHeartbeat(request));
+
+        TaskAssignorException cause = assertInstanceOf(TaskAssignorException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains(cause.getMessage()));
+
+        // No partial target records or assignment metadata are replayed on failure.
+        assertEquals(lastWrittenOffset, context.lastWrittenOffset);
+        assertEquals(previousAssignment, group.targetAssignment());
+        assertEquals(10, group.assignmentEpoch());
+        assertEquals(12345L, group.assignmentTimestamp());
+        assertEquals(member1, group.members().get(memberId1));
+        assertEquals(member2, group.members().get(memberId2));
+        context.rollback();
+
+        // With a valid assignor result, the same rebalance trigger can advance the assignment.
+        assignor.prepareGroupAssignment(previousAssignment);
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(request);
+        assertEquals(Errors.NONE.code(), result.response().data().errorCode());
+        assertEquals(previousAssignment, group.targetAssignment());
+        assertEquals(11, group.assignmentEpoch());
     }
 
     @Test
