@@ -41,7 +41,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
@@ -280,7 +279,7 @@ class StreamsCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            GROUP_ID, 42, 43, 44, Optional.of(new AssignmentConfigsImpl(2, List.of())), -1, -1));
+            GROUP_ID, 42, 43, 44, new AssignmentConfigsImpl(2, List.of()), -1, -1));
     }
 
     @Test
@@ -293,7 +292,11 @@ class StreamsCoordinatorRecordHelpersTest {
                     .setEpoch(42)
                     .setMetadataHash(43)
                     .setValidatedTopologyEpoch(44)
-                    .setLastAssignmentConfigs(List.of())
+                    .setLastAssignmentConfigs(List.of(
+                        new StreamsGroupMetadataValue.LastAssignmentConfig()
+                            .setKey("num.standby.replicas")
+                            .setValue("0")
+                    ))
                     .setStoredDescriptionTopologyEpoch(7)
                     .setFailedDescriptionTopologyEpoch(5),
                 (short) 0
@@ -301,7 +304,7 @@ class StreamsCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            GROUP_ID, 42, 43, 44, Optional.empty(), 7, 5));
+            GROUP_ID, 42, 43, 44, AssignmentConfigsImpl.DEFAULT, 7, 5));
     }
 
     @Test
@@ -710,7 +713,7 @@ class StreamsCoordinatorRecordHelpersTest {
     @Test
     public void testNewStreamsGroupMetadataRecordNullGroupId() {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, Optional.empty(), -1, -1));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, AssignmentConfigsImpl.DEFAULT, -1, -1));
         assertEquals("groupId should not be null here", exception.getMessage());
     }
 

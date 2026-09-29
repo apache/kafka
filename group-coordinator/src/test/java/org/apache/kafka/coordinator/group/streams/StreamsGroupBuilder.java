@@ -27,7 +27,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public class StreamsGroupBuilder {
 
@@ -40,7 +39,7 @@ public class StreamsGroupBuilder {
     private final Map<String, TasksTuple> targetAssignments = new HashMap<>();
     private long metadataHash = 0L;
     private int validatedTopologyEpoch = -1;
-    private Optional<AssignmentConfigsImpl> lastAssignmentConfigs = Optional.empty();
+    private AssignmentConfigsImpl lastAssignmentConfigs = AssignmentConfigsImpl.DEFAULT;
 
     public StreamsGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
@@ -86,7 +85,7 @@ public class StreamsGroupBuilder {
     }
 
     public StreamsGroupBuilder withLastAssignmentConfigs(AssignmentConfigsImpl lastAssignmentConfigs) {
-        this.lastAssignmentConfigs = Optional.of(lastAssignmentConfigs);
+        this.lastAssignmentConfigs = lastAssignmentConfigs;
         return this;
     }
 

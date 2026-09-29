@@ -38,7 +38,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -103,17 +102,15 @@ public class StreamsCoordinatorRecordHelpers {
         int newGroupEpoch,
         long metadataHash,
         int validatedTopologyEpoch,
-        Optional<AssignmentConfigsImpl> assignmentConfigs,
+        AssignmentConfigsImpl assignmentConfigs,
         int storedDescriptionTopologyEpoch,
         int failedDescriptionTopologyEpoch
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
         Objects.requireNonNull(assignmentConfigs, "assignmentConfigs should not be null here");
 
-        // Configs that were never recorded stay unrecorded (an empty list); the epoch bump check treats an
-        // unrecorded group as running the defaults.
         List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigList =
-            assignmentConfigs.map(AssignmentConfigsImpl::toMap).orElse(Map.of()).entrySet().stream()
+            AssignmentConfigsImpl.toMap(assignmentConfigs).entrySet().stream()
                 .map(entry -> new StreamsGroupMetadataValue.LastAssignmentConfig()
                     .setKey(entry.getKey())
                     .setValue(entry.getValue()))

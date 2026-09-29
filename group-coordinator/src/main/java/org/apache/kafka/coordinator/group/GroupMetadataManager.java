@@ -2265,11 +2265,10 @@ public class GroupMetadataManager {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
-        // Check if assignment configurations have changed. A group with no recorded configs (its metadata
-        // record predates persisting them) compares against the defaults, so upgrading the broker does not
-        // rebalance every group that has nothing configured.
+        // Check if assignment configurations have changed. A group with no recorded configs holds the defaults,
+        // so upgrading the broker does not rebalance every group that has nothing configured.
         AssignmentConfigsImpl currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
-        AssignmentConfigsImpl storedAssignmentConfigs = group.lastAssignmentConfigs().orElse(AssignmentConfigsImpl.DEFAULT);
+        AssignmentConfigsImpl storedAssignmentConfigs = group.lastAssignmentConfigs();
         if (assignmentUpdate == AssignmentUpdate.NONE && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
             log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
                 groupId, memberId, currentAssignmentConfigs);
@@ -2295,7 +2294,7 @@ public class GroupMetadataManager {
                 groupEpoch,
                 metadataHash,
                 validatedTopologyEpoch,
-                Optional.of(currentAssignmentConfigs),
+                currentAssignmentConfigs,
                 group.storedDescriptionTopologyEpoch(),
                 group.failedDescriptionTopologyEpoch()
             ));
@@ -4794,7 +4793,7 @@ public class GroupMetadataManager {
                 metadataImage,
                 records,
                 Optional.empty(),
-                group.lastAssignmentConfigs().orElse(AssignmentConfigsImpl.DEFAULT),
+                group.lastAssignmentConfigs(),
                 false
             );
 
@@ -6386,20 +6385,16 @@ public class GroupMetadataManager {
             streamsGroup.setStoredDescriptionTopologyEpoch(value.storedDescriptionTopologyEpoch());
             streamsGroup.setFailedDescriptionTopologyEpoch(value.failedDescriptionTopologyEpoch());
 
-            // A record without configs (written before they were persisted, or re-persisting such a state) leaves
-            // them unrecorded. The next heartbeat then compares the effective configs against the defaults, so it
-            // only rebalances the group if any effective config differs from its default.
-            if (value.lastAssignmentConfigs() == null || value.lastAssignmentConfigs().isEmpty()) {
-                streamsGroup.setLastAssignmentConfigs(Optional.empty());
-            } else {
-                streamsGroup.setLastAssignmentConfigs(Optional.of(AssignmentConfigsImpl.fromMap(
-                    value.lastAssignmentConfigs().stream()
-                        .collect(Collectors.toMap(
-                            StreamsGroupMetadataValue.LastAssignmentConfig::key,
-                            StreamsGroupMetadataValue.LastAssignmentConfig::value
-                        ))
-                )));
-            }
+            // A record without configs (written before they were persisted) yields the defaults, so the next
+            // heartbeat only rebalances the group if any effective config differs from its default.
+            Map<String, String> lastAssignmentConfigs = value.lastAssignmentConfigs() == null
+                ? Map.of()
+                : value.lastAssignmentConfigs().stream()
+                    .collect(Collectors.toMap(
+                        StreamsGroupMetadataValue.LastAssignmentConfig::key,
+                        StreamsGroupMetadataValue.LastAssignmentConfig::value
+                    ));
+            streamsGroup.setLastAssignmentConfigs(AssignmentConfigsImpl.fromMap(lastAssignmentConfigs));
 
         } else {
             StreamsGroup streamsGroup;

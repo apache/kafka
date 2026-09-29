@@ -265,10 +265,10 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
 
     /**
-     * The last used assignment configurations for this streams group, or empty if none were recorded yet.
+     * The last used assignment configurations for this streams group; the defaults until any were recorded.
      * This is used to determine when assignment configuration changes should trigger a rebalance.
      */
-    private final TimelineObject<Optional<AssignmentConfigsImpl>> lastAssignmentConfigs;
+    private final TimelineObject<AssignmentConfigsImpl> lastAssignmentConfigs;
 
     /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
@@ -331,7 +331,7 @@ public class StreamsGroup implements Group {
         this.refinedAssignment = new TimelineObject<>(snapshotRegistry, RefinedAssignment.NONE);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
-        this.lastAssignmentConfigs = new TimelineObject<>(snapshotRegistry, Optional.empty());
+        this.lastAssignmentConfigs = new TimelineObject<>(snapshotRegistry, AssignmentConfigsImpl.DEFAULT);
     }
 
     /**
@@ -1550,18 +1550,18 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The last used assignment configurations for this streams group, or empty if none were recorded yet.
+     * @return The last used assignment configurations for this streams group; the defaults until any were recorded.
      */
-    public Optional<AssignmentConfigsImpl> lastAssignmentConfigs() {
+    public AssignmentConfigsImpl lastAssignmentConfigs() {
         return lastAssignmentConfigs.get();
     }
 
     /**
      * Sets last assignment configurations.
      *
-     * @param lastAssignmentConfigs The last assignment configurations to set, or empty if none were recorded.
+     * @param lastAssignmentConfigs The last assignment configurations to set.
      */
-    public void setLastAssignmentConfigs(Optional<AssignmentConfigsImpl> lastAssignmentConfigs) {
+    public void setLastAssignmentConfigs(AssignmentConfigsImpl lastAssignmentConfigs) {
         this.lastAssignmentConfigs.set(Objects.requireNonNull(lastAssignmentConfigs));
     }
 
