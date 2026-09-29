@@ -4401,12 +4401,10 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs);
             }
 
-            Map<String, String> staticMembers = updatedMembersAndTargetAssignment.staticMembers();
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(log, group.groupId())
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
-                .withPreviousStaticMembers(staticMembers)
-                .withCurrentStaticMembers(staticMembers)
+                .withUnchangedStaticMembers()
                 .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                 .withNewTargetAssignment(assignmentResult.targetAssignment())
                 .build(records);
@@ -4493,12 +4491,10 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs);
             }
 
-            Map<String, String> staticMembers = Map.of();
             new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(log, group.groupId())
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
-                .withPreviousStaticMembers(staticMembers)
-                .withCurrentStaticMembers(staticMembers)
+                .withUnchangedStaticMembers()
                 .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                 .withNewTargetAssignment(assignmentResult.targetAssignment())
                 .build(records);
@@ -4640,12 +4636,10 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, assignor, assignorTimeMs);
             }
 
-            Map<String, String> staticMembers = updatedMembersAndTargetAssignment.staticMembers();
             new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(log, group.groupId())
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
-                .withPreviousStaticMembers(staticMembers)
-                .withCurrentStaticMembers(staticMembers)
+                .withUnchangedStaticMembers()
                 .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                 .withNewTargetAssignment(assignmentResult.targetAssignment())
                 .build(records);
