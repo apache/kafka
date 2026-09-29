@@ -72,12 +72,6 @@ import java.util.stream.Collectors;
  * target assignment (so the member's {@link MemberAssignmentState#warmupTasks()}, {@link MemberAssignmentState#taskOffsets()}
  * and {@link MemberAssignmentState#taskEndOffsets()} are not read here), and rack-aware placement is tracked
  * separately.
- * <p>
- * The assignor is not registered as a built-in assignor yet, so a group cannot select it through the group
- * configuration {@code streams.assignor.name}. Appending it to the built-in list in {@code GroupCoordinatorConfig},
- * which also adds its name to the default of {@code group.streams.assignors}, is deferred to a follow-up together
- * with the optimization of the skew loop, so that the name becomes selectable only once the assignor is ready for
- * production-sized groups.
  */
 public class BalancedTaskAssignor implements TaskAssignor {
 
@@ -172,6 +166,8 @@ public class BalancedTaskAssignor implements TaskAssignor {
         final PriorityQueue<ProcessTasks> processesByLoad = new PriorityQueue<>(BY_ASSIGNED_LOAD);
         processesByLoad.addAll(processes);
 
+        int tasksShortOfReplicas = 0;
+        int missingReplicas = 0;
         for (final TaskId task : statefulTasks) {
             int remainingReplicas = numStandbyReplicas;
             while (remainingReplicas > 0) {
@@ -185,11 +181,18 @@ public class BalancedTaskAssignor implements TaskAssignor {
             }
 
             if (remainingReplicas > 0) {
-                log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                        "There is not enough available capacity. You should increase the number of " +
-                        "application instances to maintain the requested number of standby replicas.",
-                    remainingReplicas, numStandbyReplicas, task);
+                tasksShortOfReplicas++;
+                missingReplicas += remainingReplicas;
             }
+        }
+
+        if (tasksShortOfReplicas > 0) {
+            // Expected whenever the group runs on fewer processes than copies are configured, and repeated on every
+            // assignment of that group, so one line at INFO rather than a warning per task.
+            log.info("{} of {} stateful tasks got fewer than the configured {} standby replicas ({} replicas missing in "
+                    + "total): the copies of a task must be on different processes, and the group runs on {} process(es). "
+                    + "Add application instances to get the configured number of standby replicas.",
+                tasksShortOfReplicas, statefulTasks.size(), numStandbyReplicas, missingReplicas, processes.size());
         }
 
         balanceTasksOverProcesses(processes, process -> process.standbyTasks);
@@ -248,14 +251,13 @@ public class BalancedTaskAssignor implements TaskAssignor {
                         continue;
                     }
 
-                    final SortedSet<TaskId> sourceTasks = tasksToBalance.apply(source);
                     final SortedSet<TaskId> destinationTasks = tasksToBalance.apply(destination);
-                    // Iterate over a copy, since the moves below modify the source's tasks.
-                    final Iterator<TaskId> sourceIterator = new ArrayList<>(sourceTasks).iterator();
+                    // The moves change only the source's tasks, which the iterator removes in place.
+                    final Iterator<TaskId> sourceIterator = tasksToBalance.apply(source).iterator();
                     while (shouldMoveATask(source, destination) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
                         if (!destination.hasTask(taskToMove)) {
-                            sourceTasks.remove(taskToMove);
+                            sourceIterator.remove();
                             destinationTasks.add(taskToMove);
                             keepBalancing = true;
                         }
