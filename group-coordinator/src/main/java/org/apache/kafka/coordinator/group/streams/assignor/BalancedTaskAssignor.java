@@ -60,17 +60,19 @@ import java.util.stream.Collectors;
  *     same way.</li>
  *     <li>Stateless active tasks fill in the gaps, going to the process with the lowest active task load.</li>
  *     <li>Within a process, the tasks are spread over its members in three rounds, as the classic client spreads a
- *     process's tasks over its stream threads: stateful active tasks, then stateless active tasks, then standby
- *     tasks. Each round levels the members' total task counts, keeping a task on the member that currently owns it
- *     where that does not leave another member short.</li>
+ *     process's tasks over its stream threads: stateful active tasks, then standby tasks, then stateless active
+ *     tasks. Each round levels the members' total task counts. A stateful task stays on the member that currently
+ *     holds it, in whichever role, where that does not leave another member short; stateless tasks are dealt out
+ *     without regard to their current member.</li>
  * </ol>
  * In contrast to the {@link StickyTaskAssignor}, the placement across processes does not depend on the previous
  * assignment, so the assignment stays orderly across many membership changes at the price of moving more tasks.
  * <p>
  * The parts of the classic assignor that this assignor deliberately does <em>not</em> implement are not assignor
  * concerns in the streams rebalance protocol: warm-up tasks are inserted by the group coordinator when it applies the
- * target assignment (so the member's {@link MemberAssignmentState#warmupTasks()}, {@link MemberAssignmentState#taskOffsets()}
- * and {@link MemberAssignmentState#taskEndOffsets()} are not read here), and rack-aware placement is tracked
+ * target assignment (so the member's {@link MemberAssignmentState#taskOffsets()} and
+ * {@link MemberAssignmentState#taskEndOffsets()} are not read here, and {@link MemberAssignmentState#warmupTasks()}
+ * only tells the fan-out which member of a process holds a task's state), and rack-aware placement is tracked
  * separately.
  */
 public class BalancedTaskAssignor implements TaskAssignor {
@@ -321,9 +323,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
         private final SortedSet<TaskId> statefulActiveTasks = new TreeSet<>();
         private final SortedSet<TaskId> statelessActiveTasks = new TreeSet<>();
         private final SortedSet<TaskId> standbyTasks = new TreeSet<>();
-        // The member of this process that currently owns a task, used to keep the task on that member if possible.
-        private final Map<TaskId, String> currentActiveOwner = new HashMap<>();
-        private final Map<TaskId, String> currentStandbyOwner = new HashMap<>();
+        // The member of this process that currently holds a task in any role, so that a stateful task can stay on
+        // the member that has its state, as the classic client does through the offset sums each thread reports.
+        private final Map<TaskId, String> currentOwner = new HashMap<>();
 
         private ProcessTasks(final String processId) {
             this.processId = processId;
@@ -335,16 +337,15 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
         private void addMember(final String memberId, final MemberAssignmentState currentAssignment) {
             memberIds.add(memberId);
-            recordCurrentOwner(currentActiveOwner, memberId, currentAssignment.activeTasks());
-            recordCurrentOwner(currentStandbyOwner, memberId, currentAssignment.standbyTasks());
+            recordCurrentOwner(memberId, currentAssignment.activeTasks());
+            recordCurrentOwner(memberId, currentAssignment.standbyTasks());
+            recordCurrentOwner(memberId, currentAssignment.warmupTasks());
         }
 
-        private static void recordCurrentOwner(final Map<TaskId, String> currentOwner,
-                                               final String memberId,
-                                               final Map<String, Set<Integer>> tasks) {
+        private void recordCurrentOwner(final String memberId, final Map<String, Set<Integer>> tasks) {
             for (final Map.Entry<String, Set<Integer>> entry : tasks.entrySet()) {
                 for (final int partition : entry.getValue()) {
-                    // Two members of one process cannot own the same task; the smaller member ID wins if they do.
+                    // Two members of one process cannot hold the same task; the smaller member ID wins if they do.
                     currentOwner.merge(new TaskId(entry.getKey(), partition), memberId,
                         (existing, candidate) -> existing.compareTo(candidate) <= 0 ? existing : candidate);
                 }
@@ -376,13 +377,13 @@ public class BalancedTaskAssignor implements TaskAssignor {
         }
 
         /**
-         * Spreads the process's tasks over its members in three rounds, as the classic client spreads a process's
-         * tasks over its stream threads: stateful active tasks first, then stateless active tasks, then standby
+         * Spreads the process's tasks over its members in the three rounds of the classic client's
+         * {@code assignTasksToThreads}: stateful active tasks first, then standby tasks, then stateless active
          * tasks. Each round levels the members' total task counts on top of what the previous rounds placed, so the
-         * stateful tasks are even on their own, the active tasks are even after the second round, and the standbys
-         * fill up the members with fewer active tasks. The classic client levels the standbys before the stateless
-         * tasks; the active tasks go first here, as in the {@link StickyTaskAssignor}, so that a member never
-         * processes two tasks while another only maintains standbys.
+         * stateful active tasks are even on their own and the standbys fill up the members with fewer of them. The
+         * stateless tasks come last and are dealt out without regard to their current member, since they have no
+         * state to keep close. As in the classic client, a member may therefore end up with more active tasks than a
+         * sibling that holds standbys instead.
          *
          * @return The assignment of every member of this process, including members that received no task.
          */
@@ -396,9 +397,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
                 standbyTasksByMember.put(memberId, new HashSet<>());
             }
 
-            distributeTasksOverMembers(statefulActiveTasks, currentActiveOwner, taskCountByMember, activeTasksByMember);
-            distributeTasksOverMembers(statelessActiveTasks, currentActiveOwner, taskCountByMember, activeTasksByMember);
-            distributeTasksOverMembers(standbyTasks, currentStandbyOwner, taskCountByMember, standbyTasksByMember);
+            distributeTasksOverMembers(statefulActiveTasks, currentOwner, taskCountByMember, activeTasksByMember);
+            distributeTasksOverMembers(standbyTasks, currentOwner, taskCountByMember, standbyTasksByMember);
+            distributeTasksOverMembers(statelessActiveTasks, Map.of(), taskCountByMember, activeTasksByMember);
 
             return memberIds.stream().collect(Collectors.toMap(
                 Function.identity(),
@@ -423,7 +424,8 @@ public class BalancedTaskAssignor implements TaskAssignor {
          * being left with nothing while the others keep everything.
          *
          * @param tasksToDistribute        The tasks of this round placed on the process.
-         * @param currentOwner             The member of this process that currently owns a task, if any.
+         * @param currentOwner             The member of this process that currently holds a task, if any; empty for
+         *                                 a round without stickiness.
          * @param taskCountByMember        The number of tasks each member holds so far, over all rounds; updated as
          *                                 tasks are distributed.
          * @param distributedTasksByMember The tasks of this round's role each member receives; the output of this

@@ -266,6 +266,54 @@ public class BalancedTaskAssignorTest {
     }
 
     @Test
+    public void shouldKeepStandbyTasksOnTheirCurrentMemberWithinAProcess() {
+        // The members already hold the placement the assignor computes, standbys included, so nothing moves. Without
+        // standby stickiness the standbys would be re-dealt in task order, giving member1 task 1 and member2 task 3.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberWithTasks("process1", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0))), mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(3))))),
+            mkEntry("member2", memberWithTasks("process1", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(2))), mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(1))))),
+            mkEntry("member3", memberWithTasks("process2", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(1))), mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(2))))),
+            mkEntry("member4", memberWithTasks("process2", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(3))), mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0)))))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
+            statefulTopology(4, SUBTOPOLOGY_1)
+        );
+
+        members.forEach((memberId, member) -> assertEquals(
+            new MemberAssignment(member.activeTasks(), member.standbyTasks()),
+            result.members().get(memberId),
+            memberId
+        ));
+    }
+
+    @Test
+    public void shouldKeepATaskOnItsMemberWhenItsRoleChangesWithinAProcess() {
+        // process1 currently runs tasks 1 and 3 and holds standbys of 0 and 2; the balanced placement gives it the
+        // opposite roles. Each task stays with the member that holds its state: tasks 2 and 0 go from standby to
+        // active on member1 and member2, and tasks 3 and 1 from active to standby on the same members.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberWithTasks("process1", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(3))), mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(2))))),
+            mkEntry("member2", memberWithTasks("process1", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(1))), mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0))))),
+            mkEntry("member3", memberWithTasks("process2", Map.of(), Map.of())),
+            mkEntry("member4", memberWithTasks("process2", Map.of(), Map.of()))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
+            statefulTopology(4, SUBTOPOLOGY_1)
+        );
+
+        assertEquals(mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(2))), result.members().get("member1").activeTasks());
+        assertEquals(mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(3))), result.members().get("member1").standbyTasks());
+        assertEquals(mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0))), result.members().get("member2").activeTasks());
+        assertEquals(mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(1))), result.members().get("member2").standbyTasks());
+        assertAllTasksAssignedOnce(result, statefulTopology(4, SUBTOPOLOGY_1));
+        assertStandbysAssigned(result, statefulTopology(4, SUBTOPOLOGY_1), 1);
+    }
+
+    @Test
     public void shouldAssignStandbysForStatefulTasks() {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
@@ -378,8 +426,10 @@ public class BalancedTaskAssignorTest {
     }
 
     @Test
-    public void shouldIgnoreWarmupTasksAndReportedOffsets() {
-        // The balanced strategy does not use lag or warm-up information; the result must match the plain spec.
+    public void shouldPlaceTasksAcrossProcessesIndependentlyOfWarmupTasksAndReportedOffsets() {
+        // The placement across processes does not use lag or warm-up information, so the result must match the plain
+        // spec. Within a process a warm-up only decides which member keeps a task, and both processes here have a
+        // single member.
         final Map<String, MemberMetadataAndStateImpl> plainMembers = members("member1", "process1", "member2", "process2");
         final Map<String, MemberMetadataAndStateImpl> membersWithHints = mkMap(
             mkEntry("member1", new MemberMetadataAndStateImpl(
@@ -483,11 +533,11 @@ public class BalancedTaskAssignorTest {
             }
 
             // Within a process, each round of the fan-out leaves every member at the floor or the ceiling of the
-            // process's per-member count: stateful actives on their own, then all actives, then all tasks. And no
-            // process holds a task as active and as standby.
+            // process's per-member count: stateful actives on their own, then stateful actives and standbys, then
+            // all tasks. And no process holds a task as active and as standby.
             membersByProcess.forEach((processId, memberIds) -> {
                 assertLevelled(memberIds.stream().map(memberId -> statefulActiveTaskCount(result, memberId)).toList(), "stateful active tasks", processId, context);
-                assertLevelled(memberIds.stream().map(memberId -> activeTaskCount(result, memberId)).toList(), "active tasks", processId, context);
+                assertLevelled(memberIds.stream().map(memberId -> statefulActiveTaskCount(result, memberId) + standbyTaskCount(result, memberId)).toList(), "stateful active and standby tasks", processId, context);
                 assertLevelled(memberIds.stream().map(memberId -> activeTaskCount(result, memberId) + standbyTaskCount(result, memberId)).toList(), "tasks", processId, context);
 
                 final String[] memberIdArray = memberIds.toArray(new String[0]);
