@@ -109,8 +109,7 @@ public class SourceTopicChangelogRestoreIntegrationTest {
         for (final String key : preloadedKeys()) {
             vehicles.add(KeyValue.pair(key, "initial-state"));
         }
-        // batch the preload so the 5000 records load quickly (see produce())
-        produce(TABLE_TOPIC, vehicles, false);
+        produce(TABLE_TOPIC, vehicles);
     }
 
     @AfterEach
@@ -249,20 +248,13 @@ public class SourceTopicChangelogRestoreIntegrationTest {
     }
 
     private void produce(final String topic, final List<KeyValue<String, String>> records) throws Exception {
-        produce(topic, records, true);
-    }
-
-    private void produce(final String topic,
-                         final List<KeyValue<String, String>> records,
-                         final boolean oneRecordPerBatch) throws Exception {
         final Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        if (oneRecordPerBatch) {
-            // one record per batch, so a restore fetch capped by max.partition.fetch.bytes only returns a handful of records
-            producerConfig.put(ProducerConfig.BATCH_SIZE_CONFIG, 0);
-        }
+        // one record per batch, so a restore fetch capped by max.partition.fetch.bytes only returns a handful of records;
+        // this includes the preload, since that is what the delayed restore consumer reads back after the task is wiped
+        producerConfig.put(ProducerConfig.BATCH_SIZE_CONFIG, 0);
         IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, cluster.time);
     }
 
