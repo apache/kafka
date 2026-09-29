@@ -22364,8 +22364,8 @@ public class GroupMetadataManagerTest {
 
         context.sleep(10000);
 
-        // The delay timer firing must replay the resulting target assignment records into the
-        // in-memory group state, without requiring a subsequent heartbeat.
+        // The delay timer firing must update the target assignment without requiring a subsequent
+        // heartbeat.
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         assertEquals(
             TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)),
@@ -22445,8 +22445,8 @@ public class GroupMetadataManagerTest {
 
         context.sleep(2000);
 
-        // The delay timer firing must replay the resulting target assignment records into the
-        // in-memory group state, without requiring a subsequent heartbeat.
+        // The delay timer firing must update the target assignment without requiring a subsequent
+        // heartbeat.
         assertEquals(
             TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)),
             group.targetAssignment(memberId, Optional.empty())
