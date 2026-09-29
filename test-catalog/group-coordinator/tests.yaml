@@ -1252,10 +1252,8 @@ org.apache.kafka.coordinator.group.modern.SubscribedTopicMetadataTest:
 - testNumberOfPartitions
 - testRacksForPartition
 org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilderTest:
-- testAssignmentHasNotChanged
-- testAssignmentSwapped
+- testAssignment
 - testEmpty
-- testPartialAssignmentUpdate
 - testRegularExpressions
 org.apache.kafka.coordinator.group.modern.TopicIdsTest:
 - testContains
@@ -1737,14 +1735,12 @@ org.apache.kafka.coordinator.group.streams.StreamsTopologyTest:
 - subtopologiesMapShouldNotBeNull
 - topologyEpochShouldNotBeNegative
 org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilderTest:
-- testAssignmentHasNotChanged
-- testAssignmentSwapped
+- testAssignment
 - testBuildEmptyAssignmentWhenTopologyNotReady
 - testCreateMemberMetadataAndState
 - testCreateMemberMetadataAndStatePopulatesTaskOffsets
 - testCreateMemberMetadataAndStateSourcesWarmupTasksFromCurrentAssignment
 - testEmpty
-- testPartialAssignmentUpdate
 org.apache.kafka.coordinator.group.streams.TasksTupleTest:
 - testContainsAny
 - testFromTargetAssignmentRecord
