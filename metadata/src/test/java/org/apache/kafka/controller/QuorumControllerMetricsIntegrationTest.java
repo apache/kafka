@@ -38,10 +38,10 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.createTopics;
-import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.forceRenounce;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.registerBrokersAndUnfence;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -116,7 +116,7 @@ public class QuorumControllerMetricsIntegrationTest {
                 );
             } else {
                 // Directly call QuorumController.renounce.
-                forceRenounce(controlEnv.activeController());
+                controlEnv.activeController().forceRenounce().get(30, TimeUnit.SECONDS);
             }
             TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
                 for (QuorumController controller : controlEnv.controllers()) {

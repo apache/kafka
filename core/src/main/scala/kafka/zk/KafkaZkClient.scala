@@ -32,7 +32,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.metadata.migration.{MigrationConflictException, ZkMigrationLeadershipState}
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -1764,11 +1764,46 @@ class KafkaZkClient private[zk] (
     initialState.withMigrationZkVersion(0)
   }
 
+  /**
+   * When there is a ConnectionLossException while updating the /migration znode, the update may have actually succeeded
+   * on the server before the connection dropped, so the retried request can fail with BadVersionException even though
+   * our own write went through. This checker reads back the current data and, if its migration-relevant fields match
+   * what we intended to write, treats it as our own write having succeeded, returning the real current version.
+   */
+  private def checkMigrationStateZkData(
+                                         zkClient: KafkaZkClient,
+                                         path: String,
+                                         expectedData: Array[Byte]
+                                       ): (Boolean, Int) = {
+    try {
+      val (writtenDataOpt, writtenStat) = zkClient.getDataAndStat(path)
+      val expected = MigrationZNode.decode(expectedData, writtenStat.getVersion, -1)
+      val succeeded = writtenDataOpt.exists { writtenData =>
+        val written = MigrationZNode.decode(writtenData, writtenStat.getVersion, -1)
+        expected.kraftControllerId() == written.kraftControllerId() &&
+          expected.kraftControllerEpoch() == written.kraftControllerEpoch() &&
+          expected.kraftMetadataOffset() == written.kraftMetadataOffset() &&
+          expected.kraftMetadataEpoch() == written.kraftMetadataEpoch()
+      }
+      if (succeeded) (true, writtenStat.getVersion) else (false, ZkVersion.UnknownVersion)
+    } catch {
+      case _: Exception => (false, ZkVersion.UnknownVersion)
+    }
+  }
+
   def updateMigrationState(migrationState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
-    val req = SetDataRequest(MigrationZNode.path, MigrationZNode.encode(migrationState), migrationState.migrationZkVersion())
-    val resp = retryRequestUntilConnected(req)
-    resp.maybeThrow()
-    migrationState.withMigrationZkVersion(resp.stat.getVersion)
+    val path = MigrationZNode.path
+    val data = MigrationZNode.encode(migrationState)
+    val expectedVersion = migrationState.migrationZkVersion()
+    val (succeeded, newVersion) = conditionalUpdatePath(
+      path, data, expectedVersion, Some(checkMigrationStateZkData))
+
+    if (succeeded && (expectedVersion == ZkVersion.MatchAnyVersion || expectedVersion + 1 == newVersion)) {
+      migrationState.withMigrationZkVersion(newVersion)
+    } else {
+      throw new MigrationConflictException(s"Conditional update on KRaft Migration ZNode failed. Sent zkVersion = " +
+        s"$expectedVersion.")
+    }
   }
 
   /**
@@ -2054,11 +2089,11 @@ class KafkaZkClient private[zk] (
               data match {
                 case Some(value) =>
                   val failedPayload = MigrationZNode.decode(value, version, -1)
-                  throw new RuntimeException(
+                  throw new MigrationConflictException(
                     s"Conditional update on KRaft Migration ZNode failed. Sent zkVersion = $version. The failed " +
                     s"write was: $failedPayload. This indicates that another KRaft controller is making writes to ZooKeeper.")
                 case None =>
-                  throw new RuntimeException(s"Check op on KRaft Migration ZNode failed. Sent zkVersion = $version. " +
+                  throw new MigrationConflictException(s"Check op on KRaft Migration ZNode failed. Sent zkVersion = $version. " +
                     s"This indicates that another KRaft controller is making writes to ZooKeeper.")
               }
             } else if (errorCode == Code.OK) {
