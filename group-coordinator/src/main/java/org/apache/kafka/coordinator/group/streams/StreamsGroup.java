@@ -783,8 +783,6 @@ public class StreamsGroup implements Group {
 
     /**
      * Removes the target assignment of every member.
-     * Used when the target assignment metadata tombstone is replayed while per-member target
-     * assignments remain because their tombstones were removed by compaction.
      */
     public void clearTargetAssignment() {
         targetAssignment.clear();
