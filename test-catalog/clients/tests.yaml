@@ -99,6 +99,8 @@ org.apache.kafka.clients.NetworkClientTest:
 - testAuthenticationFailureWithInFlightMetadataRequest
 - testCallDisconnect
 - testClientDisconnectAfterInternalApiVersionRequest
+- testClientInstanceIdIsRequired
+- testClientInstanceIdIsSentInTheV3RequestHeader
 - testClose
 - testCloseConnectingNode
 - testConnectionDelay
@@ -133,6 +135,7 @@ org.apache.kafka.clients.NetworkClientTest:
 - testRequestTimeout
 - testSendToUnreadyNode
 - testServerDisconnectAfterInternalApiVersionRequest
+- testShortConstructorsGenerateClientInstanceId
 - testSimpleRequestResponse
 - testSimpleRequestResponseWithNoBrokerDiscovery
 - testSimpleRequestResponseWithStaticNodes
@@ -338,6 +341,7 @@ org.apache.kafka.clients.admin.KafkaAdminClientTest:
 - testCallFailWithUnsupportedVersionExceptionDoesNotHaveConcurrentModificationException
 - testClientInstanceId
 - testClientInstanceIdInvalidTimeout
+- testClientInstanceIdIsPassedToTheNetworkClient
 - testClientInstanceIdNoTelemetryReporterRegistered
 - testClientSideTimeoutAfterFailureToReceiveResponse
 - testClientSideTimeoutAfterFailureToSend
@@ -863,11 +867,13 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testAssignOnNullTopicPartition
 - testAssignedPartitionsMetrics
 - testAssignorNameConflict
+- testAsyncConsumerPassesTheClientInstanceIdToTheNetworkClient
 - testAutoCommitSentBeforePositionUpdate
 - testBeginningOffsetsAuthenticationFailure
 - testBeginningOffsetsTimeout
 - testChangingRegexSubscription
 - testClassicConsumerCloseRunsRevocationCallbackAndAttemptsLeaveGroupWhenInterrupted
+- testClassicConsumerPassesTheClientInstanceIdToTheNetworkClient
 - testClassicProtocolLogsRecommendationToTryConsumerProtocol
 - testClientInstanceId
 - testClientInstanceIdInvalidTimeout
@@ -1002,6 +1008,7 @@ org.apache.kafka.clients.consumer.KafkaShareConsumerMetricsTest:
 - testUnregisteringCustomMetricsWithSameNameDoesntAffectConsumerMetrics
 - testUnregisteringNonexistingMetricsDoesntCauseError
 org.apache.kafka.clients.consumer.KafkaShareConsumerTest:
+- testClientInstanceIdIsPassedToTheNetworkClient
 - testShareConsumerBootstrapResolutionExceptionPropagatedToPoll
 - testShareConsumerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero
 - testVerifyFetchAndCloseImplicit
@@ -3071,6 +3078,7 @@ org.apache.kafka.clients.producer.KafkaProducerTest:
 - testCallbackAndInterceptorHandleError
 - testClientInstanceId
 - testClientInstanceIdInvalidTimeout
+- testClientInstanceIdIsPassedToTheNetworkClient
 - testClientInstanceIdNoTelemetryReporterRegistered
 - testCloseIsForcedOnPendingAddOffsetRequest
 - testCloseIsForcedOnPendingFindCoordinator
@@ -4879,9 +4887,12 @@ org.apache.kafka.common.requests.RequestContextTest:
 org.apache.kafka.common.requests.RequestHeaderTest:
 - parseHeaderFromBufferWithNonZeroPosition
 - parseHeaderWithNullClientId
+- testClientInstanceIdIsUnsetBelowTheV3Header
 - testHugeDeclaredTaggedFieldCountIsRejected
 - testRequestHeaderV1
 - testRequestHeaderV2
+- testRequestHeaderV3WithClientInstanceId
+- testRequestHeaderV3WithoutClientInstanceId
 - verifySizeMethodsReturnSameValue
 org.apache.kafka.common.requests.RequestResponseTest:
 - cannotUseFindCoordinatorV0ToFindTransactionCoordinator

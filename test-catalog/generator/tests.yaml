@@ -26,7 +26,6 @@ org.apache.kafka.message.HeaderVersionsTest:
 - testFlexibleRequestVersionNeedsFlexibleHeader
 - testFlexibleResponseVersionNeedsFlexibleHeader
 - testGap
-- testHeaderVersionThreeAcceptedWhenHeaderSchemaAllowsIt
 - testHighestExistingHeaderVersionsAccepted
 - testJacksonRoundTripPreservesMap
 - testLastRangeNotOpenEnded
