@@ -26359,6 +26359,7 @@ public class GroupMetadataManagerTest {
         assertEquals(-1, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
         assertFalse(context.groupMetadataManager.consumerGroup("foo").targetAssignment().containsKey("m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").invertedTargetAssignment());
     }
 
     @Test
@@ -26557,6 +26558,7 @@ public class GroupMetadataManagerTest {
         assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
         assertFalse(context.groupMetadataManager.shareGroup("foo").targetAssignment().containsKey("m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").invertedTargetAssignment());
     }
 
     @Test
@@ -26821,10 +26823,13 @@ public class GroupMetadataManagerTest {
     @Test
     public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneExisting() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder("foo", 10)
+                    .withTargetAssignmentEpoch(10)
+                    .withTargetAssignmentTimestamp(12345L)
+            )
             .build();
 
-        // Create the group by replaying a value record.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
         assertEquals(10, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
         assertEquals(12345L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
 
