@@ -33,6 +33,7 @@ type: docs
 ### Notable changes in 4.4.0
 
   * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
+  * Protocol message readers now limit array and collection allocations when decoding messages. Arrays and collections with more than 1,000,000 elements and flexible-version tagged-field sections with more than 10,000 fields are rejected before allocation. Arrays and collections are initially allocated with a capacity no greater than 1,000 and grow as needed during decoding.
   * New configs have been introduced: remote.copy.lag.bytes, remote.copy.lag.ms and their corresponding broker-level configurations. They allow tiered storage redundancy reduced with delayed upload. For further details, please refer to [KIP-1241](https://cwiki.apache.org/confluence/x/A4LMFw).
   * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.
   * Storage directories formatted by the `kafka-storage` tool are no longer forward-compatible. A Kafka broker must be the same version as, or newer than, the `kafka-storage` tool that formatted its directory, regardless of the `--release-version` chosen at format time. For further details, please refer to [KIP-1170](https://cwiki.apache.org/confluence/x/ZYoEFQ).
@@ -60,6 +61,18 @@ type: docs
   * The `org.apache.kafka.automatic.config.providers` allowlist is now applied when dynamic broker configurations are validated and applied.
   * `group.consumer.assignors` now fails broker startup with a `ConfigException` when two configured assignors resolve to the same name, for example a built-in listed both by its name and by its class name, or a custom assignor reusing the name of another configured assignor. Such a configuration used to pass startup validation and fail later during group coordinator loading. For further details, please refer to [KAFKA-20843](https://issues.apache.org/jira/browse/KAFKA-20843).
   * `telemetry.max.bytes` now also bounds the size of a client's *decompressed* telemetry payload, not just its compressed wire size (this decompressed-size check was introduced in 4.3.1). A push whose decompressed size exceeds this limit is rejected with the retryable `TELEMETRY_TOO_LARGE` error, so the client retries at its normal push interval; previously this was misreported as `INVALID_RECORD`, which permanently disabled telemetry for that client instance. If clients hit this limit, for example after upgrading from 4.3.0, consider raising `telemetry.max.bytes`, since typical metric formats can decompress to many times their compressed size. For further details, please refer to [KAFKA-21076](https://issues.apache.org/jira/browse/KAFKA-21076).
+
+## Upgrading to 4.3.2
+
+### Notable changes in 4.3.2
+
+  * Includes a fix for a critical tiered storage bug in which size-based retention could delete data that was still within retention from both local and remote tiers after a leader election ([KAFKA-20732](https://issues.apache.org/jira/browse/KAFKA-20732)).
+  * Includes a fix for a Kafka Streams issue in which the state directory could be cleaned prematurely under [KIP-1035](https://cwiki.apache.org/confluence/x/uYvOEg), forcing a from-scratch restore ([KAFKA-20805](https://issues.apache.org/jira/browse/KAFKA-20805)).
+  * Includes fixes for several critical Kafka Streams bugs that could cause a `StreamThread` to die after task corruption, task recycling, or state updater timeouts ([KAFKA-20808](https://issues.apache.org/jira/browse/KAFKA-20808), [KAFKA-20827](https://issues.apache.org/jira/browse/KAFKA-20827), [KAFKA-20721](https://issues.apache.org/jira/browse/KAFKA-20721)).
+  * Includes a fix for a group coordinator bug in which a consumer group downgrade could leave the group in an invalid state when the classic group metadata is very large ([KAFKA-20845](https://issues.apache.org/jira/browse/KAFKA-20845)).
+  * Includes a fix for a client telemetry bug in which metrics could be sent to a stale broker IP address after a broker address change ([KAFKA-20393](https://issues.apache.org/jira/browse/KAFKA-20393)).
+  * Includes a fix for a `NullPointerException` in `MetadataCache#toCluster` that stopped a custom `ClientQuotaCallback` (`client.quota.callback.class`) from receiving cluster metadata updates ([KAFKA-20746](https://issues.apache.org/jira/browse/KAFKA-20746)).
+  * Protocol message readers now limit array and collection allocations when decoding messages. Arrays and collections with more than 1,000,000 elements and flexible-version tagged-field sections with more than 10,000 fields are rejected before allocation. Arrays and collections are initially allocated with a capacity no greater than 1,000 and grow as needed during decoding.
 
 ## Upgrading to 4.3.1
 
@@ -98,6 +111,20 @@ Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been remove
   * New `group.consumer.assignment.interval.ms`, `group.share.assignment.interval.ms` and `group.streams.assignment.interval.ms` configs have been added to set the interval between assignment updates for consumer, share and streams groups, along with broker configs for specifying minimum and maximum values and group configs. These default to an interval of 1 second and previously had an effective value of 0. For further details, please refer to [KIP-1263](https://cwiki.apache.org/confluence/x/DIE8G).
   * A new dynamic broker configuration `follower.fetch.last.tiered.offset.enable` (default: `false`) has been added. When enabled on a cluster with tiered storage, a newly added follower replica that has no local data will skip directly to the earliest pending upload offset on the leader, avoiding re-fetching data that is already stored in remote storage. This reduces bootstrap time significantly for large tiered-storage topics. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
   * The `ListOffsets` API has been extended to version 11, adding support for the `EARLIEST_PENDING_UPLOAD_TIMESTAMP` (-6) timestamp type. This allows clients to query the earliest offset on the leader that has not yet been uploaded to tiered storage. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
+
+## Upgrading to 4.2.2
+
+### Notable changes in 4.2.2
+
+  * Includes a fix for `ListDeserializer` silently deserializing a corrupted entry when the input is truncated mid-entry ([KAFKA-20769](https://issues.apache.org/jira/browse/KAFKA-20769)).
+  * Includes a fix for an exactly-once semantics issue where the checkpoint file written at restoration completion could persist through the `RUNNING` state, causing the state store wipe to be skipped after an unclean crash ([KAFKA-20685](https://issues.apache.org/jira/browse/KAFKA-20685)).
+  * Includes a fix for a deadlock in `KafkaStreams.removeStreamThread` when it races with a concurrent `REPLACE_THREAD` uncaught-exception handler ([KAFKA-20873](https://issues.apache.org/jira/browse/KAFKA-20873)).
+  * Includes a fix for consumer group downgrades that could leave the group's on-disk coordinator state permanently unloadable when the group's classic member metadata is very large ([KAFKA-20845](https://issues.apache.org/jira/browse/KAFKA-20845)).
+  * Includes a fix for the `record-e2e-latency-max` metric only measuring consumption latency instead of the full end-to-end latency (consumption plus processing delay) documented in [KIP-613](https://cwiki.apache.org/confluence/display/KAFKA/KIP-613%3A+Add+end-to-end+latency+metrics+to+Streams) ([KAFKA-14597](https://issues.apache.org/jira/browse/KAFKA-14597)).
+  * Includes a fix for a high CPU loop on the consumer after a failed re-authentication ([KAFKA-20253](https://issues.apache.org/jira/browse/KAFKA-20253)).
+  * Includes a fix for consumer groups accepting new classic-protocol members even when `group.consumer.migration.policy=disabled`, which could leave a group permanently stuck in a mixed-protocol state ([KAFKA-20640](https://issues.apache.org/jira/browse/KAFKA-20640)).
+  * Includes a fix for `AdminClient` APIs routed through the partition-leader cache (`listOffsets`, `deleteRecords`, `describeProducers`, `abortTransaction`) blocking for the full `default.api.timeout.ms` instead of failing fast when a cached leader has left the cluster ([KAFKA-20673](https://issues.apache.org/jira/browse/KAFKA-20673)).
+  * Bumped jackson-databind ([KAFKA-21004](https://issues.apache.org/jira/browse/KAFKA-21004), [KAFKA-20773](https://issues.apache.org/jira/browse/KAFKA-20773), [KAFKA-20767](https://issues.apache.org/jira/browse/KAFKA-20767)), lz4-java ([KAFKA-20936](https://issues.apache.org/jira/browse/KAFKA-20936)), and jline ([KAFKA-20815](https://issues.apache.org/jira/browse/KAFKA-20815)) to address reported CVEs.
 
 ## Upgrading to 4.2.1
 

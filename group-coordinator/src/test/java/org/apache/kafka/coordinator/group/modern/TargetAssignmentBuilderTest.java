@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.AssignmentTestUtil;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
@@ -39,11 +40,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -55,7 +53,6 @@ import static org.mockito.Mockito.when;
 public class TargetAssignmentBuilderTest {
 
     public static class TargetAssignmentBuilderTestContext {
-        private final String groupId;
         private final int groupEpoch;
         private final long assignmentTimestamp;
         private final PartitionAssignor assignor = mock(PartitionAssignor.class);
@@ -66,11 +63,9 @@ public class TargetAssignmentBuilderTest {
         private MetadataImageBuilder metadataImageBuilder = new MetadataImageBuilder();
 
         public TargetAssignmentBuilderTestContext(
-            String groupId,
             int groupEpoch,
             long assignmentTimestamp
         ) {
-            this.groupId = groupId;
             this.groupEpoch = groupEpoch;
             this.assignmentTimestamp = assignmentTimestamp;
         }
@@ -188,7 +183,7 @@ public class TargetAssignmentBuilderTest {
 
             // Create and populate the assignment builder.
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder builder =
-                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(groupId, groupEpoch, assignor)
+                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(groupEpoch, assignor)
                     .withTime(new MockTime(0, assignmentTimestamp, assignmentTimestamp))
                     .withMembers(members)
                     .withSubscriptionType(subscriptionType)
@@ -211,149 +206,16 @@ public class TargetAssignmentBuilderTest {
 
     @Test
     public void testEmpty() {
-        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
-            "my-group",
-            20,
-            12345L
-        );
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(20, 12345L);
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(List.of(newConsumerGroupTargetAssignmentMetadataRecord(
-            "my-group",
-            20,
-            12345L
-        )), result.records());
         assertEquals(Map.of(), result.targetAssignment());
+        assertEquals(new TargetAssignmentMetadata(20, 12345L), result.targetAssignmentMetadata());
     }
 
     @Test
-    public void testAssignmentHasNotChanged() {
-        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
-            "my-group",
-            20,
-            12345L
-        );
-
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
-        Uuid barTopicId = context.addTopicMetadata("bar", 6);
-
-        context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
-            mkTopicAssignment(fooTopicId, 1, 2, 3),
-            mkTopicAssignment(barTopicId, 1, 2, 3)
-        ));
-
-        context.addGroupMember("member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
-            mkTopicAssignment(fooTopicId, 4, 5, 6),
-            mkTopicAssignment(barTopicId, 4, 5, 6)
-        ));
-
-        context.prepareMemberAssignment("member-1", mkAssignment(
-            mkTopicAssignment(fooTopicId, 1, 2, 3),
-            mkTopicAssignment(barTopicId, 1, 2, 3)
-        ));
-
-        context.prepareMemberAssignment("member-2", mkAssignment(
-            mkTopicAssignment(fooTopicId, 4, 5, 6),
-            mkTopicAssignment(barTopicId, 4, 5, 6)
-        ));
-
-        TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-
-        assertEquals(List.of(newConsumerGroupTargetAssignmentMetadataRecord(
-            "my-group",
-            20,
-            12345L
-        )), result.records());
-
-        Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
-            mkTopicAssignment(fooTopicId, 1, 2, 3),
-            mkTopicAssignment(barTopicId, 1, 2, 3)
-        )));
-        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
-            mkTopicAssignment(fooTopicId, 4, 5, 6),
-            mkTopicAssignment(barTopicId, 4, 5, 6)
-        )));
-
-        assertEquals(expectedAssignment, result.targetAssignment());
-    }
-
-    @Test
-    public void testAssignmentSwapped() {
-        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
-            "my-group",
-            20,
-            12345L
-        );
-
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
-        Uuid barTopicId = context.addTopicMetadata("bar", 6);
-
-        context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
-            mkTopicAssignment(fooTopicId, 1, 2, 3),
-            mkTopicAssignment(barTopicId, 1, 2, 3)
-        ));
-
-        context.addGroupMember("member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
-            mkTopicAssignment(fooTopicId, 4, 5, 6),
-            mkTopicAssignment(barTopicId, 4, 5, 6)
-        ));
-
-        context.prepareMemberAssignment("member-2", mkAssignment(
-            mkTopicAssignment(fooTopicId, 1, 2, 3),
-            mkTopicAssignment(barTopicId, 1, 2, 3)
-        ));
-
-        context.prepareMemberAssignment("member-1", mkAssignment(
-            mkTopicAssignment(fooTopicId, 4, 5, 6),
-            mkTopicAssignment(barTopicId, 4, 5, 6)
-        ));
-
-        TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-
-        assertUnorderedRecordsEquals(
-            List.of(
-                List.of(
-                    newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                        mkTopicAssignment(fooTopicId, 4, 5, 6),
-                        mkTopicAssignment(barTopicId, 4, 5, 6)
-                    )),
-                    newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                        mkTopicAssignment(fooTopicId, 1, 2, 3),
-                        mkTopicAssignment(barTopicId, 1, 2, 3)
-                    ))
-                ),
-                List.of(
-                    newConsumerGroupTargetAssignmentMetadataRecord(
-                        "my-group",
-                        20,
-                        12345L
-                    )
-                )
-            ),
-            result.records()
-        );
-
-        Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
-            mkTopicAssignment(fooTopicId, 1, 2, 3),
-            mkTopicAssignment(barTopicId, 1, 2, 3)
-        )));
-        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
-            mkTopicAssignment(fooTopicId, 4, 5, 6),
-            mkTopicAssignment(barTopicId, 4, 5, 6)
-        )));
-
-        assertEquals(expectedAssignment, result.targetAssignment());
-    }
-
-    @Test
-    public void testPartialAssignmentUpdate() {
-        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
-            "my-group",
-            20,
-            12345L
-        );
+    public void testAssignment() {
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(20, 12345L);
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
         Uuid barTopicId = context.addTopicMetadata("bar", 6);
@@ -390,55 +252,28 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertUnorderedRecordsEquals(
-            List.of(
-                List.of(
-                    // Member 1 has no record because its assignment did not change.
-                    newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                        mkTopicAssignment(barTopicId, 3, 4, 5)
-                    )),
-                    newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
-                        mkTopicAssignment(fooTopicId, 6),
-                        mkTopicAssignment(barTopicId, 6)
-                    ))
-                ),
-                List.of(
-                    newConsumerGroupTargetAssignmentMetadataRecord(
-                        "my-group",
-                        20,
-                        12345L
-                    )
-                )
-            ),
-            result.records()
-        );
-
-        Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
+        expectedAssignment.put("member-2", new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4, 5),
             mkTopicAssignment(barTopicId, 3, 4, 5)
         )));
-        expectedAssignment.put("member-3", new MemberAssignmentImpl(mkAssignment(
+        expectedAssignment.put("member-3", new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 6),
             mkTopicAssignment(barTopicId, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
+        assertEquals(new TargetAssignmentMetadata(20, 12345L), result.targetAssignmentMetadata());
     }
 
 
     @Test
     public void testRegularExpressions() {
-        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
-            "my-group",
-            20,
-            12345L
-        );
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(20, 12345L);
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
         Uuid barTopicId = context.addTopicMetadata("bar", 6);
@@ -471,46 +306,21 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertUnorderedRecordsEquals(
-            List.of(
-                List.of(
-                    newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                        mkTopicAssignment(fooTopicId, 1, 2),
-                        mkTopicAssignment(barTopicId, 1, 2, 3)
-                    )),
-                    newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                        mkTopicAssignment(fooTopicId, 3, 4),
-                        mkTopicAssignment(barTopicId, 4, 5, 6)
-                    )),
-                    newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
-                        mkTopicAssignment(fooTopicId, 5, 6)
-                    ))
-                ),
-                List.of(
-                    newConsumerGroupTargetAssignmentMetadataRecord(
-                        "my-group",
-                        20,
-                        12345L
-                    )
-                )
-            ),
-            result.records()
-        );
-
-        Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2, 3)
         )));
-        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
+        expectedAssignment.put("member-2", new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4),
             mkTopicAssignment(barTopicId, 4, 5, 6)
         )));
 
-        expectedAssignment.put("member-3", new MemberAssignmentImpl(mkAssignment(
+        expectedAssignment.put("member-3", new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 5, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
+        assertEquals(new TargetAssignmentMetadata(20, 12345L), result.targetAssignmentMetadata());
     }
 }
