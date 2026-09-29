@@ -30,7 +30,21 @@ public interface TopicMigrationClient {
 
     enum TopicVisitorInterest {
         TOPICS,
-        PARTITIONS
+        PARTITIONS,
+
+        /**
+         * Partitions which are included in a topic's replica assignment, but which have no partition state
+         * (leader and ISR) in ZooKeeper. Such partitions are left behind when a controller fails in between
+         * writing the topic assignment and the partition states.
+         * <p>
+         * Only meaningful in combination with {@link #PARTITIONS}. If included, these partitions are visited
+         * with a synthetic {@link PartitionRegistration} which elects the first replica as the leader. Callers
+         * for which ZooKeeper is the source of truth (i.e. the ZK to KRaft migration) should include this
+         * interest, since skipping such a partition would drop it from the migrated metadata. Callers for which
+         * KRaft is the source of truth (i.e. the KRaft to ZK dual-write) should not, since the missing partition
+         * state is meant to be (re)created from the KRaft state rather than inferred from ZooKeeper.
+         */
+        PARTITIONS_WITHOUT_STATE
     }
 
     interface TopicVisitor {
