@@ -25,8 +25,10 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -78,48 +80,83 @@ public class KafkaProtocolFaultProxyTest {
     public void shouldRewriteFindCoordinatorResponsesToPointAtTheProxy(final short version) throws Exception {
         // Unless the coordinator address is rewritten, clients talk to the coordinator directly and every
         // group-coordinator request bypasses the proxy, so faults registered for those APIs never fire.
+        final FindCoordinatorResponseData upstreamResponse = new FindCoordinatorResponseData();
+        if (version < FindCoordinatorRequest.MIN_BATCHED_VERSION) {
+            upstreamResponse.setNodeId(0).setHost(UPSTREAM_HOST).setPort(UPSTREAM_PORT);
+        } else {
+            upstreamResponse.setCoordinators(List.of(new FindCoordinatorResponseData.Coordinator()
+                .setKey(GROUP_ID).setNodeId(0).setHost(UPSTREAM_HOST).setPort(UPSTREAM_PORT)));
+        }
         try (ServerSocket upstream = new ServerSocket(0);
              KafkaProtocolFaultProxy proxy = KafkaProtocolFaultProxy.inFrontOf("localhost:" + upstream.getLocalPort())) {
-            final CompletableFuture<Void> upstreamReplied =
-                CompletableFuture.runAsync(() -> replyWithUpstreamCoordinator(upstream, version));
+            final FindCoordinatorResponseData response =
+                findCoordinatorThroughProxy(upstream, proxy, version, upstreamResponse);
 
-            final RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, version, "fault-proxy-test", 1);
-            final ByteBuffer request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
-                    .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-                    .setCoordinatorKeys(List.of(GROUP_ID)))
-                .build(version)
-                .serializeWithHeader(header);
-
-            final String[] proxyAddress = proxy.bootstrapServers().split(":");
-            try (Socket client = new Socket(proxyAddress[0], Integer.parseInt(proxyAddress[1]))) {
-                client.setSoTimeout(10_000);
-                writeFrame(new DataOutputStream(client.getOutputStream()), request);
-                final FindCoordinatorResponseData response = ((FindCoordinatorResponse) AbstractResponse.parseResponse(
-                    ByteBuffer.wrap(readFrame(new DataInputStream(client.getInputStream()))), header)).data();
-
-                if (version < FindCoordinatorRequest.MIN_BATCHED_VERSION) {
-                    assertEquals(proxy.bootstrapServers(), response.host() + ":" + response.port());
-                } else {
-                    assertEquals(1, response.coordinators().size());
-                    final FindCoordinatorResponseData.Coordinator coordinator = response.coordinators().get(0);
-                    assertEquals(proxy.bootstrapServers(), coordinator.host() + ":" + coordinator.port());
-                }
+            if (version < FindCoordinatorRequest.MIN_BATCHED_VERSION) {
+                assertEquals(proxy.bootstrapServers(), response.host() + ":" + response.port());
+            } else {
+                assertEquals(1, response.coordinators().size());
+                final FindCoordinatorResponseData.Coordinator coordinator = response.coordinators().get(0);
+                assertEquals(proxy.bootstrapServers(), coordinator.host() + ":" + coordinator.port());
             }
-            upstreamReplied.get(10, TimeUnit.SECONDS);
         }
     }
 
-    private static void replyWithUpstreamCoordinator(final ServerSocket upstream, final short version) {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.FIND_COORDINATOR, fromVersion = FindCoordinatorRequest.MIN_BATCHED_VERSION)
+    @Timeout(30)
+    public void shouldReEncodeFindCoordinatorResponsesWithNoCoordinators(final short version) throws Exception {
+        // An empty coordinators list is valid at v4+ and leaves nothing to rewrite, so the client receives the
+        // same bytes whether the proxy re-encodes the response or fails and forwards it verbatim; only the
+        // warning logged on that failure tells the two apart.
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaProtocolFaultProxy.class);
+             ServerSocket upstream = new ServerSocket(0);
+             KafkaProtocolFaultProxy proxy = KafkaProtocolFaultProxy.inFrontOf("localhost:" + upstream.getLocalPort())) {
+            appender.setClassLogger(KafkaProtocolFaultProxy.class, Level.WARN);
+
+            final FindCoordinatorResponseData response =
+                findCoordinatorThroughProxy(upstream, proxy, version, new FindCoordinatorResponseData());
+
+            assertEquals(List.of(), response.coordinators());
+            assertEquals(List.of(), appender.getMessages(Level.WARN));
+        }
+    }
+
+    // Sends a FindCoordinator request through the proxy, has the upstream broker answer it with
+    // upstreamResponse, and returns the response as the client receives it.
+    private static FindCoordinatorResponseData findCoordinatorThroughProxy(final ServerSocket upstream,
+                                                                           final KafkaProtocolFaultProxy proxy,
+                                                                           final short version,
+                                                                           final FindCoordinatorResponseData upstreamResponse)
+            throws Exception {
+        final CompletableFuture<Void> upstreamReplied =
+            CompletableFuture.runAsync(() -> replyFromUpstream(upstream, upstreamResponse, version));
+
+        final RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, version, "fault-proxy-test", 1);
+        final ByteBuffer request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
+                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
+                .setCoordinatorKeys(List.of(GROUP_ID)))
+            .build(version)
+            .serializeWithHeader(header);
+
+        final FindCoordinatorResponseData response;
+        final String[] proxyAddress = proxy.bootstrapServers().split(":");
+        try (Socket client = new Socket(proxyAddress[0], Integer.parseInt(proxyAddress[1]))) {
+            client.setSoTimeout(10_000);
+            writeFrame(new DataOutputStream(client.getOutputStream()), request);
+            response = ((FindCoordinatorResponse) AbstractResponse.parseResponse(
+                ByteBuffer.wrap(readFrame(new DataInputStream(client.getInputStream()))), header)).data();
+        }
+        upstreamReplied.get(10, TimeUnit.SECONDS);
+        return response;
+    }
+
+    private static void replyFromUpstream(final ServerSocket upstream,
+                                          final FindCoordinatorResponseData response,
+                                          final short version) {
         try (Socket broker = upstream.accept()) {
             final RequestHeader header =
                 RequestHeader.parse(ByteBuffer.wrap(readFrame(new DataInputStream(broker.getInputStream()))));
-            final FindCoordinatorResponseData response = new FindCoordinatorResponseData();
-            if (version < FindCoordinatorRequest.MIN_BATCHED_VERSION) {
-                response.setNodeId(0).setHost(UPSTREAM_HOST).setPort(UPSTREAM_PORT);
-            } else {
-                response.setCoordinators(List.of(new FindCoordinatorResponseData.Coordinator()
-                    .setKey(GROUP_ID).setNodeId(0).setHost(UPSTREAM_HOST).setPort(UPSTREAM_PORT)));
-            }
             writeFrame(new DataOutputStream(broker.getOutputStream()), RequestUtils.serialize(
                 new ResponseHeaderData().setCorrelationId(header.correlationId()),
                 ApiKeys.FIND_COORDINATOR.responseHeaderVersion(version),
