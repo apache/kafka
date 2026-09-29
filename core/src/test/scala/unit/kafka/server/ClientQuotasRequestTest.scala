@@ -265,6 +265,11 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
     entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user").asJava)
     assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(10000.5)), validateOnly = true))
+
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(Double.NaN)), validateOnly = true))
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(Double.PositiveInfinity)), validateOnly = true))
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> Some(Double.NaN)), validateOnly = true))
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> Some(Double.PositiveInfinity)), validateOnly = true))
   }
 
   private def expectInvalidRequestWithMessage(runnable: => Unit, expectedMessage: String): Unit = {

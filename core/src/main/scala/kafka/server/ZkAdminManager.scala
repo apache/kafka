@@ -767,6 +767,8 @@ class ZkAdminManager(val config: KafkaConfig,
 
       val props = adminZkClient.fetchEntityConfig(configType, path)
       ops.foreach { op =>
+        if (op.value != null && (op.value.isNaN || op.value.isInfinite))
+          throw new InvalidRequestException(s"Quota ${op.key} must be a finite number")
         op.value match {
           case null =>
             props.remove(op.key)
