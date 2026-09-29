@@ -713,6 +713,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         closeTaskSensor.record();
         partitionsToResume.clear();
         consumedOffsets.clear();
+        // Clear so a revived task has no stale fallback for a partition it has not re-read.
+        nextOffsetsAndMetadataToBeConsumed.clear();
 
         transitionTo(State.CLOSED);
     }
