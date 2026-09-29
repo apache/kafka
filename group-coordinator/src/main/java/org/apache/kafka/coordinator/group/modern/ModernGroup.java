@@ -350,9 +350,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * Removes the target assignment of every member, along with the reverse lookup map.
-     * Used when the target assignment metadata tombstone is replayed while per-member target
-     * assignments remain because their tombstones were removed by compaction.
+     * Removes the target assignment of every member.
      */
     public void clearTargetAssignment() {
         targetAssignment.clear();
