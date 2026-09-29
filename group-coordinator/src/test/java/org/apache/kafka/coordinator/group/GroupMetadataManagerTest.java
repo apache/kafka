@@ -235,7 +235,6 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessi
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ADDRESS;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_PROCESS_ID;
-import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.getDefaultAssignmentConfigs;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.mkResponseTasks;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsTopicFixture;
 import static org.apache.kafka.coordinator.group.Utils.computeGroupHash;
@@ -1197,7 +1196,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 100, computeGroupHash(Map.of(
             fooTopicName, fooTopicHash
-        )), 1, getDefaultAssignmentConfigs(), -1, -1));
+        )), 1, AssignmentConfigsImpl.DEFAULT, -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
             TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)
@@ -11903,7 +11902,7 @@ public class GroupMetadataManagerTest {
         StreamsGroupMember.Builder memberBuilder1 = streamsGroupMemberBuilderWithDefaults(memberId1);
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(streamsGroupId, memberBuilder1.build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder1.build()));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(streamsGroupId, epoch + 1, 0, -1, getDefaultAssignmentConfigs(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(streamsGroupId, epoch + 1, 0, -1, AssignmentConfigsImpl.DEFAULT, -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(streamsGroupId, topology));
 
         TasksTuple assignment = new TasksTuple(
@@ -11917,7 +11916,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(streamsGroupId, memberId2, assignment));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(streamsGroupId, epoch + 1, 12345L));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder2.build()));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(streamsGroupId, epoch + 2, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(streamsGroupId, epoch + 2, 0, 0, AssignmentConfigsImpl.DEFAULT, -1, -1));
 
         List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(List.of(streamsGroupId), context.lastCommittedOffset).describedGroups();
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
@@ -11993,7 +11992,7 @@ public class GroupMetadataManagerTest {
         String groupId = "s";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
 
         CoordinatorResult<Void, CoordinatorRecord> r =
             context.groupMetadataManager.finalizeStoredDescriptionTopologyEpochAfterDelete(groupId);
@@ -12009,7 +12008,7 @@ public class GroupMetadataManagerTest {
         String groupId = "s";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), 9, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, 9, -1));
 
         CoordinatorResult<Void, CoordinatorRecord> r =
             context.groupMetadataManager.finalizeStoredDescriptionTopologyEpochAfterDelete(groupId);
@@ -12024,7 +12023,7 @@ public class GroupMetadataManagerTest {
         String groupId = "s";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
 
         CoordinatorResult<Void, CoordinatorRecord> r =
             context.groupMetadataManager.finalizeStoredDescriptionTopologyEpochAfterDelete(groupId);
@@ -12067,7 +12066,7 @@ public class GroupMetadataManagerTest {
         String groupId = "s";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
 
         CoordinatorResult<Void, CoordinatorRecord> r =
             context.groupMetadataManager.setStoredDescriptionTopologyEpoch(groupId, 9);
@@ -12085,7 +12084,7 @@ public class GroupMetadataManagerTest {
         String groupId = "s";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
 
         CoordinatorResult<Void, CoordinatorRecord> r =
             context.groupMetadataManager.setFailedDescriptionTopologyEpoch(groupId, 9);
@@ -12104,7 +12103,7 @@ public class GroupMetadataManagerTest {
         String groupId = "s";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
 
         CoordinatorResult<Void, CoordinatorRecord> r =
             context.groupMetadataManager.setStoredDescriptionTopologyEpoch(groupId, 9);
@@ -12122,7 +12121,7 @@ public class GroupMetadataManagerTest {
 
         // Initial replay sets both epochs.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, getDefaultAssignmentConfigs(), 7, 5));
+            groupId, 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, 7, 5));
 
         StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(groupId);
         assertEquals(7, group.storedDescriptionTopologyEpoch());
@@ -12130,7 +12129,7 @@ public class GroupMetadataManagerTest {
 
         // A subsequent replay carrying defaults (-1, -1) overwrites — the latest record wins.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 2, 0L, -1, getDefaultAssignmentConfigs(), -1, -1));
+            groupId, 2, 0L, -1, AssignmentConfigsImpl.DEFAULT, -1, -1));
         assertEquals(-1, group.storedDescriptionTopologyEpoch());
         assertEquals(-1, group.failedDescriptionTopologyEpoch());
     }
@@ -12156,7 +12155,7 @@ public class GroupMetadataManagerTest {
         String groupId = "streams-group";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+            groupId, 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
 
         CoordinatorResult<Boolean, CoordinatorRecord> r =
             context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, false);
@@ -12172,7 +12171,7 @@ public class GroupMetadataManagerTest {
         String groupId = "streams-group";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
 
         CoordinatorResult<Boolean, CoordinatorRecord> r =
             context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, true);
@@ -12190,7 +12189,7 @@ public class GroupMetadataManagerTest {
         String groupId = "streams-group";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+            groupId, 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
 
         CoordinatorResult<Boolean, CoordinatorRecord> r =
             context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, false);
@@ -12206,7 +12205,7 @@ public class GroupMetadataManagerTest {
         String groupId = "streams-group";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), 5, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, 5, -1));
 
         CoordinatorResult<Boolean, CoordinatorRecord> r =
             context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, false);
@@ -12228,7 +12227,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(
             groupId, streamsGroupMemberBuilderWithDefaults("member-1").build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), 5, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, 5, -1));
 
         CoordinatorResult<Boolean, CoordinatorRecord> r =
             context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, false);
@@ -12247,7 +12246,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(
             groupId, streamsGroupMemberBuilderWithDefaults("member-1").build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 3, 0L, -1, getDefaultAssignmentConfigs(), 5, -1));
+            groupId, 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, 5, -1));
 
         CoordinatorResult<Boolean, CoordinatorRecord> r =
             context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, true);
@@ -12266,9 +12265,9 @@ public class GroupMetadataManagerTest {
         // group both drop out so the cycle does not delete them.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            "a", 3, 0L, -1, getDefaultAssignmentConfigs(), 5, -1));
+            "a", 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, 5, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            "b", 1, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+            "b", 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
 
         CoordinatorResult<Set<String>, CoordinatorRecord> r =
             context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertainBatch(
@@ -12289,9 +12288,9 @@ public class GroupMetadataManagerTest {
         // groups may be split across log batches on a shard with many cleaned-up groups.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            "a", 3, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+            "a", 3, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            "b", 1, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+            "b", 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
 
         CoordinatorResult<Void, CoordinatorRecord> r =
             context.groupMetadataManager.finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(
@@ -12311,7 +12310,7 @@ public class GroupMetadataManagerTest {
         StreamsGroupTopologyValue topology = new StreamsGroupTopologyValue().setEpoch(0);
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, getDefaultAssignmentConfigs(), 9, -1));
+            groupId, 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, 9, -1));
         // Describe reads at lastCommittedOffset, so commit to make the replay visible.
         context.commit();
 
@@ -12337,13 +12336,13 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
         // First metadata record: stored=3.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, getDefaultAssignmentConfigs(), 3, -1));
+            groupId, 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, 3, -1));
         context.commit();
         long offsetWithThree = context.lastCommittedOffset;
 
         // Apply a newer (uncommitted) record bumping stored to 7.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 2, 0L, -1, getDefaultAssignmentConfigs(), 7, -1));
+            groupId, 2, 0L, -1, AssignmentConfigsImpl.DEFAULT, 7, -1));
 
         // Describing at the older committed offset must see the old value (3), not the uncommitted 7.
         StreamsGroupDescribeResult oldSnapshot = context.groupMetadataManager.streamsGroupDescribe(
@@ -12376,7 +12375,7 @@ public class GroupMetadataManagerTest {
         // Replaying a metadata record materializes a streams group with no members; commit so the
         // group is visible at lastCommittedOffset.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, getDefaultAssignmentConfigs(), -1, -1));
+            groupId, 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, -1, -1));
         context.commit();
 
         assertThrows(UnknownMemberIdException.class,
@@ -12396,7 +12395,7 @@ public class GroupMetadataManagerTest {
 
         StreamsGroupMember member = streamsGroupMemberBuilderWithDefaults(memberId).build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, getDefaultAssignmentConfigs(), -1, -1));
+            groupId, 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member));
         context.commit();
@@ -12420,7 +12419,7 @@ public class GroupMetadataManagerTest {
         // to be fully materialized on replay.
         StreamsGroupMember member = streamsGroupMemberBuilderWithDefaults(memberId).build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, getDefaultAssignmentConfigs(), -1, -1));
+            groupId, 1, 0L, -1, AssignmentConfigsImpl.DEFAULT, -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member));
         context.commit();
@@ -19569,7 +19568,7 @@ public class GroupMetadataManagerTest {
 
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member));
 
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 100, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 100, 0, 0, AssignmentConfigsImpl.DEFAULT, -1, -1));
 
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
 
@@ -20059,7 +20058,7 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignment(memberId, TasksTuple.EMPTY)
                 .withTargetAssignmentEpoch(10)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .build();
 
         context.streamsGroupHeartbeat(
@@ -20163,7 +20162,7 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignmentEpoch(10)
                 .withMetadataHash(metadataHash)
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .build();
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
@@ -20246,7 +20245,7 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignmentEpoch(11)
                 .withMetadataHash(metadataHash)
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .build();
 
         // While the warm-up task is still far behind, the migration stays staged: memberA keeps running 0_2 and
@@ -20326,7 +20325,7 @@ public class GroupMetadataManagerTest {
             .withTargetAssignmentEpoch(10)
             .withMetadataHash(topic.metadataHash())
             .withValidatedTopologyEpoch(0)
-            .withLastAssignmentConfigs(getDefaultAssignmentConfigs());
+            .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT);
         activeTasksByMemberId.forEach((memberId, partitions) -> {
             Integer[] activeTasks = partitions.toArray(Integer[]::new);
             groupBuilder
@@ -20613,7 +20612,7 @@ public class GroupMetadataManagerTest {
                 2,
                 groupMetadataHash,
                 0,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -21100,7 +21099,7 @@ public class GroupMetadataManagerTest {
                 2,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -21194,7 +21193,7 @@ public class GroupMetadataManagerTest {
                 2,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -21288,7 +21287,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, metadataImage)
                 )),
                 -1,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -21395,7 +21394,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, metadataImage)
                 )),
                 1,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -21451,7 +21450,7 @@ public class GroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
                 .withMetadataHash(groupMetadataHash)
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -21543,7 +21542,7 @@ public class GroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(metadataHash)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -21569,7 +21568,7 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId1),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, metadataHash, 0, getDefaultAssignmentConfigs(), -1, -1)
+                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, metadataHash, 0, AssignmentConfigsImpl.DEFAULT, -1, -1)
             ),
             result1.records()
         );
@@ -21710,7 +21709,7 @@ public class GroupMetadataManagerTest {
                 11,
                 groupMetadataHash,
                 0,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -21843,7 +21842,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, newMetadataImage)
                 )),
                 0,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -22030,7 +22029,7 @@ public class GroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId2),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId2),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId2),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, 0, -1, getDefaultAssignmentConfigs(), -1, -1)
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, 0, -1, AssignmentConfigsImpl.DEFAULT, -1, -1)
         );
 
         assertRecordsEquals(expectedRecords, result.records());
@@ -22987,7 +22986,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, streamsGroupMemberBuilderWithDefaults(memberId1)
             .build()));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, groupMetadataHash, -1, getDefaultAssignmentConfigs(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, groupMetadataHash, -1, AssignmentConfigsImpl.DEFAULT, -1, -1));
 
         assertEquals(StreamsGroupState.NOT_READY, context.streamsGroupState(groupId));
 
@@ -23169,7 +23168,7 @@ public class GroupMetadataManagerTest {
                 11,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -23299,7 +23298,7 @@ public class GroupMetadataManagerTest {
                 11,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -23458,7 +23457,7 @@ public class GroupMetadataManagerTest {
                             3,
                             groupMetadataHash,
                             0,
-                            getDefaultAssignmentConfigs(),
+                            AssignmentConfigsImpl.DEFAULT,
                             -1,
                             -1
                         ),
@@ -23791,7 +23790,7 @@ public class GroupMetadataManagerTest {
                             4,
                             groupMetadataHash,
                             0,
-                            getDefaultAssignmentConfigs(),
+                            AssignmentConfigsImpl.DEFAULT,
                             -1,
                             -1
                         )
@@ -24199,9 +24198,10 @@ public class GroupMetadataManagerTest {
             .addTopic(fooTopicId, fooTopicName, 6)
             .buildCoordinatorMetadataImage();
 
+        long metadataHash = computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         // Nothing is set on the broker or on the group: every configuration is at its static default.
-        // The group carries no recorded assignment configs, like a record written before they were persisted.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(metadataImage)
@@ -24218,11 +24218,25 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignmentEpoch(10)
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
                 .withValidatedTopologyEpoch(0)
-                .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))))
+                .withMetadataHash(metadataHash)
             )
             .build();
 
+        // The group carries no recorded assignment configs, like a record written before they were persisted.
+        context.replay(CoordinatorRecord.record(
+            new StreamsGroupMetadataKey().setGroupId(groupId),
+            new ApiMessageAndVersion(
+                new StreamsGroupMetadataValue()
+                    .setEpoch(10)
+                    .setMetadataHash(metadataHash)
+                    .setValidatedTopologyEpoch(0)
+                    .setLastAssignmentConfigs(null),
+                (short) 0
+            )
+        ));
+
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(AssignmentConfigsImpl.DEFAULT, group.lastAssignmentConfigs());
 
         // Nothing should be recomputed here; prepared anyway, so a spurious recompute reaches the assertion below.
         assignor.prepareGroupAssignment(
@@ -24438,7 +24452,7 @@ public class GroupMetadataManagerTest {
                     2,
                     0,
                     -1,
-                    getDefaultAssignmentConfigs(),
+                    AssignmentConfigsImpl.DEFAULT,
                     -1,
                     -1
                 ),
@@ -24516,7 +24530,7 @@ public class GroupMetadataManagerTest {
             .build();
         // Set storedDescriptionTopologyEpoch to UNCERTAIN (not NONE) so the predicate fires.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 10, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+            groupId, 10, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
 
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
@@ -24544,7 +24558,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10))
             .build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 10, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+            groupId, 10, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
 
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
@@ -24593,7 +24607,7 @@ public class GroupMetadataManagerTest {
                     .build()))
             .build();
         nonEmpty.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 10, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+            groupId, 10, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
         assertFalse(sendJoinForCleanupDetection(nonEmpty, groupId).needsTopologyCleanup);
 
         // (d) Empty streams group at stored == NONE (nothing in the plugin to clean up).
@@ -24601,7 +24615,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10))
             .build();
         storedNone.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 10, 0L, -1, getDefaultAssignmentConfigs(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+            groupId, 10, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
         assertFalse(sendJoinForCleanupDetection(storedNone, groupId).needsTopologyCleanup);
     }
 
@@ -25598,7 +25612,7 @@ public class GroupMetadataManagerTest {
 
         // The group still exists but the member is already gone. Replaying the
         // StreamsGroupMemberMetadata tombstone should be a no-op.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, AssignmentConfigsImpl.DEFAULT, -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.streamsGroup("foo").getMemberOrThrow("m1"));
 
@@ -25654,7 +25668,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         // The group is created if it does not exist.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, AssignmentConfigsImpl.DEFAULT, -1, -1));
         assertEquals(10, context.groupMetadataManager.streamsGroup("foo").groupEpoch());
     }
 
@@ -25874,7 +25888,7 @@ public class GroupMetadataManagerTest {
 
         // The group still exists, but the member is already gone. Replaying the
         // StreamsGroupCurrentMemberAssignment tombstone should be a no-op.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, AssignmentConfigsImpl.DEFAULT, -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.streamsGroup("foo").getMemberOrThrow("m1"));
 
@@ -25950,7 +25964,7 @@ public class GroupMetadataManagerTest {
 
         // The group still exists, but the member is already gone. Replaying the
         // StreamsGroupTopology tombstone should be a no-op.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, AssignmentConfigsImpl.DEFAULT, -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("foo"));
         assertTrue(context.groupMetadataManager.streamsGroup("foo").topology().isEmpty());
 
@@ -31455,7 +31469,7 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 2, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                )), 0, getDefaultAssignmentConfigs(), -1, -1),
+                )), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId1,
                     TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1, 2, 3, 4, 5)
@@ -31518,7 +31532,7 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember2),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                )), 0, getDefaultAssignmentConfigs(), -1, -1),
+                )), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember2)
             ),
             result2.records()

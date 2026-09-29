@@ -24,7 +24,6 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
@@ -92,7 +91,7 @@ public class TargetAssignmentBuilder {
     public TargetAssignmentBuilder(
         int groupEpoch,
         TaskAssignor assignor,
-        AssignmentConfigsImpl assignmentConfigs
+        AssignmentConfigs assignmentConfigs
     ) {
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);

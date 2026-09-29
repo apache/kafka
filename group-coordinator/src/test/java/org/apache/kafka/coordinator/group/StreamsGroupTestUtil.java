@@ -28,7 +28,6 @@ import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.coordinator.group.streams.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -65,14 +64,6 @@ class StreamsGroupTestUtil {
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setProcessId(DEFAULT_PROCESS_ID)
             .setUserEndpoint(null);
-    }
-
-    /**
-     * Returns the default assignment configurations that would be used by the system.
-     * This matches what streamsGroupAssignmentConfigs() would return.
-     */
-    static AssignmentConfigsImpl getDefaultAssignmentConfigs() {
-        return AssignmentConfigsImpl.DEFAULT;
     }
 
     static List<StreamsGroupHeartbeatResponseData.TaskIds> mkResponseTasks(
