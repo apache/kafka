@@ -79,6 +79,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   override def setUp(): Unit = {
     super.setUp()
 
+    // this broker leads all transaction state partitions at coordinatorEpoch
+    replicaManager.leaderEpochOf = tp => if (tp.topic == TRANSACTION_STATE_TOPIC_NAME) Some(coordinatorEpoch) else None
+
     val brokerNode = new Node(0, "host", 10)
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     when(metadataCache.getPartitionLeaderEndpoint(
@@ -171,6 +174,60 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   def testConcurrentRandomSequences(): Unit = {
     verifyConcurrentRandomSequences(createTransactions, allOperations)
   }
+
+  @Test
+  def testEndTxnReturnsNotCoordinatorAfterLosingLeadershipBeforeResignation(): Unit = {
+    val transactionalId = "stale-coordinator"
+    val producerEpoch: Short = 5
+    txnStateManager.putTransactionStateIfNotExists(new TransactionMetadata(transactionalId, producerId,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 60000,
+      TransactionState.COMPLETE_COMMIT, new util.HashSet[TopicPartition](), time.milliseconds(), time.milliseconds(),
+      TransactionVersion.TV_2))
+    val txnPartition = txnStateManager.partitionFor(transactionalId)
+
+    def commit(): Errors = {
+      var error: Errors = null
+      transactionCoordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT,
+        TransactionVersion.TV_2, (e, _, _) => error = e)
+      error
+    }
+
+    // committing at the current epoch with no new transaction is invalid
+    assertEquals(Errors.INVALID_TXN_STATE, commit())
+
+    // the replica became a follower but the partition has not been unloaded yet
+    loseLeadership(txnPartition)
+    assertEquals(Errors.NOT_COORDINATOR, commit())
+  }
+
+  @Test
+  def testVerifyPartitionsReturnsNotCoordinatorAfterLosingLeadershipBeforeResignation(): Unit = {
+    val transactionalId = "stale-coordinator-verify"
+    val producerEpoch: Short = 5
+    val partition = new TopicPartition("topic", 0)
+    txnStateManager.putTransactionStateIfNotExists(new TransactionMetadata(transactionalId, producerId,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 60000,
+      TransactionState.ONGOING, new util.HashSet[TopicPartition](util.Set.of(partition)), time.milliseconds(),
+      time.milliseconds(), TransactionVersion.TV_0))
+
+    def verify(): Errors = {
+      var errors: util.Map[TopicPartition, Errors] = null
+      transactionCoordinator.handleVerifyPartitionsInTransaction(transactionalId, producerId, producerEpoch,
+        util.Set.of(partition), result => errors = AddPartitionsToTxnResponse.errorsForTransaction(result.topicResults))
+      errors.get(partition)
+    }
+
+    // the partition is part of the ongoing transaction
+    assertEquals(Errors.NONE, verify())
+
+    // the replica became a follower but the partition has not been unloaded yet
+    loseLeadership(txnStateManager.partitionFor(transactionalId))
+    assertEquals(Errors.NOT_COORDINATOR, verify())
+  }
+
+  private def loseLeadership(txnPartition: Int): Unit =
+    replicaManager.leaderEpochOf = tp =>
+      if (tp.topic == TRANSACTION_STATE_TOPIC_NAME && tp.partition != txnPartition) Some(coordinatorEpoch) else None
 
   /**
     * Concurrently load one set of transaction state topic partitions and unload another
