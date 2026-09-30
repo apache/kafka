@@ -40,7 +40,7 @@ public class GroupSpecBuilderTest {
 
     @ParameterizedTest
     @EnumSource(TaskRole.class)
-    public void testCreateAssignmentMemberSpec(TaskRole taskRole) {
+    public void testCreateMemberMetadataAndState(TaskRole taskRole) {
         String fooSubtopologyId = Uuid.randomUuid().toString();
         String barSubtopologyId = Uuid.randomUuid().toString();
 
