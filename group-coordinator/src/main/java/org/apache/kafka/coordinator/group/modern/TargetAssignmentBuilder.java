@@ -131,6 +131,11 @@ public class TargetAssignmentBuilder {
      * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
+        if (time == null)
+            throw new IllegalArgumentException("Time must be set.");
+        if (groupSpec == null)
+            throw new IllegalArgumentException("Group spec must be set.");
+
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
             groupSpec,

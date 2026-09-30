@@ -225,6 +225,9 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
      * @return The {@link GroupSpec} describing the members and their existing assignments.
      */
     public GroupSpec build() {
+        if (subscriptionType == null)
+            throw new IllegalArgumentException("Subscription type must be set.");
+
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
         TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
