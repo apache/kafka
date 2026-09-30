@@ -71,6 +71,50 @@ public class TargetAssignmentBuilderTest {
         assertEquals(new TargetAssignmentMetadata(1, 12345L), result.targetAssignmentMetadata());
     }
 
+    @Test
+    public void testEmpty() {
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .buildCoordinatorMetadataImage();
+
+        SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>();
+        ConfiguredTopology topology = new ConfiguredTopology(0, 0, Optional.of(subtopologies), new HashMap<>(),
+            Optional.empty());
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            Map.of(),
+            AssignmentConfigsImpl.DEFAULT
+        );
+
+        GroupAssignment groupAssignment = new GroupAssignment(Map.of());
+
+        // Prepare the expected topology metadata.
+        TopologyMetadata topologyMetadata = new TopologyMetadata(metadataImage, subtopologies);
+
+        // We use `any` here to always return an assignment but use `verify` later on
+        // to ensure that the input was correct.
+        TaskAssignor assignor = mock(TaskAssignor.class);
+        when(assignor.assign(any(), any()))
+            .thenReturn(groupAssignment);
+
+        // Create and populate the assignment builder.
+        TargetAssignmentBuilder builder = new TargetAssignmentBuilder(20, assignor)
+            .withTime(new MockTime(0, 12345L, 12345L))
+            .withTopology(topology)
+            .withMetadataImage(metadataImage)
+            .withGroupSpec(groupSpec);
+
+        // Execute the builder.
+        TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
+
+        // Verify that the assignor was called once with the expected
+        // assignment spec.
+        verify(assignor, times(1))
+            .assign(groupSpec, topologyMetadata);
+
+        assertEquals(Map.of(), result.targetAssignment());
+        assertEquals(new TargetAssignmentMetadata(20, 12345L), result.targetAssignmentMetadata());
+    }
+
     @ParameterizedTest
     // Warm-up tasks are not produced by the assignor (only active and standby), so they cannot appear
     // in the resulting target assignment. See MemberAssignment.
