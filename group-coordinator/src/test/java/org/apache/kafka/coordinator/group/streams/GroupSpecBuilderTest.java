@@ -118,10 +118,6 @@ public class GroupSpecBuilderTest {
             Map.of(fooSubtopologyId, Map.of(0, 30L)),
             Map.of(fooSubtopologyId, Map.of(0, 40L))
         );
-        MemberTaskOffsets memberTaskOffsets3 = new MemberTaskOffsets(
-            Map.of(fooSubtopologyId, Map.of(0, 50L)),
-            Map.of(fooSubtopologyId, Map.of(0, 60L))
-        );
 
         GroupSpecBuilder builder = new GroupSpecBuilder(Map.of(AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG, "1"))
             .withMembers(Map.of(
@@ -152,8 +148,7 @@ public class GroupSpecBuilderTest {
             ))
             .withTaskOffsets(Map.of(
                 "member-1", memberTaskOffsets1,
-                "member-2", memberTaskOffsets2,
-                "member-3", memberTaskOffsets3
+                "member-2", memberTaskOffsets2
             ));
 
         assertEquals(
@@ -189,8 +184,8 @@ public class GroupSpecBuilderTest {
                         assignment3.activeTasks(),
                         assignment3.standbyTasks(),
                         assignment3.warmupTasks(),
-                        memberTaskOffsets3.taskOffsets(),
-                        memberTaskOffsets3.taskEndOffsets()
+                        Map.of(),
+                        Map.of()
                     )
                 ),
                 AssignmentConfigsImpl.DEFAULT
