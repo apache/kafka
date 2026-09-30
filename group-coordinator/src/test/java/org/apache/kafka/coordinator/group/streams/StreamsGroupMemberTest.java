@@ -382,9 +382,15 @@ public class StreamsGroupMemberTest {
                     .setActiveTasks(List.of(
                         new StreamsGroupDescribeResponseData.TaskIds()
                             .setSubtopologyId(SUBTOPOLOGY1)
-                            .setPartitions(TASKS1))
+                            .setPartitions(TASKS1),
+                        new StreamsGroupDescribeResponseData.TaskIds()
+                            .setSubtopologyId(SUBTOPOLOGY2)
+                            .setPartitions(List.of(1, 2, 3)))
                     )
                     .setStandbyTasks(List.of(
+                        new StreamsGroupDescribeResponseData.TaskIds()
+                            .setSubtopologyId(SUBTOPOLOGY1)
+                            .setPartitions(List.of(4, 5, 6)),
                         new StreamsGroupDescribeResponseData.TaskIds()
                             .setSubtopologyId(SUBTOPOLOGY2)
                             .setPartitions(TASKS2))
@@ -392,7 +398,10 @@ public class StreamsGroupMemberTest {
                     .setWarmupTasks(List.of(
                         new StreamsGroupDescribeResponseData.TaskIds()
                             .setSubtopologyId(SUBTOPOLOGY1)
-                            .setPartitions(TASKS3))
+                            .setPartitions(TASKS3),
+                        new StreamsGroupDescribeResponseData.TaskIds()
+                            .setSubtopologyId(SUBTOPOLOGY2)
+                            .setPartitions(List.of(7, 9)))
                     )
             )
             .setTargetAssignment(
@@ -419,6 +428,35 @@ public class StreamsGroupMemberTest {
             );
 
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testAsStreamsGroupDescribeMemberWithOnlyTasksPendingRevocation() {
+        final StreamsGroupMember member = new StreamsGroupMember.Builder(createStreamsGroupMember())
+            .setState(MemberState.UNREVOKED_TASKS)
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .build();
+
+        StreamsGroupDescribeResponseData.Member actual = member.asStreamsGroupDescribeMember(TasksTuple.EMPTY, MemberTaskOffsets.EMPTY);
+        StreamsGroupDescribeResponseData.Assignment expected = new StreamsGroupDescribeResponseData.Assignment()
+            .setActiveTasks(List.of(
+                new StreamsGroupDescribeResponseData.TaskIds()
+                    .setSubtopologyId(SUBTOPOLOGY2)
+                    .setPartitions(List.of(1, 2, 3))
+            ))
+            .setStandbyTasks(List.of(
+                new StreamsGroupDescribeResponseData.TaskIds()
+                    .setSubtopologyId(SUBTOPOLOGY1)
+                    .setPartitions(List.of(4, 5, 6))
+            ))
+            .setWarmupTasks(List.of(
+                new StreamsGroupDescribeResponseData.TaskIds()
+                    .setSubtopologyId(SUBTOPOLOGY2)
+                    .setPartitions(List.of(7, 9))
+            ));
+
+        assertEquals(expected, actual.assignment());
+        assertEquals(new StreamsGroupDescribeResponseData.Assignment(), actual.targetAssignment());
     }
 
     @Test
