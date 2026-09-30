@@ -519,11 +519,11 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testAppendSucceededButLeadershipLostBeforeCallback(): Unit = {
+  def testNotCoordinatorIfLeadershipLostBeforeAppendCompletes(): Unit = {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
 
-    // the write succeeds but the replica becomes a follower before the callback runs
+    // the append succeeds, but the replica becomes a follower before appendTransactionToLog's completion callback runs
     prepareForTxnMessageAppend(Errors.NONE, () => partitionLeadership = _ => (false, coordinatorEpoch + 1))
     expectedError = Errors.NOT_COORDINATOR
     val newMetadata = txnMetadata1.prepareAddPartitions(util.Set.of(new TopicPartition("topic1", 0)), time.milliseconds(), TV_0)
