@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -151,13 +152,60 @@ public class BufferPoolChunkAllocationTest {
 
     /**
      * A zero-timeout request that cannot be satisfied immediately fails fast without waiting: it never
-     * joins the wait queue or records a wait time, and so cannot be interrupted either.
+     * joins the wait queue or records a wait time, and takes nothing.
      */
     @Test
     public void testZeroTimeoutFailsFastWithoutWaiting() throws Exception {
         int chunkSize = 64;
         AtomicInteger waitTimeRecordings = new AtomicInteger();
-        BufferPool p = new BufferPool(2L * chunkSize, chunkSize, metrics, time, "producer-metrics",
+        BufferPool p = waitTimeCountingPool(2L * chunkSize, chunkSize, waitTimeRecordings);
+        ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
+
+        try {
+            assertThrows(BufferExhaustedException.class, () -> p.allocateChunks(2 * chunkSize, 0));
+        } finally {
+            // Never leak an interrupt into other tests.
+            Thread.interrupted();
+        }
+        assertEquals(0, p.queued());
+        assertEquals(0, waitTimeRecordings.get());
+        assertEquals(chunkSize, p.availableMemory(), "a failed request must take nothing");
+
+        p.deallocate(held);
+        assertEquals(2L * chunkSize, p.availableMemory());
+    }
+
+    /**
+     * An interrupted thread making a zero-timeout request that cannot be satisfied immediately gets
+     * {@link InterruptedException}, with the interrupt flag cleared, just as {@link BufferPool#allocate} does
+     * (via {@code Condition.await}), rather than {@link BufferExhaustedException}. It still takes nothing,
+     * never joins the wait queue and records no wait time.
+     */
+    @Test
+    public void testZeroTimeoutThrowsInterruptedExceptionWhenInterrupted() throws Exception {
+        int chunkSize = 64;
+        AtomicInteger waitTimeRecordings = new AtomicInteger();
+        BufferPool p = waitTimeCountingPool(2L * chunkSize, chunkSize, waitTimeRecordings);
+        ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
+
+        Thread.currentThread().interrupt();
+        try {
+            assertThrows(InterruptedException.class, () -> p.allocateChunks(2 * chunkSize, 0));
+            assertFalse(Thread.interrupted(), "the interrupt flag must be cleared, as Condition.await does");
+        } finally {
+            // Never leak an interrupt into other tests.
+            Thread.interrupted();
+        }
+        assertEquals(0, p.queued());
+        assertEquals(0, waitTimeRecordings.get());
+        assertEquals(chunkSize, p.availableMemory(), "an interrupted request must take nothing");
+
+        p.deallocate(held);
+        assertEquals(2L * chunkSize, p.availableMemory());
+    }
+
+    private BufferPool waitTimeCountingPool(long totalMemory, int chunkSize, AtomicInteger waitTimeRecordings) {
+        return new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
                 BufferPool.AllocationMode.INCREMENTAL) {
             @Override
             protected void recordWaitTime(long timeNs) {
@@ -165,21 +213,6 @@ public class BufferPoolChunkAllocationTest {
                 super.recordWaitTime(timeNs);
             }
         };
-        ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
-
-        // An interrupted thread would get InterruptedException from any wait, so an exhausted-pool
-        // failure here shows the request never waited.
-        Thread.currentThread().interrupt();
-        try {
-            assertThrows(BufferExhaustedException.class, () -> p.allocateChunks(2 * chunkSize, 0));
-        } finally {
-            assertTrue(Thread.interrupted(), "the interrupt flag must be left untouched");
-        }
-        assertEquals(0, p.queued());
-        assertEquals(0, waitTimeRecordings.get());
-
-        p.deallocate(held);
-        assertEquals(2L * chunkSize, p.availableMemory());
     }
 
     /**

@@ -262,9 +262,11 @@ public class BufferPool {
      * Any failure refunds the whole reservation and signals the next waiter before the exception
      * propagates, so a failed request leaves nothing reserved.
      * <p>
-     * A {@code maxTimeToBlockMs} of 0 makes the call non-blocking: if the memory is not available right away it
-     * fails fast, without joining {@link #waiters}, releasing the lock or recording a wait time. Callers that must
-     * not fail at all use {@link #tryAllocateChunks} instead.
+     * A {@code maxTimeToBlockMs} of 0 or less makes the call non-blocking: if the memory is not available right
+     * away it throws {@link InterruptedException} if the thread is already interrupted (clearing the interrupt
+     * flag, as {@link #allocate} does), and otherwise fails fast with {@link BufferExhaustedException}, without
+     * joining {@link #waiters}, releasing the lock or recording a wait time. Callers that must not fail at all
+     * use {@link #tryAllocateChunks} instead.
      * <p>
      * Used by the incremental buffer.memory allocation strategy; the poolable size is the chunk size.
      *
@@ -272,7 +274,8 @@ public class BufferPool {
      * @param maxTimeToBlockMs maximum time in milliseconds to block waiting for memory
      * @return list of {@code ceil(totalSize / poolableSize())} {@code ByteBuffer}s, each of capacity
      *         {@code poolableSize()}
-     * @throws InterruptedException     if interrupted while waiting
+     * @throws InterruptedException     if interrupted while waiting, or, when the memory is not available right
+     *         away, if the thread is already interrupted on entry (even with a {@code maxTimeToBlockMs} of 0 or less)
      * @throws IllegalArgumentException if {@code totalSize <= 0}, or if the request rounded up to
      *         whole chunks exceeds {@code totalMemory()}
      * @throws BufferExhaustedException if the request can't be satisfied within {@code maxTimeToBlockMs}
@@ -298,6 +301,10 @@ public class BufferPool {
             } else if (maxTimeToBlockMs <= 0) {
                 // Non-blocking caller (e.g. mid-batch extension): fail fast.
                 // Nothing has been reserved yet, so there is nothing to refund.
+                // A pending interrupt still wins, as it would in Condition.await(0, ...) on the waiting
+                // path (and in allocate()): Thread.interrupted() clears the flag, matching await.
+                if (Thread.interrupted())
+                    throw new InterruptedException("Interrupted while allocating memory");
                 throw new BufferExhaustedException(exhaustedChunksMessage(memoryRequired, numChunks, chunkSize, maxTimeToBlockMs));
             } else {
                 // Not enough memory available, so we wait to acquire the memory needed for all the chunks.
@@ -366,8 +373,9 @@ public class BufferPool {
      * Non-blocking variant of {@link #allocateChunks} for callers that can neither wait nor fail, such as a
      * chunked stream growing in the middle of a record. Returns the chunks if the memory is available right
      * away, and {@code null} otherwise, without reserving anything, joining {@link #waiters} or recording a
-     * wait time. Also returns {@code null} once the pool is closed: the producer closes the pool before it
-     * drains or aborts the last batches, and closing those batches can still need to grow their streams.
+     * wait time. It never waits, so it ignores the thread's interrupt status and leaves it untouched. Also
+     * returns {@code null} once the pool is closed: the producer closes the pool before it drains or aborts the
+     * last batches, and closing those batches can still need to grow their streams.
      *
      * @param totalSize minimum total bytes of capacity required across the returned chunks
      * @return list of {@code ceil(totalSize / poolableSize())} {@code ByteBuffer}s, each of capacity

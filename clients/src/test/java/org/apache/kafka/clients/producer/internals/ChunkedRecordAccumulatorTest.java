@@ -23,6 +23,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -66,6 +67,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -229,10 +231,13 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * A topic whose data doesn't compress drives its compression ratio estimate above 1.0 (it rises by
-     * at least COMPRESSION_RATIO_DETERIORATE_STEP after a single such batch). The first record of a new
-     * batch must still append: its chunks are pre-sized to the uncompressed upper bound, and any
-     * compressor overshoot must be absorbed by mid-write growth rather than rejected up front.
+     * A topic whose data doesn't compress drives its compression ratio estimate above 1.0 (from the
+     * initial 1.0, a single such batch, whose observed ratio is just above 1.0 once the batch header is
+     * counted, raises it by at least COMPRESSION_RATIO_DETERIORATE_STEP). The first record of a new batch
+     * must still append: its chunks are pre-sized to the uncompressed upper bound, and any compressor
+     * overshoot must be absorbed by mid-write growth rather than rejected up front. The estimate here is
+     * set straight to 1.3, above the ~1.0 this batch then observes, so closing the batch lowers it by
+     * COMPRESSION_RATIO_IMPROVING_STEP rather than raising it.
      */
     @ParameterizedTest
     @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
@@ -259,6 +264,14 @@ public class ChunkedRecordAccumulatorTest {
             Record record = batch.records().records().iterator().next();
             assertArrayEquals(value, readBytes(record.value()));
 
+            // The observed ratio (about 1.0) is below the 1.3 estimate, so the estimator improves the
+            // estimate by COMPRESSION_RATIO_IMPROVING_STEP, but never below the observed ratio.
+            float observed = (float) batch.compressionRatio();
+            assertTrue(observed < 1.3f, "random data should not inflate by 30%, but the observed ratio was " + observed);
+            float updated = CompressionRatioEstimator.estimation(topic, compression.type());
+            assertEquals(Math.max(1.3f - CompressionRatioEstimator.COMPRESSION_RATIO_IMPROVING_STEP, observed), updated);
+            assertTrue(updated < 1.3f, "the estimate should improve after a batch that compressed better than it");
+
             accum.deallocate(batch);
         } finally {
             CompressionRatioEstimator.resetEstimation(topic);
@@ -273,6 +286,8 @@ public class ChunkedRecordAccumulatorTest {
      * ample pool memory that overshoot is absorbed by mid-write growth from the pool (mostly as the
      * compressor flushes on close), so the batch stays open for every record and never touches the heap.
      * The batch must decode back to every record appended, and every chunk must go back to the pool.
+     * Closing the batch must also feed its observed ratio (about 1.0) back to the estimator, raising the
+     * estimate from 0.05 by at least COMPRESSION_RATIO_DETERIORATE_STEP.
      * {@link #testMidRecordHeapFallbackClosesBatchForAppends} covers the same growth past an exhausted pool.
      */
     @ParameterizedTest
@@ -312,6 +327,15 @@ public class ChunkedRecordAccumulatorTest {
             MemoryRecords records = batch.records();
             assertTrue(records.sizeInBytes() > 4 * batchSize,
                     "the compressed batch should be several times batch.size, but was " + records.sizeInBytes());
+
+            // The observed ratio is above the estimate, so the estimate jumps to the larger of the
+            // observed ratio and one COMPRESSION_RATIO_DETERIORATE_STEP above the old estimate.
+            float observed = (float) batch.compressionRatio();
+            float updated = CompressionRatioEstimator.estimation(topic, compression.type());
+            assertEquals(Math.max(0.05f + CompressionRatioEstimator.COMPRESSION_RATIO_DETERIORATE_STEP, observed), updated);
+            assertTrue(updated >= 0.05f + CompressionRatioEstimator.COMPRESSION_RATIO_DETERIORATE_STEP,
+                    "the estimate should rise by at least COMPRESSION_RATIO_DETERIORATE_STEP, but was " + updated);
+            assertTrue(updated > 0.9f, "the estimate should track the observed ratio of about 1.0, but was " + updated);
             int i = 0;
             for (Record r : records.records()) {
                 assertArrayEquals(values.get(i), readBytes(r.value()));
@@ -420,6 +444,126 @@ public class ChunkedRecordAccumulatorTest {
 
             // Every pool chunk returns to the pool, and no heap fallback chunk is added to it.
             accum.deallocate(second);
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * A compressed chunked batch rejected with MESSAGE_TOO_LARGE is split and re-enqueued. The split
+     * batches are plain heap-backed {@link ProducerBatch}es, so they must carry every record exactly once
+     * and in order, the original batch's chunks must all go back to the pool while deallocating the split
+     * batches leaves the pool untouched, and a later append must start a new chunked batch behind them
+     * rather than try to chunk-extend a split batch.
+     * <p>
+     * A 0.05 estimate lets 30 incompressible 500-byte records (~15KB) into a single batch of a 4096-byte
+     * batch.size, spanning many 256-byte chunks. The split resets the estimate to about 1.0 and splits at
+     * that same batch.size, so each split batch takes about 7 records, giving several split batches.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testSplitAndReenqueueCompressedChunkedBatch(String codec) throws Exception {
+        int chunkSize = 256;
+        int batchSize = 4096;
+        long totalMemory = 1024L * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(batchSize, compression, pool);
+        // Read by the batch on construction, so it must be set before the first append. splitAndReenqueue
+        // also sets the estimate, so the reset in the finally block is needed regardless.
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
+        try {
+            int recordCount = 30;
+            Random random = new Random(42);
+            List<byte[]> keys = new ArrayList<>();
+            List<byte[]> values = new ArrayList<>();
+            List<FutureRecordMetadata> futures = new ArrayList<>();
+            for (int i = 0; i < recordCount; i++) {
+                byte[] recordKey = ("key-" + i).getBytes();
+                byte[] value = new byte[500];
+                random.nextBytes(value);
+                keys.add(recordKey);
+                values.add(value);
+                RecordAccumulator.RecordAppendResult result = accum.append(topic, partition1, i, recordKey, value,
+                        Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+                assertTrue(result.appended());
+                futures.add(result.future);
+            }
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "the low estimate should let every record into one batch");
+            ProducerBatch bigBatch = dq.peekFirst();
+            assertInstanceOf(ChunkedProducerBatch.class, bigBatch);
+            assertEquals(recordCount, bigBatch.recordCount);
+
+            // Drain it as the sender would: off the deque, and closed.
+            Map<Integer, List<ProducerBatch>> drained =
+                    accum.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+            assertEquals(List.of(bigBatch), drained.get(node1.id()));
+            assertTrue(dq.isEmpty());
+            assertTrue(bigBatch.records().sizeInBytes() > 4 * chunkSize,
+                    "the batch should span many chunks, but was " + bigBatch.records().sizeInBytes() + " bytes");
+
+            // What the sender does on MESSAGE_TOO_LARGE for a compressed batch.
+            int numSplit = accum.splitAndReenqueue(bigBatch);
+            assertTrue(numSplit >= 2, "the split should produce at least two batches, but produced " + numSplit);
+            assertEquals(numSplit, dq.size());
+            List<ProducerBatch> splitBatches = new ArrayList<>(dq);
+            for (ProducerBatch split : splitBatches) {
+                assertEquals(ProducerBatch.class, split.getClass(), "split batches must be plain, heap-backed batches");
+                assertTrue(split.isSplitBatch());
+            }
+
+            // The original batch's result fails with RecordBatchTooLargeException, while the record futures
+            // are chained to the split batches and stay pending until those complete.
+            assertTrue(bigBatch.produceFuture.completed());
+            assertInstanceOf(RecordBatchTooLargeException.class, bigBatch.produceFuture.error(0));
+            for (FutureRecordMetadata future : futures)
+                assertFalse(future.isDone(), "record futures should follow the split batches");
+
+            // The original batch returns every chunk it held, and deallocating a split batch is a no-op for the pool.
+            accum.deallocate(bigBatch);
+            assertEquals(totalMemory, pool.availableMemory());
+            for (ProducerBatch split : splitBatches) {
+                accum.deallocate(split);
+                assertEquals(totalMemory, pool.availableMemory(), "split batches are allocated outside the pool");
+            }
+
+            // A later append sees a closed split batch at the tail and must start a new chunked batch behind it.
+            byte[] nextKey = "key-next".getBytes();
+            byte[] next = new byte[500];
+            random.nextBytes(next);
+            RecordAccumulator.RecordAppendResult nextResult = accum.append(topic, partition1, recordCount, nextKey,
+                    next, Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+            assertTrue(nextResult.appended());
+            assertTrue(nextResult.newBatchCreated);
+            assertEquals(numSplit + 1, dq.size());
+            ProducerBatch newBatch = dq.peekLast();
+            assertInstanceOf(ChunkedProducerBatch.class, newBatch);
+            assertEquals(1, newBatch.recordCount);
+            assertTrue(pool.availableMemory() < totalMemory, "the new batch should take its chunks from the pool");
+
+            // Every original record is present exactly once, in order, across the split batches.
+            List<Record> splitRecords = new ArrayList<>();
+            for (ProducerBatch split : splitBatches) {
+                split.close();
+                split.records().records().forEach(splitRecords::add);
+            }
+            assertEquals(recordCount, splitRecords.size(), "all original records must be present exactly once");
+            for (int i = 0; i < recordCount; i++) {
+                assertArrayEquals(keys.get(i), readBytes(splitRecords.get(i).key()));
+                assertArrayEquals(values.get(i), readBytes(splitRecords.get(i).value()));
+            }
+            int splitRecordCount = splitBatches.stream().mapToInt(b -> b.recordCount).sum();
+            assertEquals(recordCount, splitRecordCount);
+
+            newBatch.close();
+            Record nextRecord = newBatch.records().records().iterator().next();
+            assertArrayEquals(nextKey, readBytes(nextRecord.key()));
+            assertArrayEquals(next, readBytes(nextRecord.value()));
+            accum.deallocate(newBatch);
             assertEquals(totalMemory, pool.availableMemory());
         } finally {
             CompressionRatioEstimator.resetEstimation(topic);
