@@ -28,7 +28,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -49,22 +48,17 @@ public class GroupSpecBuilderTest {
 
         final Map<String, String> clientTags = mkMap(mkEntry("tag1", "value1"), mkEntry("tag2", "value2"));
 
-        Map<String, Set<Integer>> activeTasks = taskRole == TaskRole.ACTIVE
-            ? Map.of(fooSubtopologyId, Set.of(1, 2, 3), barSubtopologyId, Set.of(1, 2, 3)) : Map.of();
-        Map<String, Set<Integer>> standbyTasks = taskRole == TaskRole.STANDBY
-            ? Map.of(fooSubtopologyId, Set.of(1, 2, 3), barSubtopologyId, Set.of(1, 2, 3)) : Map.of();
+        TasksTupleWithEpochs assignment = mkTasksTupleWithCommonEpoch(taskRole, 0,
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
+        );
 
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
             .setRackId("rackId")
             .setInstanceId("instanceId")
             .setProcessId("processId")
             .setClientTags(clientTags)
-            .setAssignedTasks(new TasksTupleWithEpochs(
-                taskRole == TaskRole.ACTIVE
-                    ? Map.of(fooSubtopologyId, Map.of(1, 0, 2, 0, 3, 0), barSubtopologyId, Map.of(1, 0, 2, 0, 3, 0))
-                    : Map.of(),
-                standbyTasks,
-                Map.of()))
+            .setAssignedTasks(assignment)
             .build();
 
         Map<String, Map<Integer, Long>> taskOffsets = Map.of(fooSubtopologyId, Map.of(0, 10L));
@@ -80,8 +74,8 @@ public class GroupSpecBuilderTest {
             Optional.of("rackId"),
             "processId",
             clientTags,
-            activeTasks,
-            standbyTasks,
+            assignment.activeTasks(),
+            assignment.standbyTasks(),
             Map.of(),
             taskOffsets,
             taskEndOffsets
