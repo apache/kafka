@@ -102,6 +102,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private final PollTimeSupplier pollTimeSupplier;
     private final QuorumControllerMetrics controllerMetrics;
     private final FaultHandler faultHandler;
+    private final FaultHandler migrationConflictFaultHandler;
     private final QuorumFeatures quorumFeatures;
     private final RecordRedactor recordRedactor;
     /**
@@ -126,6 +127,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         LegacyPropagator propagator,
         Consumer<MetadataPublisher> initialZkLoadHandler,
         FaultHandler faultHandler,
+        FaultHandler migrationConflictFaultHandler,
         QuorumFeatures quorumFeatures,
         KafkaConfigSchema configSchema,
         QuorumControllerMetrics controllerMetrics,
@@ -149,6 +151,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.firstPublish = false;
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
+        this.migrationConflictFaultHandler = migrationConflictFaultHandler;
         this.quorumFeatures = quorumFeatures;
         this.zkMetadataWriter = new KRaftMigrationZkWriter(zkMigrationClient, log::error);
         this.recordRedactor = new RecordRedactor(configSchema);
@@ -414,7 +417,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @SuppressWarnings("ThrowableNotThrown")
         @Override
         public void handleException(Throwable e) {
-            if (e instanceof MigrationClientAuthException) {
+            if (e instanceof MigrationConflictException) {
+                transitionTo(MigrationDriverState.INACTIVE);
+                KRaftMigrationDriver.this.migrationConflictFaultHandler.handleFault("Encountered ZooKeeper conflict in " + this, e);
+            } else if (e instanceof MigrationClientAuthException) {
                 KRaftMigrationDriver.this.faultHandler.handleFault("Encountered ZooKeeper authentication in " + this, e);
             } else if (e instanceof MigrationClientException) {
                 log.info(String.format("Encountered ZooKeeper error during event %s. Will retry.", this), e.getCause());
@@ -978,6 +984,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         private LegacyPropagator propagator;
         private Consumer<MetadataPublisher> initialZkLoadHandler;
         private FaultHandler faultHandler;
+        private FaultHandler migrationConflictFaultHandler;
         private QuorumFeatures quorumFeatures;
         private KafkaConfigSchema configSchema;
         private QuorumControllerMetrics controllerMetrics;
@@ -1011,6 +1018,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         public Builder setFaultHandler(FaultHandler faultHandler) {
             this.faultHandler = faultHandler;
+            return this;
+        }
+
+        public Builder setMigrationConflictFaultHandler(FaultHandler migrationConflictFaultHandler) {
+            this.migrationConflictFaultHandler = migrationConflictFaultHandler;
             return this;
         }
 
@@ -1058,6 +1070,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             if (faultHandler == null) {
                 throw new IllegalStateException("You must specify the FaultHandler.");
             }
+            if (migrationConflictFaultHandler == null) {
+                throw new IllegalStateException("You must specify the migration conflict FaultHandler.");
+            }
             if (configSchema == null) {
                 throw new IllegalStateException("You must specify the KafkaConfigSchema.");
             }
@@ -1077,6 +1092,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 propagator,
                 initialZkLoadHandler,
                 faultHandler,
+                migrationConflictFaultHandler,
                 quorumFeatures,
                 configSchema,
                 controllerMetrics,

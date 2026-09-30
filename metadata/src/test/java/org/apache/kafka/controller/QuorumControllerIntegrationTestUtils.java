@@ -39,9 +39,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -203,19 +201,5 @@ public class QuorumControllerIntegrationTestUtils {
             }
         });
         return latch;
-    }
-
-    /**
-     * Force the current controller to renounce.
-     *
-     * @param controller    The controller.
-     */
-    static void forceRenounce(QuorumController controller) throws Exception {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        controller.appendControlEvent("forceRenounce", () -> {
-            controller.renounce();
-            future.complete(null);
-        });
-        future.get(30, TimeUnit.SECONDS);
     }
 }
