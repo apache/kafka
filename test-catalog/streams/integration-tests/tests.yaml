@@ -472,6 +472,9 @@ org.apache.kafka.streams.integration.StreamTableJoinTopologyOptimizationIntegrat
 org.apache.kafka.streams.integration.StreamTableJoinWithGraceIntegrationTest:
 - testInnerWithVersionedStore
 - testLeftWithVersionedStore
+org.apache.kafka.streams.integration.StreamsGroupWarmupTaskIntegrationTest:
+- shouldScaleOutWithWarmupTasksAndInMemoryStores
+- shouldScaleOutWithWarmupTasksAndPersistentStores
 org.apache.kafka.streams.integration.StreamsUncaughtExceptionHandlerIntegrationTest:
 - shouldEmitSameRecordAfterFailover
 - shouldReplaceSingleThread
