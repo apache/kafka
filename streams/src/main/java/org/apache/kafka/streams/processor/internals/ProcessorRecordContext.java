@@ -114,6 +114,11 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         return sourceRawValue;
     }
 
+    /**
+     * Returns the snapshot of the original source-record headers if one was captured,
+     * or falls back to {@link #headers()} if no snapshot was set (e.g., when the context
+     * was initialized from punctuation or synthetic events).
+     */
     public Headers sourceRawHeaders() {
         return sourceRawHeaders == null ? headers : sourceRawHeaders;
     }

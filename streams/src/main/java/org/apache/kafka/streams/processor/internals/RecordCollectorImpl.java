@@ -416,7 +416,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 recordContext.topic(),
                 recordContext.partition(),
                 recordContext.offset(),
-                recordContext.headers(),
+                context.recordContext().sourceRawHeaders(),
                 processorNodeId,
                 taskId,
                 recordContext.timestamp(),

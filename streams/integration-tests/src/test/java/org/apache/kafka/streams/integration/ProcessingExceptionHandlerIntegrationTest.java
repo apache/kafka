@@ -19,6 +19,7 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -440,6 +441,41 @@ public class ProcessingExceptionHandlerIntegrationTest {
         }
     }
 
+    @Test
+    public void shouldExposeOriginalHeadersWhenForwardingWithChangedHeadersFailsDownstream() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .stream("TOPIC_NAME", consumedWithHeaderRemovingKeySerde())
+            .process(() -> new ContextualProcessor<String, String, String, String>() {
+                @Override
+                public void process(final Record<String, String> record) {
+                    final RecordHeaders newHeaders = new RecordHeaders(record.headers());
+                    newHeaders.add("downstream-header", "downstream-value".getBytes(UTF_8));
+                    context().forward(record.withHeaders(newHeaders));
+                }
+            })
+            .mapValues(value -> {
+                throw new RuntimeException("Downstream failure");
+            });
+
+        final Properties properties = new Properties();
+        properties.put(
+            StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+            AssertForwardedHeadersProcessingExceptionHandler.class
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(properties).build()) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
+            final ProducerRecord<String, String> event = sourceRecord("TOPIC_NAME", "ID123-1", "ID123-A1");
+
+            assertThrows(
+                StreamsException.class,
+                () -> inputTopic.pipeInput(new TestRecord<>(event.key(), event.value(), event.headers(), TIMESTAMP))
+            );
+        }
+    }
+
     static Stream<Arguments> sourceRawRecordTopologyTestCases() {
         // Validate source raw key and source raw value for fully stateless topology
         final List<ProducerRecord<String, String>> statelessTopologyEvent = List.of(new ProducerRecord<>("TOPIC_NAME", "ID123-1", "ID123-A1"));
@@ -534,8 +570,8 @@ public class ProcessingExceptionHandlerIntegrationTest {
         return Stream.of(
             Arguments.of(statelessTopologyEvent, statelessTopologyBuilder.build()),
             Arguments.of(cacheAggregateExceptionInAggregatorEvent, cacheAggregateExceptionInAggregatorTopologyBuilder.build()),
-            Arguments.of(cacheAggregateExceptionAfterAggregationEvent, noCacheAggregateExceptionAfterAggregationTopologyBuilder.build()),
-            Arguments.of(noCacheAggregateExceptionAfterAggregationEvents, cacheAggregateExceptionInAggregatorTopologyBuilder.build()),
+            Arguments.of(cacheAggregateExceptionAfterAggregationEvent, cacheAggregateExceptionAfterAggregationTopologyBuilder.build()),
+            Arguments.of(noCacheAggregateExceptionAfterAggregationEvents, noCacheAggregateExceptionAfterAggregationTopologyBuilder.build()),
             Arguments.of(cacheTableEvents, cacheTableTopologyBuilder.build()),
             Arguments.of(joinEvents, joinTopologyBuilder.build())
         );
@@ -632,6 +668,26 @@ public class ProcessingExceptionHandlerIntegrationTest {
             assertNull(record.headers().lastHeader(SOURCE_HEADER));
             assertNotNull(context.headers().lastHeader(SOURCE_HEADER));
             assertArrayEquals(SOURCE_HEADER_VALUE, context.headers().lastHeader(SOURCE_HEADER).value());
+            return Response.fail();
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // No-op
+        }
+    }
+
+    public static class AssertForwardedHeadersProcessingExceptionHandler implements ProcessingExceptionHandler {
+        @Override
+        public Response handleError(final ErrorHandlerContext context,
+                                    final Record<?, ?> record,
+                                    final Exception exception) {
+            assertNotNull(record.headers().lastHeader("downstream-header"));
+            assertNull(record.headers().lastHeader(SOURCE_HEADER));
+            assertNotNull(context.headers().lastHeader(SOURCE_HEADER));
+            assertArrayEquals(SOURCE_HEADER_VALUE, context.headers().lastHeader(SOURCE_HEADER).value());
+            assertEquals("ID123-1", Serdes.String().deserializer().deserialize("topic", context.sourceRawKey()));
+            assertEquals("ID123-A1", Serdes.String().deserializer().deserialize("topic", context.sourceRawValue()));
             return Response.fail();
         }
 
