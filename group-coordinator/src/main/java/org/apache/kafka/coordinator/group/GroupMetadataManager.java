@@ -7115,26 +7115,24 @@ public class GroupMetadataManager {
         boolean topologyCleanupHandled
     ) {
         Group group = groups.get(request.groupId(), Long.MAX_VALUE);
-        if (!topologyCleanupHandled
-            && group != null
-            && group.type() == STREAMS
-            && group.isEmpty()
-            && ((StreamsGroup) group).storedDescriptionTopologyEpoch() != StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) {
-            // A classic join converts this empty streams group to classic and deletes its streams
-            // metadata. If the topology-description plugin (KIP-1331) still holds a topology for the
-            // group, that data would be orphaned. So change nothing and return TRUE. The caller deletes
-            // the topology from the plugin, then calls again with topologyCleanupHandled = true to convert.
-            return new CoordinatorResult<>(List.of(), Boolean.TRUE);
-        }
         if (group != null) {
             if (group.type() == CONSUMER && !group.isEmpty()) {
                 // classicGroupJoinToConsumerGroup takes the join requests to non-empty consumer groups.
                 // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
                 return cleanupNotNeeded(classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture));
-            } else if (group.type() == CONSUMER || group.type() == CLASSIC || group.type() == STREAMS && group.isEmpty()) {
+            } else if (group.type() == STREAMS && group.isEmpty()) {
+                if (!topologyCleanupHandled && ((StreamsGroup) group).mayHaveTopologyDescription()) {
+                    // A classic join converts this empty streams group to classic and deletes its streams
+                    // metadata. If the topology-description plugin (KIP-1331) may still hold a topology for the
+                    // group, that data would be orphaned. So change nothing and return TRUE. The caller deletes
+                    // the topology from the plugin, then calls again with topologyCleanupHandled = true to convert.
+                    return new CoordinatorResult<>(List.of(), Boolean.TRUE);
+                }
+                // Empty streams groups are converted to classic groups in classicGroupJoinToClassicGroup.
+                return cleanupNotNeeded(classicGroupJoinToClassicGroup(context, request, responseFuture));
+            } else if (group.type() == CONSUMER || group.type() == CLASSIC) {
                 // classicGroupJoinToClassicGroup accepts:
                 // - classic groups
-                // - empty streams groups
                 // - empty consumer groups
                 return cleanupNotNeeded(classicGroupJoinToClassicGroup(context, request, responseFuture));
             } else {
@@ -8837,7 +8835,7 @@ public class GroupMetadataManager {
             // Include UNCERTAIN (-2): the plugin may still hold data that must be deleted.
             if (group != null
                 && group.type() == STREAMS
-                && ((StreamsGroup) group).storedDescriptionTopologyEpoch(committedOffset) != StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) {
+                && ((StreamsGroup) group).mayHaveTopologyDescription(committedOffset)) {
                 withStored.add(groupId);
             }
         }
@@ -8943,9 +8941,9 @@ public class GroupMetadataManager {
         if (stored == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) {
             return new CoordinatorResult<>(List.of());
         }
-        int newStored = stored == StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN
-            ? StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE
-            : StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN;
+        int newStored = StreamsGroup.isReliablyStoredTopologyEpoch(stored)
+            ? StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN
+            : StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE;
         CoordinatorRecord record = newStreamsGroupMetadataRecord(
             groupId,
             streamsGroup.groupEpoch(),

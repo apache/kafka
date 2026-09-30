@@ -1023,9 +1023,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 if (group == null || group.type() != Group.GroupType.STREAMS) continue;
                 StreamsGroup streamsGroup = (StreamsGroup) group;
                 if (!streamsGroup.isEmpty(committedOffset)) continue;
-                int storedEpoch = streamsGroup.storedDescriptionTopologyEpoch(committedOffset);
                 // Keep UNCERTAIN (-2): a push or delete that did not finish may have left data in the plugin.
-                if (storedEpoch == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) continue;
+                if (!streamsGroup.mayHaveTopologyDescription(committedOffset)) continue;
                 if (!offsetMetadataManager.groupHasNoOffsets(groupId, committedOffset)) continue;
                 eligible.add(groupId);
             } catch (Throwable t) {

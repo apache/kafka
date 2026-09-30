@@ -886,6 +886,23 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * @return True if the topology description plugin may hold a topology for this group, i.e. the
+     *         stored epoch is a real epoch or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}.
+     */
+    public boolean mayHaveTopologyDescription() {
+        return storedDescriptionTopologyEpoch() != STORED_TOPOLOGY_EPOCH_NONE;
+    }
+
+    /**
+     * @param committedOffset The offset at which to read the stored epoch.
+     * @return True if the topology description plugin may hold a topology for this group as of
+     *         the given offset. See {@link #mayHaveTopologyDescription()}.
+     */
+    public boolean mayHaveTopologyDescription(long committedOffset) {
+        return storedDescriptionTopologyEpoch(committedOffset) != STORED_TOPOLOGY_EPOCH_NONE;
+    }
+
+    /**
      * Delays tombstoning an empty streams group until the topology-description cleanup cycle
      * has cleared its plugin data. This applies when a plugin is configured and
      * {@code StoredDescriptionTopologyEpoch} is anything other than {@link #STORED_TOPOLOGY_EPOCH_NONE}:
@@ -903,7 +920,7 @@ public class StreamsGroup implements Group {
     @Override
     public boolean shouldExpire(GroupCoordinatorConfig config) {
         return !(config.isStreamsGroupTopologyDescriptionPluginConfigured()
-            && storedDescriptionTopologyEpoch() != STORED_TOPOLOGY_EPOCH_NONE);
+            && mayHaveTopologyDescription());
     }
 
     /**
