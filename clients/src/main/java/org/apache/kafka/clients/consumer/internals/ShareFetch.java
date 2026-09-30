@@ -26,10 +26,10 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -70,25 +70,28 @@ public class ShareFetch<K, V> {
      */
     public void add(TopicIdPartition partition, ShareInFlightBatch<K, V> batch) {
         Objects.requireNonNull(batch);
-        batches.computeIfAbsent(partition, k -> new LinkedList<>()).add(batch);
+        batches.computeIfAbsent(partition, k -> new ArrayList<>()).add(batch);
         if (batch.getAcquisitionLockTimeoutMs().isPresent()) {
             acquisitionLockTimeoutMs = batch.getAcquisitionLockTimeoutMs();
         }
     }
 
     /**
-     * @return all the non-control messages for this fetch, grouped by partition
+     * @return all the non-control messages for this fetch, grouped by partition. Partitions with no
+     * in-flight records (such as those whose acquired offsets were all control records) are omitted.
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> records() {
-        final LinkedHashMap<TopicPartition, List<ConsumerRecord<K, V>>> result = new LinkedHashMap<>();
+        final HashMap<TopicPartition, List<ConsumerRecord<K, V>>> result = new HashMap<>(batches.size());
         batches.forEach((tip, batchList) -> {
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
             for (ShareInFlightBatch<K, V> batch : batchList) {
                 records.addAll(batch.getInFlightRecords());
             }
-            result.put(tip.topicPartition(), records);
+            if (!records.isEmpty()) {
+                result.put(tip.topicPartition(), records);
+            }
         });
-        return Map.copyOf(result);
+        return Collections.unmodifiableMap(result);
     }
 
     /**
@@ -268,12 +271,14 @@ public class ShareFetch<K, V> {
      * @throws IllegalStateException if any pending acknowledgement cannot be sent to a transaction
      */
     private void ensureAcknowledgementsAreTransactional() {
-        batches.forEach((tip, batch) -> batch.pendingAcknowledgementTypes().forEach((offset, type) -> {
-            if (type == AcknowledgeType.RELEASE || type == AcknowledgeType.RENEW) {
-                throw new IllegalStateException("Acknowledgement type " + type + " for offset " + offset
-                    + " of " + tip + " cannot be sent to a transaction; only ACCEPT and REJECT are valid.");
-            }
-        }));
+        batches.forEach((tip, batchList) -> batchList.forEach(batch ->
+            batch.pendingAcknowledgementTypes().forEach((offset, type) -> {
+                if (type == AcknowledgeType.RELEASE || type == AcknowledgeType.RENEW) {
+                    throw new IllegalStateException("Acknowledgement type " + type + " for offset " + offset
+                        + " of " + tip + " cannot be sent to a transaction; only ACCEPT and REJECT are valid.");
+                }
+            })
+        ));
     }
 
     public ShareAcknowledgements takeAcknowledgementsForTransaction() {

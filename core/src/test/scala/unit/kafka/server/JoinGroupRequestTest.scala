@@ -34,6 +34,24 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
 
+object JoinGroupRequestTest {
+  // Regression coverage for KIP-1331: re-runs this entire suite with a topology description plugin
+  // configured, to prove its presence does not change ordinary (non-streams) JoinGroup semantics.
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(
+        key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+        value = "org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin")
+    )
+  )
+  class WithTopologyDescriptionPluginEnabledTest(cluster: ClusterInstance) extends JoinGroupRequestTest(cluster) {
+  }
+}
+
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(

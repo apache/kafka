@@ -14,12 +14,15 @@
 // limitations under the License.
 
 {
-  "apiKey": 94,
+  "apiKey": 95,
   "type": "request",
   "listeners": ["broker"],
   "name": "TxnShareAcknowledgeRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+",
       "nullableVersions": "0+", "entityType": "transactionalId",
