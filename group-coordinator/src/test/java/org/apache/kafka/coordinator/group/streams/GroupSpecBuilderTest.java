@@ -39,9 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class GroupSpecBuilderTest {
 
     @ParameterizedTest
-    // Active, standby and warm-up tasks all come from the member's current assignment, so this
-    // test varies which role the member's current tasks are in.
-    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
+    @EnumSource(TaskRole.class)
     public void testCreateAssignmentMemberSpec(TaskRole taskRole) {
         String fooSubtopologyId = Uuid.randomUuid().toString();
         String barSubtopologyId = Uuid.randomUuid().toString();
@@ -76,7 +74,7 @@ public class GroupSpecBuilderTest {
             clientTags,
             assignment.activeTasks(),
             assignment.standbyTasks(),
-            Map.of(),
+            assignment.warmupTasks(),
             taskOffsets,
             taskEndOffsets
         ), memberMetadata);
@@ -94,7 +92,7 @@ public class GroupSpecBuilderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
+    @EnumSource(TaskRole.class)
     public void testGroupSpec(TaskRole taskRole) {
         String fooSubtopologyId = Uuid.randomUuid().toString();
         String barSubtopologyId = Uuid.randomUuid().toString();
