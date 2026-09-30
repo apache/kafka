@@ -4380,6 +4380,7 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
+            long startTimeMs = time.milliseconds();
             GroupSpec groupSpec = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
                 .withMembers(updatedMembersAndTargetAssignment.members())
                 .withSubscriptionType(subscriptionType)
@@ -4395,7 +4396,6 @@ public class GroupMetadataManager {
                     .withMetadataImage(metadataImage)
                     .withGroupSpec(groupSpec);
 
-            long startTimeMs = time.milliseconds();
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
@@ -4476,6 +4476,7 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
+            long startTimeMs = time.milliseconds();
             GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
                 .withMembers(updatedMembersAndTargetAssignment.members())
                 .withSubscriptionType(subscriptionType)
@@ -4491,7 +4492,6 @@ public class GroupMetadataManager {
                     .withMetadataImage(metadataImage)
                     .withGroupSpec(groupSpec);
 
-            long startTimeMs = time.milliseconds();
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
