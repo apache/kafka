@@ -401,16 +401,17 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndPoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
     val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine) {
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
-        assertEquals(highWatermark, truncationState.offset)
-        super.truncate(topicPartition, truncationState)
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
+        assertEquals(highWatermark, offset)
+        super.truncate(topicPartition, offset)
       }
 
       override def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = Optional.empty
     }
 
-    // The replica has records above the high watermark which may not have been committed. It has no
-    // leader epoch, so the leader cannot report a diverging epoch and they are truncated beforehand.
+    // The replica has records above the high watermark which may not have been committed. Since
+    // latestEpoch() returns no epoch, the fetch request carries no last fetched epoch, so the leader
+    // cannot report a diverging epoch and those records are truncated beforehand.
     val replicaLog = Seq(
       mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
       mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
@@ -471,15 +472,14 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
         truncations += 1
-        super.truncate(topicPartition, truncationState)
+        super.truncate(topicPartition, offset)
       }
     }
 
     // The replica has a batch with an epoch unknown to the leader, so the first fetch diverges
-    val replicaLog = Seq(
-      mkBatch(baseOffset = 0, leaderEpoch = 2, new SimpleRecord("x".getBytes)))
+    val replicaLog = Seq(mkBatch(baseOffset = 0, leaderEpoch = 2, new SimpleRecord("x".getBytes)))
     val replicaState = PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 0L)
     fetcher.setReplicaState(partition, replicaState)
     fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 1L, leaderEpoch = 5)))
@@ -517,9 +517,9 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
         truncations += 1
-        super.truncate(topicPartition, truncationState)
+        super.truncate(topicPartition, offset)
       }
     }
     val replicaLog = Seq(
@@ -838,11 +838,11 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcherForTruncation = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, failedPartitions = failedPartitions) {
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
         if (topicPartition == partition1)
           throw new Exception()
         else {
-          super.truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState)
+          super.truncate(topicPartition, offset)
         }
       }
     }
@@ -960,9 +960,9 @@ class AbstractFetcherThreadTest {
         super.processPartitionData(topicPartition, fetchOffset, partitionLeaderEpoch, partitionData)
       }
 
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
         truncateCalls += 1
-        super.truncate(topicPartition, truncationState)
+        super.truncate(topicPartition, offset)
       }
     }
 

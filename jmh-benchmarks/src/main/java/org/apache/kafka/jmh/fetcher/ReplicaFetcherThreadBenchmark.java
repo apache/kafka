@@ -22,7 +22,6 @@ import kafka.server.BrokerBlockingSender;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
-import kafka.server.OffsetTruncationState;
 import kafka.server.RemoteLeaderEndPoint;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
@@ -321,7 +320,7 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public void truncate(TopicPartition tp, OffsetTruncationState offsetTruncationState) {
+        public void truncate(TopicPartition tp, long offset) {
             // pretend to truncate to move to Fetching state
         }
 

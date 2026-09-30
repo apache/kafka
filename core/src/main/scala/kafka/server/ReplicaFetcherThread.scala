@@ -172,11 +172,11 @@ class ReplicaFetcherThread(name: String,
 
   /**
    * Truncate the log for each partition's epoch based on leader's returned epoch and offset.
-   * The logic for finding the truncation offset is implemented in AbstractFetcherThread.getOffsetTruncationState
+   * The logic for finding the truncation offset is implemented in AbstractFetcherThread.truncationOffset
    */
-  override def truncate(tp: TopicPartition, offsetTruncationState: OffsetTruncationState): Unit = {
+  override def truncate(tp: TopicPartition, offset: Long): Unit = {
     val partition = replicaMgr.getPartitionOrException(tp)
-    partition.truncateTo(offsetTruncationState.offset, isFuture = false)
+    partition.truncateTo(offset, isFuture = false)
   }
 
   override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {

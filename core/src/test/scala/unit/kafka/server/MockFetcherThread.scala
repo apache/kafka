@@ -134,10 +134,10 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     batch.partitionLeaderEpoch() > leaderEpoch
   }
 
-  override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+  override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
     val state = replicaPartitionState(topicPartition)
     state.log = state.log.takeWhile { batch =>
-      batch.lastOffset < truncationState.offset
+      batch.lastOffset < offset
     }
     state.logEndOffset = state.log.lastOption.map(_.lastOffset + 1).getOrElse(state.logStartOffset)
     state.highWatermark = math.min(state.highWatermark, state.logEndOffset)

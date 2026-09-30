@@ -343,7 +343,7 @@ class AbstractFetcherManagerTest {
       partitionData: FetchData
     ): Option[LogAppendInfo] = None
 
-    override protected def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {}
+    override protected def truncate(topicPartition: TopicPartition, offset: Long): Unit = {}
 
     override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {}
 
