@@ -35,6 +35,7 @@ import java.util.Set;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
@@ -43,6 +44,43 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TargetAssignmentBuilderTest {
+
+    @Test
+    public void testEmpty() {
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .buildCoordinatorMetadataImage();
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            Map.of(),
+            HOMOGENEOUS,
+            Map.of()
+        );
+
+        GroupAssignment groupAssignment = new GroupAssignment(Map.of());
+
+        // We use `any` here to always return an assignment but use `verify` later on
+        // to ensure that the input was correct.
+        PartitionAssignor assignor = mock(PartitionAssignor.class);
+        when(assignor.assign(any(), any()))
+            .thenReturn(groupAssignment);
+
+        // Create and populate the assignment builder.
+        TargetAssignmentBuilder builder = new TargetAssignmentBuilder(20, assignor)
+            .withTime(new MockTime(0, 12345L, 12345L))
+            .withMetadataImage(metadataImage)
+            .withGroupSpec(groupSpec);
+
+        // Execute the builder.
+        TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
+
+        // Verify that the assignor was called once with the expected
+        // assignment spec.
+        verify(assignor, times(1))
+            .assign(groupSpec, new SubscribedTopicDescriberImpl(metadataImage));
+
+        assertEquals(Map.of(), result.targetAssignment());
+        assertEquals(new TargetAssignmentMetadata(20, 12345L), result.targetAssignmentMetadata());
+    }
 
     @Test
     public void testAssignment() {
