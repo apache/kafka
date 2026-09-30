@@ -34,14 +34,14 @@ public class GroupSpecBuilder {
     /**
      * The assignment configs.
      */
-    private AssignmentConfigs assignmentConfigs;
+    private final AssignmentConfigs assignmentConfigs;
 
     /**
      * The members in the group.
      */
     private Map<String, StreamsGroupMember> members = Map.of();
 
-    /*
+    /**
      * The latest per-task changelog offsets reported by each member, keyed by member ID. Transient (not persisted);
      * fed to the assignor so it can estimate task lag.
      */
