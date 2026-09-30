@@ -34,8 +34,11 @@ import java.util.Set;
  * The stream grows on its own: when a write runs past the attached chunks it attaches one more chunk,
  * taken from the pool without blocking and falling back to a heap-allocated chunk when the pool has no
  * remaining chunks, or has been closed, in the middle of a write (a partially written record can neither be
- * rolled back nor blocked on). The closed case arises when a compressed batch is closed or aborted after the
- * producer closed the pool (e.g. drained or aborted on producer close) and the compressor flush grows the stream.
+ * rolled back nor blocked on). Heap growth is not left unbounded, though: once a record's append falls back to
+ * the heap, the owning batch is closed for appends after that record (see {@link ChunkedProducerBatch#tryAppend}),
+ * so only the current record and the compressor's final flush can grow on the heap. The closed case arises when
+ * a compressed batch is closed or aborted after the producer closed the pool (e.g. drained or aborted on producer
+ * close) and the compressor flush grows the stream.
  * Only pool-owned chunks are tracked in {@code poolAllocatedChunks}, so heap-allocated fallback chunks are
  * never returned to the pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
  * <p>
@@ -323,7 +326,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     /**
      * Number of chunks that had to be allocated from the heap because the pool was exhausted, or
      * closed, mid-record. Zero on the normal path; a non-zero value means the producer transiently exceeded
-     * buffer.memory to guarantee forward progress. Exposed for metrics and tests.
+     * buffer.memory to guarantee forward progress. {@link ChunkedProducerBatch#tryAppend} reads it to close the
+     * batch for appends (sending it early) once growth has fallen back to the heap; also used by tests.
      */
     int fallbackAllocations() {
         return fallbackAllocations;
