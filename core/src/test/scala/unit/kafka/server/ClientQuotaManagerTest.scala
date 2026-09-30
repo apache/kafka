@@ -426,6 +426,22 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   }
 
   @Test
+  def testThrottleTimeCappedToIntRange(): Unit = {
+    val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "")
+    try {
+      clientQuotaManager.updateQuota(
+        Optional.empty,
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.of(new Quota(1, true))
+      )
+
+      assertEquals(Int.MaxValue, maybeRecord(clientQuotaManager, "ANONYMOUS", "unknown", 1e9))
+    } finally {
+      clientQuotaManager.shutdown()
+    }
+  }
+
+  @Test
   def testExpireThrottleTimeSensor(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "")
     try {
