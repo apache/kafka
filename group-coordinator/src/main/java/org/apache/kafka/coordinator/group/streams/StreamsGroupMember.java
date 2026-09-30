@@ -385,14 +385,15 @@ public record StreamsGroupMember(String memberId,
                 .setWarmupTasks(taskIdsFromMap(targetAssignment.warmupTasks()));
         }
 
+        final TasksTupleWithEpochs assignedTasksWithPendingRevocation = assignedTasks.merge(tasksPendingRevocation);
         return new StreamsGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(
                 new StreamsGroupDescribeResponseData.Assignment()
-                    .setActiveTasks(taskIdsFromMapWithEpochs(assignedTasks.activeTasksWithEpochs()))
-                    .setStandbyTasks(taskIdsFromMap(assignedTasks.standbyTasks()))
-                    .setWarmupTasks(taskIdsFromMap(assignedTasks.warmupTasks())))
+                    .setActiveTasks(taskIdsFromMapWithEpochs(assignedTasksWithPendingRevocation.activeTasksWithEpochs()))
+                    .setStandbyTasks(taskIdsFromMap(assignedTasksWithPendingRevocation.standbyTasks()))
+                    .setWarmupTasks(taskIdsFromMap(assignedTasksWithPendingRevocation.warmupTasks())))
             .setTargetAssignment(describedTargetAssignment)
             .setClientHost(clientHost)
             .setClientId(clientId)
