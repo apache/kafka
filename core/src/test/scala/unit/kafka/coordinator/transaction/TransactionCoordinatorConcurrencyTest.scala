@@ -48,7 +48,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
-import org.mockito.Mockito.{mock, when}
+import org.mockito.Mockito.{mock, never, verify, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -74,6 +74,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   val producerId: Long = 11
   private var bumpProducerId = false
+  private var pidGenerator: ProducerIdManager = _
 
   @BeforeEach
   override def setUp(): Unit = {
@@ -105,7 +106,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
 
-    val pidGenerator: ProducerIdManager = mock(classOf[ProducerIdManager])
+    pidGenerator = mock(classOf[ProducerIdManager])
     when(pidGenerator.generateProducerId())
       .thenAnswer(_ => if (bumpProducerId) {
         producerId + 1
@@ -223,6 +224,47 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     // the replica became a follower but the partition has not been unloaded yet
     loseLeadership(txnStateManager.partitionFor(transactionalId))
     assertEquals(Errors.NOT_COORDINATOR, verify())
+  }
+
+  @Test
+  def testAddPartitionsReturnsNotCoordinatorAfterLosingLeadershipBeforeResignation(): Unit = {
+    val transactionalId = "stale-coordinator-add"
+    val producerEpoch: Short = 5
+    val partition = new TopicPartition("topic", 0)
+    txnStateManager.putTransactionStateIfNotExists(new TransactionMetadata(transactionalId, producerId,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 60000,
+      TransactionState.ONGOING, new util.HashSet[TopicPartition](util.Set.of(partition)), time.milliseconds(),
+      time.milliseconds(), TransactionVersion.TV_1))
+
+    def addPartitions(): Errors = {
+      var error: Errors = null
+      transactionCoordinator.handleAddPartitionsToTransaction(transactionalId, producerId, producerEpoch,
+        util.Set.of(partition), e => error = e, TransactionVersion.TV_1)
+      error
+    }
+
+    // the partition is already in the ongoing transaction
+    assertEquals(Errors.NONE, addPartitions())
+
+    // the replica became a follower but the partition has not been unloaded yet
+    loseLeadership(txnStateManager.partitionFor(transactionalId))
+    assertEquals(Errors.NOT_COORDINATOR, addPartitions())
+  }
+
+  @Test
+  def testInitProducerIdReturnsNotCoordinatorAfterLosingLeadershipBeforeResignation(): Unit = {
+    val transactionalId = "stale-coordinator-init"
+    loseLeadership(txnStateManager.partitionFor(transactionalId))
+
+    var error: Errors = null
+    transactionCoordinator.handleInitProducerId(transactionalId, 60000, enableTwoPCFlag = false,
+      keepPreparedTxn = false, None, result => error = result.error)
+    assertEquals(Errors.NOT_COORDINATOR, error)
+
+    // no producer id is allocated and no entry is added for a partition this broker no longer leads
+    verify(pidGenerator, never()).generateProducerId()
+    replicaManager.leaderEpochOf = tp => if (tp.topic == TRANSACTION_STATE_TOPIC_NAME) Some(coordinatorEpoch) else None
+    assertEquals(Right(None), txnStateManager.getTransactionState(transactionalId))
   }
 
   private def loseLeadership(txnPartition: Int): Unit =
