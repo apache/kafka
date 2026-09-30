@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -32,58 +31,149 @@ public class RackAwareStandbyPickerTest {
     private final Set<String> holders = new HashSet<>();
 
     @Test
-    public void shouldPickStandbysUntilNoProcessAddsDiversity() {
-        // H holds the active. I is the most diverse process but never eligible. N has no cluster tag. U carries the
-        // holder's tags exactly. The other processes are new in different subsets of the keys.
+    public void shouldOnlyPickEligibleProcessesWithNewValueForPriorityKey() {
+        // W is new in zone but not in cluster, N has no cluster, and I is new in both but not eligible.
+        final RackAwareStandbyPicker<String> picker = picker(List.of("cluster", "zone"), Map.of(
+            "H", Map.of("cluster", "c1", "zone", "z1"),
+            "I", Map.of("cluster", "c2", "zone", "z2"),
+            "N", Map.of("zone", "z2"),
+            "W", Map.of("cluster", "c1", "zone", "z2"),
+            "X", Map.of("cluster", "c2", "zone", "z1")
+        ));
+        hold(picker, "H");
+
+        assertEquals(Set.of("X"), picker.pickCandidates(process -> isNotHolder(process) && !process.equals("I")));
+    }
+
+    @Test
+    public void shouldRankProcessesByNewValuesForLowerPriorityKeys() {
+        // X, Y and Z are all in a new cluster. A new zone outranks a new rack, so Y drops and X and Z tie.
         final RackAwareStandbyPicker<String> picker = picker(List.of("cluster", "zone", "rack"), Map.of(
             "H", Map.of("cluster", "c1", "zone", "z1", "rack", "r1"),
-            "I", Map.of("cluster", "c2", "zone", "z2", "rack", "r2"),
-            "N", Map.of("zone", "z9", "rack", "r9"),
-            "U", Map.of("cluster", "c1", "zone", "z1", "rack", "r1"),
-            "V", Map.of("cluster", "c1", "zone", "z1", "rack", "r4"),
-            "W", Map.of("cluster", "c1", "zone", "z3", "rack", "r3"),
             "X", Map.of("cluster", "c2", "zone", "z2", "rack", "r1"),
             "Y", Map.of("cluster", "c2", "zone", "z1", "rack", "r2"),
             "Z", Map.of("cluster", "c3", "zone", "z2", "rack", "r1")
         ));
-        final Predicate<String> eligible = process -> isNotHolder(process) && !process.equals("I");
         hold(picker, "H");
 
-        // Cluster is the priority: W is new in zone and rack but not in cluster, N has no cluster, I is not eligible.
-        // Among X, Y and Z, a new zone outranks a new rack, so Y drops and X and Z are equally diverse.
-        assertEquals(Set.of("X", "Z"), picker.pickCandidates(eligible));
+        assertEquals(Set.of("X", "Z"), picker.pickCandidates(this::isNotHolder));
+    }
 
-        // X holds cluster c2 now, so Y is out and Z is the only process in a new cluster.
+    @Test
+    public void shouldRankMissingLowerPriorityKeyLikeUsedValue() {
+        // M has no zone and U is in the used zone: neither adds a new zone, so they tie.
+        final RackAwareStandbyPicker<String> picker = picker(List.of("cluster", "zone"), Map.of(
+            "H", Map.of("cluster", "c1", "zone", "z1"),
+            "M", Map.of("cluster", "c2"),
+            "U", Map.of("cluster", "c2", "zone", "z1")
+        ));
+        hold(picker, "H");
+
+        assertEquals(Set.of("M", "U"), picker.pickCandidates(this::isNotHolder));
+    }
+
+    @Test
+    public void shouldExcludeValuesOfEachNewHolder() {
+        final RackAwareStandbyPicker<String> picker = picker(List.of("cluster"), Map.of(
+            "H", Map.of("cluster", "c1"),
+            "X", Map.of("cluster", "c2"),
+            "Y", Map.of("cluster", "c2"),
+            "Z", Map.of("cluster", "c3")
+        ));
+        hold(picker, "H");
+        assertEquals(Set.of("X", "Y", "Z"), picker.pickCandidates(this::isNotHolder));
+
+        // X holds cluster c2 now, so Y is out.
         hold(picker, "X");
-        assertEquals(Set.of("Z"), picker.pickCandidates(eligible));
+        assertEquals(Set.of("Z"), picker.pickCandidates(this::isNotHolder));
+    }
 
-        // Every cluster is used: the key is given up and zone becomes the priority. N is back, both N and W are new
-        // in rack too.
-        hold(picker, "Z");
-        assertEquals(Set.of("N", "W"), picker.pickCandidates(eligible));
+    @Test
+    public void shouldGiveUpPriorityKeyOnceEveryValueIsUsed() {
+        final RackAwareStandbyPicker<String> picker = picker(List.of("cluster", "zone"), Map.of(
+            "H", Map.of("cluster", "c1", "zone", "z1"),
+            "N", Map.of("zone", "z2"),
+            "W", Map.of("cluster", "c1", "zone", "z3"),
+            "X", Map.of("cluster", "c2", "zone", "z1")
+        ));
+        hold(picker, "H");
+        assertEquals(Set.of("X"), picker.pickCandidates(this::isNotHolder));
 
-        // N has no cluster tag to record; its zone and rack are used now.
+        // Every cluster is used: zone becomes the priority and N and W are back. There is no lower key to order
+        // them by.
+        hold(picker, "X");
+        assertEquals(Set.of("N", "W"), picker.pickCandidates(this::isNotHolder));
+
+        // N has no cluster to record; its zone is used now.
         hold(picker, "N");
-        assertEquals(Set.of("W"), picker.pickCandidates(eligible));
+        assertEquals(Set.of("W"), picker.pickCandidates(this::isNotHolder));
+    }
 
-        // Every zone is used: rack becomes the priority, and there is no lower key to order V and Y by.
+    @Test
+    public void shouldGiveUpPriorityKeyWhoseOnlyNewValueIsOnIneligibleProcess() {
+        // Only I is in a new cluster, and it is not eligible, so zone becomes the priority.
+        final RackAwareStandbyPicker<String> picker = picker(List.of("cluster", "zone"), Map.of(
+            "H", Map.of("cluster", "c1", "zone", "z1"),
+            "I", Map.of("cluster", "c2", "zone", "z1"),
+            "W", Map.of("cluster", "c1", "zone", "z2")
+        ));
+        hold(picker, "H");
+
+        assertEquals(Set.of("W"), picker.pickCandidates(process -> isNotHolder(process) && !process.equals("I")));
+    }
+
+    @Test
+    public void shouldPickNothingOnceNoProcessAddsDiversity() {
+        // U carries the holder's zone, so it never comes up.
+        final RackAwareStandbyPicker<String> picker = picker(List.of("zone"), Map.of(
+            "H", Map.of("zone", "z1"),
+            "U", Map.of("zone", "z1"),
+            "W", Map.of("zone", "z2")
+        ));
+        hold(picker, "H");
+        assertEquals(Set.of("W"), picker.pickCandidates(this::isNotHolder));
+
         hold(picker, "W");
-        assertEquals(Set.of("V", "Y"), picker.pickCandidates(eligible));
+        assertEquals(Set.of(), picker.pickCandidates(this::isNotHolder));
+        assertEquals(Set.of(), picker.pickCandidates(this::isNotHolder));
+    }
 
-        hold(picker, "Y");
-        assertEquals(Set.of("V"), picker.pickCandidates(eligible));
+    @Test
+    public void shouldStartOverForNextTask() {
+        final RackAwareStandbyPicker<String> picker = picker(List.of("cluster", "zone"), Map.of(
+            "A", Map.of("cluster", "c1", "zone", "z1"),
+            "B", Map.of("cluster", "c2", "zone", "z2"),
+            "C", Map.of("cluster", "c1", "zone", "z3"),
+            "D", Map.of("cluster", "c2", "zone", "z1")
+        ));
+        hold(picker, "A");
+        assertEquals(Set.of("B"), picker.pickCandidates(this::isNotHolder));
+        hold(picker, "B");
+        assertEquals(Set.of("C"), picker.pickCandidates(this::isNotHolder));
 
-        // Every rack is used too, so no process can add diversity: U never came up, and later calls stay empty.
-        hold(picker, "V");
-        assertEquals(Set.of(), picker.pickCandidates(eligible));
-        assertEquals(Set.of(), picker.pickCandidates(eligible));
-
-        // The next task starts over from every process and key. U holds the same tags as H did, and with I eligible
-        // now it is the single most diverse process.
+        // The previous task gave up cluster and left C as the only candidate. This one starts from cluster again,
+        // over every process and with no value used.
         holders.clear();
         picker.startTask();
-        hold(picker, "U");
-        assertEquals(Set.of("I"), picker.pickCandidates(this::isNotHolder));
+        hold(picker, "C");
+        assertEquals(Set.of("B", "D"), picker.pickCandidates(this::isNotHolder));
+    }
+
+    @Test
+    public void shouldReturnCandidatesInGroupOrder() {
+        // Z is only new in cluster and drops once Y, new in zone too, comes up; X ties with Y and follows it.
+        final Map<String, Map<String, String>> clientTags = Map.of(
+            "H", Map.of("cluster", "c1", "zone", "z1"),
+            "Z", Map.of("cluster", "c2", "zone", "z1"),
+            "Y", Map.of("cluster", "c3", "zone", "z2"),
+            "X", Map.of("cluster", "c4", "zone", "z3")
+        );
+        final RackAwareStandbyPicker<String> picker =
+            new RackAwareStandbyPicker<>(List.of("cluster", "zone"), List.of("H", "Z", "Y", "X"), clientTags::get);
+        picker.startTask();
+        hold(picker, "H");
+
+        assertEquals(List.of("Y", "X"), List.copyOf(picker.pickCandidates(this::isNotHolder)));
     }
 
     private static RackAwareStandbyPicker<String> picker(final List<String> tagKeys, final Map<String, Map<String, String>> clientTags) {

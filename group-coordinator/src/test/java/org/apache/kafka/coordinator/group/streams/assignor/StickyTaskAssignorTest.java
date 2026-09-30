@@ -1702,25 +1702,6 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldPlaceStandbyOnProcessDiverseInHighestPriorityTag() {
-        // A holds the active. B differs only in cluster, C differs only in zone: cluster ranks first, so B wins.
-        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("memberA", createTaggedMemberMetadata("processA", Map.of("cluster", "c1", "zone", "z1"), Map.of("test-subtopology", Set.of(0)), Map.of())),
-            mkEntry("memberB", createMemberMetadata("processB", Map.of("cluster", "c2", "zone", "z1"))),
-            mkEntry("memberC", createMemberMetadata("processC", Map.of("cluster", "c1", "zone", "z2")))
-        );
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("cluster", "zone"))),
-            new TopologyDescriberImpl(1, true, List.of("test-subtopology"))
-        );
-
-        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "memberA"));
-        assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "memberB"));
-        assertEquals(Set.of(), getStandbyTasks(result, "test-subtopology", "memberC"));
-    }
-
-    @Test
     public void shouldPreferPreviousActiveHolderOverPreviousStandbyHolderAmongEquallyDiverseProcesses() {
         // B held tasks 0 and 1 as active and C held task 2, so the active quota of one per member moves task 1 to
         // A. For task 1's standby, B and C are both in zone z2 with the same load: B held it as active, C as
@@ -1766,57 +1747,41 @@ public class StickyTaskAssignorTest {
                 Map.of("test-subtopology", Map.of(0, 5000L))
             ))
         );
+        final AssignmentConfigsImpl configs = AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1);
+        final TopologyDescriber topology = new TopologyDescriberImpl(2, true, List.of("test-subtopology"));
 
         final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("zone"))),
-            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
+            new GroupSpecImpl(members, configs.withRackAwareAssignmentTags(List.of("zone"))),
+            topology
         );
+        final GroupAssignment tagBlind = assignor.assign(new GroupSpecImpl(members, configs), topology);
 
         assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "memberA"));
         assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "memberB"));
         assertEquals(Set.of(1), getStandbyTasks(result, "test-subtopology", "memberA"));
         assertEquals(Set.of(), getStandbyTasks(result, "test-subtopology", "memberB"));
         assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "memberC"));
+        assertEquals(standbyHolders(tagBlind, "test-subtopology", 0), standbyHolders(result, "test-subtopology", 0));
     }
 
     @Test
     public void shouldPreferRackDiversityOverStickiness() {
-        // B held the standby before but shares the zone with the active owner; C is in a new zone and wins.
+        // B held the standby before and is in a new zone, C is in a new cluster: cluster ranks first and diversity
+        // above stickiness, so C wins.
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("memberA", createTaggedMemberMetadata("processA", Map.of("zone", "z1"), Map.of("test-subtopology", Set.of(0)), Map.of())),
-            mkEntry("memberB", createTaggedMemberMetadata("processB", Map.of("zone", "z1"), Map.of(), Map.of("test-subtopology", Set.of(0)))),
-            mkEntry("memberC", createMemberMetadata("processC", Map.of("zone", "z2")))
+            mkEntry("memberA", createTaggedMemberMetadata("processA", Map.of("cluster", "c1", "zone", "z1"), Map.of("test-subtopology", Set.of(0)), Map.of())),
+            mkEntry("memberB", createTaggedMemberMetadata("processB", Map.of("cluster", "c1", "zone", "z2"), Map.of(), Map.of("test-subtopology", Set.of(0)))),
+            mkEntry("memberC", createMemberMetadata("processC", Map.of("cluster", "c2", "zone", "z1")))
         );
 
         final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("zone"))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("cluster", "zone"))),
             new TopologyDescriberImpl(1, true, List.of("test-subtopology"))
         );
 
         assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "memberA"));
         assertEquals(Set.of(), getStandbyTasks(result, "test-subtopology", "memberB"));
         assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "memberC"));
-    }
-
-    @Test
-    public void shouldMarkStandbyHolderBeforePlacingNextStandby() {
-        // With two standbys, the second pick must see the zone of the first standby as used: one standby goes to
-        // B or C in zone z2, the other to D in zone z3.
-        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("memberA", createTaggedMemberMetadata("processA", Map.of("zone", "z1"), Map.of("test-subtopology", Set.of(0)), Map.of())),
-            mkEntry("memberB", createMemberMetadata("processB", Map.of("zone", "z2"))),
-            mkEntry("memberC", createMemberMetadata("processC", Map.of("zone", "z2"))),
-            mkEntry("memberD", createMemberMetadata("processD", Map.of("zone", "z3")))
-        );
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2).withRackAwareAssignmentTags(List.of("zone"))),
-            new TopologyDescriberImpl(1, true, List.of("test-subtopology"))
-        );
-
-        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "memberA"));
-        assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "memberD"));
-        assertEquals(1, getAllStandbyTaskIds(result, "memberB", "memberC").size());
     }
 
     @Test
@@ -1885,11 +1850,7 @@ public class StickyTaskAssignorTest {
         // Step 3: B shares cluster and zone with A but held the standby, so it gets it back without rack awareness.
         // Step 4: the last standby goes to the least loaded process that is left, G, which has no tags at all.
         // H and Q, both lighter than E, get nothing: they only add diversity where C and P already do.
-        final Set<String> standbyHolders = result.members().entrySet().stream()
-            .filter(member -> member.getValue().standbyTasks().getOrDefault("stateful", Set.of()).contains(1))
-            .map(Map.Entry::getKey)
-            .collect(Collectors.toSet());
-        assertEquals(Set.of("c2", "p1", "e2", "b1", "g1"), standbyHolders);
+        assertEquals(Set.of("c2", "p1", "e2", "b1", "g1"), standbyHolders(result, "stateful", 1));
     }
 
     @Test
@@ -1975,6 +1936,13 @@ public class StickyTaskAssignorTest {
             }
         }
         return res;
+    }
+
+    private Set<String> standbyHolders(GroupAssignment result, String subtopologyId, int partition) {
+        return result.members().entrySet().stream()
+            .filter(member -> member.getValue().standbyTasks().getOrDefault(subtopologyId, Set.of()).contains(partition))
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toSet());
     }
 
     private List<Integer> getAllActiveTaskIds(GroupAssignment result, String... memberIds) {

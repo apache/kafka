@@ -31,8 +31,9 @@ import java.util.function.Predicate;
  * order is the priority. A standby goes to an eligible process whose value for the highest-priority key is not yet
  * carried by a holder of the task; among those, the one with the lexicographically largest diversity vector over the
  * lower-priority keys wins (one bit per key, set where its value is new to the task), then the assignor's tie-break
- * decides. Keys are given up lowest priority first, and once every key is given up no process can make the task more
- * diverse, so the assignor's tag-blind pass places the remaining standbys.
+ * decides. When no eligible process has a new value for that key, the key is given up and the search repeats with the
+ * next key in priority order. Once every key is given up no process can make the task more diverse, so the assignor's
+ * tag-blind pass places the remaining standbys.
  * <p>
  * For each task: {@link #startTask()}, {@link #markUsed(Object)} for the active owner, then per standby
  * {@link #pickCandidates(Predicate)} followed by the assignor's own choice, and {@link #markUsed(Object)} for the
