@@ -6068,4 +6068,6 @@ org.apache.kafka.server.policy.AlterConfigPolicyTest:
 - testRequestMetadataEquals
 org.apache.kafka.test.faultproxy.KafkaProtocolFaultProxyTest:
 - shouldAcceptSingleBrokerBootstrap
+- shouldReEncodeFindCoordinatorResponsesWithNoCoordinators
 - shouldRejectMultiBrokerBootstrap
+- shouldRewriteFindCoordinatorResponsesToPointAtTheProxy
