@@ -263,7 +263,8 @@ public class BufferPool {
      * propagates, so a failed request leaves nothing reserved.
      * <p>
      * A {@code maxTimeToBlockMs} of 0 makes the call non-blocking: if the memory is not available right away it
-     * fails fast, without joining {@link #waiters}, releasing the lock or recording a wait time.
+     * fails fast, without joining {@link #waiters}, releasing the lock or recording a wait time. Callers that must
+     * not fail at all use {@link #tryAllocateChunks} instead.
      * <p>
      * Used by the incremental buffer.memory allocation strategy; the poolable size is the chunk size.
      *
@@ -278,16 +279,9 @@ public class BufferPool {
      * @throws KafkaException           if the pool is closed during the wait
      */
     public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-        if (allocationMode != AllocationMode.INCREMENTAL)
-            throw new IllegalStateException("allocateChunks() is not supported in " + allocationMode
-                + " allocation mode; use allocate()");
-        if (totalSize <= 0)
-            throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
-
         int chunkSize = poolableSize();
-        int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
+        int numChunks = numChunksFor(totalSize, chunkSize);
         long memoryRequired = (long) numChunks * chunkSize;
-        throwIfChunksNeededExceedsPool(totalSize, numChunks, chunkSize, memoryRequired);
 
         // Chunks taken from the free list. The remaining bytes are reserved against
         // nonPooledAvailableMemory and materialized as raw allocations after the lock is released.
@@ -299,19 +293,10 @@ public class BufferPool {
             throw new KafkaException("Producer closed while allocating memory");
         }
         try {
-            long freeListBytes = (long) free.size() * chunkSize;
-            if (this.nonPooledAvailableMemory + freeListBytes >= memoryRequired) {
-                // Enough memory available to allocate the chunks needed
-                while (pooled.size() < numChunks && !free.isEmpty())
-                    pooled.add(free.pollFirst());
-                long remainingBytes = memoryRequired - (long) pooled.size() * chunkSize;
-                if (remainingBytes > 0) {
-                    // remainingBytes > 0 means the free list was fully drained into `pooled`, so the
-                    // remainder comes entirely from non-pooled memory (sufficient per the check above).
-                    this.nonPooledAvailableMemory -= remainingBytes;
-                }
+            if (reserveChunksIfAvailable(pooled, numChunks, chunkSize, memoryRequired)) {
+                // Enough memory was available; the chunks are reserved.
             } else if (maxTimeToBlockMs <= 0) {
-                // Non-blocking caller (e.g. mid-batch extension, mid-write stream growth): fail fast.
+                // Non-blocking caller (e.g. mid-batch extension): fail fast.
                 // Nothing has been reserved yet, so there is nothing to refund.
                 throw new BufferExhaustedException(exhaustedChunksMessage(memoryRequired, numChunks, chunkSize, maxTimeToBlockMs));
             } else {
@@ -374,8 +359,86 @@ public class BufferPool {
             }
         }
 
-        // Allocate raw chunks for the reserved non-pooled portion outside the lock. On error,
-        // refund all reserved bytes (memoryRequired) and let the next waiter try.
+        return materializeChunks(pooled, numChunks, chunkSize, memoryRequired);
+    }
+
+    /**
+     * Non-blocking variant of {@link #allocateChunks} for callers that can neither wait nor fail, such as a
+     * chunked stream growing in the middle of a record. Returns the chunks if the memory is available right
+     * away, and {@code null} otherwise, without reserving anything, joining {@link #waiters} or recording a
+     * wait time. Also returns {@code null} once the pool is closed: the producer closes the pool before it
+     * drains or aborts the last batches, and closing those batches can still need to grow their streams.
+     *
+     * @param totalSize minimum total bytes of capacity required across the returned chunks
+     * @return list of {@code ceil(totalSize / poolableSize())} {@code ByteBuffer}s, each of capacity
+     *         {@code poolableSize()}, or {@code null} if the memory is not available right now or the pool is closed
+     * @throws IllegalArgumentException if {@code totalSize <= 0}, or if the request rounded up to
+     *         whole chunks exceeds {@code totalMemory()}
+     */
+    public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+        int chunkSize = poolableSize();
+        int numChunks = numChunksFor(totalSize, chunkSize);
+        long memoryRequired = (long) numChunks * chunkSize;
+        List<ByteBuffer> pooled = new ArrayList<>(numChunks);
+
+        lock.lock();
+        try {
+            if (this.closed || !reserveChunksIfAvailable(pooled, numChunks, chunkSize, memoryRequired))
+                return null;
+        } finally {
+            try {
+                signalNextWaiterIfMemoryAvailable();
+            } finally {
+                lock.unlock();
+            }
+        }
+        return materializeChunks(pooled, numChunks, chunkSize, memoryRequired);
+    }
+
+    /**
+     * Validates a chunk request and returns the number of whole chunks it needs. Shared by
+     * {@link #allocateChunks} and {@link #tryAllocateChunks}.
+     */
+    private int numChunksFor(int totalSize, int chunkSize) {
+        if (allocationMode != AllocationMode.INCREMENTAL)
+            throw new IllegalStateException("allocateChunks() and tryAllocateChunks() are not supported in "
+                + allocationMode + " allocation mode; use allocate()");
+        if (totalSize <= 0)
+            throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
+        int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
+        throwIfChunksNeededExceedsPool(totalSize, numChunks, chunkSize, (long) numChunks * chunkSize);
+        return numChunks;
+    }
+
+    /**
+     * Reserves the whole request if enough memory is available right now: chunks from the free list first
+     * (added to {@code pooled}), the rest as bytes against {@link #nonPooledAvailableMemory}, to be
+     * materialized by {@link #materializeChunks} once the lock is released. Reserves nothing otherwise.
+     * Must be called with {@link #lock} held.
+     *
+     * @return whether the request was reserved
+     */
+    private boolean reserveChunksIfAvailable(List<ByteBuffer> pooled, int numChunks, int chunkSize, long memoryRequired) {
+        long freeListBytes = (long) free.size() * chunkSize;
+        if (this.nonPooledAvailableMemory + freeListBytes < memoryRequired)
+            return false;
+        while (pooled.size() < numChunks && !free.isEmpty())
+            pooled.add(free.pollFirst());
+        long remainingBytes = memoryRequired - (long) pooled.size() * chunkSize;
+        if (remainingBytes > 0) {
+            // remainingBytes > 0 means the free list was fully drained into `pooled`, so the
+            // remainder comes entirely from non-pooled memory (sufficient per the check above).
+            this.nonPooledAvailableMemory -= remainingBytes;
+        }
+        return true;
+    }
+
+    /**
+     * Allocates raw chunks for the reserved non-pooled portion of a request, outside the lock, and returns
+     * them together with the chunks already taken from the free list. On error, refunds all reserved bytes
+     * ({@code memoryRequired}) and lets the next waiter try.
+     */
+    private List<ByteBuffer> materializeChunks(List<ByteBuffer> pooled, int numChunks, int chunkSize, long memoryRequired) {
         int chunksStillNeeded = numChunks - pooled.size();
         List<ByteBuffer> result = new ArrayList<>(numChunks);
         result.addAll(pooled);

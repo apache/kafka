@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import java.nio.ByteBuffer;
@@ -34,7 +33,9 @@ import java.util.Set;
  * <p>
  * The stream grows on its own: when a write runs past the attached chunks it attaches one more chunk,
  * taken from the pool without blocking and falling back to a heap-allocated chunk when the pool has no
- * remaining chunks in the middle of a write (a partially written record can neither be rolled back nor blocked on).
+ * remaining chunks, or has been closed, in the middle of a write (a partially written record can neither be
+ * rolled back nor blocked on). The closed case arises when a compressed batch is closed or aborted after the
+ * producer closed the pool (e.g. drained or aborted on producer close) and the compressor flush grows the stream.
  * Only pool-owned chunks are tracked in {@code poolAllocatedChunks}, so heap-allocated fallback chunks are
  * never returned to the pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
  * <p>
@@ -167,24 +168,17 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     private void advanceToNextChunk() {
         if (currentChunkIndex + 1 >= chunks.size()) {
-            ByteBuffer next = null;
-            try {
-                List<ByteBuffer> chunk = pool.allocateChunks(chunkSize, 0);
-                next = chunk.get(0);
-            } catch (BufferExhaustedException e) {
-                // No chunks remaining in pool — leave next null so we take the heap fallback
-            } catch (InterruptedException e) {
-                // Not expected: a 0 ms acquire fails fast without waiting, so nothing can be interrupted.
-                // Kept because allocateChunks declares it; preserve the flag and take the heap fallback
-                Thread.currentThread().interrupt();
-            }
-            if (next != null) {
+            // Non-blocking, and null rather than an exception when the pool has no memory right now or has been
+            // closed (the producer closes it before draining or aborting the last batches)
+            List<ByteBuffer> pooled = pool.tryAllocateChunks(chunkSize);
+            if (pooled != null) {
+                ByteBuffer next = pooled.get(0);
                 chunks.add(next);
                 poolAllocatedChunks.add(next);
             } else {
-                // Heap fallback: the pool could not satisfy the allocation without blocking, but the
-                // in-flight record can neither be rolled back nor blocked on, so allocate on the heap
-                // to guarantee forward progress
+                // Heap fallback: the pool could not hand out a chunk without blocking, but the in-flight
+                // record can neither be rolled back nor blocked on, so allocate on the heap to guarantee
+                // forward progress
                 chunks.add(ByteBuffer.allocate(chunkSize));
                 fallbackAllocations++;
             }
@@ -327,8 +321,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Number of chunks that had to be allocated from the heap because the pool was exhausted
-     * mid-record. Zero on the normal path; a non-zero value means the producer transiently exceeded
+     * Number of chunks that had to be allocated from the heap because the pool was exhausted, or
+     * closed, mid-record. Zero on the normal path; a non-zero value means the producer transiently exceeded
      * buffer.memory to guarantee forward progress. Exposed for metrics and tests.
      */
     int fallbackAllocations() {

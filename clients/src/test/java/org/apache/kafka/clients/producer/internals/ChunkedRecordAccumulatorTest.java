@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -333,6 +334,108 @@ public class ChunkedRecordAccumulatorTest {
         } finally {
             CompressionRatioEstimator.resetEstimation(topic);
             accum.close();
+        }
+    }
+
+    /**
+     * Appends a single batch of incompressible data that a compression ratio estimate far below 1.0
+     * lets grow past its attached chunks, so the compressor still has to grow the stream when it
+     * flushes on close. Returns the append result of the last record.
+     */
+    private RecordAccumulator.RecordAppendResult appendIncompressibleBatch(ChunkedRecordAccumulator accum,
+                                                                           List<byte[]> values) throws Exception {
+        Random random = new Random(42);
+        RecordAccumulator.RecordAppendResult result = null;
+        for (int i = 0; i < 100; i++) {
+            byte[] value = new byte[500];
+            random.nextBytes(value);
+            values.add(value);
+            result = accum.append(topic, partition1, i, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+        }
+        assertEquals(1, batchesFor(accum, tp1).size());
+        return result;
+    }
+
+    /**
+     * A graceful producer close closes the pool before the sender drains the remaining batches. Draining
+     * a compressed batch closes it, and the compressor's flush can still grow the stream at that point. That
+     * growth must not fail on the closed pool: the batch would already be off its deque, so it would be
+     * neither sent nor re-enqueued and its callbacks would never fire. It must instead fall back to the
+     * heap, as growth past an exhausted pool does, so the drained batch decodes to every record appended.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testDrainAfterCloseGrowsCompressedBatchOnHeap(String codec) throws Exception {
+        int chunkSize = 256;
+        // Ample memory, so any growth before close is served by the pool.
+        long totalMemory = 1024L * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, compression, pool);
+        // Read by the batch on construction, so it must be set before the first append.
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
+        try {
+            List<byte[]> values = new ArrayList<>();
+            appendIncompressibleBatch(accum, values);
+
+            // What Sender.initiateClose does, followed by the sender's shutdown drain.
+            accum.close();
+            Map<Integer, List<ProducerBatch>> drained =
+                    accum.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+
+            List<ProducerBatch> batches = drained.get(node1.id());
+            assertEquals(1, batches.size());
+            assertFalse(accum.hasUndrained());
+            ProducerBatch batch = batches.get(0);
+            int i = 0;
+            for (Record r : batch.records().records()) {
+                assertArrayEquals(values.get(i), readBytes(r.value()));
+                i++;
+            }
+            assertEquals(values.size(), i, "all appended records must be present");
+
+            // The pool had room for all growth before close, so a heap chunk can only come from growth after close.
+            ChunkedByteBufferOutputStream stream = (ChunkedByteBufferOutputStream) batch.recordsBuilder.bufferStream();
+            assertTrue(stream.fallbackAllocations() > 0, "growth after close should have fallen back to the heap");
+
+            // Every pool chunk returns to the closed pool, and no heap fallback chunk is added to it.
+            accum.deallocate(batch);
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+        }
+    }
+
+    /**
+     * The forced-close counterpart of {@link #testDrainAfterCloseGrowsCompressedBatchOnHeap}: aborting a
+     * compressed batch after the pool is closed also flushes the compressor, which can still grow the stream.
+     * The abort must still complete the batch's futures and return its chunks to the pool.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testAbortAfterCloseCompletesCompressedBatchThatGrows(String codec) throws Exception {
+        int chunkSize = 256;
+        long totalMemory = 1024L * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, compression, pool);
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
+        try {
+            RecordAccumulator.RecordAppendResult result = appendIncompressibleBatch(accum, new ArrayList<>());
+
+            // What Sender.forceClose does, followed by the sender's forced-shutdown abort.
+            accum.close();
+            accum.abortIncompleteBatches();
+
+            assertTrue(result.future.isDone(), "the aborted batch's futures must complete");
+            assertThrows(ExecutionException.class, result.future::get);
+            assertFalse(accum.hasIncomplete());
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
         }
     }
 
