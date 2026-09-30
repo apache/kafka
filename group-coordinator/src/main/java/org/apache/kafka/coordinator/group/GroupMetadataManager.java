@@ -4404,8 +4404,7 @@ public class GroupMetadataManager {
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(log, group.groupId())
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
-                .withPreviousStaticMembers(updatedMembersAndTargetAssignment.staticMembers())
-                .withCurrentStaticMembers(updatedMembersAndTargetAssignment.staticMembers())
+                .withUnchangedStaticMembers()
                 .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                 .withNewTargetAssignment(assignmentResult.targetAssignment())
                 .build(records);
@@ -4495,8 +4494,7 @@ public class GroupMetadataManager {
             new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(log, group.groupId())
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
-                .withPreviousStaticMembers(Map.of())
-                .withCurrentStaticMembers(Map.of())
+                .withUnchangedStaticMembers()
                 .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                 .withNewTargetAssignment(assignmentResult.targetAssignment())
                 .build(records);
@@ -4641,8 +4639,7 @@ public class GroupMetadataManager {
             new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(log, group.groupId())
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
-                .withPreviousStaticMembers(updatedMembersAndTargetAssignment.staticMembers())
-                .withCurrentStaticMembers(updatedMembersAndTargetAssignment.staticMembers())
+                .withUnchangedStaticMembers()
                 .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                 .withNewTargetAssignment(assignmentResult.targetAssignment())
                 .build(records);

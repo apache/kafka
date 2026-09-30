@@ -137,8 +137,7 @@ public class TargetAssignmentBuilderBenchmark {
         targetAssignmentRecordsBuilder =
             new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, GROUP_ID)
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
-                .withPreviousStaticMembers(updatedMembersAndTargetAssignment.staticMembers())
-                .withCurrentStaticMembers(updatedMembersAndTargetAssignment.staticMembers())
+                .withUnchangedStaticMembers()
                 .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment());
     }
 
