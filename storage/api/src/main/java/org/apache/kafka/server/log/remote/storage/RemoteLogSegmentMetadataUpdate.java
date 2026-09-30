@@ -48,7 +48,7 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
 
     /**
      * @param remoteLogSegmentId Universally unique remote log segment id.
-     * @param eventTimestampMs   Epoch time in milliseconds at which the remote log segment is copied to the remote tier storage.
+     * @param eventTimestampMs   Epoch time in milliseconds at which this remote log segment metadata event occurred.
      * @param customMetadata     Custom metadata.
      * @param state              State of the remote log segment.
      * @param brokerId           Broker id from which this event is generated.
