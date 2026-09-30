@@ -446,6 +446,9 @@ org.apache.kafka.server.metrics.BrokerServerMetricsTest:
 - testMetadataApplyErrorCount
 - testMetadataLoadErrorCount
 - testMetricsExported
+org.apache.kafka.server.metrics.ClientMetricsConfigsTest:
+- testMatchingPatternMayContainEqualsSign
+- testMatchingPatternWithoutEqualsSignIsRejected
 org.apache.kafka.server.metrics.ClientMetricsInstanceMetadataTest:
 - testIsMatchMismatchFail
 - testIsMatchMultiplePatternValid
@@ -521,6 +524,7 @@ org.apache.kafka.server.quota.ClientQuotaManagerTest:
 - testSetAndRemoveDefaultUserQuota
 - testSetAndRemoveUserClientQuota
 - testSetAndRemoveUserQuota
+- testThrottleTimeCappedToIntRange
 - testUserQuotaParsingWithDefaultClientIdQuota
 org.apache.kafka.server.quota.ClientQuotasRequestTest:
 - testAlterClientQuotasBadIp
