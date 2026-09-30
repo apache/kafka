@@ -137,6 +137,13 @@ public class TargetAssignmentBuilder {
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
+        if (time == null)
+            throw new IllegalArgumentException("Time must be set.");
+        if (topology == null)
+            throw new IllegalArgumentException("Topology must be set.");
+        if (groupSpec == null)
+            throw new IllegalArgumentException("Group spec must be set.");
+
         // Compute the assignment.
         GroupAssignment newGroupAssignment;
         if (topology.isReady()) {
