@@ -128,6 +128,8 @@ public class StandbyTaskEOSIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldSurviveWithOneTaskAsStandby(final boolean transactionalStateStores) throws Exception {
+        final long time = System.currentTimeMillis();
+
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
             Collections.singletonList(
@@ -139,7 +141,7 @@ public class StandbyTaskEOSIntegrationTest {
                 IntegerSerializer.class,
                 new Properties()
             ),
-            10L
+            10L + time
         );
 
         final String stateDirPath = TestUtils.tempDirectory(appId).getPath();
