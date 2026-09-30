@@ -72,7 +72,6 @@ import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -82,7 +81,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * Unlike the classic protocol, warm-up derivation for streams groups happens broker-side via an
  * {@code AssignmentRefiner} that is a {@code NoOp} by default, so the real {@link AssignmentRefinerImpl} is
- * enabled explicitly via the (internal, testing-only) {@code group.streams.assignment.refiner.class} config.
+ * enabled explicitly via {@code group.streams.assignment.refiner.class}. That config is broker-internal
+ * (its own doc string says "This should be used for testing only") because warm-up derivation isn't wired
+ * in as a production default yet; this test exercises the mechanism directly instead of waiting for that.
  */
 @Timeout(600)
 @Tag("integration")
@@ -213,11 +214,14 @@ public class StreamsGroupWarmupTaskIntegrationTest {
                     " in any test environment, but you never know..."
             );
 
-            // the promoted task should be exclusively owned by kafkaStreams1 now; kafkaStreams0 must have
-            // relinquished it, not just kept processing it alongside kafkaStreams1.
-            assertFalse(
-                isActiveTask(kafkaStreams0, warmupTaskId.get()),
-                "kafkaStreams0 should have released " + warmupTaskId.get() + " once it was promoted to active on kafkaStreams1"
+            // the promoted task should be exclusively owned by kafkaStreams1 now; with no standbys configured
+            // (streams.num.standby.replicas defaults to 0), kafkaStreams0 should have no trace of the task left
+            // in any role at all. Poll instead of checking once: a thread's exposed metadata snapshot is only
+            // refreshed on transition back into RUNNING, so it can briefly still show the pre-revocation state.
+            TestUtils.waitForCondition(
+                () -> !hasTask(kafkaStreams0, warmupTaskId.get()),
+                120_000L,
+                () -> "kafkaStreams0 should have released " + warmupTaskId.get() + " once it was promoted to active on kafkaStreams1"
             );
 
             restoreCompleteLatch.await();
@@ -245,6 +249,22 @@ public class StreamsGroupWarmupTaskIntegrationTest {
     private static boolean isActiveTask(final KafkaStreams streams, final TaskId taskId) {
         for (final ThreadMetadata threadMetadata : streams.metadataForLocalThreads()) {
             for (final TaskMetadata taskMetadata : threadMetadata.activeTasks()) {
+                if (taskMetadata.taskId().equals(taskId)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasTask(final KafkaStreams streams, final TaskId taskId) {
+        for (final ThreadMetadata threadMetadata : streams.metadataForLocalThreads()) {
+            for (final TaskMetadata taskMetadata : threadMetadata.activeTasks()) {
+                if (taskMetadata.taskId().equals(taskId)) {
+                    return true;
+                }
+            }
+            for (final TaskMetadata taskMetadata : threadMetadata.standbyTasks()) {
                 if (taskMetadata.taskId().equals(taskId)) {
                     return true;
                 }
