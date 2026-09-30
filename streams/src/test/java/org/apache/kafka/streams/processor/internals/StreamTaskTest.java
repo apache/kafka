@@ -2464,8 +2464,8 @@ public class StreamTaskTest {
     public void shouldCommitWhileUpdateSnapshotWithTheConsumedOffsetsForSuspendedRunningTask() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        final Map<TopicPartition, Long> checkpointableOffsets = singletonMap(partition1, 1L);
-        when(recordCollector.offsets()).thenReturn(checkpointableOffsets);
+        final Map<TopicPartition, Long> producedOffsets = singletonMap(partition1, 1L);
+        when(recordCollector.offsets()).thenReturn(producedOffsets);
 
         task = createStatefulTask(createConfig(), true);
         task.initializeIfNeeded();
@@ -2479,8 +2479,57 @@ public class StreamTaskTest {
         task.postCommit(true); // should checkpoint
 
         verify(stateManager, times(2)).commit();
-        verify(stateManager, times(2)).updateChangelogOffsets(checkpointableOffsets);
+        // restoration checkpoint: nothing consumed yet, so the produced offset is used
+        verify(stateManager).updateChangelogOffsets(singletonMap(partition1, 1L));
+        // post-commit checkpoint: partition1 was consumed at 10, and the consumed offset wins over the produced offset
+        verify(stateManager).updateChangelogOffsets(singletonMap(partition1, 10L));
         verify(recordCollector, times(2)).offsets();
+    }
+
+    @Test
+    public void shouldCheckpointConsumedOffsetNotProducedOffsetForSourceChangelogPartition() {
+        // A source-topic changelog partition is both consumed and produced to by the task. Its store is
+        // filled by consuming, so the checkpoint must use the consumed offset, not the (higher) produced offset.
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        when(recordCollector.offsets()).thenReturn(singletonMap(partition1, 20L)); // last offset produced to partition1
+
+        task = createStatefulTask(createConfig(), true);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 10)));
+        task.addRecords(partition2, singleton(getConsumerRecordWithOffsetAsTimestamp(partition2, 10)));
+        task.process(100L); // consumes partition1 at offset 10
+        assertTrue(task.commitNeeded());
+
+        task.suspend();
+        task.postCommit(true); // should checkpoint
+
+        // the consumed offset (10) wins over the produced offset (20) for the source-changelog partition
+        verify(stateManager).updateChangelogOffsets(singletonMap(partition1, 10L));
+    }
+
+    @Test
+    public void shouldCheckpointProducedOffsetForDedicatedChangelogPartition() {
+        // A dedicated changelog partition is produced to but never consumed, so it is not in consumedOffsets:
+        // its produced offset must be preserved even while a consumed source partition uses its consumed offset.
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, 20L)); // produced to the changelog
+
+        task = createStatefulTask(createConfig(), true);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 10)));
+        task.addRecords(partition2, singleton(getConsumerRecordWithOffsetAsTimestamp(partition2, 10)));
+        task.process(100L); // consumes partition1 at offset 10
+        assertTrue(task.commitNeeded());
+
+        task.suspend();
+        task.postCommit(true); // should checkpoint
+
+        // dedicated changelog keeps its produced offset (20); the consumed source partition adds its consumed offset (10)
+        verify(stateManager).updateChangelogOffsets(mkMap(mkEntry(changelogPartition, 20L), mkEntry(partition1, 10L)));
     }
 
     @Test
@@ -2754,6 +2803,52 @@ public class StreamTaskTest {
         task.closeDirty();
         assertFalse(task.commitNeeded());
         assertFalse(task.commitRequested());
+    }
+
+    @Test
+    public void shouldNotCommitStaleNextOffsetForPartitionNotReReadAfterRevive() {
+        // A revived task must not commit a stale "next offset to consume" for a partition it has not re-read.
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        // idle disabled (-1) so the revived task can process partition2 without waiting on empty partition1
+        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "-1"));
+
+        // committed offset partition1 will be seeked back to when the revived task restores
+        consumer.commitSync(Map.of(partition1, new OffsetAndMetadata(5L)));
+
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        // a poll advanced partition1 past its committed offset before the corruption
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(10L, Optional.of(0), ""));
+
+        // closeDirtyAndRevive: suspend, close dirty, mark inputs for offset reset, revive
+        task.suspend();
+        task.closeDirty();
+        task.addPartitionsForOffsetReset(Set.of(partition1));
+        task.revive();
+
+        // restoration seeks partition1 back to its committed offset; partition1 is now NOT re-read
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        assertEquals(5L, consumer.position(partition1));
+
+        // the revived task re-reads partition2 only, and processor metadata forces a commit of all inputs
+        task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition2, 0L, 0)));
+        task.process(0L);
+        task.updateNextOffsets(partition2, new OffsetAndMetadata(1L, Optional.of(0), ""));
+        processorStreamTime.mockProcessor.addProcessorMetadata("key1", 100L);
+
+        assertTrue(task.commitNeeded());
+        final Map<TopicPartition, OffsetAndMetadata> committed = task.prepareCommit(true);
+
+        // partition1 must be left out: committing its stale next offset (10) would skip records 5..9
+        assertFalse(
+            committed.containsKey(partition1),
+            "revived task committed a stale next offset for a partition it did not re-read"
+        );
+        // partition2, which was re-read, is still committed
+        assertTrue(committed.containsKey(partition2));
     }
 
     @Test
