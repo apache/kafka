@@ -103,6 +103,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
@@ -2396,6 +2397,109 @@ public class SenderTest {
         assertTrue(responseFuture.isDone());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
         assertEquals(1L, transactionManager.sequenceNumber(tp0));
+    }
+
+    @Test
+    public void testNewBatchesAreHeldBackWhileOldestInFlightBatchCouldLeaveBrokerDeduplicationWindow() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        // Each `runOnce` drains at most one batch per partition. No response is given yet, so the batches stay in
+        // flight and fill up the window the broker retains for duplicate detection.
+        int window = TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER;
+        for (int i = 0; i < window; i++) {
+            appendToAccumulator(tp0);
+            sender.runOnce();
+            assertEquals(i + 1, sender.inFlightBatches(tp0).size());
+        }
+        List<ClientRequest> requests = new ArrayList<>(client.requests());
+        assertEquals(window, requests.size());
+
+        // Acknowledge every batch but the first, as a new leader would while the first is still in flight to the
+        // previous leader. The first batch is now the oldest one the broker retains and there is no room after it,
+        // even though only one batch is still in flight.
+        for (int i = 1; i < window; i++) {
+            client.respondToRequest(requests.get(i), produceResponse(tp0, i, Errors.NONE, 0));
+        }
+        sender.runOnce(); // receive the responses
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // A new batch for tp0 is held back: appending it would make the broker forget the first batch, so a retry
+        // of that batch would fail with OUT_OF_ORDER_SEQUENCE. Other partitions of the same node are unaffected.
+        Future<RecordMetadata> heldBack = appendToAccumulator(tp0);
+        appendToAccumulator(tp1);
+        sender.runOnce();
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertFalse(heldBack.isDone());
+        assertEquals(1, sender.inFlightBatches(tp1).size());
+        assertTrue(accumulator.hasUndrained());
+
+        // Once the first batch completes, the held back batch is sent.
+        client.respondToRequest(requests.get(0), produceResponse(tp0, 0, Errors.NONE, 0));
+        sender.runOnce(); // receive the response
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        sender.runOnce(); // send the held back batch
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(window, sender.inFlightBatches(tp0).get(0).baseSequence());
+        assertFalse(accumulator.hasUndrained());
+    }
+
+    @Test
+    public void testRetryOfOldestInFlightBatchIsNotHeldBackByBrokerDeduplicationWindow() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        int window = TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER;
+        List<Future<RecordMetadata>> futures = new ArrayList<>();
+        for (int i = 0; i < window; i++) {
+            futures.add(appendToAccumulator(tp0));
+            sender.runOnce();
+        }
+        List<ClientRequest> requests = new ArrayList<>(client.requests());
+        assertEquals(window, requests.size());
+
+        // The leader moved: the first batch is rejected by the previous leader while the later batches are
+        // acknowledged by the new one. The first batch is re-enqueued for a retry.
+        for (int i = 1; i < window; i++) {
+            client.respondToRequest(requests.get(i), produceResponse(tp0, i, Errors.NONE, 0));
+        }
+        client.respondToRequest(requests.get(0), produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
+        sender.runOnce(); // receive the responses
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(1, accumulator.getDeque(tp0).size());
+        assertEquals(0, accumulator.getDeque(tp0).peekFirst().baseSequence());
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // The retry already has a sequence and is not held back, otherwise the partition could never make progress.
+        // A new batch queued behind it is held back until the retry completes.
+        Future<RecordMetadata> heldBack = appendToAccumulator(tp0);
+        time.sleep(RETRY_BACKOFF_MS);
+        sender.runOnce(); // send the retry
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(0, sender.inFlightBatches(tp0).get(0).baseSequence());
+        sender.runOnce(); // nothing else is sent
+        assertEquals(1, client.inFlightRequestCount());
+        assertFalse(heldBack.isDone());
+        assertTrue(accumulator.hasUndrained());
+
+        // The retry is still within the broker's window and succeeds, which releases the held back batch.
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sender.runOnce(); // receive the response
+        assertTrue(futures.get(0).isDone());
+        assertEquals(0L, futures.get(0).get().offset());
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        sender.runOnce(); // send the held back batch
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(window, sender.inFlightBatches(tp0).get(0).baseSequence());
+        assertFalse(accumulator.hasUndrained());
     }
 
     @Test
