@@ -4623,6 +4623,7 @@ public class GroupMetadataManager {
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId(), true);
         try {
+            long startTimeMs = time.milliseconds();
             org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec =
                 new org.apache.kafka.coordinator.group.streams.GroupSpecBuilder(assignmentConfigs)
                     .withMembers(updatedMembersAndTargetAssignment.members())
@@ -4636,7 +4637,6 @@ public class GroupMetadataManager {
                     .withMetadataImage(metadataImage)
                     .withGroupSpec(groupSpec);
 
-            long startTimeMs = time.milliseconds();
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
