@@ -388,7 +388,7 @@ public class ConsoleConsumerTest {
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
             ConsoleConsumer.ConsumerWrapper consumerWrapper = 
-                    new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster, GroupProtocol.CLASSIC));
+                    new ConsoleConsumer.ConsumerWrapper(options, createGroupMetadataConsumer(cluster, GroupProtocol.CLASSIC));
 
             try (ByteArrayOutputStream out = new ByteArrayOutputStream();
                  PrintStream output = new PrintStream(out)) {
@@ -432,7 +432,7 @@ public class ConsoleConsumerTest {
 
         ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
         ConsoleConsumer.ConsumerWrapper consumerWrapper =
-            new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster, GroupProtocol.CONSUMER));
+            new ConsoleConsumer.ConsumerWrapper(options, createGroupMetadataConsumer(cluster, GroupProtocol.CONSUMER));
 
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
              PrintStream output = new PrintStream(out)) {
@@ -490,7 +490,7 @@ public class ConsoleConsumerTest {
         return new KafkaConsumer<>(props);
     }
 
-    private Consumer<byte[], byte[]> createGroupMetaDataConsumer(ClusterInstance cluster, GroupProtocol groupProtocol) {
+    private Consumer<byte[], byte[]> createGroupMetadataConsumer(ClusterInstance cluster, GroupProtocol groupProtocol) {
         Properties props = consumerProps(cluster);
         props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name());
