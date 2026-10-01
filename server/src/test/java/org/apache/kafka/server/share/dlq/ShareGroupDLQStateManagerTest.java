@@ -26,6 +26,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
@@ -1918,6 +1919,201 @@ class ShareGroupDLQStateManagerTest {
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    /**
+     * As {@link #testDLQRecordCopyEnabled()}, but each source record also carries an original header.
+     * Verifies the original header is preserved on the DLQ record alongside the standard DLQ context
+     * headers (prepended, per ShareGroupDLQRecordHelper.headers()).
+     */
+    @Test
+    public void testDLQRecordCopyEnabledPreservesOriginalHeaders() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
+        Header[] originalHeaders = new Header[] {
+            new RecordHeader("x-original-header", "original-value".getBytes(StandardCharsets.UTF_8))
+        };
+        LogReader logReader = mock(LogReader.class);
+        whenReadAsync(logReader, param.topicIdPartition(), logReadResult(recordsInfo(
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1, originalHeaders),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2, originalHeaders),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3, originalHeaders)), Errors.NONE));
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause",
+                "x-original-header", "original-value"
+            ), List.of(keyData1, keyData2, keyData3), List.of(valueData1, valueData2, valueData3))
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    /**
+     * As {@link #testDLQRecordCopyEnabledPreservesOriginalHeaders()}, but each source record carries a
+     * different set of original headers (one, none, and two), verified per-record rather than via the
+     * shared-headers assumption of {@link #assertDlqProduceRecordHeaders}. Confirms headers are copied
+     * (or not) independently per record, and that the standard DLQ context headers are unaffected.
+     */
+    @Test
+    public void testDLQRecordCopyEnabledWithMixedOriginalHeadersPerRecord() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
+        LogReader logReader = mock(LogReader.class);
+        // Offset 0 carries one original header, offset 1 carries none, offset 2 carries two.
+        whenReadAsync(logReader, param.topicIdPartition(), logReadResult(recordsInfo(
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1,
+                new Header[] {new RecordHeader("x-original-header", "value-a".getBytes(StandardCharsets.UTF_8))}),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3,
+                new Header[] {
+                    new RecordHeader("x-original-header", "value-c".getBytes(StandardCharsets.UTF_8)),
+                    new RecordHeader("x-another-header", "value-c2".getBytes(StandardCharsets.UTF_8))
+                })), Errors.NONE));
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        ProduceRequestData.TopicProduceData topic = capturedProduces.get(0).data().topicData().iterator().next();
+        MemoryRecords dlqRecords = (MemoryRecords) topic.partitionData().iterator().next().records();
+        List<Map<String, String>> actualHeadersByOffset = new ArrayList<>();
+        for (Record record : dlqRecords.records()) {
+            Map<String, String> headerMap = new HashMap<>();
+            for (Header h : record.headers()) {
+                headerMap.put(h.key(), new String(h.value(), StandardCharsets.UTF_8));
+            }
+            actualHeadersByOffset.add(headerMap);
+        }
+
+        assertEquals(3, actualHeadersByOffset.size());
+        assertEquals("value-a", actualHeadersByOffset.get(0).get("x-original-header"));
+        assertFalse(actualHeadersByOffset.get(1).containsKey("x-original-header"),
+            "Record with no original headers should not carry any copied header");
+        assertEquals("value-c", actualHeadersByOffset.get(2).get("x-original-header"));
+        assertEquals("value-c2", actualHeadersByOffset.get(2).get("x-another-header"));
+        // The standard DLQ context headers are unaffected by the (varying) original headers.
+        for (Map<String, String> headers : actualHeadersByOffset) {
+            assertEquals(GROUP_ID, headers.get(HEADER_DLQ_ERRORS_GROUP));
+            assertEquals("source-topic", headers.get(HEADER_DLQ_ERRORS_TOPIC));
+        }
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+    }
+
+    /**
+     * Verifies that when an original record's header key collides with one of the standard DLQ context
+     * header keys, the DLQ-computed value wins - the original (bogus) value must not survive.
+     * ShareGroupDLQRecordHelper.headers() places original headers before the DLQ ones in the resulting
+     * array, so on a key collision the DLQ header is the one a standard last-wins header lookup returns.
+     */
+    @Test
+    public void testDLQRecordCopyEnabledOriginalHeaderCollidingWithDlqHeaderIsOverwritten() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
+        // The original record's own header reuses the "group" DLQ header's key, with a bogus value
+        // that must not survive in the final DLQ record.
+        Header[] collidingHeader = new Header[] {
+            new RecordHeader(HEADER_DLQ_ERRORS_GROUP, "bogus-group".getBytes(StandardCharsets.UTF_8))
+        };
+        LogReader logReader = mock(LogReader.class);
+        whenReadAsync(logReader, param.topicIdPartition(), logReadResult(recordsInfo(
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1, collidingHeader),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2, collidingHeader),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3, collidingHeader)), Errors.NONE));
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        // sharedHeaders intentionally asserts the real (correct) DLQ group id for HEADER_DLQ_ERRORS_GROUP:
+        // if the original record's colliding, bogus value won instead, this assertion would fail.
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), List.of(keyData1, keyData2, keyData3), List.of(valueData1, valueData2, valueData3))
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
     }
 
     @Test

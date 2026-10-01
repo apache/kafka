@@ -83,6 +83,7 @@ public final class ShareGroupDLQRecordHelper {
      * @return Array of DLQ headers
      */
     private static Header[] headers(
+            Header[] originalRecordHeaders,
             String sourceTopic,
             int partition,
             long offset,
@@ -91,10 +92,19 @@ public final class ShareGroupDLQRecordHelper {
             Optional<Throwable> cause
     ) {
         String causeMessage = cause.map(Throwable::getMessage).orElse(null);
-        int size = 4 + (deliveryCount.isPresent() ? 1 : 0) + (causeMessage != null ? 1 : 0);
+        int size = 4 + (deliveryCount.isPresent() ? 1 : 0) + (causeMessage != null ? 1 : 0) +
+            (originalRecordHeaders == null ? 0 : originalRecordHeaders.length);
 
         Header[] headers = new Header[size];
         int counter = 0;
+        if (originalRecordHeaders != null) {
+            for (Header header : originalRecordHeaders) {
+                headers[counter++] = header;
+            }
+        }
+
+        // We needn't handle DLQ context headers colliding with original record headers. Actual
+        // partition write call makes sure that the last header with same name wins.
         headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_TOPIC, sourceTopic.getBytes(StandardCharsets.UTF_8));
         headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(partition).getBytes(StandardCharsets.UTF_8));
         headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8));
@@ -181,11 +191,13 @@ public final class ShareGroupDLQRecordHelper {
             ByteBuffer key = null;
             ByteBuffer value = null;
             Record record = resolvedRecordData.get(offset);
+            Header[] originalRecordHeaders = null;
             if (record != null) {
                 key = record.hasKey() ? record.key() : null;
                 value = record.hasValue() ? record.value() : null;
+                originalRecordHeaders = record.headers();
             }
-            Header[] recordHeaders = headers(sourceTopic, param.topicIdPartition().partition(),
+            Header[] recordHeaders = headers(originalRecordHeaders, sourceTopic, param.topicIdPartition().partition(),
                     offset, param.groupId(), param.deliveryCount(), param.cause());
             if (baseTimestamp == null) {
                 baseTimestamp = timestamp;
