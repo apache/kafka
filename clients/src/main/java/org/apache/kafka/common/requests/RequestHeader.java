@@ -136,7 +136,7 @@ public class RequestHeader implements AbstractRequestResponse {
     public ResponseHeader toResponseHeader() {
         return new ResponseHeader(data.correlationId(), apiKey().responseHeaderVersion(apiVersion()));
     }
-
+    
     public static RequestHeader parse(ByteBuffer buffer) {
         short apiKeyId = -1;
         try {
@@ -153,8 +153,13 @@ public class RequestHeader implements AbstractRequestResponse {
                 throw new InvalidRequestException("Unsupported api with key " + apiKeyId + " (" + apiKey.name + ") and version " + apiVersion);
 
             short headerVersion = apiKey.requestHeaderVersion(apiVersion);
-            buffer.position(bufferStartPositionForHeader);
-            final RequestHeaderData headerData = new RequestHeaderData(new ByteBufferAccessor(buffer), headerVersion);
+            final RequestHeaderData headerData;
+            if (apiKey.isVersionSupported(apiVersion)) {
+                buffer.position(bufferStartPositionForHeader);
+                headerData = new RequestHeaderData(new ByteBufferAccessor(buffer), headerVersion);
+            } else {
+                headerData = readCommonHeaderFields(buffer, apiKeyId, apiVersion);
+            }
             // Due to a quirk in the protocol, client ID is marked as nullable.
             // However, we treat a null client ID as equivalent to an empty client ID.
             if (headerData.clientId() == null) {
@@ -175,6 +180,18 @@ public class RequestHeader implements AbstractRequestResponse {
             throw new InvalidRequestException("Error parsing request header. Our best guess of the apiKeyId is: " +
                     apiKeyId, ex);
         }
+    }
+
+    private static RequestHeaderData readCommonHeaderFields(ByteBuffer buffer, short apiKeyId, short apiVersion) {
+        ByteBufferAccessor readable = new ByteBufferAccessor(buffer);
+        int correlationId = readable.readInt();
+        short clientIdLength = readable.readShort();
+        String clientId = clientIdLength < 0 ? null : readable.readString(clientIdLength);
+        return new RequestHeaderData()
+            .setRequestApiKey(apiKeyId)
+            .setRequestApiVersion(apiVersion)
+            .setCorrelationId(correlationId)
+            .setClientId(clientId);
     }
 
     @Override

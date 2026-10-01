@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,6 +64,34 @@ public class RequestContextTest {
         requestBuffer.putInt(29034);
         requestBuffer.flip();
 
+        verifyUnsupportedApiVersionsRequestSerde(context, requestBuffer, correlationId);
+    }
+
+    @Test
+    public void testSerdeUnsupportedApiVersionRequestWithUnknownHeaderFields() throws Exception {
+        int correlationId = 23423;
+        short apiVersion = (short) (ApiKeys.API_VERSIONS.latestVersion() + 1);
+
+        // A newer client may use a header version unknown to this broker, with fields after the client id which
+        // cannot be parsed. The header parser only reads the fields common to every header version, and the rest
+        // of the buffer is ignored since the request is treated as v0.
+        byte[] unknownBytes = new byte[24];
+        Arrays.fill(unknownBytes, (byte) 0xFF);
+        ByteBuffer requestBuffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.API_VERSIONS, apiVersion,
+            correlationId, "client", unknownBytes);
+        RequestHeader header = RequestHeader.parse(requestBuffer);
+        assertEquals("client", header.clientId());
+        assertEquals(correlationId, header.correlationId());
+
+        RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
+        assertEquals(0, context.apiVersion());
+
+        verifyUnsupportedApiVersionsRequestSerde(context, requestBuffer, correlationId);
+    }
+
+    private void verifyUnsupportedApiVersionsRequestSerde(RequestContext context, ByteBuffer requestBuffer,
+                                                          int correlationId) throws Exception {
         RequestAndSize requestAndSize = context.parseRequest(requestBuffer);
         assertInstanceOf(ApiVersionsRequest.class, requestAndSize.request);
         ApiVersionsRequest request = (ApiVersionsRequest) requestAndSize.request;
@@ -80,7 +109,7 @@ public class RequestContextTest {
         responseBuffer.getInt(); // strip off the size
 
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
-            ApiKeys.API_VERSIONS.responseHeaderVersion(header.apiVersion()));
+            ApiKeys.API_VERSIONS.responseHeaderVersion(context.header.apiVersion()));
         assertEquals(correlationId, responseHeader.correlationId());
 
         ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
