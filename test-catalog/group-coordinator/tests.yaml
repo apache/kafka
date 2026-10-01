@@ -1244,6 +1244,10 @@ org.apache.kafka.coordinator.group.modern.AssignmentTest:
 - testFromTargetAssignmentRecord
 - testPartitionsCannotBeNull
 - testPartitionsImmutable
+org.apache.kafka.coordinator.group.modern.GroupSpecBuilderTest:
+- testEmpty
+- testGroupSpec
+- testRegularExpressions
 org.apache.kafka.coordinator.group.modern.MemberAssignmentImplTest:
 - testPartitionsMutable
 org.apache.kafka.coordinator.group.modern.SubscribedTopicMetadataTest:
@@ -1254,7 +1258,6 @@ org.apache.kafka.coordinator.group.modern.SubscribedTopicMetadataTest:
 org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilderTest:
 - testAssignment
 - testEmpty
-- testRegularExpressions
 org.apache.kafka.coordinator.group.modern.TopicIdsTest:
 - testContains
 - testContainsAll
