@@ -1508,14 +1508,21 @@ public class GroupMetadataManager {
     ) {
         Group group = groups.remove(groupId);
 
-        // The member tombstones normally unsubscribe the group from its topics. When the group
-        // coordinator loads concurrently with compaction, intermediate tombstone records can be
-        // missed, so the group metadata tombstone is treated as authoritative and the group may
-        // still have members here. The consumer group downgrade path also removes the group
-        // directly without replaying the member tombstones.
+        // Clean up the state kept outside of the group. The group may still be subscribed to
+        // topics or have share state partition metadata here: when the group coordinator loads
+        // concurrently with compaction, intermediate tombstone records can be missed, so the
+        // group metadata tombstone is treated as authoritative; the consumer group downgrade path
+        // removes the group without replaying the member tombstones; and a streams group's
+        // topology tombstone is written after its group metadata tombstone.
         if (group instanceof ModernGroup<?> modernGroup) {
             modernGroup.subscribedTopicNames().keySet()
                 .forEach(topicName -> unsubscribeGroupFromTopic(groupId, topicName));
+        } else if (group instanceof StreamsGroup streamsGroup) {
+            streamsGroup.topology().ifPresent(topology -> topology.requiredTopics()
+                .forEach(topicName -> unsubscribeGroupFromTopic(groupId, topicName)));
+        }
+        if (group instanceof ShareGroup) {
+            shareGroupStatePartitionMetadata.remove(groupId);
         }
     }
 
@@ -6102,7 +6109,7 @@ public class GroupMetadataManager {
                 inconsistencies.add("still has a target assignment");
             }
             if (!inconsistencies.isEmpty()) {
-                log.warn("[GroupId {}] Received a tombstone record to delete consumer group member {} but the member {};"
+                log.debug("[GroupId {}] Received a tombstone record to delete consumer group member {} but the member {};"
                     + " the missing tombstones were likely removed by compaction.",
                     groupId, memberId, String.join(" and ", inconsistencies));
             }
@@ -6228,7 +6235,7 @@ public class GroupMetadataManager {
                 inconsistencies.add("target assignment epoch " + consumerGroup.assignmentEpoch());
             }
             if (!inconsistencies.isEmpty()) {
-                log.warn("[GroupId {}] Received a tombstone record to delete the consumer group but the group still has {};"
+                log.debug("[GroupId {}] Received a tombstone record to delete the consumer group but the group still has {};"
                     + " the missing tombstones were likely removed by compaction.",
                     groupId, String.join(" and ", inconsistencies));
             }
@@ -6320,7 +6327,7 @@ public class GroupMetadataManager {
                 return;
             }
             if (!group.targetAssignment().isEmpty()) {
-                log.warn("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the consumer group"
+                log.debug("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the consumer group"
                     + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
                     groupId, group.targetAssignment().size());
                 group.clearTargetAssignment();
@@ -6463,7 +6470,7 @@ public class GroupMetadataManager {
                 inconsistencies.add("target assignment epoch " + streamsGroup.assignmentEpoch());
             }
             if (!inconsistencies.isEmpty()) {
-                log.warn("[GroupId {}] Received a tombstone record to delete the streams group but the group still has {};"
+                log.debug("[GroupId {}] Received a tombstone record to delete the streams group but the group still has {};"
                     + " the missing tombstones were likely removed by compaction.",
                     groupId, String.join(" and ", inconsistencies));
             }
@@ -6516,7 +6523,7 @@ public class GroupMetadataManager {
                 inconsistencies.add("still has a target assignment");
             }
             if (!inconsistencies.isEmpty()) {
-                log.warn("[GroupId {}] Received a tombstone record to delete share group member {} but the member {};"
+                log.debug("[GroupId {}] Received a tombstone record to delete share group member {} but the member {};"
                     + " the missing tombstones were likely removed by compaction.",
                     groupId, memberId, String.join(" and ", inconsistencies));
             }
@@ -6564,7 +6571,7 @@ public class GroupMetadataManager {
                 inconsistencies.add("target assignment epoch " + shareGroup.assignmentEpoch());
             }
             if (!inconsistencies.isEmpty()) {
-                log.warn("[GroupId {}] Received a tombstone record to delete the share group but the group still has {};"
+                log.debug("[GroupId {}] Received a tombstone record to delete the share group but the group still has {};"
                     + " the missing tombstones were likely removed by compaction.",
                     groupId, String.join(" and ", inconsistencies));
             }
@@ -6618,7 +6625,7 @@ public class GroupMetadataManager {
                 inconsistencies.add("still has a target assignment");
             }
             if (!inconsistencies.isEmpty()) {
-                log.warn("[GroupId {}] Received a tombstone record to delete streams group member {} but the member {};"
+                log.debug("[GroupId {}] Received a tombstone record to delete streams group member {} but the member {};"
                     + " the missing tombstones were likely removed by compaction.",
                     groupId, memberId, String.join(" and ", inconsistencies));
             }
@@ -6653,7 +6660,7 @@ public class GroupMetadataManager {
                 return;
             }
             if (!streamsGroup.targetAssignment().isEmpty()) {
-                log.warn("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the streams group"
+                log.debug("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the streams group"
                     + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
                     groupId, streamsGroup.targetAssignment().size());
                 streamsGroup.clearTargetAssignment();
@@ -6796,7 +6803,7 @@ public class GroupMetadataManager {
             group.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             if (!group.targetAssignment().isEmpty()) {
-                log.warn("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the share group"
+                log.debug("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the share group"
                     + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
                     groupId, group.targetAssignment().size());
                 group.clearTargetAssignment();
