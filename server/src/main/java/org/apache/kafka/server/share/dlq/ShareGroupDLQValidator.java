@@ -89,15 +89,11 @@ public final class ShareGroupDLQValidator {
                     "Configured DLQ topic name in share group: %s cannot start with __, topic: %s.", groupId, userTopicName)));
         }
 
-        // Verify that DLQ is enabled on a correctly named topic, configured on a share group.
-        if (cacheHelper.containsTopic(resolvedTopicName) && !cacheHelper.isDlqEnabledOnTopic(resolvedTopicName)) {
-            return Optional.of(new ConfigException(
-                    "DLQ is not enabled on configured DLQ topic for share group: "
-                            + groupId + ", topic: " + userTopicName));
-        }
-
+        // Verify the topic name complies with the configured prefix before the enablement check
+        // below, since this - like the "__" check above - only depends on the configured name
+        // itself, not on the topic's actual (live) state, which the enablement check needs.
         Optional<String> topicPrefix = cacheHelper.shareGroupDlqTopicPrefix();
-        return topicPrefix.map(prefix -> {
+        Optional<Throwable> prefixError = topicPrefix.<Throwable>map(prefix -> {
             if (!prefix.isEmpty() && !userTopicName.startsWith(prefix)) {
                 return new ConfigException(
                         "Configured DLQ topic name does not comply with the DLQ topic prefix in share group: "
@@ -105,5 +101,17 @@ public final class ShareGroupDLQValidator {
             }
             return null;
         });
+        if (prefixError.isPresent()) {
+            return prefixError;
+        }
+
+        // Verify that DLQ is enabled on a correctly named topic, configured on a share group.
+        if (cacheHelper.containsTopic(resolvedTopicName) && !cacheHelper.isDlqEnabledOnTopic(resolvedTopicName)) {
+            return Optional.of(new ConfigException(
+                    "DLQ is not enabled on configured DLQ topic for share group: "
+                            + groupId + ", topic: " + userTopicName));
+        }
+
+        return Optional.empty();
     }
 }

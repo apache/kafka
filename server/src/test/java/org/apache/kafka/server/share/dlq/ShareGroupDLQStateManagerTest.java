@@ -470,6 +470,23 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
+    public void testDlqExistingTopicWithoutDlqConfigAndPrefixMismatchReportsPrefixMismatch() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of("required-prefix-"));
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(false);
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains("does not comply with the DLQ topic prefix"));
+        assertFalse(cause.getMessage().contains("DLQ is not enabled"));
+        verifyNoInteractions(mockMetrics);
+    }
+
+    @Test
     public void testDlqTopicMissingAndAutoCreateDisabledFailsValidation() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
