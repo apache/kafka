@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.internal.DefaultRecord;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
@@ -61,6 +62,19 @@ public final class ShareGroupDLQRecordHelper {
     protected static final String HEADER_DLQ_ERRORS_DELIVERY_COUNT = "__dlq.errors.delivery.count";
     protected static final String HEADER_DLQ_ERRORS_MESSAGE = "__dlq.errors.message";
 
+    // DLQ context header keys added unconditionally by headers() below. An original record header
+    // reusing one of these keys is dropped (not merely shadowed) so the DLQ-computed value is the
+    // only one present - not just the one a last-header-wins lookup happens to find. The delivery
+    // count and cause/message headers are deliberately excluded here: they are only added when
+    // deliveryCount/cause are actually present (see headers() below), and dropping an original
+    // header under one of those keys when no replacement is being added would lose it outright.
+    private static final Set<String> RESERVED_DLQ_HEADER_KEYS = Set.of(
+            HEADER_DLQ_ERRORS_TOPIC,
+            HEADER_DLQ_ERRORS_PARTITION,
+            HEADER_DLQ_ERRORS_OFFSET,
+            HEADER_DLQ_ERRORS_GROUP
+    );
+
     /**
      * Result of building DLQ records for a range of offsets, respecting maxMessageBytes.
      *
@@ -74,6 +88,10 @@ public final class ShareGroupDLQRecordHelper {
     /**
      * Builds DLQ headers for a single offset.
      *
+     * @param originalRecordHeaders The original source record's headers, or null if unresolved/unavailable.
+     *                              Any header reusing the key of a DLQ context header actually added
+     *                              by this call (see {@link #RESERVED_DLQ_HEADER_KEYS}, plus delivery
+     *                              count/cause when present) is dropped.
      * @param sourceTopic   The resolved source topic name
      * @param partition     The source partition number
      * @param offset        The source offset
@@ -92,31 +110,29 @@ public final class ShareGroupDLQRecordHelper {
             Optional<Throwable> cause
     ) {
         String causeMessage = cause.map(Throwable::getMessage).orElse(null);
-        int size = 4 + (deliveryCount.isPresent() ? 1 : 0) + (causeMessage != null ? 1 : 0) +
-            (originalRecordHeaders == null ? 0 : originalRecordHeaders.length);
-
-        Header[] headers = new Header[size];
-        int counter = 0;
+        RecordHeaders headers = new RecordHeaders();
         if (originalRecordHeaders != null) {
             for (Header header : originalRecordHeaders) {
-                headers[counter++] = header;
+                String key = header.key();
+                boolean collidesWithHeaderAddedThisCall = RESERVED_DLQ_HEADER_KEYS.contains(key)
+                        || (deliveryCount.isPresent() && key.equals(HEADER_DLQ_ERRORS_DELIVERY_COUNT))
+                        || (causeMessage != null && key.equals(HEADER_DLQ_ERRORS_MESSAGE));
+                if (!collidesWithHeaderAddedThisCall) {
+                    headers.add(header);
+                }
             }
         }
-
-        // We needn't handle DLQ context headers colliding with original record headers. Actual
-        // partition write call makes sure that the last header with same name wins.
-        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_TOPIC, sourceTopic.getBytes(StandardCharsets.UTF_8));
-        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(partition).getBytes(StandardCharsets.UTF_8));
-        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8));
-        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_GROUP, groupId.getBytes(StandardCharsets.UTF_8));
-        if (deliveryCount.isPresent()) {
-            headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_DELIVERY_COUNT,
-                    Short.toString(deliveryCount.get()).getBytes(StandardCharsets.UTF_8));
-        }
+        headers.add(HEADER_DLQ_ERRORS_TOPIC, sourceTopic.getBytes(StandardCharsets.UTF_8));
+        headers.add(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(partition).getBytes(StandardCharsets.UTF_8));
+        headers.add(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8));
+        headers.add(HEADER_DLQ_ERRORS_GROUP, groupId.getBytes(StandardCharsets.UTF_8));
+        deliveryCount.ifPresent(count ->
+            headers.add(HEADER_DLQ_ERRORS_DELIVERY_COUNT, Short.toString(count).getBytes(StandardCharsets.UTF_8))
+        );
         if (causeMessage != null) {
-            headers[counter] = new RecordHeader(HEADER_DLQ_ERRORS_MESSAGE, causeMessage.getBytes(StandardCharsets.UTF_8));
+            headers.add(HEADER_DLQ_ERRORS_MESSAGE, causeMessage.getBytes(StandardCharsets.UTF_8));
         }
-        return headers;
+        return headers.toArray();
     }
 
     /**

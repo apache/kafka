@@ -317,10 +317,9 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
 
     /**
      * As {@link #testDlqCopiesOriginalRecordHeaders()}, but the source record's custom header reuses one
-     * of the standard DLQ context header keys. Verifies the DLQ-computed value wins over the original
-     * (bogus) value for that key: headerValue() mirrors ConsumerRecord.headers().lastHeader(), returning
-     * the last header with a given key, matching how ShareGroupDLQRecordHelper.headers() places original
-     * headers before the DLQ ones in the resulting array.
+     * of the standard DLQ context header keys. Verifies the original header is dropped entirely by
+     * ShareGroupDLQRecordHelper.headers() - not merely shadowed - so only the DLQ-computed value for
+     * that key reaches the DLQ record.
      */
     @ClusterTest
     public void testDlqOriginalHeaderCollidingWithDlqHeaderIsOverwritten() throws Exception {
@@ -349,6 +348,16 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
             assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP),
                 "The DLQ-computed header must win over the original record's colliding, bogus header");
+            // Confirm the original header was dropped, not merely shadowed: exactly one header under
+            // this key, not two.
+            long matchingHeaderCount = 0;
+            for (Header h : record.headers()) {
+                if (h.key().equals(HEADER_DLQ_ERRORS_GROUP)) {
+                    matchingHeaderCount++;
+                }
+            }
+            assertEquals(1, matchingHeaderCount,
+                "Expected exactly one '" + HEADER_DLQ_ERRORS_GROUP + "' header, found " + matchingHeaderCount);
         }
         verifyDlqMetrics(groupId, recordCount);
     }
