@@ -256,6 +256,36 @@ public class StreamsGroupCommandTest {
     }
 
     @Test
+    public void testDescribeStreamsGroupsWithTopologyError() throws Exception {
+        String group = "foo-group";
+        StreamsGroupDescription exp = new StreamsGroupDescription(
+            group, 0, 0, 0, List.of(), List.of(), GroupState.STABLE, new Node(0, "bar", 0), null,
+            Optional.empty(), StreamsGroupTopologyDescriptionStatus.ERROR, Optional.empty());
+
+        Admin admin = mock(KafkaAdminClient.class);
+        DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);
+        when(result.all()).thenReturn(KafkaFuture.completedFuture(Map.of(group, exp)));
+        when(admin.describeStreamsGroups(anyCollection(), any(DescribeStreamsGroupsOptions.class))).thenReturn(result);
+
+        StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(
+            new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", group, "--describe", "--topology"});
+        StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(opts, admin);
+
+        String output = ToolsTestUtils.grabConsoleOutput(() -> {
+            try {
+                // A broker-side failure to fetch the topology description must surface a non-zero exit code.
+                assertEquals(1, service.describeGroups());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        assertTrue(output.contains("The broker failed to fetch the topology description for streams group '" + group
+            + "'. See the broker logs for details."), "Unexpected output: " + output);
+        service.close();
+    }
+
+    @Test
     public void testDescribeStreamsGroupsGetOffsets() throws Exception {
         String groupId = "group1";
 
