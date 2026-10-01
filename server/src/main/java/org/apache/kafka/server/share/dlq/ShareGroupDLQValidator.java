@@ -93,7 +93,7 @@ public final class ShareGroupDLQValidator {
         // below, since this - like the "__" check above - only depends on the configured name
         // itself, not on the topic's actual (live) state, which the enablement check needs.
         Optional<String> topicPrefix = cacheHelper.shareGroupDlqTopicPrefix();
-        Optional<Throwable> prefixError = topicPrefix.<Throwable>map(prefix -> {
+        Optional<Throwable> prefixError = topicPrefix.map(prefix -> {
             if (!prefix.isEmpty() && !userTopicName.startsWith(prefix)) {
                 return new ConfigException(
                         "Configured DLQ topic name does not comply with the DLQ topic prefix in share group: "
