@@ -237,7 +237,7 @@ public class ChunkedRecordAccumulatorTest {
      * must still append: its chunks are pre-sized to the uncompressed upper bound, and any compressor
      * overshoot must be absorbed by mid-write growth rather than rejected up front. The estimate here is
      * set straight to 1.3, above the ~1.0 this batch then observes, so closing the batch lowers it by
-     * COMPRESSION_RATIO_IMPROVING_STEP rather than raising it.
+     * COMPRESSION_RATIO_IMPROVING_STEP to exactly 1.295 rather than raising it.
      */
     @ParameterizedTest
     @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
@@ -264,13 +264,11 @@ public class ChunkedRecordAccumulatorTest {
             Record record = batch.records().records().iterator().next();
             assertArrayEquals(value, readBytes(record.value()));
 
-            // The observed ratio (about 1.0) is below the 1.3 estimate, so the estimator improves the
-            // estimate by COMPRESSION_RATIO_IMPROVING_STEP, but never below the observed ratio.
+            // The observed ratio (about 1.0) is well below the 1.3 estimate, so the estimator lowers the
+            // estimate by one COMPRESSION_RATIO_IMPROVING_STEP (0.005) to 1.295.
             float observed = (float) batch.compressionRatio();
-            assertTrue(observed < 1.3f, "random data should not inflate by 30%, but the observed ratio was " + observed);
-            float updated = CompressionRatioEstimator.estimation(topic, compression.type());
-            assertEquals(Math.max(1.3f - CompressionRatioEstimator.COMPRESSION_RATIO_IMPROVING_STEP, observed), updated);
-            assertTrue(updated < 1.3f, "the estimate should improve after a batch that compressed better than it");
+            assertTrue(observed < 1.295f, "random data should not inflate by 29.5%, but the observed ratio was " + observed);
+            assertEquals(1.295f, CompressionRatioEstimator.estimation(topic, compression.type()), 1e-6f);
 
             accum.deallocate(batch);
         } finally {
@@ -286,8 +284,8 @@ public class ChunkedRecordAccumulatorTest {
      * ample pool memory that overshoot is absorbed by mid-write growth from the pool (mostly as the
      * compressor flushes on close), so the batch stays open for every record and never touches the heap.
      * The batch must decode back to every record appended, and every chunk must go back to the pool.
-     * Closing the batch must also feed its observed ratio (about 1.0) back to the estimator, raising the
-     * estimate from 0.05 by at least COMPRESSION_RATIO_DETERIORATE_STEP.
+     * Closing the batch must also feed its observed ratio (about 1.0) back to the estimator, which is far
+     * more than one COMPRESSION_RATIO_DETERIORATE_STEP above 0.05, so the estimate jumps straight to it.
      * {@link #testMidRecordHeapFallbackClosesBatchForAppends} covers the same growth past an exhausted pool.
      */
     @ParameterizedTest
@@ -328,14 +326,11 @@ public class ChunkedRecordAccumulatorTest {
             assertTrue(records.sizeInBytes() > 4 * batchSize,
                     "the compressed batch should be several times batch.size, but was " + records.sizeInBytes());
 
-            // The observed ratio is above the estimate, so the estimate jumps to the larger of the
-            // observed ratio and one COMPRESSION_RATIO_DETERIORATE_STEP above the old estimate.
+            // The observed ratio (about 1.0) is far above 0.05 + COMPRESSION_RATIO_DETERIORATE_STEP (0.1),
+            // so the estimate becomes exactly the observed ratio.
             float observed = (float) batch.compressionRatio();
-            float updated = CompressionRatioEstimator.estimation(topic, compression.type());
-            assertEquals(Math.max(0.05f + CompressionRatioEstimator.COMPRESSION_RATIO_DETERIORATE_STEP, observed), updated);
-            assertTrue(updated >= 0.05f + CompressionRatioEstimator.COMPRESSION_RATIO_DETERIORATE_STEP,
-                    "the estimate should rise by at least COMPRESSION_RATIO_DETERIORATE_STEP, but was " + updated);
-            assertTrue(updated > 0.9f, "the estimate should track the observed ratio of about 1.0, but was " + updated);
+            assertTrue(observed > 0.9f, "random data should not compress, but the observed ratio was " + observed);
+            assertEquals(observed, CompressionRatioEstimator.estimation(topic, compression.type()));
             int i = 0;
             for (Record r : records.records()) {
                 assertArrayEquals(values.get(i), readBytes(r.value()));
@@ -711,23 +706,37 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * Pool that adds one append right after a chunk allocation returns, mocking a concurrent
-     * appender racing the same batch.
+     * Pool that adds one append right after a non-blocking (extension) chunk allocation returns, mocking a
+     * concurrent appender racing the same batch.
      */
     private BufferPool poolMockingConcurrentChunkAllocation(int chunkSize, long totalMemory,
                                                             AtomicReference<ChunkedRecordAccumulator> injectAppendOnce,
                                                             byte[] injectedValue) {
         return new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
                 ChunkedRecordAccumulator toInject = injectAppendOnce.getAndSet(null);
                 if (toInject != null)
-                    toInject.append(topic, partition1, 0L, key, injectedValue, Record.EMPTY_HEADERS, null,
-                            maxBlockTimeMs, time.milliseconds(), cluster);
+                    appendFromPoolOverride(toInject, injectedValue);
                 return chunks;
             }
         };
+    }
+
+    /**
+     * Appends to {@code partition1} from inside a {@link BufferPool#tryAllocateChunks} override, standing in
+     * for a concurrent appender. The override cannot throw the checked {@link InterruptedException} that
+     * {@code append} declares, so it is rethrown unchecked.
+     */
+    private void appendFromPoolOverride(ChunkedRecordAccumulator accum, byte[] value) {
+        try {
+            accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -788,12 +797,11 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
                 ChunkedRecordAccumulator toInject = injectAppendOnce.getAndSet(null);
                 if (toInject != null)
-                    toInject.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
-                            maxBlockTimeMs, time.milliseconds(), cluster);
+                    appendFromPoolOverride(toInject, value);
                 return chunks;
             }
 
@@ -852,10 +860,11 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
-                // The mid-batch extension path is the only non-blocking caller.
-                if (maxTimeToBlockMs == 0L)
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
+                // Uncompressed, the mid-batch extension is the only caller of tryAllocateChunks: the
+                // stream is pre-sized for every record, so it never grows itself mid-write.
+                if (chunks != null)
                     extensionAllocated.set(true);
                 return chunks;
             }
@@ -954,35 +963,34 @@ public class ChunkedRecordAccumulatorTest {
         return accum.getDeque(tp);
     }
 
-    private boolean hasOpenBatch(RecordAccumulator accum) {
-        Deque<ProducerBatch> dq = batchesFor(accum, tp1);
-        synchronized (dq) {
-            return !dq.isEmpty();
-        }
-    }
-
     /**
      * When the pool is exhausted during a mid-batch extension, the append must not busy-loop
      * retrying the non-blocking acquire: after a single failed extension acquire
-     * (maxTimeToBlockMs = 0), the open batch is closed and the very next pool call is the
-     * blocking new-batch acquire (maxTimeToBlockMs > 0), where the record lands in a new batch.
+     * ({@link BufferPool#tryAllocateChunks}), the open batch is closed and the very next pool call is the
+     * blocking new-batch acquire ({@link BufferPool#allocateChunks}), where the record lands in a new batch.
      */
     @Test
     public void testExhaustedExtensionFallsBackToBlockingNewBatchPath() throws Exception {
         int chunkSize = 256;
-        List<Long> allocTimeouts = new ArrayList<>();
+        // Every pool acquire in call order: "blocking:<maxTimeToBlockMs>" or "non-blocking".
+        List<String> acquires = new ArrayList<>();
         AtomicInteger closeForAppendsCalls = new AtomicInteger();
         List<Integer> closeCallsAtAlloc = new ArrayList<>();
 
         BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                allocTimeouts.add(maxTimeToBlockMs);
+                acquires.add("blocking:" + maxTimeToBlockMs);
+                closeCallsAtAlloc.add(closeForAppendsCalls.get());
+                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+            }
+
+            @Override
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                acquires.add("non-blocking");
                 closeCallsAtAlloc.add(closeForAppendsCalls.get());
                 // Simulate an exhausted pool for the non-blocking extension acquire only.
-                if (maxTimeToBlockMs == 0L)
-                    throw new BufferExhaustedException("injected: pool exhausted");
-                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+                return null;
             }
         };
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
@@ -1013,7 +1021,7 @@ public class ChunkedRecordAccumulatorTest {
                     new byte[100], Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
 
             // Validate the expected call sequence: blocking (first batch), non-blocking (failed extension), blocking (new batch).
-            assertEquals(List.of(maxBlockTimeMs, 0L, maxBlockTimeMs), allocTimeouts,
+            assertEquals(List.of("blocking:" + maxBlockTimeMs, "non-blocking", "blocking:" + maxBlockTimeMs), acquires,
                     "expected a single failed extension acquire followed directly by the blocking new-batch acquire");
             assertEquals(0, closeCallsAtAlloc.get(0), "no close before the first-record acquire");
             assertEquals(0, closeCallsAtAlloc.get(1), "no close before the extension acquire");
@@ -1051,15 +1059,16 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
                 // Only the first non-blocking (extension) acquire is intercepted; the deque lock is not
                 // held here, which is exactly what lets the open batch change under the appender.
-                if (maxTimeToBlockMs == 0L && injected.compareAndSet(false, true)) {
+                if (injected.compareAndSet(false, true)) {
                     // From here on dq.peekLast() is no longer the batch the gap was sized against.
                     drainedRef.set(simulateConcurrentDrainAndReplace(accumRef.get()));
-                    throw new BufferExhaustedException("injected: pool exhausted");
+                    // Simulate an exhausted pool.
+                    return null;
                 }
-                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+                return super.tryAllocateChunks(totalSize);
             }
         };
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
@@ -1109,11 +1118,12 @@ public class ChunkedRecordAccumulatorTest {
     /**
      * Simulates the concurrent activity that can move the deque while an extension acquire runs off
      * the deque lock: the sender drains the open batch, returning its chunks to the pool, and another
-     * appender claims that memory for a fresh batch in its place.
+     * appender claims that memory for a fresh batch in its place. Called from a
+     * {@link BufferPool#tryAllocateChunks} override, so it appends via {@link #appendFromPoolOverride}.
      *
      * @return the batch that was drained
      */
-    private ProducerBatch simulateConcurrentDrainAndReplace(ChunkedRecordAccumulator accum) throws InterruptedException {
+    private ProducerBatch simulateConcurrentDrainAndReplace(ChunkedRecordAccumulator accum) {
         Deque<ProducerBatch> dq = batchesFor(accum, tp1);
         ProducerBatch drained;
         synchronized (dq) {
@@ -1121,8 +1131,7 @@ public class ChunkedRecordAccumulatorTest {
         }
         assertNotNull(drained, "there must be an open batch to drain");
         accum.deallocate(drained);
-        accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
-                maxBlockTimeMs, time.milliseconds(), cluster);
+        appendFromPoolOverride(accum, new byte[100]);
         return drained;
     }
 
@@ -1146,19 +1155,17 @@ public class ChunkedRecordAccumulatorTest {
         final int retrySafetyLimit = 5;
         return new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                // The extension acquire always passes a zero timeout, and a new-batch acquire does too once no
-                // time is left — but only with an empty deque here, since these tests always create the first
-                // batch with a blocking acquire.
-                boolean isExtensionPath = maxTimeToBlockMs == 0L && hasOpenBatch(accumRef.get());
-                if (isExtensionPath && refusals.get() < retrySafetyLimit) {
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                // Only the extension acquire is non-blocking; new-batch acquires go through allocateChunks.
+                if (refusals.get() < retrySafetyLimit) {
                     refusals.incrementAndGet();
                     simulateConcurrentDrainAndReplace(accumRef.get());
                     if (sleepOnRefusalMs > 0)
                         time.sleep(sleepOnRefusalMs);
-                    throw new BufferExhaustedException("injected: pool exhausted");
+                    // Simulate an exhausted pool.
+                    return null;
                 }
-                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+                return super.tryAllocateChunks(totalSize);
             }
         };
     }
@@ -1258,15 +1265,14 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
-                if (maxTimeToBlockMs == 0L && injecting.compareAndSet(false, true)) {
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
+                if (injecting.compareAndSet(false, true)) {
                     try {
                         extensionAcquires.incrementAndGet();
                         // Takes the capacity this acquire was sized against, so the attach that follows is
                         // too small and the append has to come back for more.
-                        accumRef.get().append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
-                                maxBlockTimeMs, time.milliseconds(), cluster);
+                        appendFromPoolOverride(accumRef.get(), value);
                         // Leave the append with no max.block.ms left, so its retry is refused.
                         time.sleep(maxBlockTimeMs + 1);
                     } finally {
@@ -1321,17 +1327,22 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
                 // The extension is the only acquire that does not block.
-                boolean isExtensionPath = maxTimeToBlockMs == 0L;
-                if (isExtensionPath && injected.compareAndSet(false, true)) {
+                if (injected.compareAndSet(false, true)) {
                     // The open batch is left in place, so this failure closes it and the retry falls
                     // through to the blocking new-batch acquire below.
                     time.sleep(spentInExtensionMs);
-                    throw new BufferExhaustedException("injected: pool exhausted");
+                    // Simulate an exhausted pool.
+                    return null;
                 }
+                return super.tryAllocateChunks(totalSize);
+            }
+
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
                 // The first blocking acquire after that failure is the new-batch one under test.
-                if (injected.get() && !isExtensionPath)
+                if (injected.get())
                     blockingAcquireTimeout.compareAndSet(-1, maxTimeToBlockMs);
                 return super.allocateChunks(totalSize, maxTimeToBlockMs);
             }
@@ -1414,7 +1425,7 @@ public class ChunkedRecordAccumulatorTest {
     /**
      * A single dropped record is counted exactly once even when it first fails the extension attempt
      * (recovered) and then fails the new-batch acquire.
-     * Uses a real (non-overridden) pool so the actual allocateChunks path runs on both acquires.
+     * Uses a real (non-overridden) pool so the actual tryAllocateChunks and allocateChunks paths run.
      */
     @Test
     public void testBufferExhaustedNotDoubleCountedAcrossExtensionAndNewBatch() throws Exception {
@@ -1587,10 +1598,10 @@ public class ChunkedRecordAccumulatorTest {
         BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics",
                 BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
                 // The extension acquire is the only non-blocking one (see allocateExtensionChunks).
-                if (maxTimeToBlockMs == 0L)
+                if (chunks != null)
                     extensionChunks.addAll(chunks);
                 Deque<ProducerBatch> dq = dqRef.get();
                 // Mock a concurrent appender that found the batch full: RecordAccumulator.tryAppend
@@ -1704,7 +1715,7 @@ public class ChunkedRecordAccumulatorTest {
         int chunkSize = 256;
         ChunkedRecordAccumulator accum = newAccumulator(8192, chunkSize, 16L * chunkSize, Compression.NONE);
         try {
-            // First record creates the batch; the acquire is non-blocking but the memory is there.
+            // First record creates the batch; the acquire has no time to wait, but the memory is there.
             accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
                     /* maxTimeToBlock */ 0L, time.milliseconds(), cluster);
             // Second record overflows the batch's chunk, so it needs an extension — also non-blocking, also
