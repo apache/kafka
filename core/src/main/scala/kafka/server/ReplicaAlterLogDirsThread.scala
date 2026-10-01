@@ -179,14 +179,14 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   /**
-   * Truncate the future replica's log for each partition based on the diverging epoch and offset
-   * returned by the current replica in the fetch response.
+   * Truncate the future replica's log to the given offset.
    *
-   * The logic for finding the truncation offset is the same as in ReplicaFetcherThread and mainly
-   * implemented in AbstractFetcherThread.truncationOffset. The local fetch carries the
-   * future replica's latest epoch as the last fetched epoch, so if the current replica truncates
-   * (e.g. while the future replica is offline), the divergence is detected on the next fetch and
-   * the future replica truncates to the largest common log prefix for the topic partition.
+   * When the offset comes from a diverging epoch returned by the current replica in the fetch
+   * response, the logic for finding it is the same as in ReplicaFetcherThread and mainly implemented
+   * in AbstractFetcherThread.truncationOffset. The local fetch carries the future replica's latest
+   * epoch as the last fetched epoch, so if the current replica truncates (e.g. while the future
+   * replica is offline), the divergence is detected on the next fetch and the future replica
+   * truncates to the largest common log prefix for the topic partition.
    */
   override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
