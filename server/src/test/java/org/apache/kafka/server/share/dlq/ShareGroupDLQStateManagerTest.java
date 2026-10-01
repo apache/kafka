@@ -442,6 +442,8 @@ class ShareGroupDLQStateManagerTest {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of("__internal_dlq"));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        // Topic exists, so the existence check passes through to the "__" naming check being tested here.
+        when(cacheHelper.containsTopic("__internal_dlq")).thenReturn(true);
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
         stateManager.start();
@@ -480,6 +482,39 @@ class ShareGroupDLQStateManagerTest {
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("auto create is disabled"));
+        verifyNoInteractions(mockMetrics);
+    }
+
+    @Test
+    public void testDlqTopicMissingAndPrefixMismatchReportsMissingTopic() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of("required-prefix-"));
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(false);
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains("does not exist"));
+        assertFalse(cause.getMessage().contains("does not comply"));
+        verifyNoInteractions(mockMetrics);
+    }
+
+    @Test
+    public void testDlqTopicMissingWithAutoCreateEnabledAndPrefixMismatchFailsValidation() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of("required-prefix-"));
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains("does not comply with the DLQ topic prefix"));
         verifyNoInteractions(mockMetrics);
     }
 

@@ -62,9 +62,12 @@ public final class ShareGroupDLQValidator {
     }
 
     /**
-     * Validates DLQ topic configuration. Checks that the topic name does not start with {@code __},
-     * that DLQ is enabled on the topic (if it exists), and that the topic name complies with the
-     * configured prefix.
+     * Validates DLQ topic configuration: that the topic name does not start with {@code __}, that
+     * DLQ is enabled on the topic (if it exists), and that the topic name complies with the
+     * configured prefix. This is a config-only check; it does not validate whether the topic
+     * exists or can be created - callers that care about that must check it themselves, and should
+     * do so before calling this method so a missing topic is reported as missing rather than being
+     * masked by an also-true-but-less-actionable naming error from this method.
      *
      * <p>Callers are responsible for checking that the topic name is present in the config (non-empty)
      * before calling this method, and for any implementation-specific checks (e.g., auto-create).
