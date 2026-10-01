@@ -135,6 +135,12 @@ public class Formatter {
     private Optional<DynamicVoters> initialControllers = Optional.empty();
     private boolean hasDynamicQuorum = false;
 
+    /**
+     * True if meta.properties should be written with version 0 so that the node stays
+     * compatible with rolling a KRaft migration back to ZooKeeper mode.
+     */
+    private boolean zkRollbackCompatible = false;
+
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
         return this;
@@ -212,6 +218,11 @@ public class Formatter {
 
     public Formatter setHasDynamicQuorum(boolean hasDynamicQuorum) {
         this.hasDynamicQuorum = hasDynamicQuorum;
+        return this;
+    }
+
+    public Formatter setZkRollbackCompatible(boolean zkRollbackCompatible) {
+        this.zkRollbackCompatible = zkRollbackCompatible;
         return this;
     }
 
@@ -386,8 +397,10 @@ public class Formatter {
     }
 
     void doFormat(BootstrapMetadata bootstrapMetadata) throws Exception {
+        MetaPropertiesVersion metaPropertiesVersion = zkRollbackCompatible ?
+            MetaPropertiesVersion.V0 : MetaPropertiesVersion.V1;
         MetaProperties metaProperties = new MetaProperties.Builder().
-                setVersion(MetaPropertiesVersion.V1).
+                setVersion(metaPropertiesVersion).
                 setClusterId(clusterId).
                 setNodeId(nodeId).
                 build();

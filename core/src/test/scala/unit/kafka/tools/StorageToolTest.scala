@@ -29,7 +29,7 @@ import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.Features
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
-import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
+import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
@@ -272,6 +272,38 @@ Found problem:
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream2 = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream2, properties, Seq(), true))
+  }
+
+  @Test
+  def testFormatWithZkRollbackCompatibleWritesV0MetaProperties(): Unit = {
+    val availableDir = TestUtils.tempDir()
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDir.toString)
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties, Seq("--zk-rollback-compatible")))
+
+    val ensemble = new MetaPropertiesEnsemble.Loader().
+      addLogDirs(util.Collections.singletonList(availableDir.toString)).
+      load()
+    assertEquals(MetaPropertiesVersion.V0,
+      ensemble.logDirProps().get(availableDir.toString).version())
+  }
+
+  @Test
+  def testFormatWithoutZkRollbackCompatibleWritesV1MetaProperties(): Unit = {
+    val availableDir = TestUtils.tempDir()
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDir.toString)
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties))
+
+    val ensemble = new MetaPropertiesEnsemble.Loader().
+      addLogDirs(util.Collections.singletonList(availableDir.toString)).
+      load()
+    assertEquals(MetaPropertiesVersion.V1,
+      ensemble.logDirProps().get(availableDir.toString).version())
   }
 
   @Test

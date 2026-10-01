@@ -27,6 +27,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.Features;
@@ -185,6 +186,34 @@ public class FormatterTest {
             formatter2.formatter.run();
             assertEquals("All of the log directories are already formatted.",
                 formatter2.output().trim());
+        }
+    }
+
+    @Test
+    public void testZkRollbackCompatibleWritesV0MetaProperties() throws Exception {
+        try (TestEnv testEnv = new TestEnv(1)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            formatter1.formatter.setZkRollbackCompatible(true);
+            formatter1.formatter.run();
+            MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
+                addLogDirs(testEnv.directories).
+                load();
+            MetaProperties metaProperties =
+                ensemble.logDirProps().get(testEnv.directory(0));
+            assertEquals(MetaPropertiesVersion.V0, metaProperties.version());
+        }
+    }
+
+    @Test
+    public void testDefaultWritesV1MetaProperties() throws Exception {
+        try (TestEnv testEnv = new TestEnv(1)) {
+            testEnv.newFormatter().formatter.run();
+            MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
+                addLogDirs(testEnv.directories).
+                load();
+            MetaProperties metaProperties =
+                ensemble.logDirProps().get(testEnv.directory(0));
+            assertEquals(MetaPropertiesVersion.V1, metaProperties.version());
         }
     }
 
