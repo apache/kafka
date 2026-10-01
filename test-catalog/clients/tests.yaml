@@ -2380,6 +2380,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testCommitAsync
 - testCommitAsyncWithSubscriptionChange
 - testCommitSync
+- testCommitSyncRenewOnOneNodeAcceptOnAnother
 - testCommitSyncWithSubscriptionChange
 - testCommitWithRenewAcknowledgements
 - testCorruptMessageError
