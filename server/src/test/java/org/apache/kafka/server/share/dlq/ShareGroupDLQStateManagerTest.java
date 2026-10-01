@@ -54,6 +54,8 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
 
@@ -502,36 +504,27 @@ class ShareGroupDLQStateManagerTest {
         verifyNoInteractions(mockMetrics);
     }
 
-    @Test
-    public void testDlqTopicMissingAndPrefixMismatchReportsMissingTopic() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "false, DLQ topic does not exist, does not comply with the DLQ topic prefix",
+        "true, does not comply with the DLQ topic prefix, DLQ topic does not exist"
+    })
+    public void testDlqTopicMissingAndPrefixMismatchFailsValidation(
+            boolean autoCreateEnabled, String expectedMessageFragment, String unexpectedMessageFragment) throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of("required-prefix-"));
         when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
-        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(false);
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(autoCreateEnabled);
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
         stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
-        assertTrue(cause.getMessage().contains("does not exist"));
-        assertFalse(cause.getMessage().contains("does not comply"));
-        verifyNoInteractions(mockMetrics);
-    }
-
-    @Test
-    public void testDlqTopicMissingWithAutoCreateEnabledAndPrefixMismatchFailsValidation() throws Exception {
-        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
-        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
-        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of("required-prefix-"));
-        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
-        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
-
-        stateManager = builder().withCacheHelper(cacheHelper).build();
-        stateManager.start();
-        Throwable cause = getCause(stateManager.dlq(param()));
-        assertInstanceOf(ConfigException.class, cause);
-        assertTrue(cause.getMessage().contains("does not comply with the DLQ topic prefix"));
+        assertTrue(cause.getMessage().contains(expectedMessageFragment),
+            "Expected message to contain '" + expectedMessageFragment + "', got: " + cause.getMessage());
+        assertFalse(cause.getMessage().contains(unexpectedMessageFragment),
+            "Did not expect message to contain '" + unexpectedMessageFragment + "', got: " + cause.getMessage());
         verifyNoInteractions(mockMetrics);
     }
 
