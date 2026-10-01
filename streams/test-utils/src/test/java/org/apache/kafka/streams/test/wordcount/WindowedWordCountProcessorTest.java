@@ -39,8 +39,8 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -77,7 +77,7 @@ public class WindowedWordCountProcessorTest {
         processor.process(new Record<>("key", "gamma delta", 221L));
 
         // note that the processor does not forward during process()
-        assertThat(context.forwarded().isEmpty(), is(true));
+        assertTrue(context.forwarded().isEmpty());
 
         // now, we trigger the punctuator, which iterates over the state store and forwards the contents.
         context.scheduledPunctuators().get(0).getPunctuator().punctuate(1_000L);
@@ -92,7 +92,7 @@ public class WindowedWordCountProcessorTest {
             new CapturedForward<>(new Record<>("[gamma@200/300]", "1", 1_000L))
         );
 
-        assertThat(capturedForwards, is(expected));
+        assertEquals(expected, capturedForwards);
 
         store.close();
     }
@@ -134,7 +134,7 @@ public class WindowedWordCountProcessorTest {
             processor.process(new Record<>("key", "gamma delta", 221L));
 
             // note that the processor does not forward during process()
-            assertThat(context.forwarded().isEmpty(), is(true));
+            assertTrue(context.forwarded().isEmpty());
 
             // now, we trigger the punctuator, which iterates over the state store and forwards the contents.
             context.scheduledPunctuators().get(0).getPunctuator().punctuate(1_000L);
@@ -149,7 +149,7 @@ public class WindowedWordCountProcessorTest {
                 new CapturedForward<>(new Record<>("[gamma@200/300]", "1", 1_000L))
             );
 
-            assertThat(capturedForwards, is(expected));
+            assertEquals(expected, capturedForwards);
 
             store.close();
         } finally {

@@ -31,6 +31,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.SupportedConfigChecker;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -46,6 +47,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,11 +77,28 @@ import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
 public class ConfigurationControlManagerTest {
+
+    private static final String HANGUL_GA = "\uAC00";
+    private static final String HANGUL_NA = "\uB098";
+    private static final String HANGUL_DA = "\uB2E4";
+    private static final String GRINNING_FACE_EMOJI = "\uD83D\uDE00";
+
+    @Test
+    public void testBuilderRequiresPositiveMaxRecordsPerBatch() {
+        for (int invalidMaxRecordsPerBatch : new int[] {0, -1, -100}) {
+            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new ConfigurationControlManager.Builder().
+                    setMaxRecordsPerBatch(invalidMaxRecordsPerBatch).
+                    build());
+            assertEquals("Max records per batch must be greater than zero", exception.getMessage());
+        }
+    }
 
     static final Map<ConfigResource.Type, ConfigDef> CONFIGS = new HashMap<>();
 
@@ -141,6 +160,7 @@ public class ConfigurationControlManagerTest {
     public void testReplay() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         assertEquals(Map.of(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
@@ -168,6 +188,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
@@ -201,6 +222,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
 
@@ -228,6 +250,88 @@ public class ConfigurationControlManagerTest {
         assertEquals(Errors.INVALID_CONFIG, invalidConfigValueResult.response().error());
         assertEquals("The configuration value cannot be added because it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.",
                 invalidConfigValueResult.response().message());
+        assertTrue(invalidConfigValueResult.records().isEmpty());
+    }
+
+    private static Stream<Arguments> configValuesAtSerializationLimit() {
+        return Stream.of(
+            Arguments.of("ASCII", "a".repeat(Short.MAX_VALUE), "a".repeat(Short.MAX_VALUE + 1)),
+            Arguments.of("Hangul", HANGUL_GA.repeat(10_922) + "a", HANGUL_GA.repeat(10_922) + "aa"),
+            Arguments.of("emoji", GRINNING_FACE_EMOJI.repeat(8_191) + "aaa",
+                GRINNING_FACE_EMOJI.repeat(8_191) + "aaaa")
+        );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("configValuesAtSerializationLimit")
+    public void testConfigValueSizeLimitUsesUtf8Bytes(
+        String type,
+        String maximumValue,
+        String oversizedValue
+    ) {
+        assertEquals(Short.MAX_VALUE, maximumValue.getBytes(StandardCharsets.UTF_8).length);
+        assertEquals(Short.MAX_VALUE + 1, oversizedValue.getBytes(StandardCharsets.UTF_8).length);
+
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
+            setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+            build();
+
+        ControllerResult<ApiError> maximumValueResult = manager.incrementalAlterConfig(
+            MYTOPIC,
+            toMap(entry("def", entry(SET, maximumValue))),
+            true,
+            false
+        );
+        assertEquals(ApiError.NONE, maximumValueResult.response());
+        assertEquals(1, maximumValueResult.records().size());
+        assertEquals(maximumValue, ((ConfigRecord) maximumValueResult.records().get(0).message()).value());
+
+        ControllerResult<ApiError> oversizedValueResult = manager.incrementalAlterConfig(
+            MYTOPIC,
+            toMap(entry("def", entry(SET, oversizedValue))),
+            true,
+            false
+        );
+        assertEquals(Errors.INVALID_CONFIG, oversizedValueResult.response().error());
+        assertTrue(oversizedValueResult.records().isEmpty());
+    }
+
+    @Test
+    public void testAppendChecksFinalUtf8Size() {
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
+            setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+            build();
+        String initialValue = HANGUL_GA.repeat(10_921);
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).
+            setResourceName(MYTOPIC.name()).
+            setName("abc").
+            setValue(initialValue));
+
+        ControllerResult<ApiError> maximumValueResult = manager.incrementalAlterConfig(
+            MYTOPIC,
+            toMap(entry("abc", entry(APPEND, HANGUL_NA))),
+            true,
+            false
+        );
+        assertEquals(ApiError.NONE, maximumValueResult.response());
+        assertEquals(1, maximumValueResult.records().size());
+        String maximumValue = ((ConfigRecord) maximumValueResult.records().get(0).message()).value();
+        assertEquals(Short.MAX_VALUE, maximumValue.getBytes(StandardCharsets.UTF_8).length);
+        RecordTestUtils.replayAll(manager, maximumValueResult.records());
+
+        ControllerResult<ApiError> oversizedValueResult = manager.incrementalAlterConfig(
+            MYTOPIC,
+            toMap(entry("abc", entry(APPEND, HANGUL_DA))),
+            true,
+            false
+        );
+        assertEquals(Errors.INVALID_CONFIG, oversizedValueResult.response().error());
+        assertTrue(oversizedValueResult.records().isEmpty());
     }
 
     @Test
@@ -235,6 +339,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
@@ -282,6 +387,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             setExistenceChecker(TestExistenceChecker.INSTANCE).
             build();
         ConfigResource existingTopic = new ConfigResource(TOPIC, "ExistingTopic");
@@ -345,6 +451,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             setAlterConfigPolicy(Optional.of(policy)).
             build();
         // Existing configs should not be passed to the policy
@@ -405,6 +512,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
             build();
         List<ApiMessageAndVersion> expectedRecords1 = List.of(
@@ -440,7 +548,8 @@ public class ConfigurationControlManagerTest {
     public void testMaybeGenerateElrSafetyRecords(boolean setStaticConfig) {
         ConfigurationControlManager.Builder builder = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
-            setKafkaConfigSchema(SCHEMA);
+            setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT);
         if (setStaticConfig) {
             builder.setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"));
         }
@@ -488,6 +597,7 @@ public class ConfigurationControlManagerTest {
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 () -> Set.of())).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -496,6 +606,7 @@ public class ConfigurationControlManagerTest {
             setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
             setFeatureControl(featureManager).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         ControllerResult<ApiError> result = manager.updateFeatures(
             Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
@@ -539,6 +650,7 @@ public class ConfigurationControlManagerTest {
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 () -> Set.of())).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -547,6 +659,7 @@ public class ConfigurationControlManagerTest {
             setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
             setFeatureControl(featureManager).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         assertFalse(featureManager.isElrFeatureEnabled());
         ControllerResult<ApiError> result = manager.updateFeatures(
@@ -574,6 +687,7 @@ public class ConfigurationControlManagerTest {
                 setQuorumFeatures(new QuorumFeatures(0,
                         QuorumFeatures.defaultSupportedFeatureMap(true),
                         () -> Set.of())).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
         featureManager.replay(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
@@ -581,6 +695,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
                 setFeatureControl(featureManager).
                 setKafkaConfigSchema(SCHEMA).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
 
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
@@ -595,7 +710,9 @@ public class ConfigurationControlManagerTest {
     }
 
     private FeatureControlManager createFeatureControlManager(short level) {
-        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+                build();
         featureControlManager.replay(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(level));
@@ -614,6 +731,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             setSupportedConfigChecker(supportedConfigChecker).
             build();
 
@@ -644,6 +762,7 @@ public class ConfigurationControlManagerTest {
 
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             setSupportedConfigChecker(supportedConfigChecker).
             build();
 
@@ -671,6 +790,7 @@ public class ConfigurationControlManagerTest {
     public void testIsCordonedLogDirsDisabled(boolean expected, short level) {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
                 setKafkaConfigSchema(SCHEMA).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 setFeatureControl(createFeatureControlManager(level)).
                 build();
 
@@ -696,6 +816,7 @@ public class ConfigurationControlManagerTest {
     public void testIsCordonedLogDirsInvalid() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
                 setKafkaConfigSchema(SCHEMA).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 setFeatureControl(createFeatureControlManager()).
                 build();
 

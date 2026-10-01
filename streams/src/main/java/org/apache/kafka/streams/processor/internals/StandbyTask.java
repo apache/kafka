@@ -198,7 +198,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 throw new IllegalStateException("Illegal state " + state() + " while preparing standby task " + id + " for committing ");
         }
 
-        return clean ? Collections.emptyMap() : null;
+        return clean ? Map.of() : null;
     }
 
     @Override
@@ -313,12 +313,12 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public Map<TopicPartition, Long> committedOffsets() {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     @Override
     public Map<TopicPartition, Long> highWaterMark() {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     @Override

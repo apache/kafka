@@ -73,7 +73,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -81,17 +80,15 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.KeyQueryMetadata.NOT_AVAILABLE;
 import static org.apache.kafka.streams.KeyValue.pair;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -242,7 +239,7 @@ public class NamedTopologyIntegrationTest {
 
         CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog") || t.contains("-repartition")).forEach(t -> {
             try {
-                assertThat("topic was not decorated", t.contains(TOPIC_PREFIX));
+                assertTrue(t.contains(TOPIC_PREFIX), "topic was not decorated");
                 CLUSTER.deleteTopics(t);
             } catch (final RuntimeException e) {
                 e.printStackTrace();
@@ -291,15 +288,16 @@ public class NamedTopologyIntegrationTest {
             .filter(t -> t.contains(TOPIC_PREFIX))
             .filter(t -> t.endsWith("-repartition") || t.endsWith("-changelog") || t.endsWith("-topic"))
             .collect(Collectors.toSet());
-        assertThat(internalTopics, is(Set.of(
-            countTopicPrefix + "-KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition",
-            countTopicPrefix + "-KSTREAM-AGGREGATE-STATE-STORE-0000000002-changelog",
-            fkjTopicPrefix + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic",
-            fkjTopicPrefix + "-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic",
-            fkjTopicPrefix + "-KTABLE-FK-JOIN-SUBSCRIPTION-STATE-STORE-0000000010-changelog",
-            fkjTopicPrefix + "-" + INPUT_STREAM_2 + "-STATE-STORE-0000000000-changelog",
-            fkjTopicPrefix + "-" + INPUT_STREAM_3 + "-STATE-STORE-0000000003-changelog"))
-        );
+        assertEquals(
+            Set.of(
+                countTopicPrefix + "-KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition",
+                countTopicPrefix + "-KSTREAM-AGGREGATE-STATE-STORE-0000000002-changelog",
+                fkjTopicPrefix + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic",
+                fkjTopicPrefix + "-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-0000000014-topic",
+                fkjTopicPrefix + "-KTABLE-FK-JOIN-SUBSCRIPTION-STATE-STORE-0000000010-changelog",
+                fkjTopicPrefix + "-" + INPUT_STREAM_2 + "-STATE-STORE-0000000000-changelog",
+                fkjTopicPrefix + "-" + INPUT_STREAM_3 + "-STATE-STORE-0000000003-changelog"),
+            internalTopics);
     }
 
     @Test
@@ -312,11 +310,11 @@ public class NamedTopologyIntegrationTest {
         streams.addNamedTopology(topology1Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         final List<KeyValue<String, Long>> results = waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5);
-        assertThat(results, equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, results);
 
         final Set<String> allTopics = CLUSTER.getAllTopicsInCluster();
-        assertThat(allTopics.contains(TOPIC_PREFIX + "-" + "topology-1" + "-store-changelog"), is(true));
-        assertThat(allTopics.contains(TOPIC_PREFIX + "-" + "topology-1" + "-store-repartition"), is(true));
+        assertTrue(allTopics.contains(TOPIC_PREFIX + "-" + "topology-1" + "-store-changelog"));
+        assertTrue(allTopics.contains(TOPIC_PREFIX + "-" + "topology-1" + "-store-repartition"));
     }
 
     @Test
@@ -329,11 +327,11 @@ public class NamedTopologyIntegrationTest {
         streams.addNamedTopology(topology3Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 5));
 
-        assertThat(CLUSTER.getAllTopicsInCluster().containsAll(asList(changelog1, changelog2, changelog3)), is(true));
+        assertTrue(CLUSTER.getAllTopicsInCluster().containsAll(List.of(changelog1, changelog2, changelog3)));
     }
 
     @Test
@@ -354,13 +352,13 @@ public class NamedTopologyIntegrationTest {
             topology2Builder.stream(SINGLE_PARTITION_INPUT_STREAM).groupByKey().count(Materialized.as(topology2Store)).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
             streams.addNamedTopology(topology1Builder.build());
             streams.removeNamedTopology(TOPOLOGY_1);
-            assertThat(streams.getTopologyByName(TOPOLOGY_1), is(Optional.empty()));
+            assertTrue(streams.getTopologyByName(TOPOLOGY_1).isEmpty());
             streams.addNamedTopology(topology1Builder.build());
             streams.addNamedTopology(topology2Builder.build());
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5), equalTo(COUNT_OUTPUT_DATA));
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SINGLE_PARTITION_OUTPUT_STREAM, 3), equalTo(COUNT_OUTPUT_DATA));
+            assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
+            assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, SINGLE_PARTITION_OUTPUT_STREAM, 3));
 
             final ReadOnlyKeyValueStore<String, Long> store =
                 streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType(
@@ -368,26 +366,26 @@ public class NamedTopologyIntegrationTest {
                     topology1Store,
                     QueryableStoreTypes.keyValueStore())
                 );
-            assertThat(store.get("A"), equalTo(2L));
+            assertEquals(2L, store.get("A"));
 
             final Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore(topology1Store, TOPOLOGY_1);
             final Collection<StreamsMetadata> streamsMetadata2 = streams.streamsMetadataForStore(topology2Store, TOPOLOGY_2);
-            assertThat(streamsMetadata.size(), equalTo(1));
-            assertThat(streamsMetadata2.size(), equalTo(1));
+            assertEquals(1, streamsMetadata.size());
+            assertEquals(1, streamsMetadata2.size());
 
             final KeyQueryMetadata keyMetadata = streams.queryMetadataForKey(topology1Store, "A", new StringSerializer(), TOPOLOGY_1);
             final KeyQueryMetadata keyMetadata2 = streams.queryMetadataForKey(topology2Store, "A", new StringSerializer(), TOPOLOGY_2);
 
-            assertThat(keyMetadata, not(NOT_AVAILABLE));
-            assertThat(keyMetadata, equalTo(keyMetadata2));
+            assertNotEquals(NOT_AVAILABLE, keyMetadata);
+            assertEquals(keyMetadata2, keyMetadata);
 
             final Map<String, Map<Integer, LagInfo>> partitionLags1 = streams.allLocalStorePartitionLagsForTopology(TOPOLOGY_1);
             final Map<String, Map<Integer, LagInfo>> partitionLags2 = streams.allLocalStorePartitionLagsForTopology(TOPOLOGY_2);
 
-            assertThat(partitionLags1.keySet(), equalTo(singleton(topology1Store)));
-            assertThat(partitionLags1.get(topology1Store).keySet(), equalTo(Set.of(0, 1)));
-            assertThat(partitionLags2.keySet(), equalTo(singleton(topology2Store)));
-            assertThat(partitionLags2.get(topology2Store).keySet(), equalTo(singleton(0))); // only one copy of the store in topology-2
+            assertEquals(Set.of(topology1Store), partitionLags1.keySet());
+            assertEquals(Set.of(0, 1), partitionLags1.get(topology1Store).keySet());
+            assertEquals(Set.of(topology2Store), partitionLags2.keySet());
+            assertEquals(Set.of(0), partitionLags2.get(topology2Store).keySet()); // only one copy of the store in topology-2
 
             // Start up a second node with both topologies
             setupSecondKafkaStreams();
@@ -407,14 +405,14 @@ public class NamedTopologyIntegrationTest {
                 streams.streamsMetadataForStore(topology2Store, TOPOLOGY_2),
                 streams2.streamsMetadataForStore(topology2Store, TOPOLOGY_2));
 
-            assertThat(streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1).size(), equalTo(2));
-            assertThat(streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1).size(), equalTo(2));
+            assertEquals(2, streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1).size());
+            assertEquals(2, streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1).size());
             verifyMetadataForTopology(
                 TOPOLOGY_1,
                 streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1),
                 streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1));
-            assertThat(streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2).size(), equalTo(2));
-            assertThat(streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_2).size(), equalTo(2));
+            assertEquals(2, streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2).size());
+            assertEquals(2, streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_2).size());
             verifyMetadataForTopology(
                 TOPOLOGY_2,
                 streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2),
@@ -431,7 +429,7 @@ public class NamedTopologyIntegrationTest {
         streams.start();
         streams.addNamedTopology(topology1Builder.build()).all().get();
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
     }
 
     @Test
@@ -445,8 +443,8 @@ public class NamedTopologyIntegrationTest {
 
         waitForApplicationState(Collections.singletonList(streams), State.RUNNING, Duration.ofMillis(DEFAULT_TIMEOUT));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5));
     }
 
     @Test
@@ -463,9 +461,9 @@ public class NamedTopologyIntegrationTest {
 
         waitForApplicationState(Collections.singletonList(streams), State.RUNNING, Duration.ofMillis(DEFAULT_TIMEOUT));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 5));
     }
 
     @Test
@@ -481,14 +479,14 @@ public class NamedTopologyIntegrationTest {
         streams2.addNamedTopology(topology1Builder2.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(asList(streams, streams2));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
 
         final AddNamedTopologyResult result = streams.addNamedTopology(topology2Builder.build());
         final AddNamedTopologyResult result2 = streams2.addNamedTopology(topology2Builder2.build());
         result.all().get();
         result2.all().get();
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5));
     }
 
     @Test
@@ -501,17 +499,17 @@ public class NamedTopologyIntegrationTest {
         streams2.addNamedTopology(topology1Builder2.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(asList(streams, streams2));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
 
         final RemoveNamedTopologyResult result = streams.removeNamedTopology(TOPOLOGY_1, true);
         streams2.removeNamedTopology(TOPOLOGY_1, true).all().get();
         result.all().get();
 
-        assertThat(streams.getTopologyByName(TOPOLOGY_1), equalTo(Optional.empty()));
-        assertThat(streams2.getTopologyByName(TOPOLOGY_1), equalTo(Optional.empty()));
+        assertTrue(streams.getTopologyByName(TOPOLOGY_1).isEmpty());
+        assertTrue(streams2.getTopologyByName(TOPOLOGY_1).isEmpty());
 
-        assertThat(streams.getAllTopologies().isEmpty(), is(true));
-        assertThat(streams2.getAllTopologies().isEmpty(), is(true));
+        assertTrue(streams.getAllTopologies().isEmpty());
+        assertTrue(streams2.getAllTopologies().isEmpty());
 
         streams.cleanUpNamedTopology(TOPOLOGY_1);
         streams2.cleanUpNamedTopology(TOPOLOGY_1);
@@ -534,10 +532,10 @@ public class NamedTopologyIntegrationTest {
         streams2.addNamedTopology(topology2Client2).all().get();
         result1.all().get();
 
-        assertThat(streams.getAllTopologies(), equalTo(singleton(topology2Client1)));
-        assertThat(streams2.getAllTopologies(), equalTo(singleton(topology2Client2)));
+        assertEquals(Set.of(topology2Client1), streams.getAllTopologies());
+        assertEquals(Set.of(topology2Client2), streams2.getAllTopologies());
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5));
     }
 
     @Test
@@ -553,8 +551,8 @@ public class NamedTopologyIntegrationTest {
             streams.addNamedTopology(topology1Builder.build());
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
+            assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5));
+            assertEquals(SUM_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5));
             streams.removeNamedTopology(TOPOLOGY_1).all().get();
             streams.cleanUpNamedTopology(TOPOLOGY_1);
 
@@ -567,8 +565,8 @@ public class NamedTopologyIntegrationTest {
             produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
             streams.addNamedTopology(topology1Builder2.build()).all().get();
 
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
+            assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5));
+            assertEquals(SUM_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5));
         } finally {
             CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
             CLUSTER.deleteTopics(DELAYED_INPUT_STREAM_1);
@@ -585,9 +583,9 @@ public class NamedTopologyIntegrationTest {
         streams.addNamedTopology(topology3Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 5));
     }
 
     @Test
@@ -600,9 +598,9 @@ public class NamedTopologyIntegrationTest {
         streams.addNamedTopology(topology3Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 5), equalTo(COUNT_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 5));
     }
 
     @Test
@@ -617,8 +615,8 @@ public class NamedTopologyIntegrationTest {
             final NamedTopology namedTopology = topology1Builder.build();
             streams.addNamedTopology(namedTopology).all().get();
 
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
+            assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5));
+            assertEquals(SUM_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5));
             streams.removeNamedTopology("topology-1", true).all().get();
             streams.cleanUpNamedTopology("topology-1");
 
@@ -637,8 +635,8 @@ public class NamedTopologyIntegrationTest {
             final NamedTopology namedTopologyDup = topology1BuilderDup.build();
             streams.addNamedTopology(namedTopologyDup).all().get();
 
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
+            assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5));
+            assertEquals(SUM_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5));
         } finally {
             CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
         }
@@ -655,8 +653,8 @@ public class NamedTopologyIntegrationTest {
         final NamedTopology namedTopology = topology1Builder.build();
         streams.addNamedTopology(namedTopology).all().get();
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5));
+        assertEquals(SUM_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5));
 
         TestUtils.waitForCondition(
                 () -> streams.areAllLocalTasksRunningForTopology(TOPOLOGY_1),
@@ -691,8 +689,8 @@ public class NamedTopologyIntegrationTest {
         final NamedTopology namedTopologyDup = topology1BuilderDup.build();
         streams.addNamedTopology(namedTopologyDup).all().get();
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
+        assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5));
+        assertEquals(SUM_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5));
 
         CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
     }
@@ -704,7 +702,7 @@ public class NamedTopologyIntegrationTest {
     private void verifyMetadataForTopology(final String topologyName,
                                            final Collection<StreamsMetadata> left,
                                            final Collection<StreamsMetadata> right) {
-        assertThat(left.size(), equalTo(right.size()));
+        assertEquals(right.size(), left.size());
         final Iterator<StreamsMetadata> leftIter = left.iterator();
         final Iterator<StreamsMetadata> rightIter = right.iterator();
 
@@ -715,39 +713,35 @@ public class NamedTopologyIntegrationTest {
             verifyPartitionsAndStoresForTopology(topologyName, leftMetadata);
             verifyPartitionsAndStoresForTopology(topologyName, rightMetadata);
 
-            assertThat(verifyEquivalentMetadataForHost(leftMetadata, rightMetadata), is(true));
+            assertTrue(verifyEquivalentMetadataForHost(leftMetadata, rightMetadata));
         }
     }
 
     private void verifyPartitionsAndStoresForTopology(final String topologyName, final StreamsMetadataImpl metadata) {
-        assertThat(metadata.topologyName(), equalTo(topologyName));
-        assertThat(streams.getTopologyByName(topologyName).isPresent(), is(true));
-        assertThat(streams2.getTopologyByName(topologyName).isPresent(), is(true));
+        assertEquals(topologyName, metadata.topologyName());
+        assertTrue(streams.getTopologyByName(topologyName).isPresent());
+        assertTrue(streams2.getTopologyByName(topologyName).isPresent());
         final List<String> streams1SourceTopicsForTopology = streams.getTopologyByName(topologyName).get().sourceTopics();
         final List<String> streams2SourceTopicsForTopology = streams2.getTopologyByName(topologyName).get().sourceTopics();
 
         // first check that all partitions in the metadata correspond to the given named topology
-        assertThat(
-            streams1SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
-                                                            .map(TopicPartition::topic)
-                                                            .collect(Collectors.toList())),
-            is(true));
-        assertThat(
-            streams2SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
-                                                            .map(TopicPartition::topic)
-                                                            .collect(Collectors.toList())),
-            is(true));
+        assertTrue(streams1SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
+                                                                   .map(TopicPartition::topic)
+                                                                   .collect(Collectors.toList())));
+        assertTrue(streams2SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
+                                                                   .map(TopicPartition::topic)
+                                                                   .collect(Collectors.toList())));
 
         // then verify that only this topology's one store appears if the host has partitions assigned
         if (!metadata.topicPartitions().isEmpty()) {
-            assertThat(metadata.stateStoreNames(), equalTo(singleton("store-" + topologyName)));
+            assertEquals(Set.of("store-" + topologyName), metadata.stateStoreNames());
         } else {
-            assertThat(metadata.stateStoreNames().isEmpty(), is(true));
+            assertTrue(metadata.stateStoreNames().isEmpty());
         }
 
         // finally make sure the standby fields are empty since they are not enabled for this test
-        assertThat(metadata.standbyTopicPartitions().isEmpty(), is(true));
-        assertThat(metadata.standbyStateStoreNames().isEmpty(), is(true));
+        assertTrue(metadata.standbyTopicPartitions().isEmpty());
+        assertTrue(metadata.standbyStateStoreNames().isEmpty());
     }
 
     /**

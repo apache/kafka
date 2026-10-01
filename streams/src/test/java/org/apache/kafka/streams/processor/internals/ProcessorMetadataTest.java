@@ -25,11 +25,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -44,10 +42,10 @@ public class ProcessorMetadataTest {
         metadata.put(key, value);
         final Long actualValue =  metadata.get(key);
 
-        assertThat(actualValue, is(value));
+        assertEquals(value, actualValue);
 
         final Long noValue = metadata.get("no_key");
-        assertThat(noValue, is(nullValue()));
+        assertNull(noValue);
     }
 
     @Test
@@ -59,17 +57,17 @@ public class ProcessorMetadataTest {
         final ProcessorMetadata metadata = new ProcessorMetadata(map);
 
         final long value1 = metadata.get("key1");
-        assertThat(value1, is(1L));
+        assertEquals(1L, value1);
 
         final long value2 = metadata.get("key2");
-        assertThat(value2, is(2L));
+        assertEquals(2L, value2);
 
         final Long noValue = metadata.get("key3");
-        assertThat(noValue, is(nullValue()));
+        assertNull(noValue);
 
         metadata.put("key3", 3L);
         final long value3 = metadata.get("key3");
-        assertThat(value3, is(3L));
+        assertEquals(3L, value3);
     }
 
     @Test
@@ -85,15 +83,15 @@ public class ProcessorMetadataTest {
         final byte[] serialized = metadata.serialize();
         final ProcessorMetadata deserialized = ProcessorMetadata.deserialize(serialized);
 
-        assertThat(deserialized.get(key1), is(value1));
-        assertThat(deserialized.get(key2), is(value2));
-        assertThat(deserialized.get(key3), is(value3));
+        assertEquals(value1, deserialized.get(key1));
+        assertEquals(value2, deserialized.get(key2));
+        assertEquals(value3, deserialized.get(key3));
     }
 
     @Test
     public void shouldDeserializeNull() {
         final ProcessorMetadata deserialized = ProcessorMetadata.deserialize(null);
-        assertThat(deserialized, is(new ProcessorMetadata()));
+        assertEquals(new ProcessorMetadata(), deserialized);
     }
 
     @Test
@@ -101,7 +99,7 @@ public class ProcessorMetadataTest {
         final ProcessorMetadata emptyMeta = new ProcessorMetadata();
         emptyMeta.update(null);
 
-        assertThat(emptyMeta, is(new ProcessorMetadata()));
+        assertEquals(new ProcessorMetadata(), emptyMeta);
 
         {
             final Map<String, Long> map1 = new HashMap<>();
@@ -109,8 +107,8 @@ public class ProcessorMetadataTest {
             map1.put("key2", 2L);
             final ProcessorMetadata metadata1 = new ProcessorMetadata(map1);
             emptyMeta.update(metadata1);
-            assertThat(emptyMeta.get("key1"), is(1L));
-            assertThat(emptyMeta.get("key2"), is(2L));
+            assertEquals(1L, emptyMeta.get("key1"));
+            assertEquals(2L, emptyMeta.get("key2"));
         }
 
         {
@@ -119,8 +117,8 @@ public class ProcessorMetadataTest {
             map1.put("key2", 1L);
             final ProcessorMetadata metadata1 = new ProcessorMetadata(map1);
             emptyMeta.update(metadata1);
-            assertThat(emptyMeta.get("key1"), is(1L));
-            assertThat(emptyMeta.get("key2"), is(2L));
+            assertEquals(1L, emptyMeta.get("key1"));
+            assertEquals(2L, emptyMeta.get("key2"));
         }
 
         {
@@ -129,8 +127,8 @@ public class ProcessorMetadataTest {
             map1.put("key2", 3L);
             final ProcessorMetadata metadata1 = new ProcessorMetadata(map1);
             emptyMeta.update(metadata1);
-            assertThat(emptyMeta.get("key1"), is(2L));
-            assertThat(emptyMeta.get("key2"), is(3L));
+            assertEquals(2L, emptyMeta.get("key1"));
+            assertEquals(3L, emptyMeta.get("key2"));
         }
     }
 

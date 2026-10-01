@@ -26,9 +26,6 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.util.List;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -199,8 +196,8 @@ public class LogicalKeyValueSegmentsTest extends AbstractSegmentsTest<LogicalKey
 
         segments.close();
 
-        assertThat(segments.segmentForTimestamp(0), is(nullValue()));
-        assertThat(segments.getReservedSegment(), is(nullValue()));
+        assertNull(segments.segmentForTimestamp(0));
+        assertNull(segments.getReservedSegment());
         // verify iterators closed as well
         assertThrows(InvalidStateStoreException.class, all1::hasNext);
         assertThrows(InvalidStateStoreException.class, all2::hasNext);

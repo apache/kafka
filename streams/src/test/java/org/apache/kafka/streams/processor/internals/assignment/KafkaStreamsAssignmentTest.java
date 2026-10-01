@@ -27,8 +27,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class KafkaStreamsAssignmentTest {
     @Test
@@ -42,10 +41,10 @@ public class KafkaStreamsAssignmentTest {
             )
         );
 
-        assertThat(
-            assignment.toString(),
-            equalTo("KafkaStreamsAssignment{00000000-0000-0000-0000-000000000001, "
-                    + "[AssignedTask{ACTIVE, 0_2}, AssignedTask{STANDBY, 0_1}, AssignedTask{ACTIVE, 0_0}], "
-                    + "Optional.empty}"));
+        assertEquals(
+            "KafkaStreamsAssignment{00000000-0000-0000-0000-000000000001, "
+                + "[AssignedTask{ACTIVE, 0_2}, AssignedTask{STANDBY, 0_1}, AssignedTask{ACTIVE, 0_0}], "
+                + "Optional.empty}",
+            assignment.toString());
     }
 }

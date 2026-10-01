@@ -80,12 +80,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_DELIVERY_COUNT;
-import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_GROUP;
-import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_MESSAGE;
-import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_OFFSET;
-import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_PARTITION;
-import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_TOPIC;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQRecordHelper.HEADER_DLQ_ERRORS_DELIVERY_COUNT;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQRecordHelper.HEADER_DLQ_ERRORS_GROUP;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQRecordHelper.HEADER_DLQ_ERRORS_MESSAGE;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQRecordHelper.HEADER_DLQ_ERRORS_OFFSET;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQRecordHelper.HEADER_DLQ_ERRORS_PARTITION;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQRecordHelper.HEADER_DLQ_ERRORS_TOPIC;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

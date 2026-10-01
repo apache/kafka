@@ -61,9 +61,6 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.StreamsTestUtils.toSet;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSetAndCloseIterator;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -861,30 +858,23 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore.put("a", "0005", 0x7a00000000000000L - 1);
 
         final Set<String> expected = Set.of("0001", "0003", "0005");
-        assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch("a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expected)
-        );
+        assertEquals(expected, valuesToSetAndCloseIterator(windowStore.fetch("a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))));
 
         Set<KeyValue<Windowed<String>, String>> set =
             toSet(windowStore.fetch("a", "a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
-        assertThat(
-            set,
-            equalTo(Set.of(
+        assertEquals(
+            Set.of(
                 windowedPair("a", "0001", 0, windowSize),
                 windowedPair("a", "0003", 1, windowSize),
-                windowedPair("a", "0005", 0x7a00000000000000L - 1, windowSize)
-            ))
-        );
+                windowedPair("a", "0005", 0x7a00000000000000L - 1, windowSize)),
+            set);
 
         set = toSet(windowStore.fetch("aa", "aa", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
-        assertThat(
-            set,
-            equalTo(Set.of(
+        assertEquals(
+            Set.of(
                 windowedPair("aa", "0002", 0, windowSize),
-                windowedPair("aa", "0004", 1, windowSize)
-            ))
-        );
+                windowedPair("aa", "0004", 1, windowSize)),
+            set);
         windowStore.close();
     }
 
@@ -943,20 +933,11 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore.put(key3, "9", 59999);
 
         final Set<String> expectedKey1 = Set.of("1", "4", "7");
-        assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch(key1, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expectedKey1)
-        );
+        assertEquals(expectedKey1, valuesToSetAndCloseIterator(windowStore.fetch(key1, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))));
         final Set<String> expectedKey2 = Set.of("2", "5", "8");
-        assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch(key2, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expectedKey2)
-        );
+        assertEquals(expectedKey2, valuesToSetAndCloseIterator(windowStore.fetch(key2, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))));
         final Set<String> expectedKey3 = Set.of("3", "6", "9");
-        assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expectedKey3)
-        );
+        assertEquals(expectedKey3, valuesToSetAndCloseIterator(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))));
 
         windowStore.close();
     }
@@ -985,13 +966,11 @@ public abstract class AbstractWindowBytesStoreTest {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();
-            assertThat(
-                messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
-            );
+            assertTrue(messages.contains(
+                "Returning empty iterator for fetch with invalid key range: from > to." +
+                " This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                " Note that the built-in numerical serdes do not follow this for negative numbers"));
         }
     }
 

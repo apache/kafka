@@ -530,9 +530,21 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (pollTimer.isExpired() ||
-            membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
-
+        if (pollTimer.isExpired()) {
+            return 0L;
+        }
+        // A heartbeat is only sent when the coordinator is known; poll() returns EMPTY otherwise
+        // (see the guard at the top of poll()). If the coordinator is unavailable (for example,
+        // while bootstrap DNS resolution is still in progress), the
+        // shouldNotWaitForHeartbeatInterval() check would return 0 whenever the member wants to
+        // (re)join. Because no heartbeat can be sent until the coordinator is discovered, the
+        // condition remains true and both the application and network threads end up busy-spinning.
+        // Wait a retry backoff rather than the heartbeat interval, because the interval is zero
+        // until the first heartbeat response is received, which would also busy-spin.
+        if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager.shouldSkipHeartbeat()) {
+            return heartbeatRequestState.retryBackoffMs();
+        }
+        if (membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));

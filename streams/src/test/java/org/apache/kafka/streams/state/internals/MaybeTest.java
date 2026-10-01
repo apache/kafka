@@ -20,23 +20,24 @@ import org.junit.jupiter.api.Test;
 
 import java.util.NoSuchElementException;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class MaybeTest {
     @Test
     public void shouldReturnDefinedValue() {
-        assertThat(Maybe.defined(null).getNullableValue(), nullValue());
-        assertThat(Maybe.defined("ASDF").getNullableValue(), is("ASDF"));
+        assertNull(Maybe.defined(null).getNullableValue());
+        assertEquals("ASDF", Maybe.defined("ASDF").getNullableValue());
     }
 
     @Test
     public void shouldAnswerIsDefined() {
-        assertThat(Maybe.defined(null).isDefined(), is(true));
-        assertThat(Maybe.defined("ASDF").isDefined(), is(true));
-        assertThat(Maybe.undefined().isDefined(), is(false));
+        assertTrue(Maybe.defined(null).isDefined());
+        assertTrue(Maybe.defined("ASDF").isDefined());
+        assertFalse(Maybe.undefined().isDefined());
     }
 
     @Test
@@ -52,19 +53,19 @@ public class MaybeTest {
 
     @Test
     public void shouldUpholdEqualityCorrectness() {
-        assertThat(Maybe.undefined().equals(Maybe.undefined()), is(true));
-        assertThat(Maybe.defined(null).equals(Maybe.defined(null)), is(true));
-        assertThat(Maybe.defined("q").equals(Maybe.defined("q")), is(true));
+        assertTrue(Maybe.undefined().equals(Maybe.undefined()));
+        assertTrue(Maybe.defined(null).equals(Maybe.defined(null)));
+        assertTrue(Maybe.defined("q").equals(Maybe.defined("q")));
 
-        assertThat(Maybe.undefined().equals(Maybe.defined(null)), is(false));
-        assertThat(Maybe.undefined().equals(Maybe.defined("x")), is(false));
+        assertFalse(Maybe.undefined().equals(Maybe.defined(null)));
+        assertFalse(Maybe.undefined().equals(Maybe.defined("x")));
 
-        assertThat(Maybe.defined(null).equals(Maybe.undefined()), is(false));
-        assertThat(Maybe.defined(null).equals(Maybe.defined("x")), is(false));
+        assertFalse(Maybe.defined(null).equals(Maybe.undefined()));
+        assertFalse(Maybe.defined(null).equals(Maybe.defined("x")));
 
-        assertThat(Maybe.defined("a").equals(Maybe.undefined()), is(false));
-        assertThat(Maybe.defined("a").equals(Maybe.defined(null)), is(false));
-        assertThat(Maybe.defined("a").equals(Maybe.defined("b")), is(false));
+        assertFalse(Maybe.defined("a").equals(Maybe.undefined()));
+        assertFalse(Maybe.defined("a").equals(Maybe.defined(null)));
+        assertFalse(Maybe.defined("a").equals(Maybe.defined("b")));
     }
 
     @Test
@@ -72,8 +73,8 @@ public class MaybeTest {
         // This specifies the current implementation, which is simpler to write than an exhaustive test.
         // As long as this implementation doesn't change, then the equals/hashcode contract is upheld.
 
-        assertThat(Maybe.undefined().hashCode(), is(-1));
-        assertThat(Maybe.defined(null).hashCode(), is(0));
-        assertThat(Maybe.defined("a").hashCode(), is("a".hashCode()));
+        assertEquals(-1, Maybe.undefined().hashCode());
+        assertEquals(0, Maybe.defined(null).hashCode());
+        assertEquals("a".hashCode(), Maybe.defined("a").hashCode());
     }
 }

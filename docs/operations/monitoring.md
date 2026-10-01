@@ -1192,6 +1192,45 @@ The time that an event waited in the purgatory before being completed
 <tr>  
 <td>
 
+Average Background Thread Idle Ratio
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=background-thread-idle-ratio-avg
+</td>  
+<td>
+
+The average idle ratio of the coordinator background threads
+</td> </tr>  
+<tr>  
+<td>
+
+Background Queue Time (Ms)
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=background-queue-time-ms-[max|p50|p95|p99|p999]
+</td>  
+<td>
+
+The time that a background task spent waiting in the queue to be processed
+</td> </tr>  
+<tr>  
+<td>
+
+Background Processing Time (Ms)
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=background-processing-time-ms-[max|p50|p95|p99|p999]
+</td>  
+<td>
+
+The time that a background task took to be processed
+</td> </tr>  
+<tr>  
+<td>
+
 Batch Linger Time (Ms)
 </td>  
 <td>

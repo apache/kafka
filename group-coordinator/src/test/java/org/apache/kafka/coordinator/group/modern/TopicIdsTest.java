@@ -28,6 +28,8 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -166,6 +168,55 @@ public class TopicIdsTest {
         Set<Uuid> actualIds = new HashSet<>(topicIds);
 
         assertEquals(expectedIds, actualIds);
+    }
+
+    @Test
+    public void testToArray() {
+        var fooUuid = Uuid.randomUuid();
+        var barUuid = Uuid.randomUuid();
+        var bazUuid = Uuid.randomUuid();
+        var metadataImage = new KRaftCoordinatorMetadataImage(
+            new MetadataImageBuilder()
+                .addTopic(fooUuid, "foo", 3)
+                .addTopic(barUuid, "bar", 3)
+                .addTopic(bazUuid, "baz", 3)
+                .build()
+        );
+
+        var topicIds = new TopicIds(Set.of("foo", "bar", "baz"), metadataImage);
+
+        assertEquals(Set.of(fooUuid, barUuid, bazUuid), Set.of(topicIds.toArray()));
+        assertEquals(Set.of(fooUuid, barUuid, bazUuid), Set.of(topicIds.toArray(new Uuid[0])));
+
+        // An array which is large enough is filled in place, and the element after the last
+        // one is set to null.
+        var large = new Uuid[4];
+        assertSame(large, topicIds.toArray(large));
+        assertEquals(Set.of(fooUuid, barUuid, bazUuid), Set.of(large[0], large[1], large[2]));
+        assertNull(large[3]);
+    }
+
+    @Test
+    public void testToArrayOneTopicConversionFails() {
+        // topic 'qux' only exists as topic id.
+        // topic 'baz' only exists as topic name.
+        var fooUuid = Uuid.randomUuid();
+        var barUuid = Uuid.randomUuid();
+        var quxUuid = Uuid.randomUuid();
+        var metadataImage = new KRaftCoordinatorMetadataImage(
+            new MetadataImageBuilder()
+                .addTopic(fooUuid, "foo", 3)
+                .addTopic(barUuid, "bar", 3)
+                .addTopic(quxUuid, "qux", 3)
+                .build()
+        );
+
+        var topicIds = new TopicIds(Set.of("foo", "bar", "baz"), metadataImage);
+
+        // The arrays hold the ids of the topics which exist, so fewer than the size.
+        assertEquals(3, topicIds.size());
+        assertEquals(Set.of(fooUuid, barUuid), Set.of(topicIds.toArray()));
+        assertEquals(Set.of(fooUuid, barUuid), Set.of(topicIds.toArray(new Uuid[0])));
     }
 
     @Test

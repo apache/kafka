@@ -162,7 +162,7 @@ class LocalLogTest {
         List<LogSegment> deletedSegments = log.deleteAllSegments();
         assertTrue(log.segments().isEmpty());
         assertEquals(segmentsBeforeDelete, deletedSegments);
-        assertThrows(KafkaStorageException.class, () -> log.checkIfMemoryMappedBufferClosed());
+        assertThrows(KafkaStorageException.class, () -> log.checkIfClosed());
         assertTrue(logDir.exists());
     }
 
@@ -257,7 +257,19 @@ class LocalLogTest {
     }
 
     @Test
-    public void testLogCloseSuccess() throws IOException {
+    public void testCloseIdempotent() {
+        log.close();
+        log.close();
+    }
+
+    @Test
+    public void testCloseQuietlyIdempotent() {
+        log.closeQuietly();
+        log.closeQuietly();
+    }
+
+    @Test
+    public void testClosePreventsAppend() throws IOException {
         List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
         appendRecords(kvsToRecords(keyValues), 0L);
         log.close();
@@ -265,33 +277,11 @@ class LocalLogTest {
     }
 
     @Test
-    public void testLogCloseIdempotent() {
-        log.close();
-        // Check that LocalLog.close() is idempotent
-        log.close();
-    }
-
-    @Test
-    public void testLogCloseFailureWhenInMemoryBufferClosed() throws IOException {
+    public void testCloseQuietlyPreventsAppend() throws IOException {
         List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
         appendRecords(kvsToRecords(keyValues), 0L);
-        log.closeHandlers();
-        assertThrows(KafkaStorageException.class, () -> log.close());
-    }
-
-    @Test
-    public void testLogCloseHandlers() throws IOException {
-        List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
-        appendRecords(kvsToRecords(keyValues), 0L);
-        log.closeHandlers();
+        log.closeQuietly();
         assertThrows(ClosedChannelException.class, () -> appendRecords(kvsToRecords(keyValues), 2L));
-    }
-
-    @Test
-    public void testLogCloseHandlersIdempotent() {
-        log.closeHandlers();
-        // Check that LocalLog.closeHandlers() is idempotent
-        log.closeHandlers();
     }
 
     static class TestDeletionReason implements SegmentDeletionReason {

@@ -1137,6 +1137,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestNumReplicaFetcherMetricsReporter.testReporters.clear()
 
     val invalidStaticConfigs = defaultStaticConfig(newBroker.config.brokerId)
+    // defaultStaticConfig() is not idempotent for the log dir: each call generates a fresh temp
+    // log.dir. Carry over the original broker's log.dir so the restarted broker points at the same
+    // metadata log directory, otherwise we point the broker at a new empty dir.
+    // This is a workaround; we should make the defaultStaticConfig() idempotent in future.
+    invalidStaticConfigs.put(ServerLogConfigs.LOG_DIR_CONFIG, props.getProperty(ServerLogConfigs.LOG_DIR_CONFIG))
     invalidStaticConfigs.putAll(securityProps(invalidSslConfigs, KEYSTORE_PROPS, listenerPrefix(SecureExternal)))
     newBroker.config.updateCurrentConfig(KafkaConfig.fromProps(invalidStaticConfigs))
 

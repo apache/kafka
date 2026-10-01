@@ -22,13 +22,10 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
@@ -36,8 +33,6 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.record.internal.DefaultRecord;
-import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.SimpleRecord;
@@ -59,8 +54,6 @@ import org.apache.kafka.server.util.timer.TimerTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -76,6 +69,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 /**
  * Core implementation of RPC send logic for the dlq manager.
@@ -97,13 +91,6 @@ public class ShareGroupDLQStateManager {
     private static final int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
     private static final double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
 
-    /**
-     * In most cases we expect the records getting DLQ'ed will be single offsets and
-     * not complete batches. Hence, using a large upper limit while reading from the log
-     * would be fruitless in most cases. Therefore, the value of 1 MB has been chosen
-     * for the DLQ related log reads.
-     */
-    private static final int DLQ_MAX_FETCH_BYTES = 1024 * 1024;
     private static final Logger log = LoggerFactory.getLogger(ShareGroupDLQStateManager.class);
 
     private final Set<Node> inFlight = new HashSet<>();
@@ -307,13 +294,6 @@ public class ShareGroupDLQStateManager {
         // so coalesceProduceRequests()'s partition-budget check reuses the exact same value.
         private volatile int lastMaxMessageBytes;
 
-        public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
-        public static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
-        public static final String HEADER_DLQ_ERRORS_OFFSET = "__dlq.errors.offset";
-        public static final String HEADER_DLQ_ERRORS_GROUP = "__dlq.errors.group";
-        public static final String HEADER_DLQ_ERRORS_DELIVERY_COUNT = "__dlq.errors.delivery.count";
-        public static final String HEADER_DLQ_ERRORS_MESSAGE = "__dlq.errors.message";
-
         public ProduceRequestHandler(
             ShareGroupDLQRecordParameter param,
             CompletableFuture<Void> result,
@@ -419,7 +399,8 @@ public class ShareGroupDLQStateManager {
                 throw new ConfigException(String.format("DLQ topic partition leaders for share group %s with DLQ topic %s could not be found.", param.groupId(), dlqTopic.get()));
             }
 
-            this.dlqDestinationPartition = param.topicIdPartition().partition() % tpData.numPartitions().get();
+            this.dlqDestinationPartition = ShareGroupDLQRecordHelper.dlqDestinationPartition(
+                    param.topicIdPartition().partition(), tpData.numPartitions().get());
             this.dlqPartitionLeaderNode = tpData.partitionLeaderNodes().get(dlqDestinationPartition);
 
             if (this.dlqPartitionLeaderNode == null || this.dlqPartitionLeaderNode.equals(Node.noNode())) {
@@ -430,68 +411,16 @@ public class ShareGroupDLQStateManager {
         }
 
         public ProduceRequestData.TopicProduceData topicProduceData() {
-            // Records have already been resolved (including any remote storage reads) before this
-            // handler was added to the node map, so no blocking fetch happens on the sender thread here.
-            Map<Long, Record> originalRecordData = resolvedRecordData;
             int maxMessageBytes = dlqTopicMaxMessageBytes();
+            String sourceTopic = ShareGroupDLQRecordHelper.resolveSourceTopicName(
+                    param.topicIdPartition(), topicId -> cacheHelper.topicName(topicId));
 
-            // In most cases the offset range is a single offset (see DLQ_MAX_FETCH_BYTES). Track the
-            // running batch size incrementally via DefaultRecord.sizeInBytes() - the same formula
-            // MemoryRecords itself uses - instead of re-serializing the whole batch-so-far on every
-            // offset, which would make this loop quadratic in the number of offsets.
-            List<SimpleRecord> simpleRecords = new ArrayList<>();
-            int batchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
-            Long baseTimestamp = null;
-            // Capped at lastResolvedOffsetThisRound, not just param.lastOffset(): offsets beyond it were
-            // never attempted by this round's fetch and must stay untouched for a fresh round to retry,
-            // rather than being packed in here as headers-only just because they have no map entry yet.
-            // Floored at nextOffsetToSend itself (mirroring the single-record floor below for the
-            // size-exceeds-limit case): a fetch that resolved nothing at all for this round - e.g. a read
-            // that failed outright - would otherwise leave this loop with zero iterations, producing an
-            // empty record batch, which the broker rejects outright. Sending nextOffsetToSend alone,
-            // headers-only, guarantees forward progress even when nothing could be resolved.
-            long roundEnd = Math.max(nextOffsetToSend, Math.min(param.lastOffset(), lastResolvedOffsetThisRound));
-            for (long offset = nextOffsetToSend; offset <= roundEnd; offset++) {
-                // Must be wall-clock (epoch) time: log retention decides whether to delete this
-                // record's segment by comparing its timestamp against the current wall-clock time.
-                long timestamp = time.milliseconds();
-                ByteBuffer key = null;
-                ByteBuffer value = null;
-                Record record = originalRecordData.get(offset);
-                if (record != null) {
-                    key = record.hasKey() ? record.key() : null;
-                    value = record.hasValue() ? record.value() : null;
-                }
-                Header[] recordHeaders = headers(offset);
-                if (baseTimestamp == null) {
-                    baseTimestamp = timestamp;
-                }
-                int recordSize = DefaultRecord.sizeInBytes(simpleRecords.size(), timestamp - baseTimestamp, key, value, recordHeaders);
+            ShareGroupDLQRecordHelper.BuildResult buildResult = ShareGroupDLQRecordHelper.buildDLQRecords(
+                    param, resolvedRecordData, nextOffsetToSend, lastResolvedOffsetThisRound,
+                    maxMessageBytes, time, sourceTopic);
 
-                if (batchSize + recordSize > maxMessageBytes && !simpleRecords.isEmpty()) {
-                    // Adding this record would exceed the limit and the batch already has at least one
-                    // record - stop here and send the rest in a follow-up request.
-                    break;
-                }
-                simpleRecords.add(new SimpleRecord(timestamp, key, value, recordHeaders));
-                batchSize += recordSize;
-                if (batchSize > maxMessageBytes) {
-                    // A single record (with its DLQ headers) already exceeds the limit on its own;
-                    // nothing to be gained by holding it back, so send it and let the broker
-                    // enforce/report the ultimate limit for this one, rather than stalling forever.
-                    break;
-                }
-            }
-            lastOffsetIncludedThisRound = nextOffsetToSend + simpleRecords.size() - 1;
-            // Cached so coalesceProduceRequests()'s partition-budget check can reuse the exact value
-            // used above to build this batch, instead of looking it up (and dynamically re-resolving
-            // it) a second time for the same round.
+            lastOffsetIncludedThisRound = buildResult.lastOffsetIncluded();
             this.lastMaxMessageBytes = maxMessageBytes;
-
-            MemoryRecords records = MemoryRecords.withRecords(
-                Compression.NONE,
-                simpleRecords.toArray(new SimpleRecord[]{})
-            );
 
             return new ProduceRequestData.TopicProduceData()
                 .setName(dlqTopicPartitionData.topicName())
@@ -499,7 +428,7 @@ public class ShareGroupDLQStateManager {
                 .setPartitionData(List.of(
                     new ProduceRequestData.PartitionProduceData()
                         .setIndex(dlqDestinationPartition)  // partition
-                        .setRecords(records)
+                        .setRecords(buildResult.records())
                 ));
         }
 
@@ -521,20 +450,18 @@ public class ShareGroupDLQStateManager {
 
         public Optional<Throwable> validateDlqTopic() {
             Optional<String> topicNameOpt = cacheHelper.shareGroupDlqTopic(param.groupId());
-            Optional<String> topicPrefix = cacheHelper.shareGroupDlqTopicPrefix();
 
             // Verify that DLQ topic for the share group is set and is correctly named.
             if (topicNameOpt.isEmpty()) {
                 return Optional.of(new ConfigException(String.format("Configured DLQ topic name in share group: %s is empty.", param.groupId())));
-            } else if (topicNameOpt.get().startsWith("__")) {
-                return Optional.of(new ConfigException(String.format("Configured DLQ topic name in share group: %s cannot start with __, topic: %s.", param.groupId(), topicNameOpt.get())));
             }
 
             String topicName = topicNameOpt.get();
 
-            // Verify that DLQ is enabled on a correctly named topic, configured on a share group.
-            if (cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqEnabledOnTopic(topicName)) {
-                return Optional.of(new ConfigException(String.format("DLQ is not enabled on configured DLQ topic for share group: %s, topic: %s.", param.groupId(), topicName)));
+            Optional<Throwable> sharedError = ShareGroupDLQValidator.validateDlqTopicConfig(
+                    param.groupId(), topicName, topicName, cacheHelper);
+            if (sharedError.isPresent()) {
+                return sharedError;
             }
 
             // Verify that for a non-existent correctly named DLQ topic, auto create should be enabled.
@@ -542,13 +469,7 @@ public class ShareGroupDLQStateManager {
                 return Optional.of(new ConfigException(String.format("DLQ topic does not exist and auto create is disabled on cluster for share group: %s, topic: %s.", param.groupId(), topicName)));
             }
 
-            // Verify that if configured, the DLQ topic name prefix aligns with the topic name.
-            return topicPrefix.map(prefix -> {
-                if (!prefix.isEmpty() && !topicName.startsWith(prefix)) {
-                    return new ConfigException(String.format("Configured DLQ topic name does not comply with the DLQ topic prefix in share group: %s, topic: %s, prefix: %s.", param.groupId(), topicName, prefix));
-                }
-                return null;
-            });
+            return Optional.empty();
         }
 
         public boolean dlqTopicExists() {
@@ -578,32 +499,6 @@ public class ShareGroupDLQStateManager {
                 ")";
         }
 
-        private Header[] headers(long offset) {
-            List<Header> headers = new ArrayList<>();
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_TOPIC, recordTopic().getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(param.topicIdPartition().partition()).getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_GROUP, param.groupId().getBytes(StandardCharsets.UTF_8)));
-            param.deliveryCount().ifPresent(deliveryCount -> headers.add(
-                new RecordHeader(HEADER_DLQ_ERRORS_DELIVERY_COUNT, Short.toString(deliveryCount).getBytes(StandardCharsets.UTF_8))));
-            param.cause().ifPresent(cause -> {
-                if (cause.getMessage() != null) {
-                    headers.add(new RecordHeader(HEADER_DLQ_ERRORS_MESSAGE, cause.getMessage().getBytes(StandardCharsets.UTF_8)));
-                }
-            });
-
-            return headers.toArray(new Header[0]);
-        }
-
-        private String recordTopic() {
-            TopicIdPartition topicIdPartition = param.topicIdPartition();
-            String recordTopicName = param.topicIdPartition().topic();
-            if (recordTopicName == null || recordTopicName.isEmpty()) {
-                // If topic name lookup fails, use topic id as a String in the header.
-                recordTopicName = cacheHelper.topicName(param.topicIdPartition().topicId()).orElse(topicIdPartition.topicId().toString());
-            }
-            return recordTopicName;
-        }
 
         // Visibility for testing
         Optional<Errors> checkResponseError(ClientResponse response) {
@@ -866,30 +761,8 @@ public class ShareGroupDLQStateManager {
         }
 
         private CompletableFuture<ShareGroupDLQRecordFetcher.FetchResult> maybeFetchRecordData(long fromOffset) {
-            if (!cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-                return CompletableFuture.completedFuture(
-                    new ShareGroupDLQRecordFetcher.FetchResult(Map.of(), param.lastOffset()));
-            }
-            // Bounds decompression memory against a pathologically compressible source record: there's
-            // no point retaining more decompressed data than the DLQ topic could ever accept anyway, and
-            // (unlike the user's own topic config) this value isn't controlled by whoever produced the
-            // record being copied. Falls back to DLQ_MAX_FETCH_BYTES in the (defensive-only) case the DLQ
-            // topic isn't resolvable here - copy-record being enabled implies one is configured in practice.
-            int maxDecompressedBytes = cacheHelper.shareGroupDlqTopic(param.groupId())
-                .map(cacheHelper::dlqTopicMaxMessageBytes)
-                .orElse(DLQ_MAX_FETCH_BYTES);
-            // param itself is never mutated - headers()/topicProduceData() rely on its original,
-            // unwindowed firstOffset/lastOffset for the handler's whole lifetime. Build a throwaway
-            // windowed copy only to scope this round's fetch (and its decompression budget) to what's
-            // left to send.
-            ShareGroupDLQRecordParameter window;
-            if (fromOffset == param.firstOffset()) {
-                window = param;
-            } else {
-                window = new ShareGroupDLQRecordParameter(param.groupId(), param.topicIdPartition(), fromOffset,
-                    param.lastOffset(), param.deliveryCount(), param.cause());
-            }
-            return new ShareGroupDLQRecordFetcher(logReader, time, window, DLQ_MAX_FETCH_BYTES, maxDecompressedBytes).fetch();
+            return ShareGroupDLQRecordHelper.maybeFetchSourceRecords(
+                    param, fromOffset, cacheHelper, logReader, time, Function.identity());
         }
     }
 
