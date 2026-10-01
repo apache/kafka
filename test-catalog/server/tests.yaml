@@ -652,6 +652,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testDlqCreateTopicRetriesExhaustedFailsWithNetworkException
 - testDlqCreateTopicThenProduceSucceeds
 - testDlqEmptyTopicNameFailsValidation
+- testDlqExistingTopicWithoutDlqConfigAndPrefixMismatchReportsPrefixMismatch
 - testDlqExistingTopicWithoutDlqConfigFailsValidation
 - testDlqHappyPathExistingTopic
 - testDlqMultipleGroupsWithMixedOutcomes
@@ -666,6 +667,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testDlqRecordCopyRoundBudgetResetAcrossMultipleProduceRounds
 - testDlqResolvesSourceTopicNameViaCacheHelperWhenMissing
 - testDlqTopicMissingAndAutoCreateDisabledFailsValidation
+- testDlqTopicMissingAndPrefixMismatchFailsValidation
 - testDlqTopicPrefixEmptyStringSkipsPrefixCheck
 - testDlqTopicPrefixMismatchFailsValidation
 - testDlqTopicStartingWithUnderscoreFailsValidation
