@@ -19,14 +19,11 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
-import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.HashMap;
@@ -57,16 +54,6 @@ public class TargetAssignmentBuilder {
     private final TaskAssignor assignor;
 
     /**
-     * The assignment configs.
-     */
-    private final AssignmentConfigs assignmentConfigs;
-
-    /**
-     * The members in the group.
-     */
-    private Map<String, StreamsGroupMember> members = Map.of();
-
-    /**
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
@@ -77,10 +64,9 @@ public class TargetAssignmentBuilder {
     private ConfiguredTopology topology;
 
     /**
-     * The latest per-task changelog offsets reported by each member, keyed by member ID. Transient (not persisted);
-     * fed to the assignor so it can estimate task lag.
+     * The {@link GroupSpec} describing the members of the group and their existing assignments.
      */
-    private Map<String, MemberTaskOffsets> taskOffsets = Map.of();
+    private GroupSpec groupSpec;
 
     /**
      * Constructs the object.
@@ -90,32 +76,10 @@ public class TargetAssignmentBuilder {
      */
     public TargetAssignmentBuilder(
         int groupEpoch,
-        TaskAssignor assignor,
-        Map<String, String> assignmentConfigs
+        TaskAssignor assignor
     ) {
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
-        this.assignmentConfigs = AssignmentConfigsImpl.fromMap(Objects.requireNonNull(assignmentConfigs));
-    }
-
-    static MemberMetadataAndStateImpl createMemberMetadataAndState(
-        StreamsGroupMember member,
-        MemberTaskOffsets taskOffsets
-    ) {
-        // Active, standby and warm-up tasks all reflect the tasks the member currently has, not the
-        // target assignment.
-        TasksTupleWithEpochs currentAssignment = member.assignedTasks();
-        return new MemberMetadataAndStateImpl(
-            member.instanceId(),
-            member.rackId(),
-            member.processId(),
-            member.clientTags(),
-            currentAssignment.activeTasks(),
-            currentAssignment.standbyTasks(),
-            currentAssignment.warmupTasks(),
-            taskOffsets.taskOffsets(),
-            taskOffsets.taskEndOffsets()
-        );
     }
 
     /**
@@ -126,32 +90,6 @@ public class TargetAssignmentBuilder {
      */
     public TargetAssignmentBuilder withTime(Time time) {
         this.time = time;
-        return this;
-    }
-
-    /**
-     * Adds all the existing members.
-     *
-     * @param members The existing members in the streams group.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withMembers(
-        Map<String, StreamsGroupMember> members
-    ) {
-        this.members = members;
-        return this;
-    }
-
-    /**
-     * Adds the latest per-task changelog offsets reported by each member.
-     *
-     * @param taskOffsets The reported task offsets/end-offsets keyed by member ID.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withTaskOffsets(
-        Map<String, MemberTaskOffsets> taskOffsets
-    ) {
-        this.taskOffsets = taskOffsets;
         return this;
     }
 
@@ -182,19 +120,29 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Sets the {@link GroupSpec} to be passed to the assignor.
+     *
+     * @param groupSpec The {@link GroupSpec}.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withGroupSpec(GroupSpec groupSpec) {
+        this.groupSpec = groupSpec;
+        return this;
+    }
+
+    /**
      * Builds the new target assignment.
      *
      * @return A TargetAssignmentResult which contains the new target assignment and its metadata.
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
-        Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
-
-        // Prepare the member metadata for all members.
-        members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndState(
-            member,
-            taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)
-        )));
+        if (time == null)
+            throw new IllegalArgumentException("Time must be set.");
+        if (topology == null)
+            throw new IllegalArgumentException("Topology must be set.");
+        if (groupSpec == null)
+            throw new IllegalArgumentException("Group spec must be set.");
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment;
@@ -203,19 +151,16 @@ public class TargetAssignmentBuilder {
                 throw new IllegalStateException("Subtopologies must be present if topology is ready.");
             }
             newGroupAssignment = assignor.assign(
-                new GroupSpecImpl(
-                    memberMetadataMap,
-                    assignmentConfigs
-                ),
+                groupSpec,
                 new TopologyMetadata(metadataImage, topology.subtopologies().get())
             );
         } else {
             newGroupAssignment = new GroupAssignment(
-                memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> new MemberAssignment(Map.of(), Map.of()))));
+                groupSpec.memberIds().stream().collect(Collectors.toMap(x -> x, x -> new MemberAssignment(Map.of(), Map.of()))));
         }
 
         Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> newTargetAssignment = new HashMap<>();
-        memberMetadataMap.keySet().forEach(memberId -> {
+        groupSpec.memberIds().forEach(memberId -> {
             newTargetAssignment.put(memberId, newMemberAssignment(newGroupAssignment, memberId));
         });
 

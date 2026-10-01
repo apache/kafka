@@ -4623,19 +4623,20 @@ public class GroupMetadataManager {
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId(), true);
         try {
-            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
-                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
-                    groupEpoch,
-                    assignor,
-                    assignmentConfigs
-                )
-                .withTime(time)
-                .withMembers(updatedMembersAndTargetAssignment.members())
-                .withTopology(configuredTopology)
-                .withMetadataImage(metadataImage)
-                .withTaskOffsets(group.taskOffsets());
-
             long startTimeMs = time.milliseconds();
+            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec =
+                new org.apache.kafka.coordinator.group.streams.GroupSpecBuilder(assignmentConfigs)
+                    .withMembers(updatedMembersAndTargetAssignment.members())
+                    .withTaskOffsets(group.taskOffsets())
+                    .build();
+
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
+                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(groupEpoch, assignor)
+                    .withTime(time)
+                    .withTopology(configuredTopology)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
