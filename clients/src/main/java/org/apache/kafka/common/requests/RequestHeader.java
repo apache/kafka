@@ -136,7 +136,7 @@ public class RequestHeader implements AbstractRequestResponse {
     public ResponseHeader toResponseHeader() {
         return new ResponseHeader(data.correlationId(), apiKey().responseHeaderVersion(apiVersion()));
     }
-    
+
     public static RequestHeader parse(ByteBuffer buffer) {
         short apiKeyId = -1;
         try {
