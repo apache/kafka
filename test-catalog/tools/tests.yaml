@@ -1062,7 +1062,7 @@ org.apache.kafka.tools.streams.StreamsGroupCommandTest:
 - testDescribeStreamsGroups
 - testDescribeStreamsGroupsGetOffsets
 - testDescribeStreamsGroupsWithTopologyAvailable
-- testDescribeStreamsGroupsWithTopologyNotStored
+- testDescribeStreamsGroupsWithUnavailableTopology
 - testExitCodeOnExecutionException
 - testExitCodeOnIllegalArguments
 - testExitCodeOnInterruptedException

@@ -1559,6 +1559,10 @@ org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
 - testWarmupPromotedToActiveFromUnreleasedState
 - testWarmupPromotedToActiveWhenActiveIsReleased
 - testWarmupPromotionHoldsWarmupWhileActiveOwnedByAnotherMember
+org.apache.kafka.coordinator.group.streams.GroupSpecBuilderTest:
+- testCreateMemberMetadataAndState
+- testEmpty
+- testGroupSpec
 org.apache.kafka.coordinator.group.streams.MemberTaskOffsetsTest:
 - shouldConvertHeartbeatRequestTaskOffsets
 - shouldRejectDuplicateTaskEntries
@@ -1740,9 +1744,6 @@ org.apache.kafka.coordinator.group.streams.StreamsTopologyTest:
 org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilderTest:
 - testAssignment
 - testBuildEmptyAssignmentWhenTopologyNotReady
-- testCreateMemberMetadataAndState
-- testCreateMemberMetadataAndStatePopulatesTaskOffsets
-- testCreateMemberMetadataAndStateSourcesWarmupTasksFromCurrentAssignment
 - testEmpty
 org.apache.kafka.coordinator.group.streams.TasksTupleTest:
 - testContainsAny
