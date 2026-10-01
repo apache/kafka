@@ -42,7 +42,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -523,6 +522,12 @@ public class StickyTaskAssignor implements TaskAssignor {
         return null;
     }
 
+    /** Whether {@code task} had an active or standby member before, the only members a sticky pick can go back to. */
+    private static boolean hasPrevMember(final LocalState localState, final TaskId task) {
+        final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
+        return localState.activeTaskToPrevMember.get(task) != null || prevStandbyMembers != null && !prevStandbyMembers.isEmpty();
+    }
+
     /**
      * Assigns the standby tasks. Rack diversity ranks above stickiness: when {@code rack.aware.assignment.tags} is
      * set, steps 1 and 2 place every standby that still makes its task more rack-diverse, using stickiness only to
@@ -547,6 +552,12 @@ public class StickyTaskAssignor implements TaskAssignor {
             final Map<TaskId, List<ProcessState>> currentStandbys = new HashMap<>();
             final ArrayList<TaskId> rackNonSticky = new ArrayList<>();
             for (final TaskId task : standbyTasks) {
+                // Without a previous member there is no sticky pick to make, so the task goes straight to step 2.
+                if (!hasPrevMember(localState, task)) {
+                    currentStandbys.put(task, List.of());
+                    rackNonSticky.add(task);
+                    continue;
+                }
                 final List<ProcessState> placed = pickRackAwareStandbys(localState, picker, task, List.of(), true, rackNonSticky);
                 currentStandbys.put(task, placed);
                 rackAwareStandbys.put(task, placed.size());
@@ -645,10 +656,10 @@ public class StickyTaskAssignor implements TaskAssignor {
                 break;
             }
 
-            // least loaded process of the candidate groups. The first process of every candidate group has a member with
-            // room, so the lookup cannot return null. Adding to that member directly keeps the heap of members by load out
-            // of this pass, so that it is built once, in the least-loaded pass, as without rack awareness.
-            final ProcessState processWithLeastLoad = leastLoaded(candidates);
+            // least loaded process of the candidate groups. It has a member with room, so the lookup cannot return null.
+            // Adding to that member directly keeps the heap of members by load out of this pass, so that it is built
+            // once, in the least-loaded pass, as without rack awareness.
+            final ProcessState processWithLeastLoad = leastLoaded(localState, candidates);
             placeRackAwareStandby(localState, picker, processWithLeastLoad, leastLoadedMemberWithRoom(localState, processWithLeastLoad), task, placed);
         }
         return placed;
@@ -662,25 +673,22 @@ public class StickyTaskAssignor implements TaskAssignor {
         final TaskId task,
         final List<ProcessState> placed
     ) {
-        final ProcessGroup group = localState.processIdToGroup.get(process.processId());
-        // Out of the group while its load changes, so that the group stays ordered by load.
-        group.processesByLoad.remove(process);
+        // The queue of the group catches up with the new load once the process reaches its head.
         maybeUpdateTotalTasksPerMember(localState, process.addTask(memberId, task, false, true));
-        group.processesByLoad.add(process);
-        picker.markUsed(group);
+        picker.markUsed(localState.processIdToGroup.get(process.processId()));
         placed.add(process);
     }
 
-    /** The least-loaded first process of the candidate groups, which all order their processes the same way. */
-    private static ProcessState leastLoaded(final Collection<ProcessGroup> candidates) {
-        ProcessState leastLoaded = null;
+    /** The least-loaded process with room of the candidate groups, which all have one. */
+    private static ProcessState leastLoaded(final LocalState localState, final Collection<ProcessGroup> candidates) {
+        QueuedProcess leastLoaded = null;
         for (final ProcessGroup candidate : candidates) {
-            final ProcessState first = candidate.processesByLoad.first();
-            if (leastLoaded == null || candidate.processesByLoad.comparator().compare(first, leastLoaded) < 0) {
-                leastLoaded = first;
+            final QueuedProcess head = candidate.leastLoadedWithRoom(localState);
+            if (leastLoaded == null || QueuedProcess.ORDER.compare(head, leastLoaded) < 0) {
+                leastLoaded = head;
             }
         }
-        return leastLoaded;
+        return leastLoaded.process;
     }
 
     /**
@@ -689,22 +697,17 @@ public class StickyTaskAssignor implements TaskAssignor {
      * {@code processIdToState}, so that a pick breaks load ties as a scan over all processes would.
      */
     private static Collection<ProcessGroup> groupProcessesByTagValues(final LocalState localState) {
-        final Map<ProcessState, Integer> processOrder = new HashMap<>(localState.processIdToState.size());
-        for (final ProcessState process : localState.processIdToState.values()) {
-            processOrder.put(process, processOrder.size());
-        }
-        final Comparator<ProcessState> byLoad = Comparator.comparingDouble(ProcessState::load).thenComparingInt(processOrder::get);
-
         final Map<List<String>, ProcessGroup> groupsByTagValues = new LinkedHashMap<>();
         localState.processIdToGroup = new HashMap<>(localState.processIdToState.size());
+        int order = 0;
         for (final ProcessState process : localState.processIdToState.values()) {
             final Map<String, String> clientTags = localState.processIdToClientTags.get(process.processId());
             final List<String> tagValues = new ArrayList<>(localState.rackAwareAssignmentTags.size());
             for (final String tagKey : localState.rackAwareAssignmentTags) {
                 tagValues.add(clientTags.get(tagKey));
             }
-            final ProcessGroup group = groupsByTagValues.computeIfAbsent(tagValues, values -> new ProcessGroup(clientTags, byLoad));
-            group.processesByLoad.add(process);
+            final ProcessGroup group = groupsByTagValues.computeIfAbsent(tagValues, values -> new ProcessGroup(clientTags));
+            group.processesByLoad.add(new QueuedProcess(process, order++));
             localState.processIdToGroup.put(process.processId(), group);
         }
         return groupsByTagValues.values();
@@ -761,27 +764,59 @@ public class StickyTaskAssignor implements TaskAssignor {
     /** Processes with the same values for the keys of {@code rack.aware.assignment.tags}, see {@link #groupProcessesByTagValues}. */
     private static final class ProcessGroup {
         private final Map<String, String> clientTags;
-        // The processes of the group that may still have room, least loaded first.
-        private final TreeSet<ProcessState> processesByLoad;
+        // The processes of the group that may still have room, by the load each was queued with. Placing a standby
+        // leaves the queue alone: a process whose load has grown since is queued again once it reaches the head.
+        private final PriorityQueue<QueuedProcess> processesByLoad = new PriorityQueue<>(QueuedProcess.ORDER);
 
-        private ProcessGroup(final Map<String, String> clientTags, final Comparator<ProcessState> byLoad) {
+        private ProcessGroup(final Map<String, String> clientTags) {
             this.clientTags = clientTags;
-            this.processesByLoad = new TreeSet<>(byLoad);
         }
 
         private Map<String, String> clientTags() {
             return clientTags;
         }
 
-        /**
-         * Whether a process of the group has room. One without room is dropped for good, since member task counts only
-         * grow and the quota only shrinks.
-         */
         private boolean hasRoom(final LocalState localState) {
-            while (!processesByLoad.isEmpty() && leastLoadedMemberWithRoom(localState, processesByLoad.first()) == null) {
-                processesByLoad.pollFirst();
+            return leastLoadedWithRoom(localState) != null;
+        }
+
+        /**
+         * The least-loaded process of the group with room, or null when none has room. Loads only grow, so the head is
+         * the least loaded once the load it was queued with is current. One without room is dropped for good, since
+         * member task counts only grow and the quota only shrinks.
+         */
+        private QueuedProcess leastLoadedWithRoom(final LocalState localState) {
+            while (!processesByLoad.isEmpty()) {
+                final QueuedProcess head = processesByLoad.peek();
+                if (head.load != head.process.load()) {
+                    processesByLoad.poll();
+                    head.load = head.process.load();
+                    processesByLoad.add(head);
+                } else if (leastLoadedMemberWithRoom(localState, head.process) == null) {
+                    processesByLoad.poll();
+                } else {
+                    return head;
+                }
             }
-            return !processesByLoad.isEmpty();
+            return null;
+        }
+    }
+
+    /** A process in the queue of its group, with its position in {@code processIdToState} and the load it was queued with. */
+    private static final class QueuedProcess {
+        private static final Comparator<QueuedProcess> ORDER = (process1, process2) -> {
+            final int byLoad = Double.compare(process1.load, process2.load);
+            return byLoad != 0 ? byLoad : Integer.compare(process1.order, process2.order);
+        };
+
+        private final ProcessState process;
+        private final int order;
+        private double load;
+
+        private QueuedProcess(final ProcessState process, final int order) {
+            this.process = process;
+            this.order = order;
+            this.load = process.load();
         }
     }
 
