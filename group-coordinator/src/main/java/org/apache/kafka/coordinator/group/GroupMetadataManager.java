@@ -88,6 +88,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
@@ -139,6 +140,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.GroupSpecBuilder;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
@@ -4378,17 +4380,22 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
-            TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
-                    .withTime(time)
-                    .withMembers(updatedMembersAndTargetAssignment.members())
-                    .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                    .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withMetadataImage(metadataImage)
-                    .withResolvedRegularExpressions(group.resolvedRegularExpressions());
-
             long startTimeMs = time.milliseconds();
+            GroupSpec groupSpec = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
+                .withMembers(updatedMembersAndTargetAssignment.members())
+                .withSubscriptionType(subscriptionType)
+                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withInvertedTargetAssignment(group.invertedTargetAssignment())
+                .withMetadataImage(metadataImage)
+                .withResolvedRegularExpressions(group.resolvedRegularExpressions())
+                .build();
+
+            TargetAssignmentBuilder assignmentResultBuilder =
+                new TargetAssignmentBuilder(groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                    .withTime(time)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
@@ -4468,17 +4475,22 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
-            TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(groupEpoch, shareGroupAssignor)
-                    .withTime(time)
-                    .withMembers(updatedMembersAndTargetAssignment.members())
-                    .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                    .withTopicAssignablePartitionsMap(initializedTopicPartitions)
-                    .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withMetadataImage(metadataImage);
-
             long startTimeMs = time.milliseconds();
+            GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
+                .withMembers(updatedMembersAndTargetAssignment.members())
+                .withSubscriptionType(subscriptionType)
+                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withTopicAssignablePartitionsMap(initializedTopicPartitions)
+                .withInvertedTargetAssignment(group.invertedTargetAssignment())
+                .withMetadataImage(metadataImage)
+                .build();
+
+            TargetAssignmentBuilder assignmentResultBuilder =
+                new TargetAssignmentBuilder(groupEpoch, shareGroupAssignor)
+                    .withTime(time)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
@@ -4611,19 +4623,20 @@ public class GroupMetadataManager {
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId(), true);
         try {
-            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
-                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
-                    groupEpoch,
-                    assignor,
-                    assignmentConfigs
-                )
-                .withTime(time)
-                .withMembers(updatedMembersAndTargetAssignment.members())
-                .withTopology(configuredTopology)
-                .withMetadataImage(metadataImage)
-                .withTaskOffsets(group.taskOffsets());
-
             long startTimeMs = time.milliseconds();
+            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec =
+                new org.apache.kafka.coordinator.group.streams.GroupSpecBuilder(assignmentConfigs)
+                    .withMembers(updatedMembersAndTargetAssignment.members())
+                    .withTaskOffsets(group.taskOffsets())
+                    .build();
+
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
+                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(groupEpoch, assignor)
+                    .withTime(time)
+                    .withTopology(configuredTopology)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
