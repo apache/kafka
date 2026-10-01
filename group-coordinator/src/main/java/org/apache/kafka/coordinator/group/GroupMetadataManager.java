@@ -7970,14 +7970,7 @@ public class GroupMetadataManager {
         }
 
         try {
-            // The consumer protocol is parsed with V0 which is the based prefix of all versions.
-            // This way the consumer group manager does not depend on any specific existing or
-            // future versions of the consumer protocol. VO must prefix all new versions.
-            ByteBuffer buffer = ByteBuffer.wrap(protocol.metadata());
-            ConsumerProtocol.deserializeVersion(buffer);
-            return Optional.of(new HashSet<>(
-                ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer, (short) 0).topics()
-            ));
+            return Optional.of(ClassicGroup.deserializeSubscribedTopics(protocol.metadata()));
         } catch (SchemaException e) {
             log.warn("Failed to parse Consumer Protocol {}:{} of group {}. Consumer group coordinator is not aware of the subscribed topics.",
                 ConsumerProtocol.PROTOCOL_TYPE, protocolName, group.groupId(), e);
