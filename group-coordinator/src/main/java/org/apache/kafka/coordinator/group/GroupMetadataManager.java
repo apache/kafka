@@ -1513,9 +1513,7 @@ public class GroupMetadataManager {
         // Clean up the state kept outside of the group. The group may still be subscribed to
         // topics or have share state partition metadata here: when the group coordinator loads
         // concurrently with compaction, intermediate tombstone records can be missed, so the
-        // group metadata tombstone is treated as authoritative; the consumer group downgrade path
-        // removes the group without replaying the member tombstones; and a streams group's
-        // topology tombstone is written after its group metadata tombstone.
+        // group metadata tombstone is treated as authoritative.
         if (group instanceof ModernGroup<?> modernGroup) {
             modernGroup.subscribedTopicNames().keySet()
                 .forEach(topicName -> unsubscribeGroupFromTopic(groupId, topicName));

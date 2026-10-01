@@ -25831,27 +25831,6 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupMetadataTombstoneExisting() {
-        StreamsTopology topology = StreamsTopology.fromRecord(new StreamsGroupTopologyValue()
-            .setEpoch(0)
-            .setSubtopologies(List.of(new StreamsGroupTopologyValue.Subtopology()
-                .setSubtopologyId("subtopology-1")
-                .setSourceTopics(List.of("bar")))));
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroup(new StreamsGroupBuilder("foo", 10).withTopology(topology))
-            .build();
-        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
-
-        // Replay the group deletion in the order it is written: the StreamsGroupTopology tombstone
-        // follows the StreamsGroupMetadata tombstone, so the group is already gone when it is replayed.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo"));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("foo"));
-        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
-        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
-    }
-
-    @Test
     public void testReplayStreamsGroupMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
@@ -25862,22 +25841,30 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
                     TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
             );
+        final StreamsTopology topology = StreamsTopology.fromRecord(new StreamsGroupTopologyValue()
+            .setEpoch(0)
+            .setSubtopologies(List.of(new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId("subtopology-1")
+                .setSourceTopics(List.of("bar")))));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroup(
                 new StreamsGroupBuilder("foo", 10)
                     .withTargetAssignmentEpoch(10)
                     .withMember(streamsGroupMemberBuilderWithDefaults("m1").build())
                     .withTargetAssignment("m1", tasks)
+                    .withTopology(topology)
             )
             .build();
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
 
-        // The group still has a member and a target assignment epoch, i.e. the member and
-        // StreamsGroupTargetAssignmentMetadata tombstones have not been seen. This can happen
-        // when the coordinator loads while compaction removed them. The group tombstone is
-        // authoritative and removes the group.
+        // The group still has a member, a target assignment epoch and a topology, i.e. the member,
+        // StreamsGroupTargetAssignmentMetadata and StreamsGroupTopology tombstones have not been
+        // seen. This can happen when the coordinator loads while compaction removed them. The group
+        // tombstone is authoritative and removes the group along with its topic subscriptions.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo"));
 
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
     }
 
     @Test
