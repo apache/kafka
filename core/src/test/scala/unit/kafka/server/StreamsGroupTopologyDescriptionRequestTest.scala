@@ -18,13 +18,13 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, StreamsGroupTopologyDescriptionUpdateRequestData}
+import org.apache.kafka.common.message.{DeleteGroupsRequestData, StreamsGroupHeartbeatRequestData, StreamsGroupTopologyDescriptionUpdateRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.StreamsGroupDescribeResponse
+import org.apache.kafka.common.requests.{DeleteGroupsRequest, DeleteGroupsResponse, StreamsGroupDescribeResponse}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertNull, assertThrows}
 
 import scala.jdk.CollectionConverters._
 
@@ -319,6 +319,258 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
     } finally {
       admin.close()
     }
+  }
+
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(
+      key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+      value = "kafka.server.FailingTopologyDescriptionPlugin")
+  ))
+  def testStreamsGroupTopologyDescriptionUpdatePermanentFailureRatchetsFailedEpoch(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+    val memberId = "test-member"
+    val topicName = "test-topic"
+
+    try {
+      FailingTopologyDescriptionPlugin.reset()
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq,
+        topic = topicName,
+        numPartitions = 3
+      )
+
+      // Join the group and wait until the broker solicits a topology description push.
+      var memberEpoch = 0
+      TestUtils.waitUntilTrue(() => {
+        val response = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = List.empty,
+          standbyTasks = List.empty,
+          warmupTasks = List.empty,
+          topology = createMockTopology(topicName)
+        )
+        memberEpoch = response.memberEpoch()
+        response.errorCode == Errors.NONE.code() && response.topologyDescriptionRequired()
+      }, "Broker did not solicit a topology description push within the timeout period.")
+
+      FailingTopologyDescriptionPlugin.failNextSetTopology(FailingTopologyDescriptionPlugin.SetTopologyFailureMode.PERMANENT)
+
+      val updateResponse = streamsGroupTopologyDescriptionUpdate(
+        groupId = groupId,
+        memberId = memberId,
+        topologyEpoch = topologyEpoch,
+        topologyDescription = createTopologyDescription(topicName)
+      )
+      assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), updateResponse.errorCode())
+      assertEquals("topology rejected by test plugin", updateResponse.errorMessage())
+
+      // A permanent failure ratchets the group's failed topology epoch: the broker must not
+      // re-solicit another push at the same epoch.
+      val heartbeatAfterFailure = streamsGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId,
+        memberEpoch = memberEpoch,
+        rebalanceTimeoutMs = 1000,
+        activeTasks = List.empty,
+        standbyTasks = List.empty,
+        warmupTasks = List.empty
+      )
+      assertFalse(heartbeatAfterFailure.topologyDescriptionRequired(),
+        "Broker must not re-solicit a topology description push once the epoch is marked permanently failed.")
+
+      // Nothing was ever stored for this epoch.
+      val describedGroup = streamsGroupDescribe(
+        groupIds = List(groupId),
+        includeTopologyDescription = true
+      ).head
+      assertNotEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE, describedGroup.topologyDescriptionStatus())
+    } finally {
+      FailingTopologyDescriptionPlugin.reset()
+      admin.close()
+    }
+  }
+
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(
+      key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+      value = "kafka.server.FailingTopologyDescriptionPlugin")
+  ))
+  def testStreamsGroupTopologyDescriptionUpdateTransientFailureArmsBackOff(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+    val memberId = "test-member"
+    val topicName = "test-topic"
+
+    try {
+      FailingTopologyDescriptionPlugin.reset()
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq,
+        topic = topicName,
+        numPartitions = 3
+      )
+
+      // Join the group and wait until the broker solicits a topology description push.
+      var memberEpoch = 0
+      TestUtils.waitUntilTrue(() => {
+        val response = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = List.empty,
+          standbyTasks = List.empty,
+          warmupTasks = List.empty,
+          topology = createMockTopology(topicName)
+        )
+        memberEpoch = response.memberEpoch()
+        response.errorCode == Errors.NONE.code() && response.topologyDescriptionRequired()
+      }, "Broker did not solicit a topology description push within the timeout period.")
+
+      FailingTopologyDescriptionPlugin.failNextSetTopology(FailingTopologyDescriptionPlugin.SetTopologyFailureMode.TRANSIENT)
+
+      val updateResponse = streamsGroupTopologyDescriptionUpdate(
+        groupId = groupId,
+        memberId = memberId,
+        topologyEpoch = topologyEpoch,
+        topologyDescription = createTopologyDescription(topicName)
+      )
+      assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), updateResponse.errorCode())
+      assertEquals("backend offline", updateResponse.errorMessage())
+
+      // A transient failure arms the per-group back-off: a heartbeat immediately afterwards
+      // must not re-solicit another push.
+      val heartbeatAfterFailure = streamsGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId,
+        memberEpoch = memberEpoch,
+        rebalanceTimeoutMs = 1000,
+        activeTasks = List.empty,
+        standbyTasks = List.empty,
+        warmupTasks = List.empty
+      )
+      assertFalse(heartbeatAfterFailure.topologyDescriptionRequired(),
+        "Broker must not re-solicit a topology description push immediately after a transient failure; back-off must be armed.")
+    } finally {
+      FailingTopologyDescriptionPlugin.reset()
+      admin.close()
+    }
+  }
+
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(
+      key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+      value = "kafka.server.FailingTopologyDescriptionPlugin")
+  ))
+  def testDeleteGroupsPluginFailureBlocksTombstoneUntilRecovered(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+    val memberId = "test-member"
+    val topicName = "test-topic"
+
+    try {
+      FailingTopologyDescriptionPlugin.reset()
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq,
+        topic = topicName,
+        numPartitions = 3
+      )
+
+      // Join and push the topology description successfully.
+      TestUtils.waitUntilTrue(() => {
+        val response = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = List.empty,
+          standbyTasks = List.empty,
+          warmupTasks = List.empty,
+          topology = createMockTopology(topicName)
+        )
+        response.errorCode == Errors.NONE.code()
+      }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
+
+      val updateResponse = streamsGroupTopologyDescriptionUpdate(
+        groupId = groupId,
+        memberId = memberId,
+        topologyEpoch = topologyEpoch,
+        topologyDescription = createTopologyDescription(topicName)
+      )
+      assertEquals(Errors.NONE.code(), updateResponse.errorCode(), s"Unexpected error: ${updateResponse.errorMessage()}")
+
+      // The member leaves so the group becomes empty and can be deleted.
+      val leaveResponse = streamsGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId,
+        memberEpoch = -1,
+        rebalanceTimeoutMs = 1000,
+        activeTasks = List.empty,
+        standbyTasks = List.empty,
+        warmupTasks = List.empty
+      )
+      assertEquals(Errors.NONE.code(), leaveResponse.errorCode())
+
+      FailingTopologyDescriptionPlugin.failDeleteTopologyWith(new RuntimeException("plugin offline"))
+
+      val deleteVersion = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
+      val failedDeleteResponse = deleteGroupsRaw(List(groupId), deleteVersion)
+      val failedResult = failedDeleteResponse.data.results.find(groupId)
+      assertNotNull(failedResult)
+      assertEquals(Errors.GROUP_DELETION_FAILED.code(), failedResult.errorCode())
+
+      // The group survives a failed delete: Describe must still find it.
+      val describedAfterFailedDelete = streamsGroupDescribe(
+        groupIds = List(groupId),
+        includeTopologyDescription = true
+      ).head
+      assertEquals(Errors.NONE.code(), describedAfterFailedDelete.errorCode())
+
+      // Restore the plugin: a retried DeleteGroups must succeed and tombstone the group.
+      FailingTopologyDescriptionPlugin.reset()
+      deleteGroups(
+        groupIds = List(groupId),
+        expectedErrors = List(Errors.NONE),
+        version = deleteVersion
+      )
+
+      val describedAfterDelete = streamsGroupDescribe(
+        groupIds = List(groupId),
+        includeTopologyDescription = true
+      ).head
+      assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), describedAfterDelete.errorCode())
+    } finally {
+      FailingTopologyDescriptionPlugin.reset()
+      admin.close()
+    }
+  }
+
+  private def deleteGroupsRaw(groupIds: List[String], version: Short): DeleteGroupsResponse = {
+    val deleteGroupsRequest = new DeleteGroupsRequest.Builder(
+      new DeleteGroupsRequestData().setGroupsNames(groupIds.asJava)
+    ).build(version)
+    connectAndReceive[DeleteGroupsResponse](deleteGroupsRequest)
   }
 
   private def createMockTopology(topicName: String): StreamsGroupHeartbeatRequestData.Topology = {
