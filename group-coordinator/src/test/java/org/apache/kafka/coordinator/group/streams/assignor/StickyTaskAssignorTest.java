@@ -1877,6 +1877,33 @@ public class StickyTaskAssignorTest {
         assertEquals(Set.of(1), getStandbyTasks(result, "test-subtopology", "c1"));
     }
 
+    @Test
+    public void shouldPlaceRackAwareStandbyOnAnotherProcessWithTheSameTagValuesWhenTheLeastLoadedOneHasNoRoom() {
+        // A and B are in zone z1, C and D in z2. Task 3's standby goes back to memberB0, and the standbys of tasks 2
+        // and 1 fill C and D, which drops the quota from two to one. A, with one task, has no room any more but is
+        // as loaded as B, whose memberB1 has no task yet, so task 0's standby goes to memberB1 and not over the quota
+        // to A.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("memberA0", createTaggedMemberMetadata("processA", Map.of("zone", "z1"), Map.of("test-subtopology", Set.of(1)), Map.of())),
+            mkEntry("memberB0", createTaggedMemberMetadata("processB", Map.of("zone", "z1"), Map.of("test-subtopology", Set.of(2, 3)), Map.of())),
+            mkEntry("memberB1", createMemberMetadata("processB", Map.of("zone", "z1"))),
+            mkEntry("memberC0", createMemberMetadata("processC", Map.of("zone", "z2"))),
+            mkEntry("memberD0", createTaggedMemberMetadata("processD", Map.of("zone", "z2"), Map.of("test-subtopology", Set.of(0)), Map.of()))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("zone"))),
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "memberA0"));
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "memberB0"));
+        assertEquals(Set.of(3), getActiveTasks(result, "test-subtopology", "memberC0"));
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "memberD0"));
+        assertEquals(Set.of(3), getStandbyTasks(result, "test-subtopology", "memberB0"));
+        assertEquals(Set.of("memberB1"), standbyHolders(result, "test-subtopology", 0));
+    }
+
     private int activeTaskCount(GroupAssignment result, String memberId, String subtopologyId) {
         return getAllActiveTasks(result, memberId).getOrDefault(subtopologyId, Set.of()).size();
     }

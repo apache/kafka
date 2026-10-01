@@ -35,12 +35,14 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -317,7 +319,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         for (final Iterator<TaskId> it = activeTasks.iterator(); it.hasNext();) {
             final TaskId task = it.next();
             final ArrayList<Member> prevMembers = localState.standbyTaskToPrevMember.get(task);
-            final Member prevMember = findPrevMemberWithLeastLoad(localState, prevMembers, Optional.empty());
+            final Member prevMember = findPrevMemberWithLeastLoad(localState, prevMembers, Optional.empty(), process -> true);
             if (prevMember != null) {
                 final ProcessState processState = localState.processIdToState.get(prevMember.processId);
                 if (hasUnfulfilledActiveTaskQuota(localState, processState, prevMember, stateful)) {
@@ -437,13 +439,17 @@ public class StickyTaskAssignor implements TaskAssignor {
      *        The list of previous members owning the task.
      * @param standbyTaskId
      *        The taskId, to check if the previous member already has the task.
+     * @param allowed
+     *        Whether the process of a previous member may take the task.
      *
-     * @return Previous member with the least load that does not have the task, or null if no such member exists.
+     * @return Previous member with the least load that does not have the task and is on an allowed process, or null
+     *         if no such member exists.
      */
     private static Member findPrevMemberWithLeastLoad(
         final LocalState localState,
         final ArrayList<Member> members,
-        final Optional<TaskId> standbyTaskId
+        final Optional<TaskId> standbyTaskId,
+        final Predicate<ProcessState> allowed
     ) {
         if (members == null || members.isEmpty()) {
             return null;
@@ -454,8 +460,9 @@ public class StickyTaskAssignor implements TaskAssignor {
         double candidateMemberLoad = Double.MAX_VALUE;
         for (final Member member : members) {
             final ProcessState processState = localState.processIdToState.get(member.processId);
-            // A process that already owns a standby task (either as active or standby) cannot take it again
-            if (standbyTaskId.isPresent() && processState.hasTask(standbyTaskId.get())) {
+            // A process that already owns a standby task (either as active or standby) cannot take it again, nor can a
+            // process that is not allowed
+            if (standbyTaskId.isPresent() && processState.hasTask(standbyTaskId.get()) || !allowed.test(processState)) {
                 continue;
             }
 
@@ -491,6 +498,32 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     /**
+     * The previous member to take a standby of {@code task}: the previous active member, else the least-loaded previous
+     * standby member, each only while below the quota and on a process {@code allowed} accepts. Null if neither.
+     */
+    private static Member findPrevMemberForStandby(
+        final LocalState localState,
+        final TaskId task,
+        final Predicate<ProcessState> allowed
+    ) {
+        // prev active task
+        final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
+        if (prevActiveMember != null) {
+            final ProcessState prevActiveMemberProcessState = localState.processIdToState.get(prevActiveMember.processId);
+            if (allowed.test(prevActiveMemberProcessState) && !prevActiveMemberProcessState.hasTask(task) && hasUnfulfilledTaskQuota(localState, prevActiveMemberProcessState, prevActiveMember)) {
+                return prevActiveMember;
+            }
+        }
+
+        // prev standby tasks
+        final Member prevStandbyMember = findPrevMemberWithLeastLoad(localState, localState.standbyTaskToPrevMember.get(task), Optional.of(task), allowed);
+        if (prevStandbyMember != null && hasUnfulfilledTaskQuota(localState, localState.processIdToState.get(prevStandbyMember.processId), prevStandbyMember)) {
+            return prevStandbyMember;
+        }
+        return null;
+    }
+
+    /**
      * Assigns the standby tasks. Rack diversity ranks above stickiness: when {@code rack.aware.assignment.tags} is
      * set, steps 1 and 2 place every standby that still makes its task more rack-diverse, using stickiness only to
      * break ties among the most diverse processes; steps 3 and 4 are the tag-blind assignment of the rest. Each pair
@@ -504,10 +537,10 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         final Map<TaskId, Integer> rackAwareStandbys = new HashMap<>();
         if (!localState.rackAwareAssignmentTags.isEmpty()) {
-            final RackAwareStandbyPicker<ProcessState> picker = new RackAwareStandbyPicker<>(
+            final RackAwareStandbyPicker<ProcessGroup> picker = new RackAwareStandbyPicker<>(
                 localState.rackAwareAssignmentTags,
-                localState.processIdToState.values(),
-                process -> localState.processIdToClientTags.get(process.processId())
+                groupProcessesByTagValues(localState),
+                ProcessGroup::clientTags
             );
 
             // 1. re-assigning standby tasks in a new rack to clients that previously had the same task (as active or standby)
@@ -530,30 +563,11 @@ public class StickyTaskAssignor implements TaskAssignor {
         final ArrayList<StandbyToAssign> toLeastLoaded = new ArrayList<>(standbyTasks.size() * localState.numStandbyReplicas);
         for (final TaskId task : standbyTasks) {
             for (int i = rackAwareStandbys.getOrDefault(task, 0); i < localState.numStandbyReplicas; i++) {
-
-                // prev active task
-                final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
-                if (prevActiveMember != null) {
-                    final ProcessState prevActiveMemberProcessState = localState.processIdToState.get(prevActiveMember.processId);
-                    if (!prevActiveMemberProcessState.hasTask(task) && hasUnfulfilledTaskQuota(localState, prevActiveMemberProcessState, prevActiveMember)) {
-                        int newTaskCount = prevActiveMemberProcessState.addTask(prevActiveMember.memberId, task, false, true);
-                        maybeUpdateTotalTasksPerMember(localState, newTaskCount);
-                        continue;
-                    }
-                }
-
-                // prev standby tasks
-                final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
-                if (prevStandbyMembers != null && !prevStandbyMembers.isEmpty()) {
-                    final Member prevStandbyMember = findPrevMemberWithLeastLoad(localState, prevStandbyMembers, Optional.of(task));
-                    if (prevStandbyMember != null) {
-                        final ProcessState prevStandbyMemberProcessState = localState.processIdToState.get(prevStandbyMember.processId);
-                        if (hasUnfulfilledTaskQuota(localState, prevStandbyMemberProcessState, prevStandbyMember)) {
-                            int newTaskCount = prevStandbyMemberProcessState.addTask(prevStandbyMember.memberId, task, false, true);
-                            maybeUpdateTotalTasksPerMember(localState, newTaskCount);
-                            continue;
-                        }
-                    }
+                final Member prevMember = findPrevMemberForStandby(localState, task, process -> true);
+                if (prevMember != null) {
+                    int newTaskCount = localState.processIdToState.get(prevMember.processId).addTask(prevMember.memberId, task, false, true);
+                    maybeUpdateTotalTasksPerMember(localState, newTaskCount);
+                    continue;
                 }
 
                 toLeastLoaded.add(new StandbyToAssign(task, localState.numStandbyReplicas - i));
@@ -592,55 +606,38 @@ public class StickyTaskAssignor implements TaskAssignor {
      */
     private static List<ProcessState> pickRackAwareStandbys(
         final LocalState localState,
-        final RackAwareStandbyPicker<ProcessState> picker,
+        final RackAwareStandbyPicker<ProcessGroup> picker,
         final TaskId task,
         final List<ProcessState> alreadyPlaced,
         final boolean stickyOnly,
         final List<TaskId> rackNonSticky
     ) {
         picker.startTask();
-        picker.markUsed(localState.statefulActiveTaskToProcess.get(task));
+        picker.markUsed(localState.processIdToGroup.get(localState.statefulActiveTaskToProcess.get(task).processId()));
         for (final ProcessState process : alreadyPlaced) {
-            picker.markUsed(process);
+            picker.markUsed(localState.processIdToGroup.get(process.processId()));
         }
 
-        final Predicate<ProcessState> eligible =
-            process -> !process.hasTask(task) && leastLoadedMemberWithRoom(localState, process) != null;
+        // The picker only tests groups whose value for the priority key no holder carries, so no process of such a group
+        // holds the task and only room is checked.
+        final Predicate<ProcessGroup> eligible = group -> group.hasRoom(localState);
 
         final List<ProcessState> placed = new ArrayList<>();
         while (alreadyPlaced.size() + placed.size() < localState.numStandbyReplicas) {
-            final Set<ProcessState> candidates = picker.pickCandidates(eligible);
+            final Set<ProcessGroup> candidates = picker.pickCandidates(eligible);
             if (candidates.isEmpty()) {
                 break;
             }
 
-            // prev active task, if it is a candidate
-            final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
-            if (prevActiveMember != null) {
-                final ProcessState prevActiveMemberProcessState = localState.processIdToState.get(prevActiveMember.processId);
-                if (candidates.contains(prevActiveMemberProcessState) && hasUnfulfilledTaskQuota(localState, prevActiveMemberProcessState, prevActiveMember)) {
-                    placeRackAwareStandby(localState, picker, prevActiveMemberProcessState, prevActiveMember.memberId, task, placed);
-                    continue;
-                }
-            }
-
-            // prev standby tasks on a candidate
-            final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
-            if (prevStandbyMembers != null && !prevStandbyMembers.isEmpty()) {
-                final ArrayList<Member> prevStandbyMembersOnCandidates = new ArrayList<>(prevStandbyMembers.size());
-                for (final Member prevStandbyMember : prevStandbyMembers) {
-                    if (candidates.contains(localState.processIdToState.get(prevStandbyMember.processId))) {
-                        prevStandbyMembersOnCandidates.add(prevStandbyMember);
-                    }
-                }
-                final Member prevStandbyMember = findPrevMemberWithLeastLoad(localState, prevStandbyMembersOnCandidates, Optional.of(task));
-                if (prevStandbyMember != null) {
-                    final ProcessState prevStandbyMemberProcessState = localState.processIdToState.get(prevStandbyMember.processId);
-                    if (hasUnfulfilledTaskQuota(localState, prevStandbyMemberProcessState, prevStandbyMember)) {
-                        placeRackAwareStandby(localState, picker, prevStandbyMemberProcessState, prevStandbyMember.memberId, task, placed);
-                        continue;
-                    }
-                }
+            // prev active or standby member on a process with room in a candidate group
+            final Member prevMember = findPrevMemberForStandby(
+                localState,
+                task,
+                process -> candidates.contains(localState.processIdToGroup.get(process.processId())) && leastLoadedMemberWithRoom(localState, process) != null
+            );
+            if (prevMember != null) {
+                placeRackAwareStandby(localState, picker, localState.processIdToState.get(prevMember.processId), prevMember.memberId, task, placed);
+                continue;
             }
 
             if (stickyOnly) {
@@ -648,9 +645,9 @@ public class StickyTaskAssignor implements TaskAssignor {
                 break;
             }
 
-            // least loaded candidate. Every candidate has a member with room, so the lookup cannot return null. Adding
-            // to that member directly keeps the heap of members by load out of this pass, so that it is built once, in
-            // the least-loaded pass, as without rack awareness.
+            // least loaded process of the candidate groups. The first process of every candidate group has a member with
+            // room, so the lookup cannot return null. Adding to that member directly keeps the heap of members by load out
+            // of this pass, so that it is built once, in the least-loaded pass, as without rack awareness.
             final ProcessState processWithLeastLoad = leastLoaded(candidates);
             placeRackAwareStandby(localState, picker, processWithLeastLoad, leastLoadedMemberWithRoom(localState, processWithLeastLoad), task, placed);
         }
@@ -659,25 +656,58 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     private static void placeRackAwareStandby(
         final LocalState localState,
-        final RackAwareStandbyPicker<ProcessState> picker,
+        final RackAwareStandbyPicker<ProcessGroup> picker,
         final ProcessState process,
         final String memberId,
         final TaskId task,
         final List<ProcessState> placed
     ) {
+        final ProcessGroup group = localState.processIdToGroup.get(process.processId());
+        // Out of the group while its load changes, so that the group stays ordered by load.
+        group.processesByLoad.remove(process);
         maybeUpdateTotalTasksPerMember(localState, process.addTask(memberId, task, false, true));
-        picker.markUsed(process);
+        group.processesByLoad.add(process);
+        picker.markUsed(group);
         placed.add(process);
     }
 
-    private static ProcessState leastLoaded(final Collection<ProcessState> candidates) {
+    /** The least-loaded first process of the candidate groups, which all order their processes the same way. */
+    private static ProcessState leastLoaded(final Collection<ProcessGroup> candidates) {
         ProcessState leastLoaded = null;
-        for (final ProcessState candidate : candidates) {
-            if (leastLoaded == null || candidate.load() < leastLoaded.load()) {
-                leastLoaded = candidate;
+        for (final ProcessGroup candidate : candidates) {
+            final ProcessState first = candidate.processesByLoad.first();
+            if (leastLoaded == null || candidate.processesByLoad.comparator().compare(first, leastLoaded) < 0) {
+                leastLoaded = first;
             }
         }
         return leastLoaded;
+    }
+
+    /**
+     * Puts the processes with the same values for the keys of {@code rack.aware.assignment.tags} into one group, since the
+     * rack-aware picks cannot tell them apart. Groups order their processes by load, then in the order of
+     * {@code processIdToState}, so that a pick breaks load ties as a scan over all processes would.
+     */
+    private static Collection<ProcessGroup> groupProcessesByTagValues(final LocalState localState) {
+        final Map<ProcessState, Integer> processOrder = new HashMap<>(localState.processIdToState.size());
+        for (final ProcessState process : localState.processIdToState.values()) {
+            processOrder.put(process, processOrder.size());
+        }
+        final Comparator<ProcessState> byLoad = Comparator.comparingDouble(ProcessState::load).thenComparingInt(processOrder::get);
+
+        final Map<List<String>, ProcessGroup> groupsByTagValues = new LinkedHashMap<>();
+        localState.processIdToGroup = new HashMap<>(localState.processIdToState.size());
+        for (final ProcessState process : localState.processIdToState.values()) {
+            final Map<String, String> clientTags = localState.processIdToClientTags.get(process.processId());
+            final List<String> tagValues = new ArrayList<>(localState.rackAwareAssignmentTags.size());
+            for (final String tagKey : localState.rackAwareAssignmentTags) {
+                tagValues.add(clientTags.get(tagKey));
+            }
+            final ProcessGroup group = groupsByTagValues.computeIfAbsent(tagValues, values -> new ProcessGroup(clientTags, byLoad));
+            group.processesByLoad.add(process);
+            localState.processIdToGroup.put(process.processId(), group);
+        }
+        return groupsByTagValues.values();
     }
 
     /**
@@ -685,15 +715,8 @@ public class StickyTaskAssignor implements TaskAssignor {
      * standby tasks, or null when no member is: then the process has no room for another standby.
      */
     private static String leastLoadedMemberWithRoom(final LocalState localState, final ProcessState process) {
-        String leastLoadedMember = null;
-        int leastTaskCount = localState.totalTasksPerMember;
-        for (final Map.Entry<String, Integer> memberTaskCount : process.memberToTaskCounts().entrySet()) {
-            if (memberTaskCount.getValue() < leastTaskCount) {
-                leastLoadedMember = memberTaskCount.getKey();
-                leastTaskCount = memberTaskCount.getValue();
-            }
-        }
-        return leastLoadedMember;
+        final String leastLoadedMember = process.leastLoadedMember();
+        return process.memberToTaskCounts().get(leastLoadedMember) < localState.totalTasksPerMember ? leastLoadedMember : null;
     }
 
     private static String errorMessage(final int numStandbyReplicas, final int i, final TaskId task) {
@@ -735,6 +758,33 @@ public class StickyTaskAssignor implements TaskAssignor {
     private record StandbyCandidate(Member member, boolean isPrevStandby, long offsetSum) {
     }
 
+    /** Processes with the same values for the keys of {@code rack.aware.assignment.tags}, see {@link #groupProcessesByTagValues}. */
+    private static final class ProcessGroup {
+        private final Map<String, String> clientTags;
+        // The processes of the group that may still have room, least loaded first.
+        private final TreeSet<ProcessState> processesByLoad;
+
+        private ProcessGroup(final Map<String, String> clientTags, final Comparator<ProcessState> byLoad) {
+            this.clientTags = clientTags;
+            this.processesByLoad = new TreeSet<>(byLoad);
+        }
+
+        private Map<String, String> clientTags() {
+            return clientTags;
+        }
+
+        /**
+         * Whether a process of the group has room. One without room is dropped for good, since member task counts only
+         * grow and the quota only shrinks.
+         */
+        private boolean hasRoom(final LocalState localState) {
+            while (!processesByLoad.isEmpty() && leastLoadedMemberWithRoom(localState, processesByLoad.first()) == null) {
+                processesByLoad.pollFirst();
+            }
+            return !processesByLoad.isEmpty();
+        }
+    }
+
     private static class LocalState {
         // helper data structures:
         Map<TaskId, Member> activeTaskToPrevMember;
@@ -743,6 +793,8 @@ public class StickyTaskAssignor implements TaskAssignor {
         Map<TaskId, ProcessState> statefulActiveTaskToProcess;
         Map<String, ProcessState> processIdToState;
         Map<String, Map<String, String>> processIdToClientTags;
+        // Only with rack.aware.assignment.tags: the group of each process for the rack-aware picks.
+        Map<String, ProcessGroup> processIdToGroup;
         LinkedList<TaskId> statefulActiveTaskIds;
         LinkedList<TaskId> statelessActiveTaskIds;
 

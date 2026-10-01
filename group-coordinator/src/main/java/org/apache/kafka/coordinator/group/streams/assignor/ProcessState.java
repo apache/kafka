@@ -44,6 +44,8 @@ public class ProcessState {
     private final Map<String, Set<TaskId>> assignedStandbyTasks;
     private final Set<TaskId> assignedTasks;
     private PriorityQueue<Map.Entry<String, Integer>> membersByLoad;
+    // The member with the fewest tasks, or null when not computed since the last added task.
+    private String leastLoadedMember;
 
     ProcessState(final String processId) {
         this.processId = processId;
@@ -54,6 +56,7 @@ public class ProcessState {
         this.assignedStandbyTasks = new HashMap<>();
         this.memberToTaskCounts = new HashMap<>();
         this.membersByLoad = null;
+        this.leastLoadedMember = null;
     }
 
     public String processId() {
@@ -135,8 +138,25 @@ public class ProcessState {
         }
         int newTaskCount = memberToTaskCounts.get(memberId) + 1;
         memberToTaskCounts.put(memberId, newTaskCount);
+        leastLoadedMember = null;
         computeLoad();
         return newTaskCount;
+    }
+
+    /**
+     * The member with the fewest tasks, the first one in iteration order on a tie.
+     */
+    String leastLoadedMember() {
+        if (leastLoadedMember == null) {
+            int leastTaskCount = Integer.MAX_VALUE;
+            for (final Map.Entry<String, Integer> memberTaskCount : memberToTaskCounts.entrySet()) {
+                if (memberTaskCount.getValue() < leastTaskCount) {
+                    leastLoadedMember = memberTaskCount.getKey();
+                    leastTaskCount = memberTaskCount.getValue();
+                }
+            }
+        }
+        return leastLoadedMember;
     }
 
     /**
