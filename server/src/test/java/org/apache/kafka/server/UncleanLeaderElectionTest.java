@@ -143,8 +143,7 @@ public class UncleanLeaderElectionTest {
         disableEligibleLeaderReplicas();
 
         // create topic with 1 partition, 2 replicas, one on each broker
-        NewTopic newTopic = new NewTopic(TOPIC, Map.of(PARTITION_ID, List.of(BROKER_ID_0, BROKER_ID_1)));
-        admin.createTopics(List.of(newTopic)).all().get();
+        cluster.createTopicWithAssignment(TOPIC, Map.of(PARTITION_ID, List.of(BROKER_ID_0, BROKER_ID_1)));
 
         verifyUncleanLeaderElectionEnabled(groupProtocol);
     }
@@ -164,8 +163,7 @@ public class UncleanLeaderElectionTest {
         disableEligibleLeaderReplicas();
 
         // create topic with 1 partition, 2 replicas, one on each broker
-        NewTopic newTopic = new NewTopic(TOPIC, Map.of(PARTITION_ID, List.of(BROKER_ID_0, BROKER_ID_1)));
-        admin.createTopics(List.of(newTopic)).all().get();
+        cluster.createTopicWithAssignment(TOPIC, Map.of(PARTITION_ID, List.of(BROKER_ID_0, BROKER_ID_1)));
 
         verifyUncleanLeaderElectionDisabled(groupProtocol);
     }
@@ -377,8 +375,7 @@ public class UncleanLeaderElectionTest {
         disableEligibleLeaderReplicas();
 
         // create topic with 1 partition, 2 replicas, one on each broker
-        NewTopic newTopic = new NewTopic(TOPIC, Map.of(PARTITION_ID, List.of(BROKER_ID_0, BROKER_ID_1)));
-        admin.createTopics(List.of(newTopic)).all().get();
+        cluster.createTopicWithAssignment(TOPIC, Map.of(PARTITION_ID, List.of(BROKER_ID_0, BROKER_ID_1)));
 
         // wait until leader is elected
         int leaderId = awaitLeaderChange(cluster, TOPIC_PARTITION, Optional.empty());
