@@ -19,8 +19,8 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.RebootstrapRequiredException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
@@ -30,21 +30,22 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
-import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.OffsetDeleteRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
@@ -61,6 +62,12 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -74,6 +81,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -84,12 +95,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -199,60 +217,6 @@ public class NetworkClientTest {
             ClientDnsLookup.USE_ALL_DNS_IPS,
             CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
             CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
-    }
-
-    @Test
-    public void testClientInstanceIdIsSentInTheV3RequestHeader() {
-        Uuid clientInstanceId = Uuid.randomUuid();
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", clientInstanceId, Integer.MAX_VALUE,
-                reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), null,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false);
-        // OffsetDelete v1 uses the v3 request header, while v0 does not.
-        ClientRequest request = client.newClientRequest(node.idString(),
-                new OffsetDeleteRequest.Builder(new OffsetDeleteRequestData()), time.milliseconds(), true);
-        assertEquals(clientInstanceId, request.makeHeader((short) 1).clientInstanceId());
-        assertEquals(Uuid.ZERO_UUID, request.makeHeader((short) 0).clientInstanceId());
-    }
-
-    @Test
-    public void testClientInstanceIdIsRequired() {
-        // Pass a null client instance ID, which the constructor should reject
-        assertThrows(NullPointerException.class, () -> new NetworkClient(metadataUpdater, null, selector, "mock", null,
-                Integer.MAX_VALUE, reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), null,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
-    }
-
-    @Test
-    public void testShortConstructorsGenerateClientInstanceId() {
-        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        assertGeneratedClientInstanceId(new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
-        assertGeneratedClientInstanceId(new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
-        assertGeneratedClientInstanceId(new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), null, new LogContext(),
-                MetadataRecoveryStrategy.NONE, false));
-        assertGeneratedClientInstanceId(new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
-    }
-
-    private static void assertGeneratedClientInstanceId(NetworkClient client) {
-        // OffsetDelete v1 uses the v3 request header.
-        Uuid clientInstanceId = client.newClientRequest("0", new OffsetDeleteRequest.Builder(new OffsetDeleteRequestData()), 0, true)
-                .makeHeader((short) 1).clientInstanceId();
-        // KIP-1313 does not permit a reserved UUID; Uuid.randomUuid never returns one.
-        assertFalse(Uuid.RESERVED.contains(clientInstanceId));
     }
 
     @Test
@@ -704,6 +668,67 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testUnsupportedApiVersionsVersionZeroDisconnects() {
+        client.ready(node, time.milliseconds());
+        client.poll(0, time.milliseconds());
+        ApiVersionsResponse unsupported = new ApiVersionsResponse(new ApiVersionsResponseData()
+            .setErrorCode(Errors.UNSUPPORTED_VERSION.code()));
+        delayedApiVersionsResponse(0, (short) 0, unsupported);
+        client.poll(0, time.milliseconds());
+        assertEquals(1, client.inFlightRequestCount(node.idString()));
+        selector.clear();
+
+        delayedApiVersionsResponse(1, (short) 0, unsupported);
+        client.poll(0, time.milliseconds());
+        assertFalse(client.hasInFlightRequests(node.idString()));
+        assertTrue(client.connectionFailed(node));
+    }
+
+    @Test
+    public void testApiVersionsRebootstrapRequiredWithRecoveryDisabledDisconnects() {
+        client.ready(node, time.milliseconds());
+        client.poll(0, time.milliseconds());
+        delayedApiVersionsResponse(0, ApiKeys.API_VERSIONS.latestVersion(),
+            new ApiVersionsResponse(new ApiVersionsResponseData().setErrorCode(Errors.REBOOTSTRAP_REQUIRED.code())));
+        client.poll(0, time.milliseconds());
+        assertTrue(client.connectionFailed(node));
+        assertFalse(client.hasInFlightRequests(node.idString()));
+        assertEquals(0, metadataUpdater.getRebootstrapCount());
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {
+        "true, REBOOTSTRAP, cluster, 1, true",
+        "false, REBOOTSTRAP, cluster, 1, false",
+        "true, NONE, cluster, 1, false",
+        "true, REBOOTSTRAP, null, 1, false",
+        "true, REBOOTSTRAP, cluster, -1, false"
+    }, nullValues = "null")
+    public void testApiVersionsClusterCheckFields(boolean checkCluster, MetadataRecoveryStrategy recoveryStrategy,
+                                                 String clusterId, int nodeId, boolean expectFields) {
+        Node target = new Node(nodeId, "127.0.0.1", 9092);
+        MetadataUpdater updater = mock(MetadataUpdater.class);
+        when(updater.fetchNodes()).thenReturn(List.of(target));
+        when(updater.isBootstrapped()).thenReturn(true);
+        when(updater.clusterId()).thenReturn(clusterId);
+        try (NetworkClient networkClient = new NetworkClient(selector, updater, "mock", 1,
+            0, 0, 1024, 1024, defaultRequestTimeoutMs, connectionSetupTimeoutMsTest,
+            connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
+            recoveryStrategy, BootstrapConfiguration.DISABLED, checkCluster)) {
+            networkClient.ready(target, time.milliseconds());
+            networkClient.poll(0, time.milliseconds());
+            networkClient.poll(0, time.milliseconds());
+            assertEquals(1, selector.completedSendBuffers().size());
+            ByteBuffer buffer = selector.completedSendBuffers().get(0).buffer();
+            buffer.getInt(); // skip size
+            RequestHeader header = RequestHeader.parse(buffer);
+            ApiVersionsRequest request = ApiVersionsRequest.parse(new ByteBufferAccessor(buffer), header.apiVersion());
+            assertEquals(expectFields ? clusterId : null, request.data().clusterId());
+            assertEquals(expectFields ? nodeId : -1, request.data().nodeId());
+        }
+    }
+
+    @Test
     public void testRequestTimeout() {
         testRequestTimeout(defaultRequestTimeoutMs + 5000);
     }
@@ -721,7 +746,7 @@ public class NetworkClientTest {
      * <p/>
      *
      * The {@link MetadataUpdater} has a specific method to handle
-     * {@link NetworkClient.DefaultMetadataUpdater#handleServerDisconnect(long, String, Optional) server disconnects}
+     * {@link DefaultMetadataUpdater#handleServerDisconnect(long, String, Optional) server disconnects}
      * which is where we {@link Metadata#requestUpdate(boolean) request a metadata update}. This test helper method ensures
      * that is invoked by checking {@link Metadata#updateRequested()} after the simulated timeout.
      *
@@ -1271,7 +1296,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
@@ -1332,7 +1357,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
@@ -1385,7 +1410,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
@@ -1494,7 +1519,7 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
-        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
             reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
             defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), mockClientTelemetrySender,
@@ -1613,7 +1638,7 @@ public class NetworkClientTest {
         ManualMetadataUpdater updater = new ManualMetadataUpdater(Collections.singletonList(staleNode));
 
         NetworkClient testClient = new NetworkClient(
-                updater, null, capturingSelector, "test-client", Uuid.randomUuid(),
+                updater, null, capturingSelector, "test-client",
                 Integer.MAX_VALUE,
                 0L, 0L,   // reconnectBackoffMs = 0 for instant reconnect
                 64 * 1024, 64 * 1024,
@@ -1735,86 +1760,173 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testEnsureBootstrappedSuccess() throws InterruptedException {
+    public void testEnsureBootstrappedSuccess() {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        BootstrapConfiguration config = BootstrapConfiguration.enabled(
-                BOOTSTRAP_ADDRESSES,
-                ClientDnsLookup.USE_ALL_DNS_IPS,
-                5000,
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
-        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config, false);
+        List<InetSocketAddress> addresses = List.of(new InetSocketAddress(InetAddress.getLoopbackAddress(), 9092));
+        try (MockedConstruction<BootstrapResolver> resolvers = mockConstruction(BootstrapResolver.class);
+             NetworkClient client = createBootstrapNetworkClient(metadata)) {
+            BootstrapResolver resolver = resolvers.constructed().get(0);
+            when(resolver.isEnabled()).thenReturn(true);
+            when(resolver.poll(anyLong())).thenReturn(Optional.of(BootstrapResolver.Result.resolved(addresses)));
 
-        // Async DNS resolution: first poll starts the resolution
-        client.poll(1000, time.milliseconds());
-
-        // Wait for async DNS resolution to complete and poll again to process result
-        MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
-        TestUtils.waitForCondition(() -> {
-            client.poll(100, time.milliseconds());
-            return metadataUpdater.isBootstrapped();
-        }, "Bootstrap should complete");
-
-        assertTrue(metadataUpdater.isBootstrapped());
+            client.poll(0, time.milliseconds());
+            assertEquals(Cluster.bootstrap(addresses).nodes(), metadata.fetch().nodes());
+            client.poll(0, time.milliseconds());
+            verify(resolver).poll(anyLong());
+        }
     }
 
     @Test
-    public void testEnsureBootstrappedPollTimeoutReturnsWithoutError() {
+    public void testPendingBootstrapAllowsEmptyNodeList() {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        // Use invalid addresses that cannot be resolved (using RFC 6761 reserved .invalid TLD)
-        List<String> invalidAddresses = List.of("unresolvable.invalid:9092");
-        BootstrapConfiguration config = BootstrapConfiguration.enabled(
-                invalidAddresses,
-                ClientDnsLookup.USE_ALL_DNS_IPS,
-                5000, // Long bootstrap timeout
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
-        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config, false);
+        try (MockedConstruction<BootstrapResolver> resolvers = mockConstruction(BootstrapResolver.class);
+             NetworkClient client = createBootstrapNetworkClient(metadata)) {
+            BootstrapResolver resolver = resolvers.constructed().get(0);
+            when(resolver.isEnabled()).thenReturn(true);
+            when(resolver.poll(anyLong())).thenReturn(Optional.empty());
 
-        // Directly call ensureBootstrapped
-        // Should return without error even though bootstrap hasn't succeeded (will retry on next poll)
-        // DNS resolution will fail but timeout hasn't been reached yet
-        client.ensureBootstrapped(time.milliseconds());
-
-        // Verify that no exception was thrown and metadata is still empty
-        assertEquals(0, metadata.fetch().nodes().size(), "Metadata should have no nodes after failed DNS resolution");
+            client.poll(0, time.milliseconds());
+            assertTrue(metadata.fetch().nodes().isEmpty());
+            LeastLoadedNode leastLoadedNode = client.leastLoadedNode(time.milliseconds());
+            assertNull(leastLoadedNode.node());
+            assertFalse(leastLoadedNode.hasNodeAvailableOrConnectionReady());
+        }
     }
 
     @Test
-    public void testEnsureBootstrappedRetryUntilSuccess() throws InterruptedException {
+    public void testBootstrapFailureIsRecordedInMetadata() {
+        Metadata metadata = spy(new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners()));
+        BootstrapResolutionException exception = new BootstrapResolutionException("DNS resolution timed out");
+        try (MockedConstruction<BootstrapResolver> resolvers = mockConstruction(BootstrapResolver.class);
+             NetworkClient client = createBootstrapNetworkClient(metadata)) {
+            BootstrapResolver resolver = resolvers.constructed().get(0);
+            when(resolver.isEnabled()).thenReturn(true);
+            when(resolver.poll(anyLong()))
+                .thenReturn(Optional.of(BootstrapResolver.Result.failed(exception)))
+                .thenReturn(Optional.empty());
+
+            client.poll(0, time.milliseconds());
+            assertSame(exception, assertThrows(BootstrapResolutionException.class, metadata::maybeThrowBootstrapFatalException));
+            client.poll(0, time.milliseconds());
+            assertSame(exception, assertThrows(BootstrapResolutionException.class, metadata::maybeThrowBootstrapFatalException));
+            verify(metadata).bootstrapFatalError(exception);
+            assertFalse(client.leastLoadedNode(time.milliseconds()).hasNodeAvailableOrConnectionReady());
+        }
+    }
+
+    @Test
+    public void testAlreadyBootstrappedSkipsResolution() {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        BootstrapConfiguration config = BootstrapConfiguration.enabled(
-                BOOTSTRAP_ADDRESSES,
-                ClientDnsLookup.USE_ALL_DNS_IPS,
-                5000,
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
-        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config, false);
+        metadata.bootstrap(List.of(new InetSocketAddress(InetAddress.getLoopbackAddress(), 9092)));
+        try (MockedConstruction<BootstrapResolver> resolvers = mockConstruction(BootstrapResolver.class);
+             NetworkClient client = createBootstrapNetworkClient(metadata)) {
+            BootstrapResolver resolver = resolvers.constructed().get(0);
+            when(resolver.isEnabled()).thenReturn(true);
+            time.sleep(10_000);
+            Thread.currentThread().interrupt();
+            try {
+                client.ensureBootstrapped(time.milliseconds());
+                assertTrue(Thread.currentThread().isInterrupted());
+            } finally {
+                Thread.interrupted();
+            }
+            verify(resolver, never()).poll(anyLong());
+        }
+    }
 
-        // Async DNS resolution: first poll starts the resolution
-        client.poll(1000, time.milliseconds());
+    @Test
+    public void testEmptyNodeListRejectedWhenBootstrapDisabledOrComplete() {
+        MetadataUpdater updater = mock(MetadataUpdater.class);
+        when(updater.fetchNodes()).thenReturn(List.of());
+        try (MockedConstruction<BootstrapResolver> resolvers = mockConstruction(BootstrapResolver.class);
+             NetworkClient client = new NetworkClient(selector, updater, "mock", 1,
+                 0, 0, 1024, 1024, defaultRequestTimeoutMs, connectionSetupTimeoutMsTest,
+                 connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                 MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false)) {
+            BootstrapResolver resolver = resolvers.constructed().get(0);
+            when(resolver.isEnabled()).thenReturn(false);
+            client.ensureBootstrapped(time.milliseconds());
+            verify(resolver, never()).poll(anyLong());
+            assertThrows(IllegalStateException.class, () -> client.leastLoadedNode(time.milliseconds()));
 
-        // Wait for async DNS resolution to complete and poll again to process result
-        MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
-        TestUtils.waitForCondition(() -> {
-            client.poll(100, time.milliseconds());
-            return metadataUpdater.isBootstrapped();
-        }, "Bootstrap should complete");
+            when(resolver.isEnabled()).thenReturn(true);
+            when(updater.isBootstrapped()).thenReturn(true);
+            assertThrows(IllegalStateException.class, () -> client.leastLoadedNode(time.milliseconds()));
+        }
+    }
 
-        assertTrue(metadataUpdater.isBootstrapped());
+    @Test
+    public void testCloseClosesBootstrapResolverBeforeNetworking() {
+        MetadataUpdater updater = mock(MetadataUpdater.class);
+        Selectable selector = mock(Selectable.class);
+        try (MockedConstruction<BootstrapResolver> resolvers = mockConstruction(BootstrapResolver.class)) {
+            NetworkClient client = new NetworkClient(selector, updater, "mock", 1,
+                0, 0, 1024, 1024, defaultRequestTimeoutMs, connectionSetupTimeoutMsTest,
+                connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE, bootstrapConfiguration, false);
+            BootstrapResolver resolver = resolvers.constructed().get(0);
+            client.close();
+            client.close();
+            InOrder order = inOrder(resolver, selector, updater);
+            order.verify(resolver).close();
+            order.verify(selector).close();
+            order.verify(updater).close();
+            verify(resolver).close();
+        }
+    }
 
-        // Subsequent polls should not fail even if already bootstrapped
-        client.poll(1000, time.milliseconds());
-        assertTrue(metadataUpdater.isBootstrapped());
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testRealBootstrapResolverDeliversOutcomeToMetadata(boolean succeeds) throws Exception {
+        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
+        List<InetSocketAddress> addresses = List.of(new InetSocketAddress(InetAddress.getLoopbackAddress(), 9092));
+        ExecutorService executor = mock(ExecutorService.class);
+        when(executor.awaitTermination(1, TimeUnit.SECONDS)).thenReturn(true);
+        List<Runnable> tasks = new ArrayList<>();
+        doAnswer(invocation -> {
+            tasks.add(invocation.getArgument(0));
+            return null;
+        }).when(executor).execute(any());
+        try (MockedStatic<Executors> executors = mockStatic(Executors.class);
+             MockedStatic<ClientUtils> clientUtils = mockStatic(ClientUtils.class)) {
+            executors.when(() -> Executors.newSingleThreadExecutor(any(ThreadFactory.class))).thenReturn(executor);
+            clientUtils.when(() -> ClientUtils.parseAddresses(BOOTSTRAP_ADDRESSES, ClientDnsLookup.USE_ALL_DNS_IPS))
+                .thenReturn(addresses);
+            clientUtils.when(() -> ClientUtils.resolve(any(), any())).thenReturn(List.of(InetAddress.getLoopbackAddress()));
+            try (NetworkClient networkClient = createBootstrapNetworkClient(metadata)) {
+                assertEquals(1, tasks.size());
+                networkClient.poll(0, time.milliseconds());
+                assertTrue(metadata.fetch().nodes().isEmpty());
+                time.sleep(5000);
+                if (succeeds)
+                    tasks.get(0).run();
+                networkClient.poll(0, time.milliseconds());
+                if (succeeds) {
+                    assertEquals(Cluster.bootstrap(addresses).nodes(), metadata.fetch().nodes());
+                    clientUtils.verify(() -> ClientUtils.parseAddresses(BOOTSTRAP_ADDRESSES, ClientDnsLookup.USE_ALL_DNS_IPS));
+                } else {
+                    BootstrapResolutionException exception = assertThrows(BootstrapResolutionException.class,
+                        metadata::maybeThrowBootstrapFatalException);
+                    tasks.get(0).run();
+                    networkClient.poll(0, time.milliseconds());
+                    assertSame(exception, assertThrows(BootstrapResolutionException.class, metadata::maybeThrowBootstrapFatalException));
+                    assertTrue(metadata.fetch().nodes().isEmpty());
+                    clientUtils.verifyNoInteractions();
+                }
+                assertEquals(1, tasks.size());
+            }
+        }
+        verify(executor).shutdown();
+    }
+
+    private NetworkClient createBootstrapNetworkClient(Metadata metadata) {
+        BootstrapConfiguration configuration = BootstrapConfiguration.enabled(BOOTSTRAP_ADDRESSES,
+            ClientDnsLookup.USE_ALL_DNS_IPS, 5000, CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+            reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+            defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+            time, false, new ApiVersions(), new LogContext(),
+            MetadataRecoveryStrategy.NONE, configuration, false);
     }
 
 }
