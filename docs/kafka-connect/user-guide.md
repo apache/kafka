@@ -57,7 +57,7 @@ The parameters that are configured here are intended for producers and consumers
 
 Client configuration overrides can be configured individually per connector by using the prefixes `producer.override.` and `consumer.override.` for Kafka sources or Kafka sinks respectively. These overrides are included with the rest of the connector's configuration properties.
 
-The remaining parameters are connector configuration files. Each file may either be a Java Properties file or a JSON file containing an object with the same structure as the request body of either the `POST /connectors` endpoint or the `PUT /connectors/{name}/config` endpoint (see the [OpenAPI documentation](/43/generated/connect_rest.yaml)). You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.
+The remaining parameters are connector configuration files. Each file may either be a Java Properties file or a JSON file containing an object with the same structure as the request body of either the `POST /connectors` endpoint or the `PUT /connectors/{name}/config` endpoint (see the [OpenAPI documentation](/{version}/generated/connect_rest.yaml)). You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.
 
 Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:
 
@@ -391,7 +391,7 @@ The following are the currently supported admin REST API endpoints:
 
 See [KIP-495](https://cwiki.apache.org/confluence/x/-4tTBw) for more details about the admin logger REST APIs.
 
-For the complete specification of the Kafka Connect REST API, see the [OpenAPI documentation](/43/generated/connect_rest.yaml)
+For the complete specification of the Kafka Connect REST API, see the [OpenAPI documentation](/{version}/generated/connect_rest.yaml)
 
 ## Error Reporting in Connect
 
