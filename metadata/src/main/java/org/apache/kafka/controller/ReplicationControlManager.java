@@ -1223,6 +1223,36 @@ public class ReplicationControlManager {
     }
 
     /**
+     * Validates that a batch of partition changes will create at most {@value MAX_PARTITIONS_PER_BATCH} additional partitions.
+     *
+     * @param topicsToCreate a batch of new partitions to create.
+     *
+     * @throws PolicyViolationException if total number of partitions exceeds {@value MAX_PARTITIONS_PER_BATCH}.
+     */
+    void validateTotalNumberOfPartitions(List<CreatePartitionsTopic> topicsToCreate) {
+        long totalAdditionalPartitions = 0;
+        for (CreatePartitionsTopic topic : topicsToCreate) {
+            if (topic.count() < 0) {
+                continue;
+            }
+            Uuid topicId = this.topicsByName.get(topic.name());
+            if (topicId == null) {
+                continue;
+            }
+            int additionalPartitions = topic.count() - topics.get(topicId).parts.size();
+            if (additionalPartitions <= 0) {
+                continue;
+            }
+            totalAdditionalPartitions += additionalPartitions;
+            if (totalAdditionalPartitions > MAX_PARTITIONS_PER_BATCH) {
+                throw new PolicyViolationException(
+                    "Excessively large number of additional partitions per request."
+                );
+            }
+        }
+    }
+
+    /**
      * Validate the partition information included in the alter partition request.
      *
      * @param brokerId id of the broker requesting the alter partition
@@ -1811,6 +1841,7 @@ public class ReplicationControlManager {
         ControllerRequestContext context,
         List<CreatePartitionsTopic> topics
     ) {
+        validateTotalNumberOfPartitions(topics);
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         List<CreatePartitionsTopicResult> results = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (CreatePartitionsTopic topic : topics) {
