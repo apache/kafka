@@ -17,27 +17,27 @@
 package kafka.server;
 
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
-import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionTransientFailureException;
+import org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin;
 
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Test-only {@link StreamsGroupTopologyDescriptionPlugin} whose {@code setTopology} and
- * {@code deleteTopology} failures are toggled at runtime, so broker integration tests can
- * exercise permanent/transient plugin-failure surfacing without a real backend. Calls that
- * are not configured to fail are delegated to an in-memory store, like
- * {@link org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin}.
+ * Test-only {@link org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin}
+ * whose {@code setTopology} and {@code deleteTopology} failures are toggled at runtime, so broker
+ * integration tests can exercise permanent/transient plugin-failure surfacing without a real
+ * backend. Calls that are not configured to fail delegate to {@link InMemoryTopologyDescriptionPlugin},
+ * which this class extends.
  *
- * <p>The broker, not the test, creates the plugin instance, so the failure toggles are
- * static. Callers must {@link #reset()} before relying on this plugin, since the JVM-wide
- * state otherwise leaks across test methods sharing this class.
+ * <p>The broker, not the test, creates the plugin instance, so the failure toggles are static.
+ * Callers must {@link #reset()} before relying on this plugin, since the JVM-wide state otherwise
+ * leaks across test methods sharing this class. Like its parent, this plugin's storage is local to
+ * one broker process, so it is only safe for the single-broker {@code ClusterTest} configurations
+ * it is used with today, not for a multi-broker cluster.
  */
-public class FailingTopologyDescriptionPlugin implements StreamsGroupTopologyDescriptionPlugin {
+public class FailingTopologyDescriptionPlugin extends InMemoryTopologyDescriptionPlugin {
 
     public enum SetTopologyFailureMode {
         NONE, PERMANENT, TRANSIENT
@@ -47,10 +47,6 @@ public class FailingTopologyDescriptionPlugin implements StreamsGroupTopologyDes
         new AtomicReference<>(SetTopologyFailureMode.NONE);
     private static final AtomicReference<RuntimeException> DELETE_TOPOLOGY_FAILURE =
         new AtomicReference<>(null);
-
-    private record Entry(int topologyEpoch, StreamsGroupTopologyDescription description) { }
-
-    private final ConcurrentHashMap<String, Entry> store = new ConcurrentHashMap<>();
 
     public static void failNextSetTopology(SetTopologyFailureMode mode) {
         SET_TOPOLOGY_FAILURE_MODE.set(mode);
@@ -66,11 +62,6 @@ public class FailingTopologyDescriptionPlugin implements StreamsGroupTopologyDes
     }
 
     @Override
-    public void configure(Map<String, ?> configs) {
-        // No-op.
-    }
-
-    @Override
     public CompletableFuture<Void> setTopology(String groupId, int topologyEpoch, StreamsGroupTopologyDescription description) {
         switch (SET_TOPOLOGY_FAILURE_MODE.getAndSet(SetTopologyFailureMode.NONE)) {
             case PERMANENT:
@@ -80,8 +71,7 @@ public class FailingTopologyDescriptionPlugin implements StreamsGroupTopologyDes
                 return CompletableFuture.failedFuture(
                     new StreamsTopologyDescriptionTransientFailureException("backend offline"));
             default:
-                store.put(groupId, new Entry(topologyEpoch, description));
-                return CompletableFuture.completedFuture(null);
+                return super.setTopology(groupId, topologyEpoch, description);
         }
     }
 
@@ -91,21 +81,6 @@ public class FailingTopologyDescriptionPlugin implements StreamsGroupTopologyDes
         if (failure != null) {
             return CompletableFuture.failedFuture(failure);
         }
-        store.remove(groupId);
-        return CompletableFuture.completedFuture(null);
-    }
-
-    @Override
-    public CompletableFuture<StreamsGroupTopologyDescription> getTopology(String groupId, int topologyEpoch) {
-        Entry entry = store.get(groupId);
-        if (entry == null || entry.topologyEpoch() != topologyEpoch) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return CompletableFuture.completedFuture(entry.description());
-    }
-
-    @Override
-    public void close() {
-        store.clear();
+        return super.deleteTopology(groupId);
     }
 }

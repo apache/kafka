@@ -24,7 +24,7 @@ import org.apache.kafka.common.requests.{DeleteGroupsRequest, DeleteGroupsRespon
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertNull, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertThrows}
 import org.junit.jupiter.api.Timeout
 
 import scala.jdk.CollectionConverters._
@@ -35,7 +35,6 @@ import scala.jdk.CollectionConverters._
  * See [[StreamsGroupTopologyDescriptionNoPluginRequestTest]] for the plugin-less
  * UNSUPPORTED_VERSION behavior.
  */
-@Timeout(180)
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(
@@ -349,21 +348,7 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
         numPartitions = 3
       )
 
-      // Join the group and wait until the broker solicits a topology description push.
-      var memberEpoch = 0
-      TestUtils.waitUntilTrue(() => {
-        val response = streamsGroupHeartbeat(
-          groupId = groupId,
-          memberId = memberId,
-          rebalanceTimeoutMs = 1000,
-          activeTasks = List.empty,
-          standbyTasks = List.empty,
-          warmupTasks = List.empty,
-          topology = createMockTopology(topicName)
-        )
-        memberEpoch = response.memberEpoch()
-        response.errorCode == Errors.NONE.code() && response.topologyDescriptionRequired()
-      }, "Broker did not solicit a topology description push within the timeout period.")
+      val memberEpoch = joinAndAwaitTopologyDescriptionSolicited(groupId, memberId, topicName)
 
       FailingTopologyDescriptionPlugin.failNextSetTopology(FailingTopologyDescriptionPlugin.SetTopologyFailureMode.PERMANENT)
 
@@ -390,12 +375,13 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       assertFalse(heartbeatAfterFailure.topologyDescriptionRequired(),
         "Broker must not re-solicit a topology description push once the epoch is marked permanently failed.")
 
-      // Nothing was ever stored for this epoch.
+      // Nothing was ever stored for this epoch: the permanent failure leaves the group's
+      // stored-topology-epoch at its UNCERTAIN sentinel, which Describe reports as NOT_STORED.
       val describedGroup = streamsGroupDescribe(
         groupIds = List(groupId),
         includeTopologyDescription = true
       ).head
-      assertNotEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE, describedGroup.topologyDescriptionStatus())
+      assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED, describedGroup.topologyDescriptionStatus())
     } finally {
       FailingTopologyDescriptionPlugin.reset()
       admin.close()
@@ -432,23 +418,12 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       // Join the group and wait until the broker solicits a topology description push. This
       // arms the first back-off window: 30s * 2^0, +/-20% jitter (StreamsGroupTopologyDescriptionBackoff),
       // i.e. 24-36s.
-      var memberEpoch = 0
-      TestUtils.waitUntilTrue(() => {
-        val response = streamsGroupHeartbeat(
-          groupId = groupId,
-          memberId = memberId,
-          rebalanceTimeoutMs = 1000,
-          activeTasks = List.empty,
-          standbyTasks = List.empty,
-          warmupTasks = List.empty,
-          topology = createMockTopology(topicName)
-        )
-        memberEpoch = response.memberEpoch()
-        response.errorCode == Errors.NONE.code() && response.topologyDescriptionRequired()
-      }, "Broker did not solicit a topology description push within the timeout period.")
+      var memberEpoch = joinAndAwaitTopologyDescriptionSolicited(groupId, memberId, topicName)
 
       // Let that window fully expire without heartbeating, so nothing but the upcoming
-      // transient failure can be responsible for the suppression asserted below.
+      // transient failure can be responsible for the suppression asserted below. The back-off
+      // uses the broker's real clock, with no test seam to inject a mock one here, so this
+      // waits out real time rather than simulating it.
       Thread.sleep(40000)
 
       FailingTopologyDescriptionPlugin.failNextSetTopology(FailingTopologyDescriptionPlugin.SetTopologyFailureMode.TRANSIENT)
@@ -491,7 +466,7 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
         )
         memberEpoch = response.memberEpoch()
         response.errorCode == Errors.NONE.code() && response.topologyDescriptionRequired()
-      }, "Broker did not re-solicit a topology description push after the transient back-off lapsed.", waitTimeMs = 90000)
+      }, "Broker did not re-solicit a topology description push after the transient back-off lapsed.", waitTimeMs = 90000, pause = 2000L)
     } finally {
       FailingTopologyDescriptionPlugin.reset()
       admin.close()
@@ -590,6 +565,24 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       FailingTopologyDescriptionPlugin.reset()
       admin.close()
     }
+  }
+
+  private def joinAndAwaitTopologyDescriptionSolicited(groupId: String, memberId: String, topicName: String): Int = {
+    var memberEpoch = 0
+    TestUtils.waitUntilTrue(() => {
+      val response = streamsGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId,
+        rebalanceTimeoutMs = 1000,
+        activeTasks = List.empty,
+        standbyTasks = List.empty,
+        warmupTasks = List.empty,
+        topology = createMockTopology(topicName)
+      )
+      memberEpoch = response.memberEpoch()
+      response.errorCode == Errors.NONE.code() && response.topologyDescriptionRequired()
+    }, "Broker did not solicit a topology description push within the timeout period.")
+    memberEpoch
   }
 
   private def deleteGroupsRaw(groupIds: List[String], version: Short): DeleteGroupsResponse = {
