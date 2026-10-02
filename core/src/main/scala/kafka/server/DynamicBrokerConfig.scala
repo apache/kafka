@@ -790,7 +790,7 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
               // Use new interface (i.e., takes precedence even if class also implements deprecated interface)
               val exporter = exporterProvider.clientTelemetryExporter()
               telemetryExporterPlugin.add(exporter)
-               currentTelemetryExporters += reporter.getClass.getName -> exporter
+              currentTelemetryExporters += reporter.getClass.getName -> exporter
             case telemetry: ClientTelemetry =>
               val receiver = telemetry.clientReceiver()
               telemetryExporterPlugin.add(receiver)

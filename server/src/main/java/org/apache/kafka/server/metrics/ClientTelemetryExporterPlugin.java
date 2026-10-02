@@ -21,9 +21,8 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Plugin to register client telemetry receivers/exporters and export metrics. This class is used by the Kafka
@@ -37,8 +36,8 @@ public class ClientTelemetryExporterPlugin {
     private final List<ClientTelemetryExporter> exporters;
 
     public ClientTelemetryExporterPlugin() {
-        this.receivers = Collections.synchronizedList(new ArrayList<>());
-        this.exporters = Collections.synchronizedList(new ArrayList<>());
+        this.receivers = new CopyOnWriteArrayList<>();
+        this.exporters = new CopyOnWriteArrayList<>();
     }
 
     public boolean isEmpty() {
