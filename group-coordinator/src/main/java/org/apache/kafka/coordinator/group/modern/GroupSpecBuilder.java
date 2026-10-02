@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.assignor.AssignorHelpers;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
@@ -264,14 +265,14 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = this.invertedTargetAssignment;
         Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = this.topicAssignablePartitionsMap;
         if (assignorOffload) {
-            Map<Uuid, Map<Integer, String>> invertedTargetAssignmentCopy = new HashMap<>(invertedTargetAssignment.size());
+            Map<Uuid, Map<Integer, String>> invertedTargetAssignmentCopy = AssignorHelpers.newHashMap(invertedTargetAssignment.size());
             for (Map.Entry<Uuid, Map<Integer, String>> entry : invertedTargetAssignment.entrySet()) {
                 invertedTargetAssignmentCopy.put(entry.getKey(), Map.copyOf(entry.getValue()));
             }
             invertedTargetAssignment = invertedTargetAssignmentCopy;
 
             if (topicAssignablePartitionsMap.isPresent()) {
-                Map<Uuid, Set<Integer>> topicAssignablePartitionsMapCopy = new HashMap<>(topicAssignablePartitionsMap.get().size());
+                Map<Uuid, Set<Integer>> topicAssignablePartitionsMapCopy = AssignorHelpers.newHashMap(topicAssignablePartitionsMap.get().size());
                 for (Map.Entry<Uuid, Set<Integer>> entry : topicAssignablePartitionsMap.get().entrySet()) {
                     topicAssignablePartitionsMapCopy.put(entry.getKey(), Set.copyOf(entry.getValue()));
                 }
