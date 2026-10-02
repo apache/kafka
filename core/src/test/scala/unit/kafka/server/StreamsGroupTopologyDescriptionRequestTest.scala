@@ -25,6 +25,7 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertNull, assertThrows}
+import org.junit.jupiter.api.Timeout
 
 import scala.jdk.CollectionConverters._
 
@@ -34,6 +35,7 @@ import scala.jdk.CollectionConverters._
  * See [[StreamsGroupTopologyDescriptionNoPluginRequestTest]] for the plugin-less
  * UNSUPPORTED_VERSION behavior.
  */
+@Timeout(180)
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(
@@ -400,6 +402,7 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
     }
   }
 
+  @Timeout(180)
   @ClusterTest(serverProperties = Array(
     new ClusterConfigProperty(
       key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
@@ -426,7 +429,9 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
         numPartitions = 3
       )
 
-      // Join the group and wait until the broker solicits a topology description push.
+      // Join the group and wait until the broker solicits a topology description push. This
+      // arms the first back-off window: 30s * 2^0, +/-20% jitter (StreamsGroupTopologyDescriptionBackoff),
+      // i.e. 24-36s.
       var memberEpoch = 0
       TestUtils.waitUntilTrue(() => {
         val response = streamsGroupHeartbeat(
@@ -442,6 +447,10 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
         response.errorCode == Errors.NONE.code() && response.topologyDescriptionRequired()
       }, "Broker did not solicit a topology description push within the timeout period.")
 
+      // Let that window fully expire without heartbeating, so nothing but the upcoming
+      // transient failure can be responsible for the suppression asserted below.
+      Thread.sleep(40000)
+
       FailingTopologyDescriptionPlugin.failNextSetTopology(FailingTopologyDescriptionPlugin.SetTopologyFailureMode.TRANSIENT)
 
       val updateResponse = streamsGroupTopologyDescriptionUpdate(
@@ -453,8 +462,8 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), updateResponse.errorCode())
       assertEquals("backend offline", updateResponse.errorMessage())
 
-      // A transient failure arms the per-group back-off: a heartbeat immediately afterwards
-      // must not re-solicit another push.
+      // The first window already lapsed, so this suppression can only come from the back-off
+      // the transient failure itself just armed (30s * 2^1, +/-20% jitter, i.e. 48-72s).
       val heartbeatAfterFailure = streamsGroupHeartbeat(
         groupId = groupId,
         memberId = memberId,
@@ -466,6 +475,23 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       )
       assertFalse(heartbeatAfterFailure.topologyDescriptionRequired(),
         "Broker must not re-solicit a topology description push immediately after a transient failure; back-off must be armed.")
+
+      // Unlike a permanent failure, this back-off lapses on its own: the broker eventually
+      // re-solicits at the same topology epoch, which is what distinguishes transient handling
+      // from ratcheting the epoch as permanently failed.
+      TestUtils.waitUntilTrue(() => {
+        val response = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = memberEpoch,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = List.empty,
+          standbyTasks = List.empty,
+          warmupTasks = List.empty
+        )
+        memberEpoch = response.memberEpoch()
+        response.errorCode == Errors.NONE.code() && response.topologyDescriptionRequired()
+      }, "Broker did not re-solicit a topology description push after the transient back-off lapsed.", waitTimeMs = 90000)
     } finally {
       FailingTopologyDescriptionPlugin.reset()
       admin.close()

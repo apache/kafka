@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@code deleteTopology} failures are toggled at runtime, so broker integration tests can
  * exercise permanent/transient plugin-failure surfacing without a real backend. Calls that
  * are not configured to fail are delegated to an in-memory store, like
- * {@link InMemoryTopologyDescriptionPlugin}.
+ * {@link org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin}.
  *
  * <p>The broker, not the test, creates the plugin instance, so the failure toggles are
  * static. Callers must {@link #reset()} before relying on this plugin, since the JVM-wide
@@ -72,7 +72,7 @@ public class FailingTopologyDescriptionPlugin implements StreamsGroupTopologyDes
 
     @Override
     public CompletableFuture<Void> setTopology(String groupId, int topologyEpoch, StreamsGroupTopologyDescription description) {
-        switch (SET_TOPOLOGY_FAILURE_MODE.get()) {
+        switch (SET_TOPOLOGY_FAILURE_MODE.getAndSet(SetTopologyFailureMode.NONE)) {
             case PERMANENT:
                 return CompletableFuture.failedFuture(
                     new StreamsTopologyDescriptionPermanentFailureException("topology rejected by test plugin"));
