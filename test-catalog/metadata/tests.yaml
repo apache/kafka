@@ -305,6 +305,7 @@ org.apache.kafka.controller.ReplicationControlManagerTest:
 - testCreatePartitionsFailsWithManualAssignmentWithAllFenced
 - testCreatePartitionsISRInvariants
 - testCreatePartitionsWithMutationQuotaExceeded
+- testCreatePartitionsWithOverSizedBatch
 - testCreateTopicWithCollisionChars
 - testCreateTopics
 - testCreateTopicsISRInvariants
