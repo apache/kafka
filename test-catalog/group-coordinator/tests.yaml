@@ -1245,6 +1245,7 @@ org.apache.kafka.coordinator.group.modern.AssignmentTest:
 - testPartitionsCannotBeNull
 - testPartitionsImmutable
 org.apache.kafka.coordinator.group.modern.GroupSpecBuilderTest:
+- testAssignorOffload
 - testEmpty
 - testGroupSpec
 - testRegularExpressions
@@ -1560,6 +1561,7 @@ org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
 - testWarmupPromotedToActiveWhenActiveIsReleased
 - testWarmupPromotionHoldsWarmupWhileActiveOwnedByAnotherMember
 org.apache.kafka.coordinator.group.streams.GroupSpecBuilderTest:
+- testAssignorOffload
 - testCreateMemberMetadataAndState
 - testEmpty
 - testGroupSpec
