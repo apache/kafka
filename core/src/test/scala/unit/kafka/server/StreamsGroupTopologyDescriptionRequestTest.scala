@@ -392,7 +392,11 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
   @ClusterTest(serverProperties = Array(
     new ClusterConfigProperty(
       key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
-      value = "kafka.server.FailingTopologyDescriptionPlugin")
+      value = "kafka.server.FailingTopologyDescriptionPlugin"),
+    // The test below goes 40s without heartbeating; the default 45s session timeout would
+    // leave only ~5s of margin before the member is reaped for inactivity.
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, value = "120000"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, value = "120000")
   ))
   def testStreamsGroupTopologyDescriptionUpdateTransientFailureArmsBackOff(): Unit = {
     val admin = cluster.admin()
