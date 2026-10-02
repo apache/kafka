@@ -4,6 +4,7 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorExecutorImplTest:
 - testCancelAllTasks
 - testTaskCancelledAfterBeingExecutedButBeforeWriteOperationIsExecuted
 - testTaskCancelledBeforeBeingExecuted
+- testTaskCancelledWhileBeingExecuted
 - testTaskFailedLifecycle
 - testTaskSchedulingWriteOperationFailed
 - testTaskSuccessfulLifecycle
