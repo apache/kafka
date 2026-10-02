@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.assignor.AssignorHelpers;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
@@ -148,6 +149,13 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
     private Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = Optional.empty();
 
     /**
+     * Whether the {@link GroupSpec} produced by {@link GroupSpecBuilder#build()} will be used on a
+     * background thread. When {@code true}, {@link GroupSpecBuilder#build()} takes copies of any
+     * mutable collections, so that subsequent changes are not visible to the assignor.
+     */
+    private boolean assignorOffload;
+
+    /**
      * Adds all the existing members.
      *
      * @param members   The existing members in the consumer group.
@@ -220,6 +228,20 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
     }
 
     /**
+     * Sets whether the {@link GroupSpec} produced by {@link GroupSpecBuilder#build()} will be used
+     * on a background thread. When {@code true}, {@link GroupSpecBuilder#build()} takes copies of
+     * any mutable collections, so that subsequent changes are not visible to the assignor.
+     *
+     * @param assignorOffload Whether the produced {@link GroupSpec} will be consumed on a
+     *                        background thread.
+     * @return This object.
+     */
+    public U withAssignorOffload(boolean assignorOffload) {
+        this.assignorOffload = assignorOffload;
+        return self();
+    }
+
+    /**
      * Builds the {@link GroupSpec} to be passed to the assignor.
      *
      * @return The {@link GroupSpec} describing the members and their existing assignments.
@@ -239,6 +261,24 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
                 topicResolver
             ))
         );
+
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = this.invertedTargetAssignment;
+        Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = this.topicAssignablePartitionsMap;
+        if (assignorOffload) {
+            Map<Uuid, Map<Integer, String>> invertedTargetAssignmentCopy = AssignorHelpers.newHashMap(invertedTargetAssignment.size());
+            for (Map.Entry<Uuid, Map<Integer, String>> entry : invertedTargetAssignment.entrySet()) {
+                invertedTargetAssignmentCopy.put(entry.getKey(), Map.copyOf(entry.getValue()));
+            }
+            invertedTargetAssignment = invertedTargetAssignmentCopy;
+
+            if (topicAssignablePartitionsMap.isPresent()) {
+                Map<Uuid, Set<Integer>> topicAssignablePartitionsMapCopy = AssignorHelpers.newHashMap(topicAssignablePartitionsMap.get().size());
+                for (Map.Entry<Uuid, Set<Integer>> entry : topicAssignablePartitionsMap.get().entrySet()) {
+                    topicAssignablePartitionsMapCopy.put(entry.getKey(), Set.copyOf(entry.getValue()));
+                }
+                topicAssignablePartitionsMap = Optional.of(topicAssignablePartitionsMapCopy);
+            }
+        }
 
         return new GroupSpecImpl(
             Collections.unmodifiableMap(memberSpecs),
