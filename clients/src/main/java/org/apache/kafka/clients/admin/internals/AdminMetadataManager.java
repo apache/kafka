@@ -118,6 +118,11 @@ public class AdminMetadataManager {
 
     public class AdminMetadataUpdater implements MetadataUpdater {
         @Override
+        public String clusterId() {
+            return cluster.clusterResource().clusterId();
+        }
+
+        @Override
         public List<Node> fetchNodes() {
             return cluster.nodes();
         }

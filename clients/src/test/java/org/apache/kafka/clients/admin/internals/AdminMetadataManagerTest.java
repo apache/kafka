@@ -34,6 +34,7 @@ import java.util.HashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -148,6 +149,22 @@ public class AdminMetadataManagerTest {
         assertFalse(mgr.needsRebootstrap(time.milliseconds(), rebootstrapTriggerMs));
         assertFalse(mgr.needsRebootstrap(time.milliseconds() + 1000, rebootstrapTriggerMs));
         assertTrue(mgr.needsRebootstrap(time.milliseconds() + 1001, rebootstrapTriggerMs));
+    }
+
+    @Test
+    public void testUpdaterClusterId() {
+        try (AdminMetadataManager.AdminMetadataUpdater updater = mgr.updater()) {
+            // Cluster ID is unknown before any metadata has been received
+            assertNull(updater.clusterId());
+
+            // Cluster ID is still unknown when only bootstrap servers are set
+            mgr.update(Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999))), time.milliseconds());
+            assertNull(updater.clusterId());
+
+            // Cluster ID is known once a metadata response has been applied
+            mgr.update(mockCluster(), time.milliseconds());
+            assertEquals("mockClusterId", updater.clusterId());
+        }
     }
 
     private static Cluster mockCluster() {
