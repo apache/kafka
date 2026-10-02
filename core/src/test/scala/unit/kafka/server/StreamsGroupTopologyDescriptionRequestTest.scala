@@ -307,7 +307,7 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       deleteGroups(
         groupIds = List(groupId),
         expectedErrors = List(Errors.NONE),
-        version = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
+        version = ApiKeys.DELETE_GROUPS.latestVersion()
       )
 
       // The group is gone.
@@ -534,7 +534,7 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
 
       FailingTopologyDescriptionPlugin.failDeleteTopologyWith(new RuntimeException("plugin offline"))
 
-      val deleteVersion = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
+      val deleteVersion = ApiKeys.DELETE_GROUPS.latestVersion()
       val failedDeleteResponse = deleteGroupsRaw(List(groupId), deleteVersion)
       val failedResult = failedDeleteResponse.data.results.find(groupId)
       assertNotNull(failedResult)
