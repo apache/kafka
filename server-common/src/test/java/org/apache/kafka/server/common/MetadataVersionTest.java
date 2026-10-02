@@ -37,6 +37,7 @@ import static org.apache.kafka.server.common.MetadataVersion.IBP_3_7_IV2;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_4_0_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_4_2_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_4_3_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_5_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.LATEST_PRODUCTION;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -156,6 +157,12 @@ class MetadataVersionTest {
     @EnumSource(value = MetadataVersion.class)
     public void testIsElrSupported(MetadataVersion metadataVersion) {
         assertEquals(metadataVersion.isAtLeast(IBP_4_0_IV1), metadataVersion.isElrSupported());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testIsUncleanRecoverySupported(MetadataVersion metadataVersion) {
+        assertEquals(metadataVersion.isAtLeast(IBP_4_5_IV0), metadataVersion.isUncleanRecoverySupported());
     }
 
     @ParameterizedTest

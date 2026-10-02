@@ -129,6 +129,15 @@ public class ReplicationConfigs {
             "thread to trigger election periodically (default is 5 minutes). Please run <code>kafka-leader-election.sh</code> with <code>unclean</code> option " +
             "to trigger the unclean leader election immediately if needed.</p>";
 
+    public static final String UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG = "unclean.recovery.manager.enabled";
+    public static final String UNCLEAN_RECOVERY_MANAGER_ENABLED_DOC = "Whether the controller elects the replica with the highest last written leader epoch and longest log, " +
+            "as reported in broker heartbeats, when a partition has no leader. When <code>" + UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG + "</code> is false, " +
+            "the election waits until the ISR and ELR are empty and all last known ELR members are unfenced. Takes effect once <code>metadata.version</code> is at least 4.5-IV0; " +
+            "until then, the controller uses the existing unclean leader election.";
+    public static final String UNCLEAN_RECOVERY_TIMEOUT_MS_CONFIG = "unclean.recovery.timeout.ms";
+    public static final String UNCLEAN_RECOVERY_TIMEOUT_MS_DOC = "How long the controller waits for all live replicas of a leaderless partition to report before " +
+            "electing the best replica that did report, or the first replica to report after the timeout if none did.";
+
     public static final String INTER_BROKER_SECURITY_PROTOCOL_CONFIG = "security.inter.broker.protocol";
     public static final String INTER_BROKER_SECURITY_PROTOCOL_DEFAULT = SecurityProtocol.PLAINTEXT.toString();
     public static final String INTER_BROKER_LISTENER_NAME_CONFIG = "inter.broker.listener.name";
@@ -168,6 +177,8 @@ public class ReplicationConfigs {
             .define(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG, LONG, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DEFAULT, atLeast(1), HIGH, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DOC)
             .defineInternal(UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG, LONG, UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DOC)
             .define(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
+            .define(UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG, BOOLEAN, false, MEDIUM, UNCLEAN_RECOVERY_MANAGER_ENABLED_DOC)
+            .define(UNCLEAN_RECOVERY_TIMEOUT_MS_CONFIG, LONG, TimeUnit.MINUTES.toMillis(5), atLeast(0), MEDIUM, UNCLEAN_RECOVERY_TIMEOUT_MS_DOC)
             .define(INTER_BROKER_SECURITY_PROTOCOL_CONFIG, STRING, INTER_BROKER_SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(Utils.enumOptions(SecurityProtocol.class)), MEDIUM, INTER_BROKER_SECURITY_PROTOCOL_DOC)
             .define(INTER_BROKER_LISTENER_NAME_CONFIG, STRING, null, MEDIUM, INTER_BROKER_LISTENER_NAME_DOC)
             .define(REPLICA_SELECTOR_CLASS_CONFIG, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC)

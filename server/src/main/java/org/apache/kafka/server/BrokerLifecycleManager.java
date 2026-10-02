@@ -19,6 +19,7 @@ package org.apache.kafka.server;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData.LeaderlessReplica;
 import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
@@ -81,6 +82,8 @@ public class BrokerLifecycleManager {
     private final Map<String, Uuid> logDirs;
     private final Runnable shutdownHook;
     private final Supplier<Boolean> cordonedLogDirsSupported;
+    private final Supplier<Boolean> uncleanRecoverySupported;
+    private final Supplier<List<LeaderlessReplica>> leaderlessReplicas;
 
     /**
      * The broker id.
@@ -220,7 +223,7 @@ public class BrokerLifecycleManager {
             Time time,
             String threadNamePrefix,
             Map<String, Uuid> logDirs) {
-        this(config, time, threadNamePrefix, logDirs, () -> { }, () -> false);
+        this(config, time, threadNamePrefix, logDirs, () -> { }, () -> false, () -> false, List::of);
     }
 
     public BrokerLifecycleManager(
@@ -229,12 +232,16 @@ public class BrokerLifecycleManager {
             String threadNamePrefix,
             Map<String, Uuid> logDirs,
             Runnable shutdownHook,
-            Supplier<Boolean> cordonedLogDirsSupported) {
+            Supplier<Boolean> cordonedLogDirsSupported,
+            Supplier<Boolean> uncleanRecoverySupported,
+            Supplier<List<LeaderlessReplica>> leaderlessReplicas) {
         this.config = config;
         this.time = time;
         this.logDirs = logDirs;
         this.shutdownHook = shutdownHook;
         this.cordonedLogDirsSupported = cordonedLogDirsSupported;
+        this.uncleanRecoverySupported = uncleanRecoverySupported;
+        this.leaderlessReplicas = leaderlessReplicas;
         LogContext logContext = new LogContext("[BrokerLifecycleManager id=" + this.config.nodeId() + "] ");
         this.logger = logContext.logger(BrokerLifecycleManager.class);
         this.nodeId = config.nodeId();
@@ -570,6 +577,9 @@ public class BrokerLifecycleManager {
             .setWantFence(!readyToUnfence)
             .setWantShutDown(state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
             .setOfflineLogDirs(new ArrayList<>(offlineDirs.keySet()));
+        if (uncleanRecoverySupported.get()) {
+            data.setLeaderlessReplicas(leaderlessReplicas.get());
+        }
         if (initialCatchUpFuture.isDone() && !initialCatchUpFuture.isCompletedExceptionally() && cordonedLogDirsSupported.get()) {
             data.setCordonedLogDirs(List.copyOf(cordonedLogDirs));
         }

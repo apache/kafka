@@ -50,6 +50,7 @@ import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData.LeaderlessReplica;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -78,6 +79,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
@@ -108,6 +110,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -119,6 +122,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.IntPredicate;
 import java.util.function.Supplier;
 
@@ -149,6 +153,9 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
 
+    private static final Comparator<LeaderlessReplica> LOG_END_ORDER = Comparator
+        .comparingInt(LeaderlessReplica::lastWrittenLeaderEpoch).thenComparingLong(LeaderlessReplica::logEndOffset);
+
     static class Builder {
         private SnapshotRegistry snapshotRegistry = null;
         private LogContext logContext = null;
@@ -161,6 +168,9 @@ public class ReplicationControlManager {
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
+        private boolean uncleanRecoveryManagerEnabled = false;
+        private long uncleanRecoveryTimeoutMs = TimeUnit.MINUTES.toMillis(5);
+        private Time time = Time.SYSTEM;
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -212,6 +222,21 @@ public class ReplicationControlManager {
             return this;
         }
 
+        Builder setUncleanRecoveryManagerEnabled(boolean uncleanRecoveryManagerEnabled) {
+            this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
+            return this;
+        }
+
+        Builder setUncleanRecoveryTimeoutMs(long uncleanRecoveryTimeoutMs) {
+            this.uncleanRecoveryTimeoutMs = uncleanRecoveryTimeoutMs;
+            return this;
+        }
+
+        Builder setTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
         ReplicationControlManager build() {
             if (configurationControl == null) {
                 throw new IllegalStateException("Configuration control must be set before building");
@@ -234,7 +259,10 @@ public class ReplicationControlManager {
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
-                featureControl);
+                featureControl,
+                uncleanRecoveryManagerEnabled,
+                uncleanRecoveryTimeoutMs,
+                time);
         }
     }
 
@@ -391,6 +419,16 @@ public class ReplicationControlManager {
      */
     final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
 
+    private final boolean uncleanRecoveryManagerEnabled;
+    private final long uncleanRecoveryTimeoutMs;
+    private final Time time;
+    private final Map<TopicIdPartition, Long> uncleanRecoveryStartMs = new HashMap<>();
+
+    /**
+     * The latest leaderless replicas reported by each broker heartbeat. This is only used by the active controller.
+     */
+    private final Map<Integer, Map<TopicIdPartition, LeaderlessReplica>> leaderlessReplicasByBroker = new HashMap<>();
+
     private ReplicationControlManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -401,7 +439,10 @@ public class ReplicationControlManager {
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
-        FeatureControlManager featureControl
+        FeatureControlManager featureControl,
+        boolean uncleanRecoveryManagerEnabled,
+        long uncleanRecoveryTimeoutMs,
+        Time time
     ) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
@@ -413,6 +454,9 @@ public class ReplicationControlManager {
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;
         this.clusterControl = clusterControl;
+        this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
+        this.uncleanRecoveryTimeoutMs = uncleanRecoveryTimeoutMs;
+        this.time = time;
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topicsWithCollisionChars = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -1151,7 +1195,7 @@ public class ReplicationControlManager {
                     featureControl.metadataVersionOrThrow(),
                     getTopicEffectiveMinIsr(topic.name),
                     featureControl.isElrFeatureEnabled()
-                );
+                ).setUseLastKnownLeaderInBalancedRecovery(!uncleanRecoveryEnabled());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1702,6 +1746,7 @@ public class ReplicationControlManager {
             getTopicEffectiveMinIsr(topic),
             featureControl.isElrFeatureEnabled()
         )
+            .setUseLastKnownLeaderInBalancedRecovery(!uncleanRecoveryEnabled())
             .setElection(election)
             .setDefaultDirProvider(clusterDescriber)
             .build();
@@ -1750,12 +1795,82 @@ public class ReplicationControlManager {
         if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
             handleDirectoriesCordoned(brokerId, brokerEpoch, request.cordonedLogDirs(), records);
         }
+        if (uncleanRecoveryEnabled()) {
+            maybeElectUncleanRecoveryLeaders(brokerId, request.leaderlessReplicas(), records);
+        }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;
         BrokerHeartbeatReply reply = new BrokerHeartbeatReply(isCaughtUp,
                 states.next().fenced(),
                 states.next().inControlledShutdown(),
                 states.next().shouldShutDown());
         return ControllerResult.of(records, reply);
+    }
+
+    private void maybeElectUncleanRecoveryLeaders(int brokerId, List<LeaderlessReplica> leaderlessReplicas, List<ApiMessageAndVersion> records) {
+        Map<TopicIdPartition, LeaderlessReplica> reports = new HashMap<>();
+        leaderlessReplicas.forEach(r -> reports.put(new TopicIdPartition(r.topicId(), r.partitionIndex()), r));
+        leaderlessReplicasByBroker.put(brokerId, reports);
+        for (TopicIdPartition tp : reports.keySet()) {
+            TopicControlInfo topic = topics.get(tp.topicId());
+            PartitionRegistration partition = topic == null ? null : topic.parts.get(tp.partitionId());
+            if (partition != null && partition.leader == NO_LEADER) maybeElectUncleanRecoveryLeader(topic, tp, partition, !uncleanRecoveryTimedOut(tp), records);
+        }
+    }
+
+    private boolean uncleanRecoveryEnabled() {
+        return uncleanRecoveryManagerEnabled && featureControl.metadataVersionOrThrow().isUncleanRecoverySupported();
+    }
+
+    void deactivate() {
+        leaderlessReplicasByBroker.clear();
+        uncleanRecoveryStartMs.clear();
+    }
+
+    private boolean uncleanRecoveryTimedOut(TopicIdPartition tp) {
+        long nowMs = time.milliseconds();
+        return nowMs - uncleanRecoveryStartMs.computeIfAbsent(tp, k -> nowMs) >= uncleanRecoveryTimeoutMs;
+    }
+
+    private boolean maybeElectUncleanRecoveryLeader(TopicControlInfo topic, TopicIdPartition tp, PartitionRegistration partition,
+                                                    boolean requireAllReports, List<ApiMessageAndVersion> records) {
+        boolean balanced = !configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name);
+        if (balanced && (partition.isr.length > 0 || partition.elr.length > 0 ||
+                !Arrays.stream(partition.lastKnownElr).allMatch(r -> clusterControl.isActive(r) && currentReport(r, tp, partition) != null))) return false;
+        OptionalInt leader = uncleanRecoveryLeader(tp, partition, requireAllReports);
+        if (leader.isEmpty()) return false;
+        Optional<ApiMessageAndVersion> record = new PartitionChangeBuilder(partition, tp.topicId(), tp.partitionId(),
+                new LeaderAcceptor(clusterControl, partition, r -> r == leader.getAsInt()),
+                featureControl.metadataVersionOrThrow(), getTopicEffectiveMinIsr(topic.name), featureControl.isElrFeatureEnabled())
+            .setElection(PartitionChangeBuilder.Election.UNCLEAN)
+            .setUseLastKnownLeaderInBalancedRecovery(false)
+            .setDefaultDirProvider(clusterDescriber)
+            .build();
+        record.ifPresent(records::add);
+        return record.isPresent();
+    }
+
+    private LeaderlessReplica currentReport(int replica, TopicIdPartition tp, PartitionRegistration partition) {
+        LeaderlessReplica report = leaderlessReplicasByBroker.getOrDefault(replica, Map.of()).get(tp);
+        return report == null || report.currentLeaderEpoch() != partition.leaderEpoch ? null : report;
+    }
+
+    private OptionalInt uncleanRecoveryLeader(TopicIdPartition tp, PartitionRegistration partition, boolean requireAllReports) {
+        LeaderAcceptor isAcceptableLeader = new LeaderAcceptor(clusterControl, partition);
+        OptionalInt leader = OptionalInt.empty();
+        LeaderlessReplica longestLog = null;
+        for (int replica : partition.replicas) {
+            if (!isAcceptableLeader.test(replica)) continue;
+            LeaderlessReplica report = currentReport(replica, tp, partition);
+            if (report == null) {
+                if (requireAllReports) return OptionalInt.empty();
+                continue;
+            }
+            if (longestLog == null || LOG_END_ORDER.compare(report, longestLog) > 0) {
+                longestLog = report;
+                leader = OptionalInt.of(replica);
+            }
+        }
+        return leader;
     }
 
     /**
@@ -1869,6 +1984,7 @@ public class ReplicationControlManager {
                 getTopicEffectiveMinIsr(topic.name),
                 featureControl.isElrFeatureEnabled()
             )
+                .setUseLastKnownLeaderInBalancedRecovery(!uncleanRecoveryEnabled())
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
                 .setDefaultDirProvider(clusterDescriber)
                 .build().ifPresent(records::add);
@@ -1899,13 +2015,21 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> records,
             int maxElections
     ) {
+        uncleanRecoveryStartMs.keySet().removeIf(tp -> {
+            PartitionRegistration partition = getPartition(tp.topicId(), tp.partitionId());
+            return partition == null || partition.leader != NO_LEADER;
+        });
         Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
         while (iterator.hasNext() && records.size() < maxElections) {
             TopicIdPartition topicIdPartition = iterator.next();
             int partitionId = topicIdPartition.partitionId();
             TopicControlInfo topic = topics.get(topicIdPartition.topicId());
 
-            if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
+            if (uncleanRecoveryEnabled()) {
+                if (uncleanRecoveryTimedOut(topicIdPartition)) {
+                    maybeElectUncleanRecoveryLeader(topic, topicIdPartition, topic.parts.get(partitionId), false, records);
+                }
+            } else if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 ApiError result = electLeader(topic.name, partitionId,
                         ElectionType.UNCLEAN, records);
                 if (result.error().equals(Errors.NONE)) {
@@ -2151,8 +2275,8 @@ public class ReplicationControlManager {
                 featureControl.metadataVersionOrThrow(),
                 getTopicEffectiveMinIsr(topic.name),
                 featureControl.isElrFeatureEnabled()
-            );
-            if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
+            ).setUseLastKnownLeaderInBalancedRecovery(!uncleanRecoveryEnabled());
+            if (!uncleanRecoveryEnabled() && configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
             if (brokerWithUncleanShutdown != NO_LEADER) {
@@ -2271,7 +2395,7 @@ public class ReplicationControlManager {
             featureControl.metadataVersionOrThrow(),
             getTopicEffectiveMinIsr(topicName),
             featureControl.isElrFeatureEnabled()
-        );
+        ).setUseLastKnownLeaderInBalancedRecovery(!uncleanRecoveryEnabled());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -2337,7 +2461,7 @@ public class ReplicationControlManager {
             featureControl.metadataVersionOrThrow(),
             getTopicEffectiveMinIsr(topics.get(tp.topicId()).name),
             featureControl.isElrFeatureEnabled()
-        );
+        ).setUseLastKnownLeaderInBalancedRecovery(!uncleanRecoveryEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }
@@ -2421,6 +2545,7 @@ public class ReplicationControlManager {
                                     getTopicEffectiveMinIsr(topicName),
                                     featureControl.isElrFeatureEnabled()
                             )
+                                    .setUseLastKnownLeaderInBalancedRecovery(!uncleanRecoveryEnabled())
                                     .setDirectory(brokerId, dirId)
                                     .setDefaultDirProvider(clusterDescriber)
                                     .build();
