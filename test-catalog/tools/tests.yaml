@@ -740,7 +740,8 @@ org.apache.kafka.tools.consumer.ConsoleConsumerTest:
 - shouldStopWhenOutputCheckErrorFails
 - shouldThrowTimeoutExceptionWhenTimeoutIsReached
 - shouldWorkWithoutTopicOption
-- testGroupMetadataMessageFormatter
+- testGroupMetadataMessageFormatterWithClassicGroupProtocol
+- testGroupMetadataMessageFormatterWithConsumerGroupProtocol
 - testOffsetsMessageFormatter
 - testTransactionLogMessageFormatter
 org.apache.kafka.tools.consumer.ConsoleShareConsumerOptionsTest:
