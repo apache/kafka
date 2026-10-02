@@ -143,10 +143,11 @@ abstract class AbstractFetcherThread(name: String,
 
   /**
    * Truncate the log of every partition in the truncating state to its fetch offset, which is the
-   * high watermark. A partition only enters that state when the follower has no leader epoch, i.e.
-   * its log only contains records in a message format older than v2. Divergence cannot be detected
-   * from the fetch response in that case, so the records above the high watermark, which may not
-   * have been committed, are truncated before fetching resumes.
+   * high watermark. A partition enters that state when the follower has no leader epoch, e.g. its
+   * log is empty or contains only records in a message format older than v2. Divergence cannot be
+   * detected from the fetch response in that case, so the records above the high watermark, which
+   * may not have been committed, are truncated before fetching resumes. The truncation is a no-op
+   * for an empty log, whose high watermark cannot be above its log end offset.
    */
   private[server] def maybeTruncate(): Unit = LockUtils.inLock[Exception](partitionMapLock, () => {
     // Collect the partitions first since truncating one of them may fail and remove it from `partitionStates`.
@@ -418,10 +419,10 @@ abstract class AbstractFetcherThread(name: String,
    * reported by the leader as a diverging epoch in the fetch response and handled by
    * `truncateOnFetchResponse`.
    *
-   * If `latestEpoch` is empty (for example, when the log contains only records in a message format
-   * older than v2), the fetch request carries no last fetched epoch and the leader cannot report a
-   * diverging epoch. In this case, the partition starts in the Truncating state, so that
-   * `maybeTruncate()` truncates its log to `initOffset`, which is the high watermark.
+   * If `latestEpoch` is empty (for example, when the log is empty or contains only records in a
+   * message format older than v2), the fetch request carries no last fetched epoch and the leader
+   * cannot report a diverging epoch. In this case, the partition starts in the Truncating state, so
+   * that `maybeTruncate()` truncates its log to `initOffset`, which is the high watermark.
    */
   private def partitionFetchState(tp: TopicPartition, initialFetchState: InitialFetchState, currentState: PartitionFetchState): PartitionFetchState = {
     if (currentState != null && currentState.currentLeaderEpoch == initialFetchState.currentLeaderEpoch) {
