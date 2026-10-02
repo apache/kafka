@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.MemberDescription;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -1174,9 +1173,7 @@ public class DescribeConsumerGroupTest {
     }
 
     private void createTopic(String topic, int numPartitions) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic(topic, numPartitions, (short) 1))).topicId(topic).get());
-        }
+        Assertions.assertDoesNotThrow(() -> clusterInstance.createTopic(topic, numPartitions, (short) 1));
     }
 
     private void deleteConsumerGroups(Collection<String> groupIds) {
