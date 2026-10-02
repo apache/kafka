@@ -116,6 +116,7 @@ public class MessageGeneratorTest {
                 "  \"name\": \"FooBarRequest\",",
                 "  \"validVersions\": \"0-2\",",
                 "  \"flexibleVersions\": \"none\",",
+                "  \"headerVersions\": { \"0+\": \"1\" },",
                 "  \"fields\": [",
                 "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" }",
                 "  ]",
@@ -127,6 +128,7 @@ public class MessageGeneratorTest {
                 "  \"name\": \"FooBarResponse\",",
                 "  \"validVersions\": \"0-2\",",
                 "  \"flexibleVersions\": \"none\",",
+                "  \"headerVersions\": { \"0+\": \"0\" },",
                 "  \"fields\": [",
                 "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" }",
                 "  ]",
@@ -189,33 +191,7 @@ public class MessageGeneratorTest {
     }
 
     @Test
-    public void testHeaderVersionFallbackFlexibleDerived() throws Exception {
-        String source = generateApiMessageTypeSource(
-            spec(3, "request", "QuxRequest", "0-5", "2+", null),
-            spec(3, "response", "QuxResponse", "0-5", "2+", null));
-        assertTrue(source.contains(
-            "case 3: // Qux\n" +
-            "if (_version >= 2) {\n" +
-            "return (short) 2;\n" +
-            "} else {\n" +
-            "return (short) 1;\n" +
-            "}\n"), source);
-    }
-
-    @Test
-    public void testHeaderVersionFallbackApiVersionsResponse() throws Exception {
-        String source = generateApiMessageTypeSource(
-            spec(18, "request", "ApiVersionsRequest", "0-3", "3+", null),
-            spec(18, "response", "ApiVersionsResponse", "0-3", "3+", null));
-        assertTrue(source.contains(
-            "case 18: // ApiVersions\n" +
-            "// ApiVersionsResponse always includes a v0 header.\n" +
-            "// See KIP-511 for details.\n" +
-            "return (short) 0;\n"), source);
-    }
-
-    @Test
-    public void testHeaderVersionExplicitApiVersionsResponse() throws Exception {
+    public void testHeaderVersionApiVersionsResponseKeepsKip511Comment() throws Exception {
         String source = generateApiMessageTypeSource(
             spec(18, "request", "ApiVersionsRequest", "0-3", "3+", "{'0-2': '1', '3+': '2'}"),
             spec(18, "response", "ApiVersionsResponse", "0-3", "3+", "{'0+': '0'}"));
@@ -224,23 +200,67 @@ public class MessageGeneratorTest {
             "// ApiVersionsResponse always includes a v0 header.\n" +
             "// See KIP-511 for details.\n" +
             "return (short) 0;\n"), source);
-    }
-
-    @Test
-    public void testHeaderVersionMixedExplicitAndFallback() throws Exception {
-        String source = generateApiMessageTypeSource(
-            spec(1, "request", "BarRequest", "0-5", "0+", "{'0+': '2'}"),
-            spec(1, "response", "BarResponse", "0-5", "0+", "{'0+': '1'}"),
-            spec(3, "request", "QuxRequest", "0-5", "2+", null),
-            spec(3, "response", "QuxResponse", "0-5", "2+", null));
-        assertTrue(source.contains("case 1: // Bar\nreturn (short) 2;\n"), source);
         assertTrue(source.contains(
-            "case 3: // Qux\n" +
-            "if (_version >= 2) {\n" +
+            "case 18: // ApiVersions\n" +
+            "if (_version >= 3) {\n" +
             "return (short) 2;\n" +
             "} else {\n" +
             "return (short) 1;\n" +
             "}\n"), source);
+    }
+
+    @Test
+    public void testHeaderVersionNoValidVersionsGetsNoCase() throws Exception {
+        // A retired RPC has no map and no case: requestHeaderVersion() falls through to the
+        // UnsupportedVersionException default.
+        MessageSpec request = MessageGenerator.JSON_SERDE.readValue(
+            "{\"apiKey\": 6, \"type\": \"request\", \"name\": \"GraultRequest\", \"validVersions\": \"none\"}",
+            MessageSpec.class);
+        MessageSpec response = MessageGenerator.JSON_SERDE.readValue(
+            "{\"apiKey\": 6, \"type\": \"response\", \"name\": \"GraultResponse\", \"validVersions\": \"none\"}",
+            MessageSpec.class);
+        String source = generateApiMessageTypeSource(request, response);
+        // "case 6:" alone would also match fromApiKey()'s switch, which lists every registered
+        // apiKey regardless of valid versions; the header-version cases carry a "// Name" comment.
+        assertFalse(source.contains("case 6: // Grault"), source);
+    }
+
+    @Test
+    public void testHeaderVersionThreeRangeChain() throws Exception {
+        String source = generateApiMessageTypeSource(
+            spec(7, "request", "WaldoRequest", "0-6", "2+", "{'0-1': '1', '2-4': '2', '5+': '3'}"),
+            spec(7, "response", "WaldoResponse", "0-6", "2+", "{'0-1': '0', '2+': '1'}"));
+        assertTrue(source.contains(
+            "case 7: // Waldo\n" +
+            "if (_version >= 5) {\n" +
+            "return (short) 3;\n" +
+            "} else if (_version >= 2) {\n" +
+            "return (short) 2;\n" +
+            "} else {\n" +
+            "return (short) 1;\n" +
+            "}\n"), source);
+    }
+
+    @Test
+    public void testProcessDirectoriesRejectsMissingHeaderVersions(@TempDir Path input, @TempDir Path output) throws Exception {
+        Files.writeString(input.resolve("RequestHeader.json"), REQUEST_HEADER_JSON);
+        Files.writeString(input.resolve("ResponseHeader.json"), RESPONSE_HEADER_JSON);
+        // FooRequest has valid versions but no headerVersions map.
+        Files.writeString(input.resolve("FooRequest.json"),
+            ("{'apiKey': 99, 'type': 'request', 'name': 'FooRequest', 'validVersions': '0-1', " +
+             "'flexibleVersions': '0+', 'fields': [{'name': 'Field1', 'type': 'int32', 'versions': '0+'}]}")
+                .replace('\'', '"'));
+        Files.writeString(input.resolve("FooResponse.json"), fooSpec("response", "{'0+': '1'}"));
+
+        Exception exception = assertThrows(Exception.class, () -> runProcessDirectories(input, output));
+        StringBuilder messages = new StringBuilder();
+        for (Throwable throwable = exception; throwable != null; throwable = throwable.getCause()) {
+            if (throwable.getMessage() != null) {
+                messages.append(throwable.getMessage()).append(" | ");
+            }
+        }
+        assertTrue(messages.toString().contains("FooRequest.json"), messages.toString());
+        assertTrue(messages.toString().contains("You must specify a value for headerVersions"), messages.toString());
     }
 
     @Test
