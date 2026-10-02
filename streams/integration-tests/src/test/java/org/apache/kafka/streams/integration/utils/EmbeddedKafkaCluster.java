@@ -224,6 +224,26 @@ public class EmbeddedKafkaCluster {
         }
     }
 
+    /**
+     * The IDs of the nodes that also run a controller. Restarting one of them would take the cluster's metadata quorum
+     * down with it.
+     */
+    public Set<Integer> controllerNodeIds() {
+        return cluster.controllers().keySet();
+    }
+
+    /**
+     * Shuts the broker down and starts it back up with the same identity, and waits for it to be ready again.
+     */
+    public void restartBroker(final int nodeId) {
+        cluster.restartBroker(nodeId, Map.of());
+        try {
+            cluster.waitForReadyBrokers();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public String bootstrapServers() {
         return cluster.bootstrapServers();
     }
