@@ -218,7 +218,7 @@ public class CordonedLogDirsIntegrationTest {
             // Uncordon log dirs
             setCordonedLogDirs(admin, List.of(), BROKER_0);
 
-            // We can't create topics again
+            // We can create topics again
             createTopic(TOPIC1);
         }
     }
