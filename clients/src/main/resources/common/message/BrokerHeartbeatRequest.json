@@ -15,12 +15,13 @@
 
 // Version 1 adds the OfflineLogDirs flexible field
 // Version 2 adds the CordonedLogDirs flexible field
+// Version 3 adds the LeaderlessReplicas flexible field (KIP-966)
 {
   "apiKey": 63,
   "type": "request",
   "listeners": ["controller"],
   "name": "BrokerHeartbeatRequest",
-  "validVersions": "0-2",
+  "validVersions": "0-3",
   "flexibleVersions": "0+",
   "headerVersions": {
     "0+": "2"
@@ -40,6 +41,14 @@
       "about": "Log directories that failed and went offline." },
     { "name": "CordonedLogDirs", "type":  "[]uuid", "versions": "2+", "taggedVersions": "2+", "tag": 1,
       "nullableVersions": "2+", "default": "null",
-      "about": "List of log directories that are cordoned. This is null before the broker reaches the RECOVERY state." }
+      "about": "List of log directories that are cordoned. This is null before the broker reaches the RECOVERY state." },
+    { "name": "LeaderlessReplicas", "type": "[]LeaderlessReplica", "versions": "3+", "taggedVersions": "3+", "tag": 2,
+      "about": "The log end offsets of local replicas of leaderless partitions, used for unclean recovery.", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "3+", "about": "The topic ID." },
+      { "name": "PartitionIndex", "type": "int32", "versions": "3+", "about": "The partition index." },
+      { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "3+", "about": "The partition leader epoch known by the broker." },
+      { "name": "LastWrittenLeaderEpoch", "type": "int32", "versions": "3+", "about": "The leader epoch of the last record in the local log." },
+      { "name": "LogEndOffset", "type": "int64", "versions": "3+", "about": "The log end offset of the local log." }
+    ]}
   ]
 }

@@ -810,6 +810,14 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getLong(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG);
     }
 
+    public boolean uncleanRecoveryManagerEnabled() {
+        return getBoolean(ReplicationConfigs.UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG);
+    }
+
+    public long uncleanRecoveryTimeoutMs() {
+        return getLong(ReplicationConfigs.UNCLEAN_RECOVERY_TIMEOUT_MS_CONFIG);
+    }
+
     public Boolean uncleanLeaderElectionEnable() {
         return getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
     }

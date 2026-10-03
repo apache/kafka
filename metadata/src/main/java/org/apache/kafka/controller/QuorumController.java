@@ -212,6 +212,8 @@ public final class QuorumController implements Controller {
         private long delegationTokenExpiryTimeMs;
         private long delegationTokenExpiryCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
         private long uncleanLeaderElectionCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
+        private boolean uncleanRecoveryManagerEnabled = false;
+        private long uncleanRecoveryTimeoutMs = TimeUnit.MINUTES.toMillis(5);
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -377,6 +379,16 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setUncleanRecoveryManagerEnabled(boolean uncleanRecoveryManagerEnabled) {
+            this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
+            return this;
+        }
+
+        public Builder setUncleanRecoveryTimeoutMs(long uncleanRecoveryTimeoutMs) {
+            this.uncleanRecoveryTimeoutMs = uncleanRecoveryTimeoutMs;
+            return this;
+        }
+
 
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -445,6 +457,8 @@ public final class QuorumController implements Controller {
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs,
                     uncleanLeaderElectionCheckIntervalMs,
+                    uncleanRecoveryManagerEnabled,
+                    uncleanRecoveryTimeoutMs,
                     controllerPerformanceSamplePeriodMs,
                     controllerPerformanceAlwaysLogThresholdMs
                 );
@@ -1213,6 +1227,7 @@ public final class QuorumController implements Controller {
                     newWrongControllerException(OptionalInt.empty()));
             offsetControl.deactivate();
             clusterControl.deactivate();
+            replicationControl.deactivate();
             periodicControl.deactivate();
         } catch (Throwable e) {
             fatalFaultHandler.handleFault("exception while renouncing leadership", e);
@@ -1528,6 +1543,8 @@ public final class QuorumController implements Controller {
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs,
         long uncleanLeaderElectionCheckIntervalMs,
+        boolean uncleanRecoveryManagerEnabled,
+        long uncleanRecoveryTimeoutMs,
         long controllerPerformanceSamplePeriodMs,
         long controllerPerformanceAlwaysLogThresholdMs
     ) {
@@ -1602,6 +1619,9 @@ public final class QuorumController implements Controller {
             setClusterControl(clusterControl).
             setCreateTopicPolicy(createTopicPolicy).
             setFeatureControl(featureControl).
+            setUncleanRecoveryManagerEnabled(uncleanRecoveryManagerEnabled).
+            setUncleanRecoveryTimeoutMs(uncleanRecoveryTimeoutMs).
+            setTime(time).
             build();
         this.scramControlManager = new ScramControlManager.Builder().
             setLogContext(logContext).

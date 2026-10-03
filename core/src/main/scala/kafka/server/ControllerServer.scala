@@ -264,6 +264,8 @@ class ControllerServer(
           setDelegationTokenExpiryTimeMs(delegationTokenManagerConfigs.delegationTokenExpiryTimeMs).
           setDelegationTokenExpiryCheckIntervalMs(delegationTokenManagerConfigs.delegationTokenExpiryCheckIntervalMs).
           setUncleanLeaderElectionCheckIntervalMs(config.uncleanLeaderElectionCheckIntervalMs).
+          setUncleanRecoveryManagerEnabled(config.uncleanRecoveryManagerEnabled).
+          setUncleanRecoveryTimeoutMs(config.uncleanRecoveryTimeoutMs).
           setControllerPerformanceSamplePeriodMs(config.controllerPerformanceSamplePeriodMs).
           setControllerPerformanceAlwaysLogThresholdMs(config.controllerPerformanceAlwaysLogThresholdMs).
           setControllerMaxRecordsPerBatch(config.controllerMaxRecordsPerBatch)
