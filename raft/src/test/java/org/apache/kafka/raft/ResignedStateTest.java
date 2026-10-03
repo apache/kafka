@@ -50,10 +50,15 @@ class ResignedStateTest {
     );
 
     private ResignedState newResignedState(Set<Integer> voters) {
+        return newResignedState(Optional.empty(), voters);
+    }
+
+    private ResignedState newResignedState(Optional<ReplicaKey> votedKey, Set<Integer> voters) {
         return new ResignedState(
             time,
             localId,
             epoch,
+            votedKey,
             voters,
             electionTimeoutMs,
             List.of(),
@@ -84,6 +89,16 @@ class ResignedStateTest {
         time.sleep(electionTimeoutMs / 2);
         assertEquals(0, state.remainingElectionTimeMs(time.milliseconds()));
         assertTrue(state.hasElectionTimeoutExpired(time.milliseconds()));
+    }
+
+    @Test
+    public void testElectionPreservesVotedKey() {
+        ReplicaKey votedKey = ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID);
+        Set<Integer> voters = Set.of(localId, 1);
+
+        ResignedState state = newResignedState(Optional.of(votedKey), voters);
+
+        assertEquals(ElectionState.withElectedLeader(epoch, localId, Optional.of(votedKey), voters), state.election());
     }
 
     @ParameterizedTest
