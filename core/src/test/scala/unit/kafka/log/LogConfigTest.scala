@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.record.internal.Records
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -494,6 +495,54 @@ class LogConfigTest {
     } else {
       LogConfig.validateBrokerLogConfigValues(kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled)
     }
+  }
+
+  @Test
+  def testBrokerMessageTimestampAfterMaxMsWarning(): Unit = {
+    val default = ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT
+    assertTrue(LogConfig.brokerMessageTimestampAfterMaxMsWarning(default, TimestampType.CREATE_TIME).isEmpty)
+    assertTrue(LogConfig.brokerMessageTimestampAfterMaxMsWarning(default - 1, TimestampType.CREATE_TIME).isEmpty)
+
+    val warning = LogConfig.brokerMessageTimestampAfterMaxMsWarning(default + 1, TimestampType.CREATE_TIME)
+    assertTrue(warning.isPresent)
+    assertTrue(warning.get.contains(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG))
+    assertTrue(LogConfig.brokerMessageTimestampAfterMaxMsWarning(Long.MaxValue, TimestampType.CREATE_TIME).isPresent)
+
+    // The config is ignored with LogAppendTime, so there is nothing to warn about.
+    assertTrue(LogConfig.brokerMessageTimestampAfterMaxMsWarning(Long.MaxValue, TimestampType.LOG_APPEND_TIME).isEmpty)
+  }
+
+  @Test
+  def testTopicMessageTimestampAfterMaxMsWarning(): Unit = {
+    val key = TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG
+    val raised = (ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT + 1).toString
+
+    def warning(existing: util.Map[String, String], updated: util.Map[String, String],
+                brokerType: TimestampType = TimestampType.CREATE_TIME): java.util.Optional[String] =
+      LogConfig.topicMessageTimestampAfterMaxMsWarning("foo", existing, updated, brokerType)
+
+    // No topic override: a raised broker default is warned about by the broker, not per topic.
+    assertTrue(warning(util.Map.of, util.Map.of).isEmpty)
+    // Override at the default: no warning.
+    assertTrue(warning(util.Map.of, util.Map.of(key, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT.toString)).isEmpty)
+    // New raised override: warns and names the topic.
+    val newOverride = warning(util.Map.of, util.Map.of(key, raised))
+    assertTrue(newOverride.isPresent)
+    assertTrue(newOverride.get.contains("for topic foo is set to " + raised))
+    // Unrelated alter of a topic that already has the raised override: no repeated warning.
+    assertTrue(warning(util.Map.of(key, raised), util.Map.of(key, raised, TopicConfig.RETENTION_MS_CONFIG, "1000")).isEmpty)
+    // Raising an existing override further: warns again.
+    assertTrue(warning(util.Map.of(key, raised), util.Map.of(key, Long.MaxValue.toString)).isPresent)
+    // LogAppendTime, from the topic override or the broker default: the config is ignored, so no warning.
+    assertTrue(warning(util.Map.of, util.Map.of(key, raised,
+      TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.LOG_APPEND_TIME.name)).isEmpty)
+    assertTrue(warning(util.Map.of, util.Map.of(key, raised), TimestampType.LOG_APPEND_TIME).isEmpty)
+    // Switching only the timestamp type from LogAppendTime to CreateTime makes the raised value take effect: warns.
+    assertTrue(warning(util.Map.of(key, raised, TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.LOG_APPEND_TIME.name),
+      util.Map.of(key, raised, TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.CREATE_TIME.name)).isPresent)
+    // A topic CreateTime override takes precedence over a LogAppendTime broker default.
+    assertTrue(warning(util.Map.of, util.Map.of(key, raised,
+      TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.CREATE_TIME.name), TimestampType.LOG_APPEND_TIME).isPresent)
   }
 
   @ParameterizedTest

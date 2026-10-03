@@ -228,6 +228,7 @@ public class LogManager {
         this.cleanerFactory = cleanerBuilder;
         liveLogDirs = createAndValidateLogDirs(logDirs, initialOfflineDirs);
         currentDefaultConfig = initialDefaultConfig;
+        maybeWarnMessageTimestampAfterMaxMs(initialDefaultConfig);
         dirLocks = lockLogDirs(liveLogDirs);
         directoryIds = loadDirectoryIds(liveLogDirs);
 
@@ -271,7 +272,18 @@ public class LogManager {
     }
 
     public void reconfigureDefaultLogConfig(LogConfig logConfig) {
+        LogConfig oldConfig = this.currentDefaultConfig;
         this.currentDefaultConfig = logConfig;
+        // Only re-check when a relevant value changes, so unrelated dynamic updates do not repeat the warning.
+        if (logConfig.messageTimestampAfterMaxMs != oldConfig.messageTimestampAfterMaxMs ||
+                logConfig.messageTimestampType != oldConfig.messageTimestampType) {
+            maybeWarnMessageTimestampAfterMaxMs(logConfig);
+        }
+    }
+
+    private static void maybeWarnMessageTimestampAfterMaxMs(LogConfig defaultConfig) {
+        LogConfig.brokerMessageTimestampAfterMaxMsWarning(defaultConfig.messageTimestampAfterMaxMs, defaultConfig.messageTimestampType)
+                .ifPresent(LOG::warn);
     }
 
     public Collection<File> liveLogDirs() {

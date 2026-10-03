@@ -264,7 +264,11 @@ public class TopicConfig {
         "difference between the message timestamp and the broker's timestamp. The message timestamp can be later than " +
         "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
         "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
-        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime. " +
+        "Note that time-based retention (" + RETENTION_MS_CONFIG + ") is based on the largest message timestamp in a segment, " +
+        "so a segment containing a message with a future timestamp is not eligible for time-based deletion until that " +
+        "timestamp plus the retention time has passed. Increasing this value above the default allows more " +
+        "future-timestamped messages and can delay segment deletion, increasing disk usage.";
 
     /**
      * @deprecated down-conversion is not possible in Apache Kafka 4.0 and newer, hence this configuration is a no-op,
