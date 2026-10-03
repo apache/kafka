@@ -19,6 +19,7 @@ import os
 import time
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
@@ -100,6 +101,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.stop_timeout_sec = stop_timeout_sec
         self.request_timeout_sec = request_timeout_sec
         self.enable_idempotence = enable_idempotence
+        self.started_nodes = set()
         self.offline_nodes = offline_nodes
         self.create_time = create_time
         self.repeating_keys = repeating_keys
@@ -107,6 +109,13 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.kafka_opts_override = kafka_opts_override
         self.client_prop_file_override = client_prop_file_override
         self.retries = retries
+
+    def start(self, **kwargs):
+        super().start(**kwargs)
+        timeout_sec=kwargs.get("timeout_sec", 120)
+        wait_until(lambda: len(self.started_nodes) == len(self.nodes),
+                   timeout_sec=timeout_sec,
+                   err_msg="Verifiable producer didn't finish startup in %d seconds" % timeout_sec)
 
     def java_class_name(self):
         return "VerifiableProducer"
@@ -211,6 +220,13 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                         if node in self.clean_shutdown_nodes:
                             raise Exception("Unexpected shutdown event from producer, already shutdown. Producer index: %d" % idx)
                         self.clean_shutdown_nodes.add(node)
+                        self.started_nodes.discard(node)
+
+                    elif data["name"] == "startup_complete":
+                        if node in self.started_nodes:
+                            raise Exception("Unexpected startup event from producer, already started. Producer index: %d" % idx)
+
+                        self.started_nodes.add(node)
 
     def _has_output(self, node):
         """Helper used as a proxy to determine whether jmx is running by that jmx_tool_log contains output."""
