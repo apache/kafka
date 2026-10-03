@@ -2082,6 +2082,25 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Deserialize the topics of a classic group member's stored subscription for the given protocol.
+     * The subscription is parsed with version 0, which prefixes all versions, as in
+     * {@link ClassicGroup#computeSubscribedTopics()}.
+     *
+     * @param member        The classic group member.
+     * @param protocolName  The protocol whose metadata is parsed. The member must support it.
+     * @return The subscribed topics.
+     * @throws SchemaException if the metadata is not a valid consumer protocol subscription.
+     */
+    private static Set<String> deserializeMemberSubscribedTopics(
+        ClassicGroupMember member,
+        String protocolName
+    ) {
+        ByteBuffer buffer = ByteBuffer.wrap(member.metadata(protocolName));
+        ConsumerProtocol.deserializeVersion(buffer);
+        return new HashSet<>(ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer, (short) 0).topics());
+    }
+
+    /**
      * Handles a regular heartbeat from a streams group member.
      * It mainly consists of five parts:
      * 1) Create or update the member.
@@ -7562,7 +7581,31 @@ public class GroupMetadataManager {
                     );
                 }
             } else if (group.isInState(STABLE)) {
-                if (group.isLeader(memberId)) {
+                boolean isLeader = group.isLeader(memberId);
+
+                if (isStaticMemberRejoiningAfterReset(context, group, member, request)) {
+                    // The member lost its generation locally but the group still has its assignment,
+                    // so return the current generation. The leader gets the members so it can resume
+                    // monitoring metadata, but skips the assignment.
+                    log.info("Static member {} with instance id {} rejoins group {} in {} state after resetting " +
+                            "its generation. Returning generation {} without a rebalance; client reason: {}",
+                        memberId, member.groupInstanceId().get(), group.groupId(), group.stateAsString(),
+                        group.generationId(), JoinGroupRequest.joinReason(request));
+
+                    // The member stops heartbeating while it is away from the group, so start a new session
+                    // as the static member replacement path does.
+                    rescheduleClassicGroupMemberHeartbeat(group, member);
+
+                    responseFuture.complete(new JoinGroupResponseData()
+                        .setMembers(isLeader ? group.currentClassicGroupMembers() : List.of())
+                        .setMemberId(memberId)
+                        .setGenerationId(group.generationId())
+                        .setProtocolName(group.protocolName().orElse(null))
+                        .setProtocolType(group.protocolType().orElse(null))
+                        .setLeader(group.leaderOrNull())
+                        .setSkipAssignment(isLeader)
+                    );
+                } else if (isLeader) {
                     // Force a rebalance if the leader sends JoinGroup;
                     // This allows the leader to trigger rebalances for changes affecting assignment
                     // which do not affect the member metadata (such as topic metadata changes for the consumer)
@@ -7609,6 +7652,72 @@ public class GroupMetadataManager {
         }
 
         return EMPTY_RESULT;
+    }
+
+    /**
+     * Checks whether a JoinGroup from an existing member of a Stable group comes from a static member
+     * that reset its generation locally while keeping its member id, for instance after unsubscribe()
+     * or a poll timeout, and can get its current assignment back without a rebalance.
+     *
+     * The embedded consumer subscription tells the two kinds of rejoin apart: a member that reset its
+     * generation sends generation id -1, while a member that rejoins to trigger a rebalance keeps its
+     * generation. The join qualifies only if nothing that the current assignment depends on has changed.
+     *
+     * @param context   The request context.
+     * @param group     The group. It must be in Stable state.
+     * @param member    The existing member sending the join.
+     * @param request   The join group request.
+     *
+     * @return Whether the member can rejoin without a rebalance.
+     */
+    private boolean isStaticMemberRejoiningAfterReset(
+        AuthorizableRequestContext context,
+        ClassicGroup group,
+        ClassicGroupMember member,
+        JoinGroupRequestData request
+    ) {
+        String protocolName = group.protocolName().orElse(null);
+        JoinGroupRequestProtocol protocol = protocolName == null ? null : request.protocols().find(protocolName);
+
+        // The join qualifies only if:
+        // - The member is static, as only a static member keeps its assignment while it is away.
+        // - The JoinGroup version is 9 or above, so a leader can be told to skip the assignment.
+        // - The group uses the consumer protocol, the only one that embeds the generation id.
+        // - The member still supports the group's protocol, which computed the current assignment.
+        if (!member.isStaticMember()
+            || !JoinGroupRequest.supportsSkippingAssignment(context.requestVersion())
+            || !ConsumerProtocol.PROTOCOL_TYPE.equals(member.protocolType())
+            || protocol == null) {
+            return false;
+        }
+
+        try {
+            ByteBuffer buffer = ByteBuffer.wrap(protocol.metadata());
+            short version = ConsumerProtocol.deserializeVersion(buffer);
+
+            // The generation id was added in version 2. Older subscriptions always read as -1.
+            if (version < 2) {
+                return false;
+            }
+
+            ConsumerProtocolSubscription subscription =
+                ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer, version);
+
+            // A member that kept its generation is rejoining on purpose, to trigger a rebalance.
+            if (subscription.generationId() != -1) {
+                return false;
+            }
+
+            // A change of subscribed topics requires a rebalance.
+            return new HashSet<>(subscription.topics())
+                .equals(deserializeMemberSubscribedTopics(member, protocolName));
+        } catch (SchemaException e) {
+            // The subscription is not needed on this path otherwise, so fall back to the regular path
+            // rather than failing the join.
+            log.debug("Failed to parse the consumer protocol subscription of static member {} in group {}. " +
+                "The member rejoins through the regular path.", member.memberId(), group.groupId(), e);
+            return false;
+        }
     }
 
     /**
