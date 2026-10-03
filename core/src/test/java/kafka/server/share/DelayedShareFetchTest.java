@@ -120,8 +120,12 @@ public class DelayedShareFetchTest {
     private static final FetchParams FETCH_PARAMS = new FetchParams(
         FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK,
         Optional.empty(), true);
+    private static final RemoteStorageFetchInfo REMOTE_STORAGE_FETCH_INFO = new RemoteStorageFetchInfo(
+        1024, false, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic", 0)),
+        new FetchRequest.PartitionData(Uuid.randomUuid(), 0, 0, 1024, Optional.empty()),
+        FetchIsolation.HIGH_WATERMARK);
     private static final FetchDataInfo REMOTE_FETCH_INFO = new FetchDataInfo(new LogOffsetMetadata(0, 0, 0),
-        MemoryRecords.EMPTY, false, Optional.empty(), Optional.of(mock(RemoteStorageFetchInfo.class)));
+        MemoryRecords.EMPTY, false, Optional.empty(), Optional.of(REMOTE_STORAGE_FETCH_INFO));
     private static final BrokerTopicStats BROKER_TOPIC_STATS = new BrokerTopicStats();
 
     private Timer mockTimer;
@@ -1626,6 +1630,83 @@ public class DelayedShareFetchTest {
             Mockito.verify(sp0, times(1)).maybeAcquireFetchLock(fetchId);
             Mockito.verify(sp0, times(1)).releaseFetchLock(fetchId);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testRemoteStorageFetchMaxBytesResizedToRemoteFetchPartitions() {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp1.canAcquireRecords()).thenReturn(true);
+        when(sp2.canAcquireRecords()).thenReturn(true);
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+        sharePartitions.put(tp1, sp1);
+        sharePartitions.put(tp2, sp2);
+
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), List.of(tp0, tp1, tp2), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        when(sp0.nextFetchOffset()).thenReturn(10L);
+        when(sp1.nextFetchOffset()).thenReturn(20L);
+        when(sp2.nextFetchOffset()).thenReturn(30L);
+
+        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
+        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
+        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
+
+        // Mocking local log read result for tp0 and tp1, and remote storage read result for tp2.
+        doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(tp0, tp1), Set.of(tp2))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        // Remote fetch related mocks. Remote fetch object does not complete within tryComplete in this mock.
+        RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
+        when(remoteLogManager.asyncRead(any(), any())).thenReturn(mock(Future.class));
+        when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
+
+        Partition p2 = mock(Partition.class);
+        when(p2.isLeader()).thenReturn(true);
+        when(replicaManager.getPartitionOrException(tp2.topicPartition())).thenReturn(p2);
+
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withSharePartitions(sharePartitions)
+            .withReplicaManagerLogReader(replicaManager)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
+            .withFetchId(fetchId)
+            .build();
+
+        // All the topic partitions are acquirable.
+        when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+        when(sp2.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+
+        assertFalse(delayedShareFetch.tryComplete());
+
+        // tp0 and tp1 are local log reads and got released, hence the request budget must be
+        // re-distributed across the remote fetch partitions alone, raising tp2's byte caps from the
+        // per-partition value computed over 3 acquired partitions to the full request max bytes.
+        List<RemoteFetch> remoteFetches = delayedShareFetch.pendingRemoteFetches().remoteFetches();
+        assertEquals(1, remoteFetches.size());
+        assertEquals(tp2, remoteFetches.get(0).topicIdPartition());
+        RemoteStorageFetchInfo resizedFetchInfo = remoteFetches.get(0).remoteFetchInfo();
+        assertEquals(FETCH_PARAMS.maxBytes, resizedFetchInfo.fetchMaxBytes());
+        assertEquals(FETCH_PARAMS.maxBytes, resizedFetchInfo.fetchInfo().maxBytes);
+        // The rest of the remote storage fetch info must be carried over unchanged.
+        assertEquals(REMOTE_STORAGE_FETCH_INFO.topicIdPartition(), resizedFetchInfo.topicIdPartition());
+        assertEquals(REMOTE_STORAGE_FETCH_INFO.minOneMessage(), resizedFetchInfo.minOneMessage());
+        assertEquals(REMOTE_STORAGE_FETCH_INFO.fetchIsolation(), resizedFetchInfo.fetchIsolation());
+        assertEquals(REMOTE_STORAGE_FETCH_INFO.fetchInfo().fetchOffset, resizedFetchInfo.fetchInfo().fetchOffset);
     }
 
     @SuppressWarnings("unchecked")
