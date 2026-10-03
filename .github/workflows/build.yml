@@ -127,6 +127,8 @@ jobs:
       - name: Check Python dependency conflicts
         shell: bash
         run: pip install --dry-run ./tests
+      - name: Test GitHub scripts
+        run: python -m unittest discover -s .github/scripts/tests -p 'test_*.py'
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:

@@ -52,6 +52,8 @@ jobs:
           description: 'Could not load PR number'
           context: 'PR Linter'
           state: 'error'
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
       - name: Lint PR
         id: lint-pr
         env:
