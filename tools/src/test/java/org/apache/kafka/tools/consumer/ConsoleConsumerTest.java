@@ -439,7 +439,8 @@ public class ConsoleConsumerTest {
             ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
 
             JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
-            // Consumer group protocol does not write GROUP_METADATA records, so the result is empty
+            // GroupMetadataMessageFormatter only formats GROUP_METADATA records, but the CONSUMER protocol writes
+            // CONSUMER_GROUP_* records (e.g. CONSUMER_GROUP_METADATA) instead, so the output is empty.
             assertTrue(jsonNode.isEmpty());
         } finally {
             consumerWrapper.cleanup();
