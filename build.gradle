@@ -1044,6 +1044,8 @@ project(':server') {
 
   apply plugin: 'java-test-fixtures'
   configurations {
+    generator
+
     // To prevent a UniqueResourceException due the same resource existing in both
     // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
     testImplementation.exclude module: 'api-ldap-schema-data'
@@ -1103,7 +1105,36 @@ project(':server') {
     testFixturesImplementation libs.apachedsJdbmPartition
 
     testRuntimeOnly runtimeTestLibs
+
+    generator project(':generator')
   }
+
+  tasks.register('processMessages', JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [
+      "-p", "org.apache.kafka.network",
+      "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/network",
+      "-i", "$rootDir/clients/src/main/resources/common/message",
+      "-t", "GeneratedRequestConvertToJsonGenerator"
+    ]
+    inputs.dir("$rootDir/clients/src/main/resources/common/message")
+      .withPropertyName("messages")
+      .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    outputs.cacheIf { true }
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/network")
+  }
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
+      }
+    }
+  }
+
+  compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   tasks.register('createVersionFile') {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
