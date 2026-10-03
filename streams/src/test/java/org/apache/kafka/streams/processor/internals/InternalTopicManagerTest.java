@@ -74,6 +74,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -313,57 +314,33 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldThrowTimeoutExceptionIfGetPartitionInfoHasTopicDescriptionTimeout() {
-        mockAdminClient.timeoutNextRequest(1);
-
+    public void shouldNotThrowExceptionIfGetPartitionInfoHasTopicDescriptionTimeout() {
         final InternalTopicManager internalTopicManager =
                 new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
-        try {
-            final Set<String> topic1set = Set.of(topic1);
-            internalTopicManager.getTopicPartitionInfo(topic1set, null);
-
-        } catch (final TimeoutException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
-        }
 
         mockAdminClient.timeoutNextRequest(1);
+        final Set<String> topic1set = Set.of(topic1);
+        assertDoesNotThrow(
+                () -> internalTopicManager.getTopicPartitionInfo(topic1set, null)
+        );
 
-        try {
-            final Set<String> topic2set = Set.of(topic2);
-            internalTopicManager.getTopicPartitionInfo(topic2set, null);
-
-        } catch (final TimeoutException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
-        }
+        mockAdminClient.timeoutNextRequest(1);
+        final Set<String> topic2set = Set.of(topic2);
+        assertDoesNotThrow(
+                () -> internalTopicManager.getTopicPartitionInfo(topic2set, null)
+        );
     }
 
     @Test
-    public void shouldThrowTimeoutExceptionIfGetNumPartitionsHasTopicDescriptionTimeout() {
+    public void shouldNotThrowExceptionIfGetNumPartitionsHasTopicDescriptionTimeout() {
         mockAdminClient.timeoutNextRequest(1);
 
-        final InternalTopicManager internalTopicManager =
-                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
-        try {
-            final Set<String> topic1set = Set.of(topic1);
-            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
+        final Set<String> topic1set = Set.of(topic1);
+        final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
 
-            internalTopicManager.getNumPartitions(topic1set, topic2set);
-
-        } catch (final TimeoutException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
-        }
-
-        mockAdminClient.timeoutNextRequest(1);
-
-        try {
-            final Set<String> topic1set = Set.of(topic1);
-            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
-
-            internalTopicManager.getNumPartitions(topic1set, topic2set);
-
-        } catch (final TimeoutException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
-        }
+        assertDoesNotThrow(
+                () -> internalTopicManager.getNumPartitions(topic1set, topic2set)
+        );
     }
 
     @Test
