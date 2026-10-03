@@ -40,7 +40,7 @@ jobs:
           exit-code: '1'
       - name: Upload CVE scan report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
           path: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
