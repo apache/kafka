@@ -57,6 +57,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.clients.admin.AdminClientTestUtils.listGroupsResult;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -237,6 +238,8 @@ public class ConsumerGroupServiceTest {
                 .thenReturn(describeTopicsResult(TOPICS));
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
+        when(admin.listGroups(any()))
+                .thenReturn(listGroupsResult());
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetResult = groupService.resetOffsets();
         assertEquals(Set.of(GROUP), resetResult.keySet());
