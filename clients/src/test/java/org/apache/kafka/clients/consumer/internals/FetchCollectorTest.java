@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -50,6 +51,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,6 +59,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -314,6 +318,99 @@ public class FetchCollectorTest {
         // The next-in-line CompletedFetch should be null; the CompletedFetch is added to the FetchBuffer
         // queue by the FetchCollector when it detects a 'paused' partition.
         assertNull(fetchBuffer.nextInLineFetch());
+    }
+
+    @Test
+    public void testCollectPausedFetchDoesNotRegenerateWakeup() throws Exception {
+        buildDependencies();
+        assignAndSeek(topicAPartition0);
+
+        CompletedFetch completedFetch = completedFetchBuilder.build();
+        fetchBuffer.add(completedFetch);
+        // Consume the notification for the original response before testing paused fetch requeues.
+        fetchBuffer.awaitWakeup(time.timer(0));
+        subscriptions.pause(topicAPartition0);
+
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.numRecords());
+        assertTrue(fetch.nextOffsets().isEmpty());
+        assertEquals(0, subscriptions.position(topicAPartition0).offset);
+        assertSame(completedFetch, fetchBuffer.peek());
+        assertNull(fetchBuffer.nextInLineFetch());
+        assertFalse(completedFetch.isConsumed());
+
+        FutureTask<Void> awaitWakeup = new FutureTask<>(() -> {
+            fetchBuffer.awaitWakeup(time.timer(Duration.ofMinutes(1)));
+            return null;
+        });
+        Thread waitingThread = new Thread(awaitWakeup);
+        waitingThread.start();
+        try {
+            TestUtils.waitForCondition(
+                () -> waitingThread.getState() == Thread.State.TIMED_WAITING,
+                "Thread did not start waiting on the fetch buffer"
+            );
+            assertFalse(awaitWakeup.isDone(), "Collecting paused fetches must not regenerate the wakeup signal");
+        } finally {
+            fetchBuffer.wakeup();
+            waitingThread.join(Duration.ofSeconds(30).toMillis());
+        }
+        assertFalse(waitingThread.isAlive());
+        awaitWakeup.get(30, TimeUnit.SECONDS);
+
+        subscriptions.resume(topicAPartition0);
+        fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertEquals(DEFAULT_RECORD_COUNT, fetch.numRecords());
+        assertEquals(DEFAULT_RECORD_COUNT, subscriptions.position(topicAPartition0).offset);
+    }
+
+    @Test
+    public void testCollectMixedPausedAndUnpausedFetchesDoesNotRegenerateWakeup() throws Exception {
+        buildDependencies();
+        assign(topicAPartition0, topicAPartition1);
+        subscriptions.seek(topicAPartition0, 0);
+        subscriptions.seek(topicAPartition1, 0);
+
+        CompletedFetch pausedFetch = completedFetchBuilder.build();
+        CompletedFetch unpausedFetch = new CompletedFetchBuilder()
+            .partition(topicAPartition1)
+            .build();
+        // Put the paused partition first so collection must skip it to reach the available records.
+        fetchBuffer.addAll(List.of(pausedFetch, unpausedFetch));
+        fetchBuffer.awaitWakeup(time.timer(0));
+        subscriptions.pause(topicAPartition0);
+
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertEquals(Set.of(topicAPartition1), fetch.records().keySet());
+        assertEquals(DEFAULT_RECORD_COUNT, fetch.numRecords());
+        assertEquals(DEFAULT_RECORD_COUNT, subscriptions.position(topicAPartition1).offset);
+        assertEquals(0, subscriptions.position(topicAPartition0).offset);
+        assertSame(pausedFetch, fetchBuffer.peek());
+        assertFalse(pausedFetch.isConsumed());
+
+        // After consuming the unpaused partition, only paused data remains to be collected.
+        assertTrue(fetchCollector.collectFetch(fetchBuffer).isEmpty());
+        assertEquals(Set.of(topicAPartition0), fetchBuffer.bufferedPartitions());
+
+        FutureTask<Void> awaitWakeup = new FutureTask<>(() -> {
+            fetchBuffer.awaitWakeup(time.timer(Duration.ofMinutes(1)));
+            return null;
+        });
+        Thread waitingThread = new Thread(awaitWakeup);
+        waitingThread.start();
+        try {
+            TestUtils.waitForCondition(
+                () -> waitingThread.getState() == Thread.State.TIMED_WAITING,
+                "Thread did not start waiting on the fetch buffer"
+            );
+            assertFalse(awaitWakeup.isDone(), "Requeuing the remaining paused fetch must not regenerate the wakeup signal");
+        } finally {
+            fetchBuffer.wakeup();
+            waitingThread.join(Duration.ofSeconds(30).toMillis());
+        }
+        assertFalse(waitingThread.isAlive());
+        awaitWakeup.get(30, TimeUnit.SECONDS);
     }
 
     @ParameterizedTest
