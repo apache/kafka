@@ -540,35 +540,10 @@ public class StickyTaskAssignor implements TaskAssignor {
         // Assuming our current assignment is range-based, we want to sort by partition first.
         standbyTasks.sort(Comparator.comparing(TaskId::partition).thenComparing(TaskId::subtopologyId).reversed());
 
-        final Map<TaskId, Integer> rackAwareStandbys = new HashMap<>();
-        if (!localState.rackAwareAssignmentTags.isEmpty()) {
-            final RackAwareStandbyPicker<ProcessGroup> picker = new RackAwareStandbyPicker<>(
-                localState.rackAwareAssignmentTags,
-                groupProcessesByTagValues(localState),
-                ProcessGroup::clientTags
-            );
-
-            // 1. re-assigning standby tasks in a new rack to clients that previously had the same task (as active or standby)
-            final Map<TaskId, List<ProcessState>> currentStandbys = new HashMap<>();
-            final ArrayList<TaskId> rackNonSticky = new ArrayList<>();
-            for (final TaskId task : standbyTasks) {
-                // Without a previous member there is no sticky pick to make, so the task goes straight to step 2.
-                if (!hasPrevMember(localState, task)) {
-                    currentStandbys.put(task, List.of());
-                    rackNonSticky.add(task);
-                    continue;
-                }
-                final List<ProcessState> placed = pickRackAwareStandbys(localState, picker, task, List.of(), true, rackNonSticky);
-                currentStandbys.put(task, placed);
-                rackAwareStandbys.put(task, placed.size());
-            }
-
-            // 2. assigning remaining standby tasks in a new rack to the least loaded client
-            for (final TaskId task : rackNonSticky) {
-                final List<ProcessState> alreadyPlaced = currentStandbys.get(task);
-                rackAwareStandbys.put(task, alreadyPlaced.size() + pickRackAwareStandbys(localState, picker, task, alreadyPlaced, false, rackNonSticky).size());
-            }
-        }
+        // 1. and 2. assigning the standby tasks that make their task more rack-diverse
+        final Map<TaskId, Integer> rackAwareStandbys = localState.rackAwareAssignmentTags.isEmpty()
+            ? Map.of()
+            : assignRackAwareStandbys(localState, standbyTasks);
 
         // 3. re-assigning remaining standby tasks to clients that previously had the same task (as active or standby)
         final ArrayList<StandbyToAssign> toLeastLoaded = new ArrayList<>(standbyTasks.size() * localState.numStandbyReplicas);
@@ -603,6 +578,41 @@ public class StickyTaskAssignor implements TaskAssignor {
                 }
             }
         }
+    }
+
+    /**
+     * Steps 1 and 2 of {@link #assignStandby}: places the standbys that make their task more rack-diverse and returns
+     * the number placed per task.
+     */
+    private static Map<TaskId, Integer> assignRackAwareStandbys(final LocalState localState, final List<TaskId> standbyTasks) {
+        final RackAwareStandbyPicker<ProcessGroup> picker = new RackAwareStandbyPicker<>(
+            localState.rackAwareAssignmentTags,
+            groupProcessesByTagValues(localState),
+            ProcessGroup::clientTags
+        );
+        final Map<TaskId, Integer> rackAwareStandbys = new HashMap<>();
+
+        // 1. re-assigning standby tasks in a new rack to clients that previously had the same task (as active or standby)
+        final Map<TaskId, List<ProcessState>> currentStandbys = new HashMap<>();
+        final ArrayList<TaskId> rackNonSticky = new ArrayList<>();
+        for (final TaskId task : standbyTasks) {
+            // Without a previous member there is no sticky pick to make, so the task goes straight to step 2.
+            if (!hasPrevMember(localState, task)) {
+                currentStandbys.put(task, List.of());
+                rackNonSticky.add(task);
+                continue;
+            }
+            final List<ProcessState> placed = pickRackAwareStandbys(localState, picker, task, List.of(), true, rackNonSticky);
+            currentStandbys.put(task, placed);
+            rackAwareStandbys.put(task, placed.size());
+        }
+
+        // 2. assigning remaining standby tasks in a new rack to the least loaded client
+        for (final TaskId task : rackNonSticky) {
+            final List<ProcessState> alreadyPlaced = currentStandbys.get(task);
+            rackAwareStandbys.put(task, alreadyPlaced.size() + pickRackAwareStandbys(localState, picker, task, alreadyPlaced, false, rackNonSticky).size());
+        }
+        return rackAwareStandbys;
     }
 
     /**
