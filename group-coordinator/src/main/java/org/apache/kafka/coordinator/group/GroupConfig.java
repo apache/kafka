@@ -34,6 +34,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -187,19 +188,19 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
             atLeast(1),
-            MEDIUM,
+            HIGH,
             GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DOC)
         .define(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
             atLeast(1),
-            MEDIUM,
+            HIGH,
             GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
         .define(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT,
             atLeast(0),
-            MEDIUM,
+            LOW,
             GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
             BOOLEAN,
@@ -210,13 +211,13 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
             atLeast(1),
-            MEDIUM,
+            HIGH,
             GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_DOC)
         .define(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
             atLeast(1),
-            MEDIUM,
+            HIGH,
             GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
         .define(SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
             INT,
@@ -257,7 +258,7 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT,
             atLeast(0),
-            MEDIUM,
+            LOW,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
             BOOLEAN,
@@ -268,19 +269,19 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
             atLeast(1),
-            MEDIUM,
+            HIGH,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DOC)
         .define(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
             atLeast(1),
-            MEDIUM,
+            HIGH,
             GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
         .define(STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
             atLeast(0),
-            MEDIUM,
+            HIGH,
             GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC)
         .define(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG,
             INT,
@@ -292,7 +293,7 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT,
             atLeast(0),
-            MEDIUM,
+            LOW,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
             BOOLEAN,
@@ -303,7 +304,7 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             atLeast(1),
-            MEDIUM,
+            LOW,
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
             INT,
