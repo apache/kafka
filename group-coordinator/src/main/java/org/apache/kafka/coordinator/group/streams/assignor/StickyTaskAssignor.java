@@ -667,8 +667,6 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
 
             // least loaded process of the candidate groups. It has a member with room, so the lookup cannot return null.
-            // Adding to that member directly keeps the heap of members by load out of this pass, so that it is built
-            // once, in the least-loaded pass, as without rack awareness.
             final ProcessState processWithLeastLoad = leastLoaded(localState, candidates);
             placeRackAwareStandby(localState, picker, processWithLeastLoad, leastLoadedMemberWithRoom(localState, processWithLeastLoad), task, placed);
         }
