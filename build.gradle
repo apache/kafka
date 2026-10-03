@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import org.ajoberstar.grgit.Grgit
+import org.eclipse.jgit.api.Git
 import org.gradle.api.artifacts.FileCollectionDependency
 import java.nio.charset.StandardCharsets
 
@@ -22,11 +22,6 @@ buildscript {
     mavenCentral()
   }
   apply from: "$rootDir/gradle/dependencies.gradle"
-
-  dependencies {
-    // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar.grgit:grgit-core:$versions.grgit"
-  }
 }
 
 plugins {
@@ -115,7 +110,7 @@ ext {
     throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues, but received: $userScalaOptimizerMode")
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
-  repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
+  repo = file("$rootDir/.git").isDirectory() ? Git.open(project.getRootDir()) : null
 
   commitId = determineCommitId()
 
@@ -238,7 +233,7 @@ def determineCommitId() {
   if (project.hasProperty('commitId')) {
     commitId.take(takeFromHash)
   } else if (repo != null) {
-    repo.head().id.take(takeFromHash)
+    repo.repository.resolve("HEAD").abbreviate(takeFromHash).name()
   } else {
     "unknown"
   }
@@ -278,7 +273,7 @@ if (repo != null) {
 
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
-    excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
+    excludes = new ArrayList<String>(repo.clean().setIgnore(false).setCleanDirectories(true).setDryRun(true).call())
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
         '**/.git/**',
