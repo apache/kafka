@@ -47,6 +47,7 @@ import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.DefaultConfigPropertyFilter;
+import org.apache.kafka.connect.mirror.GroupMirroringPolicy;
 import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
 import org.apache.kafka.connect.mirror.MirrorClient;
 import org.apache.kafka.connect.mirror.MirrorConnectorConfig;
@@ -498,6 +499,57 @@ public class MirrorConnectorsIntegrationBaseTest {
     @Test
     public void testOneWayReplicationWithFrequentOffsetSyncs() throws InterruptedException {
         testOneWayReplicationWithOffsetSyncs(0);
+    }
+
+    @Test
+    public void testGroupMirroringPolicy() throws Exception {
+        produceMessages(primaryProducer, "test-topic-1");
+        String sourceGroup = "consumer-group-testGroupMirroringPolicy";
+        String targetGroup = PRIMARY_CLUSTER_ALIAS + "." + sourceGroup;
+        String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
+        Map<String, Object> consumerProps = Map.of(
+                "group.id", sourceGroup,
+                "auto.offset.reset", "earliest");
+
+        // Create offsets before the connector starts so the group is discovered immediately.
+        try (Consumer<byte[], byte[]> consumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
+            waitForConsumingAllRecords(consumer, NUM_RECORDS_PRODUCED);
+        }
+
+        mm2Props.put("group.mirroring.policy.class", PrefixGroupMirroringPolicy.class.getName());
+        mm2Props.put("sync.group.offsets.enabled", "true");
+        mm2Props.put("sync.group.offsets.interval.seconds", "1");
+        mm2Props.put("offset.lag.max", "0");
+        mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
+        mm2Config = new MirrorMakerConfig(mm2Props);
+
+        waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+        waitForTopicCreated(backup, remoteTopic);
+
+        Map<TopicPartition, OffsetAndMetadata> checkpoints;
+        try (MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS))) {
+            checkpoints = waitForCheckpointOnAllPartitions(
+                    backupClient, targetGroup, PRIMARY_CLUSTER_ALIAS, remoteTopic);
+            assertEquals(NUM_PARTITIONS, checkpoints.size(), "Checkpoints were not written for the renamed group");
+        }
+
+        waitForConsumerGroupFullSync(backup, List.of(remoteTopic), targetGroup, NUM_RECORDS_PRODUCED, 0);
+        String checkpointsTopic = PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal";
+        int checkpointCountBeforeRestart = backup.kafka().consumeAll(CHECKPOINT_DURATION_MS, checkpointsTopic).count();
+
+        // Restart after the checkpoint has been written. The checkpoint store must load it using
+        // the target group ID; otherwise the task treats it as new and writes it again.
+        try (Admin admin = backup.kafka().createAdminClient()) {
+            Map<TopicPartition, OffsetAndMetadata> offsetsToReset = checkpoints.keySet().stream()
+                    .collect(Collectors.toMap(Function.identity(), ignored -> new OffsetAndMetadata(0)));
+            admin.alterConsumerGroupOffsets(targetGroup, offsetsToReset).all().get();
+        }
+        restartMirrorMakerConnectors(backup, List.of(MirrorCheckpointConnector.class));
+        // The target-offset synchronization runs only after the checkpoint store has loaded.
+        waitForConsumerGroupFullSync(backup, List.of(remoteTopic), targetGroup, NUM_RECORDS_PRODUCED, 0);
+        int checkpointCountAfterRestart = backup.kafka().consumeAll(CHECKPOINT_DURATION_MS, checkpointsTopic).count();
+        assertEquals(checkpointCountBeforeRestart, checkpointCountAfterRestart,
+                "Checkpoint task emitted duplicate checkpoints after restart");
     }
 
     private void testOneWayReplicationWithOffsetSyncs(int offsetLagMax) throws InterruptedException {
@@ -1610,6 +1662,21 @@ public class MirrorConnectorsIntegrationBaseTest {
                     .get(topicName).partitions().size() == totalNumPartitions, TOPIC_SYNC_DURATION_MS,
                 "Topic: " + topicName + "'s partitions didn't get created on cluster: " + cluster.getName()
             );
+        }
+    }
+
+    /** Test-only group policy that namespaces target groups with their source cluster alias. */
+    public static class PrefixGroupMirroringPolicy implements GroupMirroringPolicy {
+
+        @Override
+        public String targetGroupId(String sourceClusterAlias, String group) {
+            return sourceClusterAlias + "." + group;
+        }
+
+        @Override
+        public String sourceGroupId(String sourceClusterAlias, String targetGroup) {
+            String prefix = sourceClusterAlias + ".";
+            return targetGroup.startsWith(prefix) ? targetGroup.substring(prefix.length()) : null;
         }
     }
 
