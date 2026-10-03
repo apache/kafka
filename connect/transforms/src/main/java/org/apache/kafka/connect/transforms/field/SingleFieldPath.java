@@ -22,6 +22,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -205,6 +206,55 @@ public class SingleFieldPath {
             if (current == null) return null;
         }
         return current.get(lastStep());
+    }
+
+    /**
+     * Set a value at the current path within a schemaless {@code Map<String, Object>}.
+     * Intermediate maps along the path are defensively copied to avoid mutating the original.
+     */
+    @SuppressWarnings("unchecked")
+    public void setValue(Map<String, Object> map, Object newValue) {
+        Map<String, Object> current = map;
+        for (String step : stepsWithoutLast()) {
+            Map<String, Object> nested = requireMapOrNull(current.get(step), "nested field access");
+            if (nested == null) return;
+            Map<String, Object> copy = new HashMap<>(nested);
+            current.put(step, copy);
+            current = copy;
+        }
+        current.put(lastStep(), newValue);
+    }
+
+    /**
+     * Return a copy of the given Struct with the value at this path replaced.
+     * The schema is preserved; only the value at the target path is changed.
+     */
+    public Struct withValue(Struct struct, Object newValue, boolean replaceNullWithDefault) {
+        return rebuildWithValue(struct, 0, newValue, replaceNullWithDefault);
+    }
+
+    private Struct rebuildWithValue(Struct source, int stepIndex, Object newValue, boolean replaceNullWithDefault) {
+        Schema schema = source.schema();
+        Struct result = new Struct(schema);
+        String targetFieldName = steps.get(stepIndex);
+        boolean isLeaf = stepIndex == lastStepIndex();
+
+        for (Field field : schema.fields()) {
+            Object fieldValue = replaceNullWithDefault ? source.get(field) : source.getWithoutDefault(field.name());
+            if (field.name().equals(targetFieldName)) {
+                if (isLeaf) {
+                    result.put(field, newValue);
+                } else {
+                    Struct child = requireStructOrNull(fieldValue, "nested field access");
+                    result.put(field, child != null
+                        ? rebuildWithValue(child, stepIndex + 1, newValue, replaceNullWithDefault)
+                        : null);
+                }
+            } else {
+                result.put(field, fieldValue);
+            }
+        }
+        return result;
     }
 
     // For testing
