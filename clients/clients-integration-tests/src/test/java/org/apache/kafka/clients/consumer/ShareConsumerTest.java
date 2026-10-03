@@ -74,6 +74,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -1723,14 +1724,15 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
         // produce some messages
         ClientState prodState = new ClientState();
+        AtomicBoolean stopProducer = new AtomicBoolean(false);
         final Set<String> produced = new HashSet<>();
-        service.execute(() -> {
+        Future<?> producerFuture = service.submit(() -> {
                 int i = 0;
                 try (Producer<String, String> producer = createProducer(Map.of(
                     ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
                     ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
                 ))) {
-                    while (!prodState.done().get()) {
+                    while (!stopProducer.get()) {
                         String key = "key-" + (i++);
                         ProducerRecord<String, String> record = new ProducerRecord<>(
                             tpMulti.topic(),
@@ -1749,6 +1751,8 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                             // ignore
                         }
                     }
+                } finally {
+                    prodState.done().set(true);
                 }
             }
         );
@@ -1757,7 +1761,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         ClientState consState = new ClientState();
         // using map here if we want to debug specific keys
         Map<String, Integer> consumed = new HashMap<>();
-        service.schedule(() -> {
+        Future<?> consumerFuture = service.schedule(() -> {
                 try (ShareConsumer<String, String> shareConsumer = createShareConsumer(groupId, Map.of(
                     ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
                     ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()
@@ -1767,7 +1771,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                         ConsumerRecords<String, String> records = shareConsumer.poll(Duration.ofMillis(2000L));
                         consState.count().addAndGet(records.count());
                         records.forEach(rec -> consumed.compute(rec.key(), (k, v) -> v == null ? 1 : v + 1));
-                        if (prodState.done().get() && records.count() == 0) {
+                        if (prodState.done().get() && records.count() == 0 && consumed.keySet().containsAll(produced)) {
                             consState.done().set(true);
                         }
                     }
@@ -1778,7 +1782,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         // To be closer to real world scenarios, we will execute after
         // some time has elapsed since the producer and consumer started
         // working.
-        service.schedule(() -> {
+        Future<?> coordinatorMovementFuture = service.schedule(() -> {
                 // Get the current node hosting the __share_group_state partition
                 // on which tpMulti is hosted. Then shut down this node and wait
                 // for it to be gracefully shutdown. Then fetch the coordinator again
@@ -1814,16 +1818,30 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             }, 5L, TimeUnit.SECONDS
         );
 
-        // top the producer after some time (but after coordinator shutdown)
-        service.schedule(() -> prodState.done().set(true), 10L, TimeUnit.SECONDS);
+        // Stop the producer after some time (but after coordinator shutdown).
+        Future<?> stopProducerFuture = service.schedule(() -> stopProducer.set(true), 10L, TimeUnit.SECONDS);
 
-        // wait for both producer and consumer to finish
-        TestUtils.waitForCondition(
-            () -> prodState.done().get() && consState.done().get(),
-            45_000L,
-            500L,
-            () -> "prod/cons not done yet"
-        );
+        try {
+            // Wait for all tasks to finish and propagate exceptions from the executor threads.
+            TestUtils.waitForCondition(
+                () -> producerFuture.isDone()
+                    && consumerFuture.isDone()
+                    && coordinatorMovementFuture.isDone()
+                    && stopProducerFuture.isDone(),
+                45_000L,
+                500L,
+                () -> "producer/consumer/coordinator tasks not done yet"
+            );
+            producerFuture.get();
+            consumerFuture.get();
+            coordinatorMovementFuture.get();
+            stopProducerFuture.get();
+        } finally {
+            // Ensure the producer and consumer exit if waiting for the tasks fails.
+            stopProducer.set(true);
+            consState.done().set(true);
+            shutdownExecutorService(service);
+        }
 
         // Make sure we consumed all records. Consumed records could be higher
         // due to re-delivery but that is expected since we are only guaranteeing
@@ -1831,8 +1849,6 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         assertTrue(prodState.count().get() <= consState.count().get());
         Set<String> consumedKeys = consumed.keySet();
         assertTrue(produced.containsAll(consumedKeys) && consumedKeys.containsAll(produced));
-
-        shutdownExecutorService(service);
 
         verifyShareGroupStateTopicRecordsProduced();
     }
