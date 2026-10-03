@@ -27,25 +27,15 @@
     "1+": "3"
   },
   "fields": [
-    {
-      "name": "ClientInstanceId", "type": "uuid", "versions": "0",
-      "about": "Unique id for this client instance."
-    },
-    {
-      "name": "SubscriptionId", "type": "int32", "versions": "0+",
-      "about": "Unique identifier for the current subscription."
-    },
-    {
-      "name": "Terminating", "type": "bool", "versions": "0+",
-      "about": "Client is terminating the connection."
-    },
-    {
-      "name": "CompressionType", "type": "int8", "versions": "0+",
-      "about": "Compression codec used to compress the metrics."
-    },
-    {
-      "name": "Metrics", "type": "bytes", "versions": "0+", "zeroCopy": true,
-      "about": "Metrics encoded in OpenTelemetry MetricsData v1 protobuf format."
-    }
+    { "name": "ClientInstanceId", "type": "uuid", "versions": "0",
+      "about": "Unique id for this client instance." },
+    { "name": "SubscriptionId", "type": "int32", "versions": "0+",
+      "about": "Unique identifier for the current subscription." },
+    { "name": "Terminating", "type": "bool", "versions": "0+",
+      "about": "Client is terminating the connection." },
+    { "name": "CompressionType", "type": "int8", "versions": "0+",
+      "about": "Compression codec used to compress the metrics." },
+    { "name": "Metrics", "type": "bytes", "versions": "0+", "zeroCopy": true,
+      "about": "Metrics encoded in OpenTelemetry MetricsData v1 protobuf format." }
   ]
 }

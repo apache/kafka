@@ -24,41 +24,23 @@
     "0+": "1"
   },
   "fields": [
-    {
-      "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
-      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota."
-    },
-    {
-      "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The error code, or 0 if there was no error."
-    },
-    {
-      "name": "ClientInstanceId", "type": "uuid", "versions": "0",
-      "about": "Assigned client instance id if ClientInstanceId was 0 in the request, else 0."
-    },
-    {
-      "name": "SubscriptionId", "type": "int32", "versions": "0+",
-      "about": "Unique identifier for the current subscription set for this client instance."
-    },
-    {
-      "name": "AcceptedCompressionTypes", "type": "[]int8", "versions": "0+",
-      "about": "Compression types that broker accepts for the PushTelemetryRequest."
-    },
-    {
-      "name": "PushIntervalMs", "type": "int32", "versions": "0+",
-      "about": "Configured push interval, which is the lowest configured interval in the current subscription set."
-    },
-    {
-      "name": "TelemetryMaxBytes", "type": "int32", "versions": "0+",
-      "about": "The maximum bytes of binary data the broker accepts in PushTelemetryRequest."
-    },
-    {
-      "name": "DeltaTemporality", "type": "bool", "versions": "0+",
-      "about": "Flag to indicate monotonic/counter metrics are to be emitted as deltas or cumulative values."
-    },
-    {
-      "name": "RequestedMetrics", "type": "[]string", "versions": "0+",
-      "about": "Requested metrics prefix string match. Empty array: No metrics subscribed, Array[0] empty string: All metrics subscribed."
-    }
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The error code, or 0 if there was no error." },
+    { "name": "ClientInstanceId", "type": "uuid", "versions": "0",
+      "about": "Assigned client instance id if ClientInstanceId was 0 in the request, else 0." },
+    { "name": "SubscriptionId", "type": "int32", "versions": "0+",
+      "about": "Unique identifier for the current subscription set for this client instance." },
+    { "name": "AcceptedCompressionTypes", "type": "[]int8", "versions": "0+",
+      "about": "Compression types that broker accepts for the PushTelemetryRequest." },
+    { "name": "PushIntervalMs", "type": "int32", "versions": "0+",
+      "about": "Configured push interval, which is the lowest configured interval in the current subscription set." },
+    { "name": "TelemetryMaxBytes", "type": "int32", "versions": "0+",
+      "about": "The maximum bytes of binary data the broker accepts in PushTelemetryRequest." },
+    { "name": "DeltaTemporality", "type": "bool", "versions": "0+",
+      "about": "Flag to indicate monotonic/counter metrics are to be emitted as deltas or cumulative values." },
+    { "name": "RequestedMetrics", "type": "[]string", "versions": "0+",
+      "about": "Requested metrics prefix string match. Empty array: No metrics subscribed, Array[0] empty string: All metrics subscribed." }
   ]
 }

@@ -19,10 +19,13 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,16 +40,23 @@ public class GetTelemetrySubscriptionsRequestTest {
     }
 
     @Test
-    public void testBuildV1ClearsClientInstanceIdInBody() {
+    public void testBuildV1SendsClientInstanceIdInHeaderOnly() {
         Uuid clientInstanceId = Uuid.randomUuid();
-        GetTelemetrySubscriptionsRequest.Builder builder = new GetTelemetrySubscriptionsRequest.Builder(
-            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(clientInstanceId), true);
+        GetTelemetrySubscriptionsRequestData data = new GetTelemetrySubscriptionsRequestData().setClientInstanceId(clientInstanceId);
+        GetTelemetrySubscriptionsRequest.Builder builder = new GetTelemetrySubscriptionsRequest.Builder(data, true);
 
         assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
 
-        // In v1 the ID travels in the request header.
+        // The data carries the v0 body ID because the version is only chosen when the request is built.
         GetTelemetrySubscriptionsRequest v1 = builder.build((short) 1);
-        assertEquals(Uuid.ZERO_UUID, v1.data().clientInstanceId());
+        ByteBuffer buffer = v1.serializeWithHeader(
+            new RequestHeader(ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS, (short) 1, "client", clientInstanceId, 0));
+
+        RequestHeader header = RequestHeader.parse(buffer);
+        assertEquals(clientInstanceId, header.clientInstanceId());
+        GetTelemetrySubscriptionsRequest parsed = (GetTelemetrySubscriptionsRequest) AbstractRequest.parseRequest(
+            ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS, (short) 1, new ByteBufferAccessor(buffer)).request;
+        assertEquals(data.duplicate().setClientInstanceId(Uuid.ZERO_UUID), parsed.data());
         // Building v1 must not mutate the data the builder was given.
         assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
     }

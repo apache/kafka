@@ -19,6 +19,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
@@ -53,23 +55,27 @@ public class PushTelemetryRequestTest {
     }
 
     @Test
-    public void testBuildV1ClearsClientInstanceIdInBody() {
+    public void testBuildV1SendsClientInstanceIdInHeaderOnly() {
         Uuid clientInstanceId = Uuid.randomUuid();
-        ByteBuffer metrics = ByteBuffer.wrap("test-metrics".getBytes(StandardCharsets.UTF_8));
-        PushTelemetryRequest.Builder builder = new PushTelemetryRequest.Builder(
-            new PushTelemetryRequestData()
-                .setClientInstanceId(clientInstanceId)
-                .setSubscriptionId(1)
-                .setCompressionType(CompressionType.NONE.id)
-                .setMetrics(metrics), true);
+        PushTelemetryRequestData data = new PushTelemetryRequestData()
+            .setClientInstanceId(clientInstanceId)
+            .setSubscriptionId(1)
+            .setCompressionType(CompressionType.NONE.id)
+            .setMetrics(ByteBuffer.wrap("test-metrics".getBytes(StandardCharsets.UTF_8)));
+        PushTelemetryRequest.Builder builder = new PushTelemetryRequest.Builder(data, true);
 
         assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
 
-        // In v1 the ID travels in the request header.
+        // The data carries the v0 body ID because the version is only chosen when the request is built.
         PushTelemetryRequest v1 = builder.build((short) 1);
-        assertEquals(Uuid.ZERO_UUID, v1.data().clientInstanceId());
-        assertEquals(1, v1.data().subscriptionId());
-        assertEquals(metrics, v1.data().metrics());
+        ByteBuffer buffer = v1.serializeWithHeader(
+            new RequestHeader(ApiKeys.PUSH_TELEMETRY, (short) 1, "client", clientInstanceId, 0));
+
+        RequestHeader header = RequestHeader.parse(buffer);
+        assertEquals(clientInstanceId, header.clientInstanceId());
+        PushTelemetryRequest parsed = (PushTelemetryRequest) AbstractRequest.parseRequest(
+            ApiKeys.PUSH_TELEMETRY, (short) 1, new ByteBufferAccessor(buffer)).request;
+        assertEquals(data.duplicate().setClientInstanceId(Uuid.ZERO_UUID), parsed.data());
         // Building v1 must not mutate the data the builder was given.
         assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
     }
