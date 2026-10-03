@@ -52,7 +52,6 @@ import org.apache.commons.validator.routines.InetAddressValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -695,16 +694,9 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public Set<ProcessRole> processRoles() {
-        Set<ProcessRole> result = new HashSet<>();
-        for (String role : getList(KRaftConfigs.PROCESS_ROLES_CONFIG)) {
-            switch (role) {
-                case "broker" -> result.add(ProcessRole.BrokerRole);
-                case "controller" -> result.add(ProcessRole.ControllerRole);
-                default -> throw new ConfigException("Unknown process role '" + role +
-                            "' (only 'broker' and 'controller' are allowed roles)");
-            }
-        }
-        return Collections.unmodifiableSet(result);
+        return getList(KRaftConfigs.PROCESS_ROLES_CONFIG).stream()
+            .map(ProcessRole::fromString)
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     public String metadataLogDir() {
