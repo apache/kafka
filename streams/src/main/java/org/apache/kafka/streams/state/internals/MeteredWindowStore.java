@@ -50,7 +50,6 @@ import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -84,7 +83,7 @@ public class MeteredWindowStore<K, V>
     private Sensor restoreSensor;
 
     protected final LongAdder numOpenIterators = new LongAdder();
-    protected final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
+    protected final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(MeteredIterator.OPENED_FIRST);
 
     private final Map<Class<?>, QueryHandler<?>> queryHandlers =
         mkMap(
