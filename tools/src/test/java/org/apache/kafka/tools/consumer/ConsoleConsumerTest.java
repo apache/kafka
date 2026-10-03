@@ -37,6 +37,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKeyJsonConverter;
@@ -453,7 +454,7 @@ public class ConsoleConsumerTest {
         }
     }
 
-    @ClusterTest(serverProperties = {
+    @ClusterTest(types = {Type.KRAFT}, serverProperties = {
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     })
