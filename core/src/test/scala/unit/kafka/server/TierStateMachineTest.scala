@@ -17,17 +17,26 @@
 
 package kafka.server
 
+import kafka.cluster.Partition
 import org.apache.kafka.common.errors.FencedLeaderEpochException
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.server.{PartitionFetchState, ReplicaState}
+import org.apache.kafka.server.{LeaderEndPoint, PartitionFetchState, ReplicaState}
+import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogSegmentMetadata, RemoteStorageException}
+import org.apache.kafka.storage.internals.log.UnifiedLog
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 import org.apache.kafka.server.common.OffsetAndEpoch
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.ArgumentMatchers.{any, anyInt, anyLong}
+import org.mockito.Mockito.{mock, never, verify, when}
 
+import java.lang.{Long => JLong}
 import java.util.Optional
 import scala.collection.Map
 
@@ -199,4 +208,66 @@ class TierStateMachineTest {
     assertTrue(failedPartitions.contains(partition))
   }
 
+  @Test
+  def testStartFetchesFromLogStartOffsetWhenRemoteRangeIsEmpty(): Unit = {
+    val logStartOffset = 18203L
+    val ctx = new TierStateMachineTestContext(earlierEpochEndOffset = logStartOffset)
+
+    // The fetch start offset equals the leader's log start offset, so the remote range is empty.
+    val fetchState = ctx.tierStateMachine.start(ctx.topicPartition, Optional.empty(), ctx.currentLeaderEpoch,
+      new OffsetAndEpoch(logStartOffset, ctx.fetchStartEpoch), logStartOffset)
+
+    assertEquals(logStartOffset, fetchState.fetchOffset)
+    assertEquals(ReplicaState.FETCHING, fetchState.state)
+    assertEquals(Optional.of(JLong.valueOf(ctx.leaderEndOffset - logStartOffset)), fetchState.lag)
+    verify(ctx.partition).truncateFullyAndStartAt(logStartOffset, false, Optional.of(JLong.valueOf(logStartOffset)))
+    verify(ctx.remoteLogManager, never()).fetchRemoteLogSegmentMetadata(any(), anyInt(), anyLong())
+    verify(ctx.leader, never()).fetchEpochEndOffsets(any())
+  }
+
+  @Test
+  def testStartFailsWhenRemoteMetadataIsMissingForNonEmptyRemoteRange(): Unit = {
+    val logStartOffset = 18203L
+    val fetchStartOffset = 18300L
+    val ctx = new TierStateMachineTestContext(earlierEpochEndOffset = fetchStartOffset)
+
+    // The remote range [18203, 18300) is not empty, so missing metadata for offset 18299 is an error.
+    assertThrows(classOf[RemoteStorageException], () => ctx.tierStateMachine.start(ctx.topicPartition,
+      Optional.empty(), ctx.currentLeaderEpoch, new OffsetAndEpoch(fetchStartOffset, ctx.fetchStartEpoch),
+      logStartOffset))
+    verify(ctx.partition, never()).truncateFullyAndStartAt(anyLong(), any(), any())
+  }
+
+  /**
+   * A TierStateMachine whose remote log segment metadata lookups return empty.
+   */
+  private class TierStateMachineTestContext(earlierEpochEndOffset: Long) {
+    val topicPartition = new TopicPartition("topic", 0)
+    val currentLeaderEpoch = 406
+    val fetchStartEpoch = 405
+    val leaderEndOffset = 18400L
+
+    val leader: LeaderEndPoint = mock(classOf[LeaderEndPoint])
+    val remoteLogManager: RemoteLogManager = mock(classOf[RemoteLogManager])
+    val partition: Partition = mock(classOf[Partition])
+    private val replicaManager = mock(classOf[ReplicaManager])
+    private val log = mock(classOf[UnifiedLog])
+
+    when(replicaManager.brokerTopicStats).thenReturn(new BrokerTopicStats(true))
+    when(replicaManager.localLogOrException(topicPartition)).thenReturn(log)
+    when(replicaManager.remoteLogManager).thenReturn(Some(remoteLogManager))
+    when(replicaManager.getPartitionOrException(topicPartition)).thenReturn(partition)
+    when(log.remoteLogEnabled()).thenReturn(true)
+    when(log.latestEpoch()).thenReturn(Optional.empty[Integer]())
+    when(remoteLogManager.isPartitionReady(topicPartition)).thenReturn(true)
+    when(remoteLogManager.fetchRemoteLogSegmentMetadata(any(), anyInt(), anyLong()))
+      .thenReturn(Optional.empty[RemoteLogSegmentMetadata]())
+    when(leader.fetchEpochEndOffsets(any())).thenReturn(java.util.Map.of(topicPartition,
+      new EpochEndOffset().setPartition(topicPartition.partition).setLeaderEpoch(fetchStartEpoch - 1)
+        .setEndOffset(earlierEpochEndOffset)))
+    when(leader.fetchLatestOffset(topicPartition, currentLeaderEpoch))
+      .thenReturn(new OffsetAndEpoch(leaderEndOffset, currentLeaderEpoch))
+
+    val tierStateMachine = new TierStateMachine(leader, replicaManager, false)
+  }
 }
