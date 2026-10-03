@@ -24,6 +24,7 @@ import org.apache.kafka.message.MessageSpec;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.OptionalInt;
 
 public class CheckerTestUtils {
@@ -143,9 +144,8 @@ public class CheckerTestUtils {
             false);
     }
 
-    static String messageSpecStringToTempFile(String input) throws IOException {
-        File file = Files.createTempFile("MetadataSchemaCheckerToolTest", null).toFile();
-        file.deleteOnExit();
+    static String messageSpecStringToTempFile(Path tempDir, String input) throws IOException {
+        File file = Files.createFile(tempDir.resolve("MetadataSchemaCheckerToolTest.json")).toFile();
         MessageSpec messageSpec = MessageGenerator.JSON_SERDE.
                 readValue(input.replaceAll("'", "\""), MessageSpec.class);
         MessageGenerator.JSON_SERDE.writeValue(file, messageSpec);
