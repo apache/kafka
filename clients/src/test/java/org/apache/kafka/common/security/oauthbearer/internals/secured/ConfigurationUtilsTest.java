@@ -40,6 +40,7 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
     @AfterEach
     public void tearDown() throws Exception {
         System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+        System.clearProperty(ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG);
     }
 
     @Test
@@ -156,6 +157,24 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url + "," + fileUrl);
         assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME, url));
         assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME, fileUrl));
+    }
+
+    @Test
+    public void testUrlWithWildcardAllowList() {
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, " * ");
+        Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, "https://another.example.com");
+        ConfigurationUtils cu = new ConfigurationUtils(configs);
+
+        assertDoesNotThrow(() -> cu.validateUrl(URL_CONFIG_NAME));
+    }
+
+    @Test
+    public void testFileAllowListDoesNotSupportWildcard() {
+        ConfigurationUtils cu = new ConfigurationUtils(Map.of());
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, "*");
+
+        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfFileIsNotAllowed(FILE_CONFIG_NAME, "/tmp/token"),
+            ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG);
     }
 
     @Test
