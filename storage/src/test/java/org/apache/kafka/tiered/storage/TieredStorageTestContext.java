@@ -23,7 +23,6 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewPartitions;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -143,17 +142,12 @@ public final class TieredStorageTestContext implements AutoCloseable {
                 .toList();
     }
 
-    public void createTopic(TopicSpec spec) throws ExecutionException, InterruptedException {
-        NewTopic newTopic;
+    public void createTopic(TopicSpec spec) throws InterruptedException {
         if (spec.assignment() == null || spec.assignment().isEmpty()) {
-            newTopic = new NewTopic(spec.topicName(), spec.partitionCount(), (short) spec.replicationFactor());
+            cluster.createTopic(spec.topicName(), spec.partitionCount(), (short) spec.replicationFactor(), spec.properties());
         } else {
-            Map<Integer, List<Integer>> replicasAssignments = spec.assignment();
-            newTopic = new NewTopic(spec.topicName(), replicasAssignments);
+            cluster.createTopicWithAssignment(spec.topicName(), spec.assignment(), spec.properties());
         }
-        newTopic.configs(spec.properties());
-        admin.createTopics(List.of(newTopic)).all().get();
-        cluster.waitTopicCreation(spec.topicName(), spec.partitionCount());
         synchronized (this) {
             topicSpecs.put(spec.topicName(), spec);
         }
