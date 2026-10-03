@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Time;
@@ -62,6 +63,8 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.findBootstrapResolutionException;
 
 /**
  * ChangelogReader is created and maintained by the stream thread and used for both updating standby tasks and
@@ -842,6 +845,12 @@ public class StoreChangelogReader implements ChangelogReader {
             clearTaskTimeout(getTasksFromPartitions(tasks, partitions));
             return committedOffsets;
         } catch (final TimeoutException | InterruptedException | ExecutionException retriableException) {
+            final BootstrapResolutionException bootstrapResolutionException = findBootstrapResolutionException(retriableException);
+            if (bootstrapResolutionException != null) {
+                log.error("Fatal bootstrap resolution failure encountered by admin client while reading committed offsets", retriableException);
+                throw new StreamsException("Admin client failed to resolve bootstrap servers within bootstrap.resolve.timeout.ms: "
+                    + bootstrapResolutionException.getMessage(), retriableException);
+            }
             log.debug("Could not retrieve the committed offsets for partitions {} due to {}, will retry in the next run loop",
                 partitions, retriableException.toString());
             maybeInitTaskTimeoutOrThrow(getTasksFromPartitions(tasks, partitions), retriableException);
@@ -874,6 +883,12 @@ public class StoreChangelogReader implements ChangelogReader {
             clearTaskTimeout(getTasksFromPartitions(tasks, partitions));
             return logEndOffsets;
         } catch (final TimeoutException | InterruptedException | ExecutionException retriableException) {
+            final BootstrapResolutionException bootstrapResolutionException = findBootstrapResolutionException(retriableException);
+            if (bootstrapResolutionException != null) {
+                log.error("Fatal bootstrap resolution failure encountered by admin client while reading end offsets", retriableException);
+                throw new StreamsException("Admin client failed to resolve bootstrap servers within bootstrap.resolve.timeout.ms: "
+                    + bootstrapResolutionException.getMessage(), retriableException);
+            }
             log.debug("Could not fetch all end offsets for {} due to {}, will retry in the next run loop",
                 partitions, retriableException.toString());
             maybeInitTaskTimeoutOrThrow(getTasksFromPartitions(tasks, partitions), retriableException);

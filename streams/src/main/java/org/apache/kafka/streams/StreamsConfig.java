@@ -149,8 +149,6 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  *   <li>{@link ConsumerConfig#ALLOW_AUTO_CREATE_TOPICS_CONFIG "allow.auto.create.topics"} (false) - Consumers will never trigger automatic topic creation</li>
  *   <li>{@link ConsumerConfig#GROUP_PROTOCOL_CONFIG "group.protocol"} as a consumer config, e.g. {@code consumer.group.protocol} (classic) -
  *       Streams ignores it; to select the rebalance protocol, set the Streams config {@link #GROUP_PROTOCOL_CONFIG "group.protocol"} instead</li>
- *   <li>{@link CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG "bootstrap.resolve.timeout.ms"} (0) - All clients created by Streams
- *       will always resolve bootstrap servers synchronously</li>
  * </ul>
  *
  * If {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} is set to {@link #EXACTLY_ONCE_V2 "exactly_once_v2"},
@@ -462,6 +460,10 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code bootstrap.servers} */
     @SuppressWarnings("WeakerAccess")
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+
+    /** {@code bootstrap.resolve.timeout.ms} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG;
 
     /** {@code buffered.records.per.partition} */
     @SuppressWarnings("WeakerAccess")
@@ -1391,10 +1393,7 @@ public class StreamsConfig extends AbstractConfig {
     // Configs that Streams controls: a user-specified value is ignored (with a warning) and the
     // Streams value is enforced after the user props have been merged.
     // Controlled for every client Streams creates: the consumers, the producer, and the admin client.
-    private static final Map<String, Object> CONTROLLED_CLIENT_CONFIGS = Map.of(
-        // Kafka Streams does not support asynchronous bootstrap resolution
-        CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "0"
-    );
+    private static final Map<String, Object> CONTROLLED_CLIENT_CONFIGS = Map.of();
 
     private static final Map<String, Object> CONTROLLED_CONSUMER_CONFIGS = Map.of(
         ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
