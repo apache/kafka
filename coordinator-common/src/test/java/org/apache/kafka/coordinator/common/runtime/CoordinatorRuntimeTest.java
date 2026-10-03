@@ -1056,6 +1056,414 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testScheduleWriteOperationWithChainedSteps() throws ExecutionException, InterruptedException, TimeoutException {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+
+        // A chain of two intermediate steps followed by a terminal result.
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP,
+            state -> new CoordinatorStep<>(
+                List.of("record1"),
+                () -> new CoordinatorStep<>(
+                    List.of("record2"),
+                    () -> new CoordinatorResult<>(List.of("record3"), "response1")
+                )
+            )
+        );
+
+        // Not committed yet.
+        assertFalse(write.isDone());
+
+        // All three steps' records were replayed, in order, before the write returned.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(
+            List.of(
+                new MockCoordinatorShard.RecordAndMetadata(0, "record1"),
+                new MockCoordinatorShard.RecordAndMetadata(1, "record2"),
+                new MockCoordinatorShard.RecordAndMetadata(2, "record3")
+            ),
+            ctx.coordinator.coordinator().fullRecords()
+        );
+
+        // Each step's records formed their own atomic chunk of the same batch, which was
+        // flushed as one write once the chain completed.
+        assertEquals(
+            List.of(records(timer.time().milliseconds(), "record1", "record2", "record3")),
+            writer.entries(TP)
+        );
+
+        // The response future completes only once the batch holding the final (terminal)
+        // records commits.
+        assertFalse(write.isDone());
+
+        writer.commit(TP, 3);
+
+        assertTrue(write.isDone());
+        assertEquals("response1", write.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testScheduleWriteOperationWithChainedStepsWhenLaterStepFails() throws ExecutionException, InterruptedException, TimeoutException {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(Duration.ofMillis(30))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(10))
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+
+        // Write #1: a chain whose second step fails with a business exception.
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
+            state -> new CoordinatorStep<>(
+                List.of("record1"),
+                () -> {
+                    throw new KafkaException("assignor failed");
+                }
+            )
+        );
+
+        // The event fails; no commit is needed to observe a business exception thrown
+        // between steps.
+        assertFutureThrows(KafkaException.class, write1);
+
+        // Step #1's record was nonetheless replayed and remains in the (still open)
+        // batch: the prefix commits even though the chain as a whole failed.
+        assertEquals(
+            List.of(new MockCoordinatorShard.RecordAndMetadata(0, "record1")),
+            ctx.coordinator.coordinator().fullRecords()
+        );
+        assertEquals(List.of(), writer.entries(TP));
+
+        // Write #2: an unrelated, non-chained write landing in the same still-open batch.
+        // It must be unaffected by write#1's failure.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
+            state -> new CoordinatorResult<>(List.of("record2"), "response2"));
+
+        assertFalse(write2.isDone());
+        assertEquals(
+            List.of(
+                new MockCoordinatorShard.RecordAndMetadata(0, "record1"),
+                new MockCoordinatorShard.RecordAndMetadata(1, "record2")
+            ),
+            ctx.coordinator.coordinator().fullRecords()
+        );
+
+        // Advance past the linger time to flush the shared batch.
+        timer.advanceClock(11);
+
+        assertEquals(
+            List.of(records(timer.time().milliseconds() - 11, "record1", "record2")),
+            writer.entries(TP)
+        );
+
+        // Commit. Only write#2 completes; write#1 already failed and is unaffected.
+        writer.commit(TP, 2);
+        assertTrue(write2.isDone());
+        assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testScheduleWriteOperationWithChainedStepsAcrossFlushBoundary() throws ExecutionException, InterruptedException, TimeoutException {
+        MockTimer timer = new MockTimer();
+        // The partition writer only accepts one write: the first flushed batch succeeds,
+        // the second fails.
+        MockPartitionWriter writer = new MockPartitionWriter(1);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(Duration.ofMillis(30))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(10))
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+
+        // Two records, each too large for both to fit in the same batch, so the terminal
+        // step forces a flush of the intermediate step's chunk ahead of its own.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+        char[] payload = new char[maxBatchSize * 3 / 4];
+        Arrays.fill(payload, 'a');
+        String bigRecord1 = new String(payload);
+        Arrays.fill(payload, 'b');
+        String bigRecord2 = new String(payload);
+
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP,
+            state -> new CoordinatorStep<>(
+                List.of(bigRecord1),
+                () -> new CoordinatorResult<>(List.of(bigRecord2), "response1")
+            )
+        );
+
+        // The first chunk did not fit with the second, so it was flushed on its own,
+        // ahead of the terminal chunk which opened a new batch.
+        assertEquals(List.of(
+            records(timer.time().milliseconds(), bigRecord1)
+        ), writer.entries(TP));
+        assertFalse(write.isDone());
+
+        // Committing the first (already flushed) batch does not complete the write: the
+        // event is attached only to the terminal chunk's batch.
+        writer.commit(TP, 1);
+        assertFalse(write.isDone());
+
+        // Advance past the linger time. The second batch is flushed and fails because
+        // the writer only accepts one write.
+        timer.advanceClock(11);
+
+        // The event fails, even though the first chunk's records already committed.
+        assertFutureThrows(KafkaException.class, write);
+
+        // The first chunk's record remains part of the committed state; it is not
+        // reverted by the second batch's failure (only that batch's base offset is
+        // reverted to).
+        assertEquals(
+            List.of(new MockCoordinatorShard.RecordAndMetadata(0, bigRecord1)),
+            ctx.coordinator.coordinator().fullRecords()
+        );
+    }
+
+    @Test
+    public void testScheduleWriteOperationWithChainedStepsWhenIntermediateReplayFails() {
+        MockTimer timer = new MockTimer();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+
+        // Override the coordinator with one that throws when replaying the
+        // intermediate step's record.
+        SnapshotRegistry snapshotRegistry = ctx.coordinator.snapshotRegistry();
+        ctx.coordinator = new SnapshottableCoordinator<>(
+            new LogContext(),
+            snapshotRegistry,
+            new MockCoordinatorShard(snapshotRegistry, ctx.timer) {
+                @Override
+                public void replay(
+                    long offset,
+                    long producerId,
+                    short producerEpoch,
+                    String record
+                ) throws RuntimeException {
+                    if (record.equals("record1")) {
+                        throw new IllegalArgumentException("error");
+                    }
+                }
+            },
+            TP
+        );
+
+        // Write. The intermediate step's record fails to replay.
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP,
+            state -> new CoordinatorStep<>(
+                List.of("record1"),
+                () -> new CoordinatorResult<>(List.of("record2"), "response1")
+            ));
+
+        // The chain aborts via rethrow and the write event completes exceptionally with
+        // the original (not wrapped) exception, exactly like a non-chained replay failure.
+        assertFutureThrows(IllegalArgumentException.class, write);
+
+        // Nothing committed: the chain aborted before the terminal step even ran.
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
+    }
+
+    @Test
+    public void testScheduleWriteOperationWithChainedStepsWhenTerminalStepHasNoRecords() throws ExecutionException, InterruptedException, TimeoutException {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+
+        // The terminal step returns no records.
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP,
+            state -> new CoordinatorStep<>(
+                List.of("record1"),
+                () -> new CoordinatorResult<>(List.of(), "response1")
+            ));
+
+        assertFalse(write.isDone());
+        assertEquals(1L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(
+            List.of(records(timer.time().milliseconds(), "record1")),
+            writer.entries(TP)
+        );
+
+        // The terminal (record-less) step's event is parked behind the chain's own
+        // earlier record via waitForPendingWrites; it completes only when that record's
+        // batch commits.
+        writer.commit(TP, 1);
+        assertTrue(write.isDone());
+        assertEquals("response1", write.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testScheduleTransactionalWriteOperationRejectsCoordinatorStep() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // No transactional operation may be chained.
+        CompletableFuture<String> write = runtime.scheduleTransactionalWriteOperation(
+            "txn-write",
+            TP,
+            "transactional-id",
+            100L,
+            (short) 50,
+            state -> new CoordinatorStep<>(
+                List.of("record1"),
+                () -> new CoordinatorResult<>(List.of("record2"), "response1")
+            ),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
+        );
+
+        assertFutureThrows(IllegalStateException.class, write);
+    }
+
+    @Test
+    public void testScheduleWriteOperationWithChainedStepsTimesOut() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // We should get a TimeoutException because the HWM will not advance.
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP,
+            state -> new CoordinatorStep<>(
+                List.of("record1"),
+                () -> new CoordinatorResult<>(List.of("record2"), "response1")
+            ));
+
+        timer.advanceClock(DEFAULT_WRITE_TIMEOUT.toMillis() + 1);
+
+        assertFutureThrows(org.apache.kafka.common.errors.TimeoutException.class, write);
+    }
+
+    @Test
     public void testScheduleWriteAllOperation() throws ExecutionException, InterruptedException, TimeoutException {
         MockTimer timer = new MockTimer();
         MockPartitionWriter writer = new MockPartitionWriter();
