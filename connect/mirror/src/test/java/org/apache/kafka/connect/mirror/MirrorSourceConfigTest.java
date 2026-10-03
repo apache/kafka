@@ -151,6 +151,20 @@ public class MirrorSourceConfigTest {
     }
 
     @Test
+    public void testDataLossAndTopicResetDetectionDefaultsToDisabled() {
+        MirrorSourceConfig config = new MirrorSourceConfig(makeProps());
+        assertFalse(config.dataLossAndTopicResetDetectionEnabled(),
+                "Data loss and topic reset detection should be disabled by default to preserve existing behavior");
+    }
+
+    @Test
+    public void testDataLossAndTopicResetDetectionCanBeEnabled() {
+        MirrorSourceConfig config = new MirrorSourceConfig(
+                makeProps("data.loss.and.topic.reset.detection.enabled", "true"));
+        assertTrue(config.dataLossAndTopicResetDetectionEnabled());
+    }
+
+    @Test
     public void testAdminConfigsForOffsetSyncsTopic() {
         Map<String, String> connectorProps = makeProps(
                 "source.admin.request.timeout.ms", "1",
