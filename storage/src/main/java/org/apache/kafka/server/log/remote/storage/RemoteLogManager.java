@@ -1367,11 +1367,29 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             }
         }
 
-        private void updateMetadataCountAndLogSizeWith(int metadataCount, long remoteLogSizeBytes) {
-            int partition = topicIdPartition.partition();
-            String topic = topicIdPartition.topic();
-            brokerTopicStats.recordRemoteLogMetadataCount(topic, partition, metadataCount);
-            brokerTopicStats.recordRemoteLogSizeBytes(topic, partition, remoteLogSizeBytes);
+        // VisibleForTesting
+        void recordRemoteLogSizeComputationTime(long computationTime) {
+            // Avoid emitting metrics from a cancelled expiration task after a
+            // leader-to-follower transition has removed them. This check is best-effort
+            // and does not fully close the race between cancellation and metric emission.
+            if (!isCancelled()) {
+                int partition = topicIdPartition.partition();
+                String topic = topicIdPartition.topic();
+                brokerTopicStats.recordRemoteLogSizeComputationTime(topic, partition, computationTime);
+            }
+        }
+
+        // VisibleForTesting
+        void updateMetadataCountAndLogSizeWith(int metadataCount, long remoteLogSizeBytes) {
+            // Avoid emitting metrics from a cancelled expiration task after a
+            // leader-to-follower transition has removed them. This check is best-effort
+            // and does not fully close the race between cancellation and metric emission.
+            if (!isCancelled()) {
+                int partition = topicIdPartition.partition();
+                String topic = topicIdPartition.topic();
+                brokerTopicStats.recordRemoteLogMetadataCount(topic, partition, metadataCount);
+                brokerTopicStats.recordRemoteLogSizeBytes(topic, partition, remoteLogSizeBytes);
+            }
         }
 
         // VisibleForTesting
@@ -1686,8 +1704,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 // Once all the segments are valid, then the future segments to be uploaded by this leader are also valid.
                 remoteLogSizeBytes = fullCopyFinishedSegmentsSizeInBytes;
             }
-            brokerTopicStats.recordRemoteLogSizeComputationTime(topicIdPartition.topic(), topicIdPartition.partition(),
-                    time.milliseconds() - startTimeMs);
+            recordRemoteLogSizeComputationTime(time.milliseconds() - startTimeMs);
             // This is the total size of segments in local log that have their base-offset > local-log-start-offset
             // and size of the segments in remote storage which have their end-offset < local-log-start-offset.
             long totalSize = onlyLocalLogSegmentsSize + remoteLogSizeBytes;
