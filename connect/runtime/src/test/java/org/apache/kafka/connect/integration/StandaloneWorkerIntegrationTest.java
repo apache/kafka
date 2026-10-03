@@ -364,6 +364,35 @@ public class StandaloneWorkerIntegrationTest {
         }
     }
 
+    @Test
+    public void testRecreatedConnectorDoesNotInheritActiveTopics() throws Exception {
+        connect = connectBuilder.build();
+        connect.start();
+
+        String oldTopic = "old-topic";
+        String newTopic = "new-topic";
+        connect.kafka().createTopic(oldTopic, 1);
+        connect.kafka().createTopic(newTopic, 1);
+
+        // Create the connector and verify that the original topic is tracked.
+        connect.configureConnector(CONNECTOR_NAME, defaultSourceConnectorProps(oldTopic));
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorActiveTopics(CONNECTOR_NAME, List.of(oldTopic),
+                "Active topic set is not: " + List.of(oldTopic));
+
+        // Delete the connector
+        connect.deleteConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME, "Connector wasn't deleted in time.");
+
+        // Recreate the connector with the same name but a different topic.
+        connect.configureConnector(CONNECTOR_NAME, defaultSourceConnectorProps(newTopic));
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorActiveTopics(CONNECTOR_NAME, List.of(newTopic),
+                "Recreated connector inherited active topics from the deleted connector");
+    }
+
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup props for the source connector
         Map<String, String> props = new HashMap<>();

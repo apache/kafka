@@ -65,6 +65,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
+
 
 /**
  * Single process, in-memory "herder". Useful for a standalone Kafka Connect process.
@@ -75,6 +77,7 @@ public final class StandaloneHerder extends AbstractHerder {
     private final AtomicLong requestSeqNum = new AtomicLong();
     private final ScheduledExecutorService requestExecutorService;
     private final HealthCheckThread healthCheckThread;
+    private final boolean isTopicTrackingEnabled;
 
     // Visible for testing
     ClusterConfigState configState;
@@ -103,6 +106,7 @@ public final class StandaloneHerder extends AbstractHerder {
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
         this.healthCheckThread = new HealthCheckThread(this);
+        this.isTopicTrackingEnabled = worker.config().getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
@@ -185,6 +189,9 @@ public final class StandaloneHerder extends AbstractHerder {
             worker.stopAndAwaitConnector(connName);
             configBackingStore.removeConnectorConfig(connName);
             onDeletion(connName);
+            if (isTopicTrackingEnabled) {
+                resetConnectorActiveTopics(connName);
+            }
             callback.onCompletion(null, new Created<>(false, null));
         } catch (ConnectException e) {
             callback.onCompletion(e, null);
