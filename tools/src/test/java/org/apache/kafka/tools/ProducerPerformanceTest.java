@@ -408,6 +408,17 @@ public class ProducerPerformanceTest {
     }
 
     @Test
+    public void testSuppressPrintAfterPrintTotal() {
+        ProducerPerformance.Stats stats = new ProducerPerformance.Stats(100, 100L, false);
+        String totalOutput = ToolsTestUtils.captureStandardOut(stats::printTotal);
+        assertTrue(totalOutput.contains("records sent"));
+        assertTrue(totalOutput.contains("50th"));
+
+        String windowOutput = ToolsTestUtils.captureStandardOut(() -> stats.record(10, 100, System.currentTimeMillis() + 1000L));
+        assertEquals("", windowOutput);
+    }
+
+    @Test
     public void testConfigPostProcessor() throws IOException, ArgumentParserException {
         ArgumentParser parser = ProducerPerformance.argParser();
         String[] args = new String[]{

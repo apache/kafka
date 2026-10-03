@@ -140,15 +140,30 @@ class ConsumerPerformanceService(PerformanceService):
 
         cmd = self.start_cmd(node)
         self.logger.debug("Consumer performance %d command: %s", idx, cmd)
-        last = None
+        parsed_result = None
         for line in node.account.ssh_capture(cmd):
-            last = line
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(',')
+            if len(parts) >= 6:
+                try:
+                    parsed_result = {
+                        'total_mb': float(parts[2]),
+                        'mbps': float(parts[3]),
+                        'records_per_sec': float(parts[5]),
+                    }
+                except (ValueError, IndexError):
+                    pass
 
-        # Parse and save the last line's information
-        if last is not None:
-            parts = last.split(',')
-            self.results[idx-1] = {
-                'total_mb': float(parts[2]),
-                'mbps': float(parts[3]),
-                'records_per_sec': float(parts[5]),
-            }
+        if parsed_result is not None:
+            self.results[idx-1] = parsed_result
+        else:
+            stderr = ""
+            try:
+                stderr_lines = list(node.account.ssh_capture("cat %s" % ConsumerPerformanceService.STDERR_CAPTURE))
+                if stderr_lines:
+                    stderr = "\nStderr: %s" % "".join(stderr_lines).strip()
+            except Exception:
+                pass
+            raise Exception("Unable to parse consumer performance statistics on node %d.%s" % (idx, stderr))
