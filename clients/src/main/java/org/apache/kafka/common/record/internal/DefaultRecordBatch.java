@@ -337,11 +337,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
-    public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
-        return skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH);
-    }
-
-    @Override
     public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
         if (count() == 0) {
             return CloseableIterator.wrap(Collections.emptyIterator());

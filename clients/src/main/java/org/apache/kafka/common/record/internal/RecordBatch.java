@@ -256,15 +256,9 @@ public interface RecordBatch extends Iterable<Record> {
      * copying, and older message formats fall back to a full decode. Callers should ensure that the iterator is closed.
      *
      * @param bufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
-     * @return The closeable iterator
-     */
-    CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier);
-
-    /**
-     * Variant of {@link #skipKeyValueIterator(BufferSupplier)} that rejects any record whose declared
-     * (decompressed) body size exceeds {@code maxRecordBodySize}; see
-     * {@link #streamingIterator(BufferSupplier, int)}.
-     *
+     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed record
+     *                          exceeding it is rejected with an InvalidRecordException. Pass
+     *                          {@link Records#SOFT_MAX_ARRAY_LENGTH} for no limit beyond the array-length ceiling.
      * @return The closeable iterator
      */
     CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize);

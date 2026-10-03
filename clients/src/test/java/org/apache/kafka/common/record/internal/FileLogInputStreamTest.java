@@ -281,7 +281,7 @@ public class FileLogInputStreamTest {
             // legacy uncompressed batches hold one record each, so walk every batch in the file
             int index = 0;
             for (FileChannelRecordBatch batch : fileRecords.batches()) {
-                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH)) {
                     while (iterator.hasNext()) {
                         Record record = iterator.next();
                         SimpleRecord expected = records[index];

@@ -278,14 +278,9 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         return iterator(bufferSupplier, maxRecordBodySize);
     }
 
-    // the older message format versions cannot cheaply skip the record body, so both variants fully decode it
-    @Override
-    public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
-        return iterator(bufferSupplier);
-    }
-
     @Override
     public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
+        // the older message format versions do not implement a partial read, so we return the normal iterator
         return iterator(bufferSupplier, maxRecordBodySize);
     }
 

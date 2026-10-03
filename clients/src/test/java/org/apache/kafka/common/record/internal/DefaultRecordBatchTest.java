@@ -430,7 +430,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
 
         try (BufferSupplier bufferSupplier = BufferSupplier.create();
-             CloseableIterator<Record> skipKeyValueIterator = batch.skipKeyValueIterator(bufferSupplier)) {
+             CloseableIterator<Record> skipKeyValueIterator = batch.skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH)) {
 
             if (CompressionType.NONE == compressionType) {
                 // assert that for uncompressed data stream record iterator is not used
@@ -466,7 +466,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
 
         try (BufferSupplier bufferSupplier = spy(BufferSupplier.create());
-             CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier)) {
+             CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH)) {
 
             // Consume through the iterator
             Utils.toList(streamingIterator);
@@ -526,7 +526,7 @@ public class DefaultRecordBatchTest {
              final InputStream chunkedStream = new ChunkedBytesStream(zstdStream, bufferSupplier, 16 * 1024, false)
         ) {
             doReturn(chunkedStream).when(batch).recordInputStream(any());
-            try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier)) {
+            try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH)) {
                 assertNotNull(streamingIterator);
                 Utils.toList(streamingIterator);
                 // verify the number of read() calls to zstd JNI stream. Each read() call is a JNI call.
