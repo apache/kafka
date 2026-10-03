@@ -169,6 +169,18 @@ public interface Herder {
     void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature);
 
     /**
+     * Re-publish the current task configurations for a connector. This is used by a worker that was assigned a task
+     * but could not reconstruct its configuration after compaction of the config topic.
+     *
+     * @param connName connector whose task configurations should be re-published
+     * @param expectedConfigOffset config offset used to create the caller's assignment
+     * @param callback callback to invoke upon completion
+     * @param requestSignature the signature of the request; may be null if no signature was provided
+     */
+    void refreshTaskConfigs(String connName, long expectedConfigOffset, Callback<Void> callback,
+                            InternalRequestSignature requestSignature);
+
+    /**
      * Fence out any older task generations for a source connector, and then write a record to the config topic
      * indicating that it is safe to bring up a new generation of tasks. If that record is already present, do nothing
      * and invoke the callback successfully.

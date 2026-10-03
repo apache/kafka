@@ -130,6 +130,93 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
+    public void testInconsistentTaskConfigsRevokeAndReassignConnector() {
+        connectors.clear();
+        addNewConnector("connector1", 1);
+        memberAssignments.clear();
+        ConnectorTaskId task = new ConnectorTaskId("connector1", 0);
+        addNewWorker("connector-worker", List.of("connector1"), List.of());
+        addNewWorker("task-worker", List.of(), List.of(task));
+        initAssignor();
+
+        // Establish the previous generation in which both the connector and its task were active.
+        performStandardRebalance();
+        assertEmptyAssignment();
+
+        // Model a new leader that reconstructed the connector, but not its task configs, from a
+        // compacted config topic. The connector remains configured, while no tasks are usable.
+        Map<String, Map<String, String>> connectorConfigs = Map.of("connector1", Map.of());
+        ClusterConfigState inconsistentConfigState = new ClusterConfigState(
+                CONFIG_OFFSET,
+                null,
+                Map.of(),
+                connectorConfigs,
+                Map.of("connector1", TargetState.STARTED),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of("connector1", new AppliedConnectorConfig(Map.of())),
+                Set.of(),
+                Set.of("connector1")
+        );
+
+        performRebalance(inconsistentConfigState);
+
+        assertEquals(Set.of(task), new HashSet<>(returnedAssignments.newlyRevokedTasks("task-worker")));
+        assertEquals(Set.of("connector1"), new HashSet<>(returnedAssignments.newlyRevokedConnectors("connector-worker")));
+        assertTrue(memberAssignments.values().stream().allMatch(assignment -> assignment.connectors().isEmpty()));
+        assertTrue(memberAssignments.values().stream().allMatch(assignment -> assignment.tasks().isEmpty()));
+
+        // The next rebalance reassigns the connector. Starting it invokes the existing task config
+        // reconfiguration path, which regenerates and republishes its task configs.
+        performRebalance(inconsistentConfigState);
+        assertNoRevocations();
+        assertConnectorAllocations(0, 1);
+        assertTaskAllocations(0, 0);
+
+        // Once the regenerated task configs reach the config snapshot, the task is assigned again
+        // without another connector restart.
+        performStandardRebalance();
+        assertNoRevocations();
+        assertConnectorAllocations(0, 1);
+        assertTaskAllocations(0, 1);
+    }
+
+    @Test
+    public void testInconsistentTaskConfigsDoNotRestartPausedConnector() {
+        connectors.clear();
+        addNewConnector("connector1", 1);
+        memberAssignments.clear();
+        ConnectorTaskId task = new ConnectorTaskId("connector1", 0);
+        addNewWorker("worker", List.of("connector1"), List.of(task));
+        initAssignor();
+
+        performStandardRebalance();
+        assertEmptyAssignment();
+
+        ClusterConfigState inconsistentPausedConfigState = new ClusterConfigState(
+                CONFIG_OFFSET,
+                null,
+                Map.of(),
+                Map.of("connector1", Map.of()),
+                Map.of("connector1", TargetState.PAUSED),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of("connector1", new AppliedConnectorConfig(Map.of())),
+                Set.of(),
+                Set.of("connector1")
+        );
+
+        performRebalance(inconsistentPausedConfigState);
+
+        assertEquals(Set.of(task), new HashSet<>(returnedAssignments.newlyRevokedTasks("worker")));
+        assertEquals(Set.of(), new HashSet<>(returnedAssignments.newlyRevokedConnectors("worker")));
+        assertEquals(Set.of("connector1"), new HashSet<>(memberAssignments.get("worker").connectors()));
+        assertEquals(Set.of(), new HashSet<>(memberAssignments.get("worker").tasks()));
+    }
+
+    @Test
     public void testAssignmentsWhenWorkersJoinAfterRevocations()  {
         // Customize assignor for this test case
         time = new MockTime();
@@ -1302,6 +1389,14 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     private void performRebalance(boolean assignmentFailure, boolean generationMismatch) {
+        performRebalance(assignmentFailure, generationMismatch, configState());
+    }
+
+    private void performRebalance(ClusterConfigState configState) {
+        performRebalance(false, false, configState);
+    }
+
+    private void performRebalance(boolean assignmentFailure, boolean generationMismatch, ClusterConfigState configState) {
         generationId++;
         int lastCompletedGenerationId = generationMismatch ? generationId - 2 : generationId - 1;
         try {
@@ -1310,7 +1405,7 @@ public class IncrementalCooperativeAssignorTest {
                             Map.Entry::getKey,
                             e -> new ConnectorsAndTasks.Builder().with(e.getValue().connectors(), e.getValue().tasks()).build()
                     ));
-            returnedAssignments = assignor.performTaskAssignment(configState(), lastCompletedGenerationId, generationId, memberAssignmentsCopy);
+            returnedAssignments = assignor.performTaskAssignment(configState, lastCompletedGenerationId, generationId, memberAssignmentsCopy);
         } catch (RuntimeException e) {
             if (assignmentFailure) {
                 RequestFuture.failure(e);
