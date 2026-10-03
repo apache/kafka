@@ -1177,6 +1177,9 @@ project(':core') {
     // `core` is often used in users' tests, define the following dependencies as `api` for backwards compatibility
     // even though the `core` module doesn't expose any public API
     api project(':clients')
+    // `kafka.server.KafkaConfig` extends `org.apache.kafka.server.config.AbstractKafkaConfig`, so `server` has to
+    // be on the compile classpath of any consumer that references `KafkaConfig`
+    api project(':server')
     api libs.scalaLibrary
 
     compileOnly log4j2Libs
@@ -1192,7 +1195,6 @@ project(':core') {
     implementation project(':tools:tools-api')
     implementation project(':raft')
     implementation project(':storage')
-    implementation project(':server')
     implementation project(':coordinator-common')
     implementation project(':share-coordinator')
 
