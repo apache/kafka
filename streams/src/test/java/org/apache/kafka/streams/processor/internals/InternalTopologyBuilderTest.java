@@ -1035,6 +1035,44 @@ public class InternalTopologyBuilderTest {
         assertEquals(200L, topologyBuilder.topologyConfigs().cacheSize);
     }
 
+    @Test
+    @SuppressWarnings("deprecation")
+    public void shouldIgnoreTopologyInputBufferMaxBytesOverrideAndHonorLegacyOverride() {
+        // Per-topology input.buffer.max.bytes is unsupported and ignored; the legacy override still
+        // wins for this topology rather than being silently disabled by the (ignored) byte override.
+        final Properties topologyOverrides = new Properties();
+        topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
+        topologyOverrides.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, 100L);
+
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig(
+                "my-topology",
+                config,
+                topologyOverrides)
+        );
+        assertEquals(15, topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize);
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void shouldHonorLegacyBufferedRecordsTopologyOverrideEvenWhenGlobalInputBufferMaxBytesIsSet() {
+        // A topology-level legacy override wins locally (strongest signal of intent); the thread-wide
+        // bytes guard still bounds memory globally. A global input.buffer.max.bytes (possibly just the
+        // documented default) must not silently drop the topology's explicit override.
+        final Properties globalProps = StreamsTestUtils.getStreamsConfig();
+        globalProps.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, 100L);
+        final StreamsConfig config = new StreamsConfig(globalProps);
+
+        final Properties topologyOverrides = new Properties();
+        topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
+
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig("my-topology", config, topologyOverrides)
+        );
+        assertEquals(15, topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize);
+    }
+
     @SuppressWarnings("deprecation")
     @Test
     public void shouldOverrideGlobalStreamsConfigWhenGivenNamedTopologyProps() {
