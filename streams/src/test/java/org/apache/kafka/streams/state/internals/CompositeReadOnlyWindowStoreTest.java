@@ -47,7 +47,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -216,13 +215,13 @@ public class CompositeReadOnlyWindowStoreTest {
                 QueryableStoreTypes.windowStore(),
                 "window-store"
             );
-        try {
-            store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
-            fail("InvalidStateStoreException was expected");
-        } catch (final InvalidStateStoreException e) {
-            assertEquals("State store is not available anymore and may have been migrated to another instance; " +
-                "please re-discover its location from the state metadata.", e.getMessage());
-        }
+        final InvalidStateStoreException e = assertThrows(
+            InvalidStateStoreException.class,
+            () -> store.fetch("key", ofEpochMilli(1), ofEpochMilli(10)),
+            "should not fetch from a closed window store"
+        );
+        assertEquals("State store is not available anymore and may have been migrated to another instance; " +
+            "please re-discover its location from the state metadata.", e.getMessage());
     }
 
     @Test
@@ -234,13 +233,13 @@ public class CompositeReadOnlyWindowStoreTest {
                 QueryableStoreTypes.windowStore(),
                 "window-store"
             );
-        try {
-            store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10));
-            fail("InvalidStateStoreException was expected");
-        } catch (final InvalidStateStoreException e) {
-            assertEquals("State store is not available anymore and may have been migrated to another instance; " +
-                "please re-discover its location from the state metadata.", e.getMessage());
-        }
+        final InvalidStateStoreException e = assertThrows(
+            InvalidStateStoreException.class,
+            () -> store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10)),
+            "should not backward fetch from a closed window store"
+        );
+        assertEquals("State store is not available anymore and may have been migrated to another instance; " +
+            "please re-discover its location from the state metadata.", e.getMessage());
     }
 
     @Test
