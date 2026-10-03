@@ -804,6 +804,52 @@ public class ConfigCommandIntegrationTest {
         });
     }
 
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    public void testUpdatingBothClusterAndBrokerLevelDynamicConfigUsingKRaft() throws Exception {
+        List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+
+        try (Admin client = cluster.admin()) {
+
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), Map.of("message.max.bytes", "110000"), alterOpts);
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), Map.of("message.max.bytes", "130000"), alterOpts);
+
+            assertThrows(ExecutionException.class,
+                    () -> alterAndVerifyBothLevelConfig(
+                            client,
+                            Optional.of(defaultBrokerId),
+                            Map.of("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"),
+                            alterOpts)
+            );
+            assertThrows(ExecutionException.class,
+                    () -> alterAndVerifyBothLevelConfig(
+                            client,
+                            Optional.of(defaultBrokerId),
+                            Map.of("listener.name.external.ssl.keystore.password", "secret"),
+                            alterOpts)
+            );
+        }
+    }
+
+    private void alterAndVerifyBothLevelConfig(Admin client,
+                                               Optional<String> brokerId,
+                                               Map<String, String> config,
+                                               List<String> alterOpts) throws Exception {
+        alterBothLevelConfigWithKraft(client, brokerId, config, alterOpts);
+        verifyBrokerConfig(client, brokerId, config);
+        verifyBrokerConfig(client, Optional.empty(), config);
+    }
+
+    private void alterBothLevelConfigWithKraft(Admin client,
+                                               Optional<String> brokerId,
+                                               Map<String, String> config,
+                                               List<String> alterOpts) throws Exception {
+        String configStr = transferConfigMapToString(config);
+        ConfigCommand.ConfigCommandOptions addOpts =
+                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
+                        entityOp(Optional.empty()), List.of("--add-config", configStr)));
+        ConfigCommand.alterConfig(client, addOpts);
+    }
+
     @ClusterTest
     public void testIntervalMsParser(ClusterInstance clusterInstance) {
         List<String> alterOpts = List.of("--bootstrap-server", clusterInstance.bootstrapServers(),
@@ -815,6 +861,7 @@ public class ConfigCommandIntegrationTest {
             assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
         }
     }
+
 
     private void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
