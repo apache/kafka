@@ -31,11 +31,14 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitio
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection;
+import org.apache.kafka.common.message.ValidateShareGroupMemberResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.ValidateShareGroupMemberRequest;
+import org.apache.kafka.common.requests.ValidateShareGroupMemberResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.metadata.MetadataCache;
@@ -122,6 +125,42 @@ public class AddPartitionsToTxnManagerTest {
     @AfterEach
     public void teardown() throws InterruptedException {
         addPartitionsToTxnManager.shutdown();
+    }
+
+    @Test
+    public void testRoutesMemberValidationToGroupCoordinator() {
+        when(metadataCache.getPartitionLeaderEndpoint(Topic.GROUP_METADATA_TOPIC_NAME, 3, config.interBrokerListenerName()))
+            .thenReturn(Optional.of(node2));
+        var future = addPartitionsToTxnManager.validateShareGroupMember("share", "member", 7, 3);
+        var requests = addPartitionsToTxnManager.generateRequests();
+        assertEquals(1, requests.size());
+        var request = requests.iterator().next();
+        assertEquals(node2, request.destination);
+        var data = ((ValidateShareGroupMemberRequest) request.request.build()).data();
+        assertEquals("share", data.groupId());
+        assertEquals("member", data.memberId());
+        assertEquals(7, data.memberEpoch());
+        request.handler.onComplete(clientResponse(new ValidateShareGroupMemberResponse(
+            new ValidateShareGroupMemberResponseData().setErrorCode(Errors.STALE_MEMBER_EPOCH.code())), null, null, false));
+        assertEquals(Errors.STALE_MEMBER_EPOCH, future.join());
+    }
+
+    @Test
+    public void testMissingGroupCoordinatorDoesNotValidateMember() {
+        when(metadataCache.getPartitionLeaderEndpoint(Topic.GROUP_METADATA_TOPIC_NAME, 3, config.interBrokerListenerName()))
+            .thenReturn(Optional.empty());
+        assertEquals(Errors.COORDINATOR_NOT_AVAILABLE,
+            addPartitionsToTxnManager.validateShareGroupMember("share", "member", 7, 3).join());
+        assertEquals(0, addPartitionsToTxnManager.generateRequests().size());
+    }
+
+    @Test
+    public void testUnsupportedMemberValidationDoesNotSucceed() {
+        when(metadataCache.getPartitionLeaderEndpoint(Topic.GROUP_METADATA_TOPIC_NAME, 3, config.interBrokerListenerName()))
+            .thenReturn(Optional.of(node2));
+        var future = addPartitionsToTxnManager.validateShareGroupMember("share", "member", 7, 3);
+        addPartitionsToTxnManager.generateRequests().iterator().next().handler.onComplete(versionMismatchResponse);
+        assertEquals(Errors.UNSUPPORTED_VERSION, future.join());
     }
 
     @ParameterizedTest
