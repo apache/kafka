@@ -43,7 +43,7 @@ public final class GlobComponent {
      */
     private static boolean isGlobSpecialCharacter(char ch) {
         return switch (ch) {
-            case '*', '?', '\\', '{', '}' -> true;
+            case '*', '?', '\\', '{', '}', '[', ']' -> true;
             default -> false;
         };
     }
@@ -70,17 +70,7 @@ public final class GlobComponent {
                     output.append(".*");
                     break;
                 case '\\':
-                    if (i == glob.length()) {
-                        output.append(c);
-                    } else {
-                        char next = glob.charAt(i);
-                        i++;
-                        if (isGlobSpecialCharacter(next) ||
-                                isRegularExpressionSpecialCharacter(next)) {
-                            output.append('\\');
-                        }
-                        output.append(next);
-                    }
+                    i = handleEscape(glob, i, output);
                     break;
                 case '{':
                     if (processingGroup) {
@@ -107,7 +97,10 @@ public final class GlobComponent {
                         output.append(c);
                     }
                     break;
-                // TODO: handle character ranges
+                case '[':
+                    literal = false;
+                    i = handleBracket(glob, i, output);
+                    break;
                 default:
                     if (isRegularExpressionSpecialCharacter(c)) {
                         output.append('\\');
@@ -123,6 +116,55 @@ public final class GlobComponent {
         }
         output.append('$');
         return output.toString();
+    }
+
+    private static int handleEscape(String glob, int i, StringBuilder output) {
+        if (i == glob.length()) {
+            output.append('\\');
+        } else {
+            char next = glob.charAt(i++);
+            if (isGlobSpecialCharacter(next) || isRegularExpressionSpecialCharacter(next)) {
+                output.append('\\');
+            }
+            output.append(next);
+        }
+        return i;
+    }
+
+    private static int handleBracket(String glob, int i, StringBuilder output) {
+        output.append('[');
+        boolean foundClosingBracket = false;
+        // Handle negation: [!...] or [^...] -> [^...]
+        if (i < glob.length() && (glob.charAt(i) == '!' || glob.charAt(i) == '^')) {
+            output.append('^');
+            i++;
+        }
+        // Handle literal ] as first character: [] or [!]
+        if (i < glob.length() && glob.charAt(i) == ']') {
+            output.append(']');
+            i++;
+        }
+        while (i < glob.length()) {
+            char bracketChar = glob.charAt(i++);
+            if (bracketChar == ']') {
+                foundClosingBracket = true;
+                output.append(']');
+                break;
+            } else if (bracketChar == '\\' && i < glob.length()) {
+                // Handle escaped characters inside brackets
+                char escapedChar = glob.charAt(i++);
+                if (escapedChar == ']' || escapedChar == '[' || escapedChar == '\\' || escapedChar == '-' || escapedChar == '^') {
+                    output.append('\\');
+                }
+                output.append(escapedChar);
+            } else {
+                output.append(bracketChar);
+            }
+        }
+        if (!foundClosingBracket) {
+            throw new RuntimeException("Unterminated character class.");
+        }
+        return i;
     }
 
     private final String component;
