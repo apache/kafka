@@ -39,6 +39,7 @@ import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
@@ -140,6 +141,10 @@ public class TransactionManager {
     private static final long ADD_PARTITIONS_RETRY_BACKOFF_MS = 20L;
 
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
+    // Set in TxnRequestHandler.onComplete() under the TransactionManager lock, and read in
+    // handleResponse() within the same synchronized block. Safe from interleaving because
+    // only one transactional request is in-flight at a time (enforced by inFlightRequestCorrelationId).
+    private long currentRequestCompletionTimeMs = -1L;
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
     private boolean coordinatorSupportsBumpingEpoch;
@@ -1477,6 +1482,7 @@ public class TransactionManager {
                     log.trace("Received transactional response {} for request {}", response.responseBody(),
                             requestBuilder());
                     synchronized (TransactionManager.this) {
+                        currentRequestCompletionTimeMs = response.receivedTimeMs();
                         handleResponse(response.responseBody());
                     }
                 } else {
@@ -1599,11 +1605,13 @@ public class TransactionManager {
     private class AddPartitionsToTxnHandler extends TxnRequestHandler {
         private final AddPartitionsToTxnRequest.Builder builder;
         private long retryBackoffMs;
+        private long firstRetriableErrorTimeMs;
 
         private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
             super("AddPartitionsToTxn");
             this.builder = builder;
             this.retryBackoffMs = TransactionManager.this.retryBackoffMs;
+            this.firstRetriableErrorTimeMs = -1L;
         }
 
         @Override
@@ -1632,14 +1640,14 @@ public class TransactionManager {
                     continue;
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                     lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
-                    reenqueue();
+                    maybeReenqueueOrTimeout(topicPartition, error);
                     return;
                 } else if (error == Errors.CONCURRENT_TRANSACTIONS) {
                     maybeOverrideRetryBackoffMs();
-                    reenqueue();
+                    maybeReenqueueOrTimeout(topicPartition, error);
                     return;
                 } else if (error.exception() instanceof RetriableException) {
-                    reenqueue();
+                    maybeReenqueueOrTimeout(topicPartition, error);
                     return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
                     // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
@@ -1703,6 +1711,22 @@ public class TransactionManager {
             // https://issues.apache.org/jira/browse/KAFKA-5482
             if (partitionsInTransaction.isEmpty())
                 this.retryBackoffMs = ADD_PARTITIONS_RETRY_BACKOFF_MS;
+        }
+
+        private void maybeReenqueueOrTimeout(TopicPartition topicPartition, Errors error) {
+            if (firstRetriableErrorTimeMs < 0L) {
+                firstRetriableErrorTimeMs = currentRequestCompletionTimeMs;
+                reenqueue();
+                return;
+            }
+
+            if (currentRequestCompletionTimeMs - firstRetriableErrorTimeMs >= transactionTimeoutMs) {
+                abortableErrorIfPossible(new TimeoutException("Timed out after " + transactionTimeoutMs
+                    + "ms while adding partition " + topicPartition + " to transaction due to retriable error "
+                    + error + "."));
+            } else {
+                reenqueue();
+            }
         }
     }
 
