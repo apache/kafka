@@ -345,9 +345,11 @@ public class MockProducer<K, V> implements Producer<K, V> {
         if (!this.cluster.partitionsForTopic(record.topic()).isEmpty())
             partition = partition(record, this.cluster);
         else {
-            //just to throw ClassCastException if serializers are not the proper ones to serialize key/value
-            keySerializer.serialize(record.topic(), new RecordHeaders(), record.key());
-            valueSerializer.serialize(record.topic(), new RecordHeaders(), record.value());
+            // Validate serializers if they are set
+            if (keySerializer != null)
+                keySerializer.serialize(record.topic(), new RecordHeaders(), record.key());
+            if (valueSerializer != null)
+                valueSerializer.serialize(record.topic(), new RecordHeaders(), record.value());
         }
 
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
@@ -644,8 +646,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
                                                    + "].");
             return partition;
         }
-        byte[] keyBytes = keySerializer.serialize(topic, record.headers(), record.key());
-        byte[] valueBytes = valueSerializer.serialize(topic, record.headers(), record.value());
+        byte[] keyBytes = keySerializer != null ? keySerializer.serialize(topic, record.headers(), record.key()) : null;
+        byte[] valueBytes = valueSerializer != null ? valueSerializer.serialize(topic, record.headers(), record.value()) : null;
         if (partitioner == null) {
             return this.cluster.partitionsForTopic(record.topic()).get(0).partition();
         }
