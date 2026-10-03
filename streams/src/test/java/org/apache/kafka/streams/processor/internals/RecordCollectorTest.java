@@ -43,6 +43,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+
+import java.nio.charset.StandardCharsets;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Time;
@@ -2036,6 +2038,49 @@ public class RecordCollectorTest {
 
             assertNotNull(sourceRawData[0]);
             assertNotNull(sourceRawData[1]);
+        }
+    }
+
+    @Test
+    public void shouldHaveSourceRawHeadersDuringExceptionInSerialization() {
+        final Headers[] capturedHeaders = new Headers[1];
+        final Headers sourceRawHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("source-key", "source-val".getBytes(StandardCharsets.UTF_8))
+        });
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+            0,
+            0,
+            0,
+            "topic",
+            new RecordHeaders(),
+            "sourceKey".getBytes(StandardCharsets.UTF_8),
+            "sourceValue".getBytes(StandardCharsets.UTF_8),
+            sourceRawHeaders
+        );
+        context.setRecordContext(recordContext);
+
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(
+                new ProductionExceptionHandler() {
+                    @SuppressWarnings({"deprecation", "rawtypes"})
+                    @Override
+                    public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext handlerContext,
+                                                                                           final ProducerRecord record,
+                                                                                           final Exception exception,
+                                                                                           final SerializationExceptionOrigin origin) {
+                        capturedHeaders[0] = handlerContext.headers();
+                        return ProductionExceptionHandlerResponse.CONTINUE;
+                    }
+
+                    @Override
+                    public void configure(final Map<String, ?> configs) { }
+                }
+            );
+            collector.initialize();
+
+            collector.send(topic, "hello", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
+
+            assertEquals(sourceRawHeaders, capturedHeaders[0]);
         }
     }
 

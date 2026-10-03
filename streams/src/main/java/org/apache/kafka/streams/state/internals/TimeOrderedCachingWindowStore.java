@@ -274,7 +274,8 @@ public class TimeOrderedCachingWindowStore
                 internalContext.recordContext().partition(),
                 internalContext.recordContext().topic(),
                 internalContext.recordContext().sourceRawKey(),
-                internalContext.recordContext().sourceRawValue()
+                internalContext.recordContext().sourceRawValue(),
+                internalContext.recordContext().sourceRawHeaders()
             );
 
         // Put to index first so that base can be evicted later
@@ -294,7 +295,8 @@ public class TimeOrderedCachingWindowStore
                     internalContext.recordContext().partition(),
                     "",
                     internalContext.recordContext().sourceRawKey(),
-                    internalContext.recordContext().sourceRawValue()
+                    internalContext.recordContext().sourceRawValue(),
+                    internalContext.recordContext().sourceRawHeaders()
                 );
             final Bytes indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, 0);
             internalContext.cache().put(cacheName, indexKeyCacheFunction.cacheKey(indexKey), emptyEntry);
