@@ -56,6 +56,8 @@ class KafkaRaftServer(
   private val (metaPropsEnsemble, bootstrapMetadata) =
     KafkaRaftServer.initializeLogDirs(config, this.logger.underlying, this.logIdent)
 
+  info(s"Loaded cluster id ${metaPropsEnsemble.clusterId().get()} from meta.properties")
+
   private val metrics = Server.initializeMetrics(
     config,
     time,
