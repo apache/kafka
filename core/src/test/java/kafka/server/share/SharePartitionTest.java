@@ -12755,6 +12755,22 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testNextFetchOffsetIfAcquirableAtRecordLimitWithReleasedOffsets() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(50)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        fetchAcquiredRecords(sharePartition, memoryRecords(0, 50), 50);
+        assertEquals(OptionalLong.empty(), sharePartition.nextFetchOffsetIfAcquirable());
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(40, 49, List.of(AcknowledgeType.RELEASE.id)))).join();
+
+        assertEquals(OptionalLong.of(40), sharePartition.nextFetchOffsetIfAcquirable());
+    }
+
+    @Test
     public void testDynamicPartitionMaxRecordLocksIncrease() {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
