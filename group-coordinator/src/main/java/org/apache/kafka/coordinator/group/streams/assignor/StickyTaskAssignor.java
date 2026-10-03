@@ -428,17 +428,19 @@ public class StickyTaskAssignor implements TaskAssignor {
      *        The list of previous members owning the task.
      * @param standbyTaskId
      *        The taskId, to check if the previous member already has the task.
-     * @param allowed
-     *        Whether the process of a previous member may take the task.
+     * @param rackAwareFilter
+     *        Only previous members on a process that passes this filter are considered. The rack-aware pass accepts only
+     *        processes with room in the groups that make the task most rack-diverse; the tag-blind steps pass
+     *        {@code process -> true}.
      *
-     * @return Previous member with the least load that does not have the task and is on an allowed process, or null
-     *         if no such member exists.
+     * @return Previous member with the least load that does not have the task and is on a process that passes
+     *         {@code rackAwareFilter}, or null if no such member exists.
      */
     private static Member findPrevMemberWithLeastLoad(
         final LocalState localState,
         final ArrayList<Member> members,
         final Optional<TaskId> standbyTaskId,
-        final Predicate<ProcessState> allowed
+        final Predicate<ProcessState> rackAwareFilter
     ) {
         if (members == null || members.isEmpty()) {
             return null;
@@ -450,7 +452,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         for (final Member member : members) {
             final ProcessState processState = localState.processIdToState.get(member.processId);
             // A process that already owns a standby task (either as active or standby) cannot take it again
-            if (standbyTaskId.isPresent() && processState.hasTask(standbyTaskId.get()) || !allowed.test(processState)) {
+            if (standbyTaskId.isPresent() && processState.hasTask(standbyTaskId.get()) || !rackAwareFilter.test(processState)) {
                 continue;
             }
 
@@ -487,24 +489,25 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     /**
      * The previous member to take a standby of {@code task}: the previous active member, else the least-loaded previous
-     * standby member, each only while below the quota and on a process {@code allowed} accepts. Null if neither.
+     * standby member, each only while below the quota and on a process that passes {@code rackAwareFilter}. Null if
+     * neither.
      */
     private static Member findPrevMemberForStandby(
         final LocalState localState,
         final TaskId task,
-        final Predicate<ProcessState> allowed
+        final Predicate<ProcessState> rackAwareFilter
     ) {
         // prev active task
         final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
         if (prevActiveMember != null) {
             final ProcessState prevActiveMemberProcessState = localState.processIdToState.get(prevActiveMember.processId);
-            if (allowed.test(prevActiveMemberProcessState) && !prevActiveMemberProcessState.hasTask(task) && hasUnfulfilledTaskQuota(localState, prevActiveMemberProcessState, prevActiveMember)) {
+            if (rackAwareFilter.test(prevActiveMemberProcessState) && !prevActiveMemberProcessState.hasTask(task) && hasUnfulfilledTaskQuota(localState, prevActiveMemberProcessState, prevActiveMember)) {
                 return prevActiveMember;
             }
         }
 
         // prev standby tasks
-        final Member prevStandbyMember = findPrevMemberWithLeastLoad(localState, localState.standbyTaskToPrevMember.get(task), Optional.of(task), allowed);
+        final Member prevStandbyMember = findPrevMemberWithLeastLoad(localState, localState.standbyTaskToPrevMember.get(task), Optional.of(task), rackAwareFilter);
         if (prevStandbyMember != null && hasUnfulfilledTaskQuota(localState, localState.processIdToState.get(prevStandbyMember.processId), prevStandbyMember)) {
             return prevStandbyMember;
         }
