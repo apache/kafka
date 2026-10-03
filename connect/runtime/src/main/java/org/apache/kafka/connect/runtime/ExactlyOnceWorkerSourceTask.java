@@ -284,7 +284,8 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             recordCommitSuccess(durationMillis);
             log.debug("{} Finished commitOffsets successfully in {} ms", this, durationMillis);
 
-            commitSourceTask();
+            // no offsets to flush
+            commitSourceTask(offsetWriter.getFlushedOffsets());
             return;
         }
 
@@ -345,7 +346,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             committableRecords.forEach(this::commitTaskRecord);
             committableRecords.clear();
         }
-        commitSourceTask();
+        commitSourceTask(offsetWriter.getFlushedOffsets());
     }
 
     private RuntimeException maybeWrapProducerSendException(String message, Throwable error) {
