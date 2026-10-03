@@ -18,7 +18,6 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
-import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -42,7 +41,7 @@ public final class MockStandbyUpdateListener implements StandbyUpdateListener {
     }
 
     @Override
-    public void onBatchLoaded(TopicPartition topicPartition, String storeName, TaskId taskId, long batchEndOffset, long batchSize, long currentEndOffset) {
+    public void onBatchLoaded(TopicPartition topicPartition, String storeName, long batchEndOffset, long batchSize, long currentEndOffset) {
         storeNameCalledUpdate.put(UPDATE_BATCH, storeName);
     }
 
