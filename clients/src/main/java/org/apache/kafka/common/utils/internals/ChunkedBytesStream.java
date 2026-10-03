@@ -301,7 +301,7 @@ public class ChunkedBytesStream extends FilterInputStream {
                 long delegateBytesSkipped = getInIfOpen().skip(remaining);
                 if (delegateBytesSkipped == 0) {
                     // read one byte to check for EOS
-                    if (read() == -1) {
+                    if (getInIfOpen().read() == -1) {
                         break;
                     }
                     // one byte read so decrement number to skip
