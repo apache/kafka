@@ -16,12 +16,23 @@
 KAFKA_TOPICS="fixtures/kafka/bin/kafka-topics.sh"
 KAFKA_CONSOLE_PRODUCER="fixtures/kafka/bin/kafka-console-producer.sh"
 KAFKA_CONSOLE_CONSUMER="fixtures/kafka/bin/kafka-console-consumer.sh"
+KAFKA_CONSOLE_SHARE_CONSUMER="fixtures/kafka/bin/kafka-console-share-consumer.sh"
+KAFKA_CONFIGS="fixtures/kafka/bin/kafka-configs.sh"
 KAFKA_RUN_CLASS="fixtures/kafka/bin/kafka-run-class.sh"
 
 COMBINED_MODE_COMPOSE="fixtures/mode/combined/docker-compose.yml"
 ISOLATED_MODE_COMPOSE="fixtures/mode/isolated/docker-compose.yml"
 
 CLIENT_TIMEOUT=40000
+
+CONSUMER_GROUP_PROTOCOL_TESTS="Consumer Group Protocol Tests"
+CONSUMER_GROUP_PROTOCOL_TOPIC="test-topic-consumer-group-protocol"
+CONSUMER_GROUP_PROTOCOL_GROUP_ID="docker-sanity-consumer-group"
+
+SHARE_GROUP_PROTOCOL_TESTS="Share Group Protocol Tests"
+SHARE_GROUP_PROTOCOL_TOPIC="test-topic-share-group-protocol"
+SHARE_GROUP_PROTOCOL_GROUP_ID="docker-sanity-share-group"
+SHARE_GROUP_CONFIG_TIMEOUT_SECONDS=20
 
 SSL_FLOW_TESTS="SSL Flow Tests"
 SSL_CLIENT_CONFIG="fixtures/secrets/client-ssl.properties"
@@ -48,3 +59,5 @@ SASL_ERROR_PREFIX="SASL_ERR"
 BROKER_RESTART_ERROR_PREFIX="BROKER_RESTART_ERR"
 FILE_INPUT_ERROR_PREFIX="FILE_INPUT_ERR"
 BROKER_METRICS_ERROR_PREFIX="BROKER_METRICS_ERR"
+CONSUMER_GROUP_PROTOCOL_ERROR_PREFIX="CONSUMER_GROUP_PROTOCOL_ERR"
+SHARE_GROUP_PROTOCOL_ERROR_PREFIX="SHARE_GROUP_PROTOCOL_ERR"
