@@ -17,8 +17,9 @@
 package org.apache.kafka.coordinator.group.streams.assignor;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -43,15 +44,16 @@ import java.util.function.Predicate;
  */
 final class RackAwareStandbyPicker<P> {
 
-    private record TaggedProcess<P>(P process, Map<String, String> clientTags) {
+    /** A process with the id of its value for each key, -1 where it has none. Ids number the values of each key. */
+    private record TaggedProcess<P>(P process, int[] valueIds) {
     }
 
     private final List<String> tagKeys;
-    private final Function<P, Map<String, String>> clientTags;
     private final List<TaggedProcess<P>> allProcesses;
+    private final Map<P, int[]> valueIdsByProcess;
 
     // State of the task being placed, reset by startTask.
-    private final List<Set<String>> usedTagValues;       // per key, the values already carried by a holder of the task
+    private final boolean[][] usedTagValues;             // per key and value id, whether a holder of the task carries it
     private int priorityIndex;                           // position in tagKeys of the key the filter enforces
     private List<TaggedProcess<P>> candidates;           // the pool the next pick filters
 
@@ -66,21 +68,33 @@ final class RackAwareStandbyPicker<P> {
         final Function<P, Map<String, String>> clientTags
     ) {
         this.tagKeys = tagKeys;
-        this.clientTags = clientTags;
-        allProcesses = new ArrayList<>(processes.size());
-        for (final P process : processes) {
-            allProcesses.add(new TaggedProcess<>(process, clientTags.apply(process)));
-        }
-        usedTagValues = new ArrayList<>(tagKeys.size());
+        final List<Map<String, Integer>> idsByValue = new ArrayList<>(tagKeys.size());
         for (int i = 0; i < tagKeys.size(); i++) {
-            usedTagValues.add(new HashSet<>());
+            idsByValue.add(new HashMap<>());
+        }
+        allProcesses = new ArrayList<>(processes.size());
+        valueIdsByProcess = new HashMap<>();
+        for (final P process : processes) {
+            final Map<String, String> tags = clientTags.apply(process);
+            final int[] valueIds = new int[tagKeys.size()];
+            for (int i = 0; i < tagKeys.size(); i++) {
+                final String value = tags.get(tagKeys.get(i));
+                final Map<String, Integer> ids = idsByValue.get(i);
+                valueIds[i] = value == null ? -1 : ids.computeIfAbsent(value, v -> ids.size());
+            }
+            allProcesses.add(new TaggedProcess<>(process, valueIds));
+            valueIdsByProcess.put(process, valueIds);
+        }
+        usedTagValues = new boolean[tagKeys.size()][];
+        for (int i = 0; i < tagKeys.size(); i++) {
+            usedTagValues[i] = new boolean[idsByValue.get(i).size()];
         }
         candidates = allProcesses;
     }
 
     void startTask() {
-        for (final Set<String> values : usedTagValues) {
-            values.clear();
+        for (final boolean[] used : usedTagValues) {
+            Arrays.fill(used, false);
         }
         priorityIndex = 0;
         candidates = allProcesses;
@@ -88,11 +102,10 @@ final class RackAwareStandbyPicker<P> {
 
     /** Records the tag values of a holder of the task, so that no later standby lands on them while a new value exists. */
     void markUsed(final P holder) {
-        final Map<String, String> holderTags = clientTags.apply(holder);
-        for (int i = 0; i < tagKeys.size(); i++) {
-            final String value = holderTags.get(tagKeys.get(i));
-            if (value != null) {
-                usedTagValues.get(i).add(value);
+        final int[] valueIds = valueIdsByProcess.get(holder);
+        for (int i = 0; i < valueIds.length; i++) {
+            if (valueIds[i] >= 0) {
+                usedTagValues[i][valueIds[i]] = true;
             }
         }
     }
@@ -106,13 +119,9 @@ final class RackAwareStandbyPicker<P> {
      */
     Set<P> pickCandidates(final Predicate<P> eligible) {
         while (priorityIndex < tagKeys.size()) {
-            final String priorityKey = tagKeys.get(priorityIndex);
-            final Set<String> usedPriorityValues = usedTagValues.get(priorityIndex);
-
             final List<TaggedProcess<P>> survivors = new ArrayList<>();
             for (final TaggedProcess<P> candidate : candidates) {
-                final String value = candidate.clientTags.get(priorityKey);
-                if (value != null && !usedPriorityValues.contains(value) && eligible.test(candidate.process)) {
+                if (hasUnusedValue(candidate, priorityIndex) && eligible.test(candidate.process)) {
                     survivors.add(candidate);
                 }
             }
@@ -167,7 +176,7 @@ final class RackAwareStandbyPicker<P> {
     }
 
     private boolean hasUnusedValue(final TaggedProcess<P> process, final int keyIndex) {
-        final String value = process.clientTags.get(tagKeys.get(keyIndex));
-        return value != null && !usedTagValues.get(keyIndex).contains(value);
+        final int valueId = process.valueIds[keyIndex];
+        return valueId >= 0 && !usedTagValues[keyIndex][valueId];
     }
 }
