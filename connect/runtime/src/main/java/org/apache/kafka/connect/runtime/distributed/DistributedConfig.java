@@ -36,7 +36,6 @@ import java.security.Provider;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -110,6 +109,15 @@ public final class DistributedConfig extends WorkerConfig {
 
     public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
     private static final String METADATA_CLUSTER_CHECK_ENABLE_DOC = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC;
+
+    /**
+     * Default value for <code>bootstrap.resolve.timeout.ms</code> used by the worker's group-membership
+     * network client, overriding the client-wide default of
+     * {@link CommonClientConfigs#DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS}. Ten seconds is short enough to
+     * fail fast if the cluster's bootstrap servers are persistently unresolvable, while still tolerating
+     * a brief DNS blip during worker startup or rejoin. A user-supplied value always takes precedence.
+     */
+    public static final long BOOTSTRAP_RESOLVE_TIMEOUT_MS_DEFAULT = 10_000L;
 
     /**
      * <code>worker.sync.timeout.ms</code>
@@ -408,11 +416,10 @@ public final class DistributedConfig extends WorkerConfig {
                     CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
             .define(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                    BOOTSTRAP_RESOLVE_TIMEOUT_MS_DEFAULT,
                     atLeast(0L),
-                    ConfigDef.Importance.LOW,
-                    "Kafka Connect does not support asynchronous bootstrap resolution;" +
-                            " this configuration is ignored and always treated as <code>0</code> (synchronous resolution).")
+                    ConfigDef.Importance.HIGH,
+                    CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
@@ -626,15 +633,7 @@ public final class DistributedConfig extends WorkerConfig {
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
         warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs();
-        Map<String, Object> configUpdates = new HashMap<>(super.postProcessParsedConfig(parsedValues));
-        Object bootstrapResolveTimeoutMs = parsedValues.get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
-        if (bootstrapResolveTimeoutMs != null && !bootstrapResolveTimeoutMs.equals(0L)) {
-            log.warn("The value {} for the {} property will be ignored as Kafka Connect does not support" +
-                            " asynchronous bootstrap resolution. The value 0 will be used instead.",
-                    bootstrapResolveTimeoutMs, CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
-            configUpdates.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, 0L);
-        }
-        return configUpdates;
+        return super.postProcessParsedConfig(parsedValues);
     }
 
     private void warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs() {
