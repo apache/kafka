@@ -134,12 +134,7 @@ This linting step will help to ensure that we have nice looking commits.
 The linter wraps plain top-level prose at 72 columns. Markdown blocks and
 paragraphs containing inline Markdown or explicit line breaks retain their
 original source formatting. Reviewers trailers retain their indented continuation
-lines. PR descriptions are only updated when formatting changes the body. Run
-the script tests locally after installing `.github/scripts/requirements.txt`:
-
-```bash
-python -m unittest discover -s .github/scripts/tests -p 'test_*.py'
-```
+lines. PR descriptions are only updated when formatting changes the body.
 
 ### Stale PRs
 
