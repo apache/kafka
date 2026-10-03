@@ -2168,6 +2168,51 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
+     * Waiting for an in-flight fetch (fetchable partitions, empty buffer, {@code maximumTimeToWait} unbounded)
+     * must use the full user poll timeout. Clamping that wait to {@code retry.backoff.ms} made {@code poll()}
+     * re-enter every backoff interval and, with KAFKA-20780, submit a new {@link AsyncPollEvent} each time,
+     * doubling CPU versus the classic consumer (KAFKA-20904).
+     */
+    @Test
+    public void testPollDoesNotBoundWaitWhileFetchIsInFlight() {
+        FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        ConsumerInterceptors<String, String> interceptors = mock(ConsumerInterceptors.class);
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = mock(ConsumerRebalanceListenerInvoker.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(fetchBuffer, interceptors, rebalanceListenerInvoker, subscriptions);
+
+        final TopicPartition tp = new TopicPartition("topic1", 0);
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // FetchRequestManager.maximumTimeToWait() is Long.MAX_VALUE while a fetch request is in flight.
+        doReturn(Long.MAX_VALUE).when(applicationEventHandler).maximumTimeToWait();
+
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        // Partition is fetchable and not buffered: the application thread is waiting for the in-flight fetch.
+        doReturn(Collections.emptySet()).when(fetchBuffer).bufferedPartitions();
+
+        AtomicReference<Long> awaitTimerInitialMs = new AtomicReference<>();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            awaitTimerInitialMs.compareAndSet(null, pollTimer.remainingMs());
+            time.sleep(pollTimer.remainingMs());
+            pollTimer.update();
+            return null;
+        }).when(fetchBuffer).awaitWakeup(any(Timer.class));
+
+        final long pollTimeoutMs = 500;
+        consumer.poll(Duration.ofMillis(pollTimeoutMs));
+
+        assertNotNull(awaitTimerInitialMs.get(), "fetchBuffer.awaitWakeup was never called");
+        assertEquals(pollTimeoutMs, awaitTimerInitialMs.get(),
+            "Expected poll wait timer to use the full user timeout while a fetch is in flight, but was "
+                + awaitTimerInitialMs.get());
+        verify(fetchBuffer, times(1)).awaitWakeup(any(Timer.class));
+    }
+
+    /**
      * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer, Predicate, boolean) processBackgroundEvents}
      * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
      */
