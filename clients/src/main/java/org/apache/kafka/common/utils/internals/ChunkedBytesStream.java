@@ -301,11 +301,16 @@ public class ChunkedBytesStream extends FilterInputStream {
                 long delegateBytesSkipped = getInIfOpen().skip(remaining);
                 if (delegateBytesSkipped == 0) {
                     // read one byte to check for EOS
-                    if (getInIfOpen().read() == -1) {
+                    if (read() == -1) {
                         break;
                     }
                     // one byte read so decrement number to skip
                     remaining--;
+                    // read() may have filled the intermediate buffer. Skip those bytes before delegating again.
+                    avail = count - pos;
+                    bytesSkipped = (int) Math.min(avail, remaining);
+                    pos += bytesSkipped;
+                    remaining -= bytesSkipped;
                 } else if (delegateBytesSkipped > remaining || delegateBytesSkipped < 0) { // skipped negative or too many bytes
                     throw new IOException("Unable to skip exactly");
 
