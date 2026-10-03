@@ -71,7 +71,7 @@ public class StreamsRebalanceListenerTest {
 
         final MissingSourceTopicException exception = assertThrows(
             MissingSourceTopicException.class,
-            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList(), null)
         );
         assertEquals("One or more source topics were missing during rebalance", exception.getMessage());
         verify(taskManager).handleRebalanceComplete();
@@ -80,7 +80,7 @@ public class StreamsRebalanceListenerTest {
     @Test
     public void shouldSwallowVersionProbingError() {
         assignmentErrorCode.set(AssignorError.VERSION_PROBING.code());
-        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList(), null);
         verify(streamThread).setState(State.PARTITIONS_ASSIGNED);
         verify(streamThread).setPartitionAssignedTime(time.milliseconds());
         verify(taskManager).handleRebalanceComplete();
@@ -89,7 +89,7 @@ public class StreamsRebalanceListenerTest {
     @Test
     public void shouldSendShutdown() {
         assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
-        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList(), null);
         verify(taskManager).handleRebalanceComplete();
         verify(streamThread).shutdownToError();
     }
@@ -100,7 +100,7 @@ public class StreamsRebalanceListenerTest {
 
         final TaskAssignmentException exception = assertThrows(
             TaskAssignmentException.class,
-            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList(), null)
         );
         assertEquals("Hit an unexpected exception during task assignment phase of rebalance", exception.getMessage());
 
@@ -113,7 +113,7 @@ public class StreamsRebalanceListenerTest {
 
         final TaskAssignmentException exception = assertThrows(
             TaskAssignmentException.class,
-            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList(), null)
         );
         assertEquals("Hit an unrecognized exception during rebalance", exception.getMessage());
     }
@@ -122,7 +122,7 @@ public class StreamsRebalanceListenerTest {
     public void shouldHandleAssignedPartitions() {
         assignmentErrorCode.set(AssignorError.NONE.code());
 
-        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList(), null);
 
         verify(streamThread).setState(State.PARTITIONS_ASSIGNED);
         verify(streamThread).setPartitionAssignedTime(time.milliseconds());
@@ -134,7 +134,7 @@ public class StreamsRebalanceListenerTest {
         final Collection<TopicPartition> partitions = Collections.singletonList(new TopicPartition("topic", 0));
         when(streamThread.setState(State.PARTITIONS_REVOKED)).thenReturn(State.RUNNING);
 
-        streamsRebalanceListener.onPartitionsRevoked(partitions);
+        streamsRebalanceListener.onPartitionsRevoked(partitions, null);
 
         verify(taskManager).handleRevocation(partitions);
     }
@@ -143,7 +143,7 @@ public class StreamsRebalanceListenerTest {
     public void shouldNotHandleRevokedPartitionsIfStateCannotTransitToPartitionRevoked() {
         when(streamThread.setState(State.PARTITIONS_REVOKED)).thenReturn(null);
 
-        streamsRebalanceListener.onPartitionsRevoked(Collections.singletonList(new TopicPartition("topic", 0)));
+        streamsRebalanceListener.onPartitionsRevoked(Collections.singletonList(new TopicPartition("topic", 0)), null);
 
         verify(taskManager, never()).handleRevocation(any());
     }
@@ -152,14 +152,14 @@ public class StreamsRebalanceListenerTest {
     public void shouldNotHandleEmptySetOfRevokedPartitions() {
         when(streamThread.setState(State.PARTITIONS_REVOKED)).thenReturn(State.RUNNING);
 
-        streamsRebalanceListener.onPartitionsRevoked(Collections.emptyList());
+        streamsRebalanceListener.onPartitionsRevoked(Collections.emptyList(), null);
 
         verify(taskManager, never()).handleRevocation(any());
     }
 
     @Test
     public void shouldHandleLostPartitions() {
-        streamsRebalanceListener.onPartitionsLost(Collections.singletonList(new TopicPartition("topic", 0)));
+        streamsRebalanceListener.onPartitionsLost(Collections.singletonList(new TopicPartition("topic", 0)), null);
 
         verify(taskManager).handleLostAll();
     }
