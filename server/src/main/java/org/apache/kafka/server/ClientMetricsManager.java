@@ -46,6 +46,7 @@ import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.Crc32C;
+import org.apache.kafka.server.metrics.ClientMatchPattern;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
 import org.apache.kafka.server.metrics.ClientMetricsInstanceMetadata;
@@ -73,7 +74,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -133,8 +133,9 @@ public class ClientMetricsManager implements AutoCloseable {
     }
 
     public void updateSubscription(String subscriptionName, Properties properties) {
-        // Validate the subscription properties.
-        ClientMetricsConfigs.validate(subscriptionName, properties);
+        // Reapplying an already-committed config, not admitting a new one, so pass properties
+        // twice to skip RE2/J-only strictness. Patterns are still validated permissively below.
+        ClientMetricsConfigs.validate(subscriptionName, properties, properties);
         // IncrementalAlterConfigs API will send empty configs when all the configs are deleted
         // for respective subscription. In that case, we need to remove the subscription from the map.
         if (properties.isEmpty()) {
@@ -260,7 +261,7 @@ public class ClientMetricsManager implements AutoCloseable {
 
         SubscriptionInfo newSubscription =
             new SubscriptionInfo(subscriptionName, metrics, pushInterval,
-                ClientMetricsConfigs.parseMatchingPatterns(clientMatchPattern));
+                ClientMetricsConfigs.parseMatchingPatterns(subscriptionName, clientMatchPattern));
 
         subscriptionMap.put(subscriptionName, newSubscription);
     }
@@ -512,10 +513,10 @@ public class ClientMetricsManager implements AutoCloseable {
         private final String name;
         private final Set<String> metrics;
         private final int intervalMs;
-        private final Map<String, Pattern> matchPattern;
+        private final Map<String, ClientMatchPattern> matchPattern;
 
         public SubscriptionInfo(String name, List<String> metrics, int intervalMs,
-            Map<String, Pattern> matchPattern) {
+            Map<String, ClientMatchPattern> matchPattern) {
             this.name = name;
             this.metrics = new HashSet<>(metrics);
             this.intervalMs = intervalMs;
@@ -534,7 +535,7 @@ public class ClientMetricsManager implements AutoCloseable {
             return intervalMs;
         }
 
-        public Map<String, Pattern> matchPattern() {
+        public Map<String, ClientMatchPattern> matchPattern() {
             return matchPattern;
         }
     }

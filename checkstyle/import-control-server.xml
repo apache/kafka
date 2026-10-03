@@ -98,6 +98,7 @@
       <allow class="org.apache.kafka.controller.QuorumFeatures" />
       <allow class="org.apache.kafka.controller.metrics.ControllerMetadataMetrics" />
       <allow pkg="org.apache.kafka.server.telemetry" />
+      <allow pkg="com.google.re2j" />
     </subpackage>
     <subpackage name="share">
       <allow pkg="org.apache.kafka.storage.log.metrics" />
