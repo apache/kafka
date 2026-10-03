@@ -166,6 +166,8 @@ public final class Worker {
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
     private final Function<Map<String, Object>, Admin> adminFactory;
 
+    private static final String DEFAULT_CONNECTOR_CONSUMER = "connector-consumer-";
+
     public Worker(
         String workerId,
         Time time,
@@ -977,10 +979,22 @@ public final class Worker {
                                            connectorType, ConnectorClientConfigRequest.ClientType.CONSUMER,
                                            connectorClientConfigOverridePolicy);
         consumerProps.putAll(consumerOverrides);
+        addTaskToConnectorConsumerOverride(consumerProps, defaultClientId);
 
         ConnectUtils.enforceSynchronousBootstrapResolution(consumerProps);
 
         return consumerProps;
+    }
+
+    private static void addTaskToConnectorConsumerOverride(final Map<String, Object> consumerProps, final String defaultClientId) {
+        if (defaultClientId.startsWith(DEFAULT_CONNECTOR_CONSUMER)) {
+            String clientIdConfig = consumerProps.get(ConsumerConfig.CLIENT_ID_CONFIG).toString();
+            if (!clientIdConfig.equals(defaultClientId)) {
+                var parts = defaultClientId.split("-");
+                String taskID = parts[parts.length - 1];
+                consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, clientIdConfig + "-" + taskID);
+            }
+        }
     }
 
     static Map<String, Object> adminConfigs(String connName,
@@ -1333,7 +1347,7 @@ public final class Worker {
                 kafkaClusterId,
                 ConnectorType.SINK);
         String groupId = (String) baseConsumerConfigs(
-                connName, "connector-consumer-", config, new SinkConnectorConfig(plugins, connectorConfig),
+                connName, DEFAULT_CONNECTOR_CONSUMER, config, new SinkConnectorConfig(plugins, connectorConfig),
                 connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK).get(ConsumerConfig.GROUP_ID_CONFIG);
         Admin admin = adminFactory.apply(adminConfig);
         try {
@@ -1455,7 +1469,7 @@ public final class Worker {
                         ConnectorType.SINK);
 
                 String groupId = (String) baseConsumerConfigs(
-                        connName, "connector-consumer-", config, sinkConnectorConfig,
+                        connName, DEFAULT_CONNECTOR_CONSUMER, config, sinkConnectorConfig,
                         sinkConnectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK).get(ConsumerConfig.GROUP_ID_CONFIG);
 
                 Admin admin = adminFactory.apply(adminConfig);
@@ -1956,7 +1970,7 @@ public final class Worker {
                     keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get());
 
             Map<String, Object> consumerProps = baseConsumerConfigs(
-                    id.connector(),  "connector-consumer-" + id, config, connectorConfig, connectorClass,
+                    id.connector(),  DEFAULT_CONNECTOR_CONSUMER + id, config, connectorConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
@@ -2127,7 +2141,7 @@ public final class Worker {
 
         if (usesConnectorSpecificStore) {
             Map<String, Object> consumerProps = regularSourceOffsetsConsumerConfigs(
-                        connName, "connector-consumer-" + connName, config, sourceConfig, connector.getClass(),
+                        connName, DEFAULT_CONNECTOR_CONSUMER + connName, config, sourceConfig, connector.getClass(),
                         connectorClientConfigOverridePolicy, kafkaClusterId);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
@@ -2199,7 +2213,7 @@ public final class Worker {
                 connectorClientConfigOverridePolicy, kafkaClusterId);
 
         Map<String, Object> consumerProps = exactlyOnceSourceOffsetsConsumerConfigs(
-                    connName, "connector-consumer-" + connName, config, sourceConfig, connector.getClass(),
+                    connName, DEFAULT_CONNECTOR_CONSUMER + connName, config, sourceConfig, connector.getClass(),
                     connectorClientConfigOverridePolicy, kafkaClusterId);
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
@@ -2254,7 +2268,7 @@ public final class Worker {
             Objects.requireNonNull(topicAdmin, "Source tasks require a non-null topic admin when configured to use their own offsets topic");
 
             Map<String, Object> consumerProps = regularSourceOffsetsConsumerConfigs(
-                    id.connector(), "connector-consumer-" + id, config, sourceConfig, connectorClass,
+                    id.connector(), DEFAULT_CONNECTOR_CONSUMER + id, config, sourceConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
@@ -2305,9 +2319,9 @@ public final class Worker {
             TopicAdmin topicAdmin
     ) {
         Objects.requireNonNull(topicAdmin, "Source tasks require a non-null topic admin when exactly-once support is enabled");
-
+        // Lorcan
         Map<String, Object> consumerProps = exactlyOnceSourceOffsetsConsumerConfigs(
-                id.connector(), "connector-consumer-" + id, config, sourceConfig, connectorClass,
+                id.connector(), DEFAULT_CONNECTOR_CONSUMER + id, config, sourceConfig, connectorClass,
                 connectorClientConfigOverridePolicy, kafkaClusterId);
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
