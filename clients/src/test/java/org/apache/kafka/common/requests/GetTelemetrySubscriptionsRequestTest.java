@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -33,5 +34,20 @@ public class GetTelemetrySubscriptionsRequestTest {
         GetTelemetrySubscriptionsRequest req = new GetTelemetrySubscriptionsRequest(new GetTelemetrySubscriptionsRequestData(), (short) 0);
         GetTelemetrySubscriptionsResponse response = req.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
         assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 1), response.errorCounts());
+    }
+
+    @Test
+    public void testBuildV1ClearsClientInstanceIdInBody() {
+        Uuid clientInstanceId = Uuid.randomUuid();
+        GetTelemetrySubscriptionsRequest.Builder builder = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(clientInstanceId), true);
+
+        assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
+
+        // In v1 the ID travels in the request header.
+        GetTelemetrySubscriptionsRequest v1 = builder.build((short) 1);
+        assertEquals(Uuid.ZERO_UUID, v1.data().clientInstanceId());
+        // Building v1 must not mutate the data the builder was given.
+        assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
     }
 }

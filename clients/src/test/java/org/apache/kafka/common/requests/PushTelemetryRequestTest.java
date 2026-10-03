@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.CompressionType;
@@ -31,6 +32,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,6 +50,28 @@ public class PushTelemetryRequestTest {
         PushTelemetryRequest req = new PushTelemetryRequest(new PushTelemetryRequestData(), (short) 0);
         PushTelemetryResponse response = req.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
         assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 1), response.errorCounts());
+    }
+
+    @Test
+    public void testBuildV1ClearsClientInstanceIdInBody() {
+        Uuid clientInstanceId = Uuid.randomUuid();
+        ByteBuffer metrics = ByteBuffer.wrap("test-metrics".getBytes(StandardCharsets.UTF_8));
+        PushTelemetryRequest.Builder builder = new PushTelemetryRequest.Builder(
+            new PushTelemetryRequestData()
+                .setClientInstanceId(clientInstanceId)
+                .setSubscriptionId(1)
+                .setCompressionType(CompressionType.NONE.id)
+                .setMetrics(metrics), true);
+
+        assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
+
+        // In v1 the ID travels in the request header.
+        PushTelemetryRequest v1 = builder.build((short) 1);
+        assertEquals(Uuid.ZERO_UUID, v1.data().clientInstanceId());
+        assertEquals(1, v1.data().subscriptionId());
+        assertEquals(metrics, v1.data().metrics());
+        // Building v1 must not mutate the data the builder was given.
+        assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
     }
 
     @ParameterizedTest
