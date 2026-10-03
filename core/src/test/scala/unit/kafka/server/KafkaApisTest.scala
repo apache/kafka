@@ -646,7 +646,62 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testTxnShareAcknowledgeDoesNotValidateMemberLocallyBeforeParticipantRegistration(): Unit = {
+  def testValidateShareGroupMemberRequiresClusterAuthorization(): Unit = {
+    val request = buildRequest(new ValidateShareGroupMemberRequest.Builder(
+      new ValidateShareGroupMemberRequestData().setGroupId("group").setMemberId("member").setMemberEpoch(1)).build())
+    val authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[AuthorizableRequestContext], any[util.List[Action]]))
+      .thenReturn(util.List.of(AuthorizationResult.DENIED))
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+    val response = verifyNoThrottling[ValidateShareGroupMemberResponse](request)
+    assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED.code, response.data.errorCode)
+    verify(groupCoordinator, never()).validateShareGroupMember(any(), any(), any(), anyInt())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("NONE", "STALE_MEMBER_EPOCH", "NOT_COORDINATOR"))
+  def testValidateShareGroupMemberPropagatesLocalResult(errorName: String): Unit = {
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3, transactionVersion = Some(TransactionVersion.TV_2))
+    val request = buildRequest(new ValidateShareGroupMemberRequest.Builder(
+      new ValidateShareGroupMemberRequestData().setGroupId("group").setMemberId("member").setMemberEpoch(4)).build())
+    kafkaApis = createKafkaApis()
+    val error = Errors.valueOf(errorName)
+    when(groupCoordinator.validateShareGroupMember(any[AuthorizableRequestContext],
+      ArgumentMatchers.eq("group"), ArgumentMatchers.eq("member"), ArgumentMatchers.eq(4)))
+      .thenReturn(CompletableFuture.completedFuture(error))
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+    val response = verifyNoThrottling[ValidateShareGroupMemberResponse](request)
+    assertEquals(error.code, response.data.errorCode)
+    verifyNoInteractions(addPartitionsToTxnManager, sharePartitionManager)
+  }
+
+  @Test
+  def testTxnShareAcknowledgeValidatesAtRemoteGroupCoordinatorBeforeStaging(): Unit = {
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3, transactionVersion = Some(TransactionVersion.TV_2))
+    val topicId = Uuid.randomUuid
+    addTopicToMetadataCache("source", 1, topicId = topicId)
+    val request = buildRequest(txnShareAcknowledgeRequest("txn", "group", 10L, 2.toShort,
+      "member", topicId, 0, 0L, 0L, AcknowledgeType.ACCEPT.id))
+    kafkaApis = createKafkaApis()
+    when(groupCoordinator.partitionFor("group")).thenReturn(7)
+    when(groupCoordinator.validateShareGroupMember(any[AuthorizableRequestContext],
+      ArgumentMatchers.eq("group"), ArgumentMatchers.eq("member"), ArgumentMatchers.eq(1)))
+      .thenReturn(CompletableFuture.completedFuture(Errors.NOT_COORDINATOR))
+    when(addPartitionsToTxnManager.validateShareGroupMember("group", "member", 1, 7))
+      .thenReturn(CompletableFuture.completedFuture(Errors.STALE_MEMBER_EPOCH))
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+    val response = verifyNoThrottling[TxnShareAcknowledgeResponse](request)
+    assertEquals(Errors.STALE_MEMBER_EPOCH.code, response.data.errorCode)
+    verify(addPartitionsToTxnManager).validateShareGroupMember("group", "member", 1, 7)
+    verify(addPartitionsToTxnManager, never()).addOrVerifyTransaction(any(), anyLong(), anyShort(), any(), any(), any())
+    verifyNoInteractions(sharePartitionManager)
+  }
+
+  @Test
+  def testTxnShareAcknowledgeRejectsStaleMemberBeforeParticipantRegistration(): Unit = {
     val transactionalId = "transactional-id"
     val groupId = "group"
     val memberId = "member-id"
@@ -714,12 +769,12 @@ class KafkaApisTest extends Logging {
 
     kafkaApis.handle(request, requestLocal)
 
-    addPartitionsCallback.getValue.complete(util.Map.of(shareStatePartition, Errors.NONE))
     val response = verifyNoThrottling[TxnShareAcknowledgeResponse](request)
-    assertEquals(Errors.NONE.code, response.data.errorCode)
-    assertEquals(Errors.NONE.code, txnShareAcknowledgePartitionError(response, topicId, sourcePartition))
-    assertEquals(util.Set.of(tip), acknowledgeBatchesCaptor.getValue.keySet)
-    verify(groupCoordinator, never()).validateShareGroupMember(any[AuthorizableRequestContext], any(), any(), anyInt())
+    assertEquals(Errors.STALE_MEMBER_EPOCH.code, response.data.errorCode)
+    assertTrue(response.data.responses.isEmpty)
+    verify(groupCoordinator).validateShareGroupMember(any[AuthorizableRequestContext], ArgumentMatchers.eq(groupId),
+      ArgumentMatchers.eq(memberId), ArgumentMatchers.eq(1))
+    verifyNoInteractions(addPartitionsToTxnManager, sharePartitionManager)
   }
 
   @Test
@@ -4041,7 +4096,7 @@ class KafkaApisTest extends Logging {
       any()
     )
     verify(sharePartitionManager, never()).applyTxnMarker(anyLong, anyShort, any())
-    verify(sharePartitionManager).invalidateSharePartitions(ArgumentMatchers.eq(util.Set.of(affectedSharePartition)))
+    verify(sharePartitionManager, never()).invalidateSharePartitions(any())
 
     val response = verifyNoThrottling[WriteTxnMarkersResponse](request)
     assertEquals(Errors.NONE, response.errorsByProducerId.get(1L).get(shareStatePartition))

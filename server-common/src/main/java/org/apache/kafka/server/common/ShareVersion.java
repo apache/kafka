@@ -31,7 +31,7 @@ public enum ShareVersion implements FeatureVersion {
     SV_2(2, MetadataVersion.IBP_4_4_IV0, Map.of()),
 
     // Version 3 adds transactional acknowledgments for share groups (KIP-1289)
-    SV_3(3, MetadataVersion.IBP_4_4_IV0, Map.of());
+    SV_3(3, MetadataVersion.IBP_4_5_IV0, Map.of());
 
     public static final String FEATURE_NAME = "share.version";
 

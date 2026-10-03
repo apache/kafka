@@ -26,7 +26,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
-import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -38,6 +37,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
@@ -191,6 +191,7 @@ public class SharePartition implements AutoCloseable {
      * the in-flight records are accessed in a thread-safe manner.
      */
     private final ReadWriteLock lock;
+    private final SharePartitionTxnState txnState;
 
     /**
      * The lock to ensure that the same share partition does not enter a fetch queue
@@ -400,6 +401,8 @@ public class SharePartition implements AutoCloseable {
         this.defaultMaxDeliveryCount = defaultMaxDeliveryCount;
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
+        this.txnState = new SharePartitionTxnState(lock, cachedState,
+            () -> partitionState == SharePartitionState.ACTIVE, this::readTransactionalState, this::finishTransactionalRefresh);
         this.findNextFetchOffset = false;
         this.fetchLock = new AtomicReference<>(null);
         this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
@@ -1156,6 +1159,8 @@ public class SharePartition implements AutoCloseable {
 
             if (throwable != null) {
                 revertStagedAndRearm(persisterBatches, txnOwnerId, txnOwnerEpoch);
+            } else if (!persisterBatches.isEmpty()) {
+                txnState.beginStaging();
             }
         } finally {
             lock.writeLock().unlock();
@@ -1163,20 +1168,9 @@ public class SharePartition implements AutoCloseable {
 
         if (throwable != null) future.completeExceptionally(throwable);
         else if (persisterBatches.isEmpty()) future.complete(null);
-        else writeShareGroupState(persisterBatches.stream().map(PersisterBatch::stateBatch).toList())
-            .whenComplete((result, exception) -> {
-                if (exception != null) {
-                    lock.writeLock().lock();
-                    try {
-                        revertStagedAndRearm(persisterBatches, txnOwnerId, txnOwnerEpoch);
-                    } finally {
-                        lock.writeLock().unlock();
-                    }
-                    future.completeExceptionally(exception);
-                    return;
-                }
-                future.complete(null);
-            });
+        else return txnState.persistStaging(
+            () -> writeShareGroupState(persisterBatches.stream().map(PersisterBatch::stateBatch).toList()),
+            () -> revertStagedAndRearm(persisterBatches, txnOwnerId, txnOwnerEpoch));
         return future;
     }
 
@@ -1329,9 +1323,7 @@ public class SharePartition implements AutoCloseable {
                     return;
                 }
 
-                List<DlqBatch> dlqBatches = new ArrayList<>();
-                boolean fetchableStateUpdated = false;
-                boolean cacheStateUpdated;
+                List<SharePartitionTxnState.ResolvedRecord> resolved = new ArrayList<>();
                 lock.writeLock().lock();
                 try {
                     for (TxnMarkerBatch markerBatch : markerBatches) {
@@ -1339,57 +1331,53 @@ public class SharePartition implements AutoCloseable {
                         if (updatedState == null) {
                             continue;
                         }
-                        if (updatedState.state() == RecordState.AVAILABLE) {
-                            updateFindNextFetchOffset(true);
-                            fetchableStateUpdated = true;
-                        } else if (updatedState.state() == RecordState.ARCHIVING) {
-                            dlqBatches.add(new DlqBatch(
-                                markerBatch.batch() != null ? markerBatch.batch()::archiveBatch : markerBatch.state()::archive,
-                                markerBatch.firstOffset(),
-                                markerBatch.lastOffset(),
-                                markerBatch.deliveryCount()
-                            ));
-                        } else if (isStateTerminal(updatedState.state())) {
-                            deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(markerBatch.firstOffset(), markerBatch.lastOffset()));
-                        }
+                        resolved.add(new SharePartitionTxnState.ResolvedRecord(markerBatch.firstOffset(), markerBatch.lastOffset(),
+                            updatedState.state(), (short) updatedState.deliveryCount(),
+                            markerBatch.batch() != null ? markerBatch.batch()::archiveBatch : markerBatch.state()::archive));
                     }
-                    cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
                 } finally {
                     lock.writeLock().unlock();
                 }
-                maybeCompleteDelayedShareFetchRequest(cacheStateUpdated || fetchableStateUpdated);
-                dlqBatches.forEach(dlqBatch -> initiateDLQAndArchive(
-                    dlqBatch.archiveAction(),
-                    dlqBatch.firstOffset(),
-                    dlqBatch.lastOffset(),
-                    dlqBatch.deliveryCount(),
-                    ShareGroupDLQManager.CLIENT_REJECT
-                ));
+                finishTransactionalRefresh(resolved);
                 future.complete(null);
             });
         return future;
     }
 
-    boolean hasPendingTransactionalRecords() {
-        lock.readLock().lock();
+    public CompletableFuture<Void> refreshTransactionalState() {
+        return txnState.refresh();
+    }
+
+    private CompletableFuture<PartitionAllData> readTransactionalState() {
+        return SharePartitionTxnState.readState(persister, groupId, topicIdPartition, leaderEpoch, stateEpoch);
+    }
+
+    private void finishTransactionalRefresh(List<SharePartitionTxnState.ResolvedRecord> resolved) {
+        List<DlqBatch> dlqBatches = new ArrayList<>();
+        lock.writeLock().lock();
         try {
-            for (InFlightBatch batch : cachedState.values()) {
-                if (batch.offsetState() == null) {
-                    if (batch.batchState() == RecordState.TX_PENDING) {
-                        return true;
-                    }
+            if (partitionState != SharePartitionState.ACTIVE) return;
+            for (SharePartitionTxnState.ResolvedRecord record : resolved) {
+                if (record.state() == RecordState.AVAILABLE) {
+                    updateFindNextFetchOffset(true);
+                } else if (record.state() == RecordState.ARCHIVING) {
+                    dlqBatches.add(new DlqBatch(record.archive(), record.firstOffset(), record.lastOffset(),
+                        record.deliveryCount()));
                 } else {
-                    for (InFlightState state : batch.offsetState().values()) {
-                        if (state.state() == RecordState.TX_PENDING) {
-                            return true;
-                        }
-                    }
+                    deliveryCompleteCount.addAndGet(Math.toIntExact(record.lastOffset() - record.firstOffset() + 1));
                 }
             }
-            return false;
+            maybeUpdateCachedStateAndOffsets();
         } finally {
-            lock.readLock().unlock();
+            lock.writeLock().unlock();
         }
+        maybeCompleteDelayedShareFetchRequest(!resolved.isEmpty());
+        dlqBatches.forEach(batch -> initiateDLQAndArchive(batch.archiveAction(), batch.firstOffset(),
+            batch.lastOffset(), batch.deliveryCount(), ShareGroupDLQManager.CLIENT_REJECT));
+    }
+
+    boolean hasPendingTransactionalRecords() {
+        return SharePartitionTxnState.hasPendingRecords(cachedState, lock);
     }
 
     private boolean matchesTxnMarker(InFlightState state, long txnOwnerId, short txnOwnerEpoch) {

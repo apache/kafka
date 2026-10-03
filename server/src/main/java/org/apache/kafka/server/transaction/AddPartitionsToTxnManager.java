@@ -28,11 +28,14 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitio
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
+import org.apache.kafka.common.message.ValidateShareGroupMemberRequestData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.ValidateShareGroupMemberRequest;
+import org.apache.kafka.common.requests.ValidateShareGroupMemberResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
@@ -50,7 +53,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -210,6 +216,38 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
     private final ListenerName interBrokerListenerName;
     private final Set<Node> inflightNodes = new HashSet<>();
     private final Map<Node, TransactionDataAndCallbacks> nodesToTransactions = new HashMap<>();
+    private final Queue<RequestAndCompletionHandler> memberValidationRequests = new ConcurrentLinkedQueue<>();
+
+    public CompletableFuture<Errors> validateShareGroupMember(
+        String groupId,
+        String memberId,
+        int memberEpoch,
+        int groupPartition
+    ) {
+        Optional<Node> node = metadataCache.getPartitionLeaderEndpoint(
+            Topic.GROUP_METADATA_TOPIC_NAME, groupPartition, interBrokerListenerName);
+        if (node.isEmpty() || node.get().id() == MetadataResponse.NO_LEADER_ID) {
+            return CompletableFuture.completedFuture(Errors.COORDINATOR_NOT_AVAILABLE);
+        }
+        CompletableFuture<Errors> future = new CompletableFuture<>();
+        memberValidationRequests.add(new RequestAndCompletionHandler(time.milliseconds(), node.get(),
+            new ValidateShareGroupMemberRequest.Builder(new ValidateShareGroupMemberRequestData()
+                .setGroupId(groupId).setMemberId(memberId).setMemberEpoch(memberEpoch)),
+            response -> {
+                if (response.authenticationException() != null) {
+                    future.complete(Errors.COORDINATOR_NOT_AVAILABLE);
+                } else if (response.versionMismatch() != null) {
+                    future.complete(Errors.UNSUPPORTED_VERSION);
+                } else if (response.wasDisconnected() || response.wasTimedOut()) {
+                    future.complete(Errors.NETWORK_EXCEPTION);
+                } else {
+                    Errors error = Errors.forCode(((ValidateShareGroupMemberResponse) response.responseBody()).data().errorCode());
+                    future.complete(error == Errors.CLUSTER_AUTHORIZATION_FAILED ? Errors.COORDINATOR_NOT_AVAILABLE : error);
+                }
+            }));
+        wakeup();
+        return future;
+    }
 
     // For compatibility - this metrics group was previously defined within
     // a Scala class named `kafka.server.AddPartitionsToTxnManager`
@@ -329,6 +367,10 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
     public Collection<RequestAndCompletionHandler> generateRequests() {
         // build and add requests to the queue
         List<RequestAndCompletionHandler> list = new ArrayList<>();
+        RequestAndCompletionHandler validationRequest;
+        while ((validationRequest = memberValidationRequests.poll()) != null) {
+            list.add(validationRequest);
+        }
         var currentTimeMs = time.milliseconds();
         synchronized (nodesToTransactions) {
             var iter = nodesToTransactions.entrySet().iterator();

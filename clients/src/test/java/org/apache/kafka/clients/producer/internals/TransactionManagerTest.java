@@ -1300,6 +1300,40 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testTxnShareAcknowledgeRefreshesUnknownSourceLeader() {
+        TopicPartition source = new TopicPartition("source-only-topic", 0);
+        TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, source);
+        doInitTransactionsWithTransactionV2();
+        transactionManager.beginTransaction();
+        transactionManager.sendShareAcknowledgementsToTransaction(
+            shareAcknowledgements(tip),
+            new ShareGroupMetadata(consumerGroupId, memberId, generationId));
+        client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWith(1, singletonMap(source.topic(), 1)));
+
+        sender.runOnce();
+
+        assertTrue(metadata.currentLeader(source).leader.isPresent());
+    }
+
+    @Test
+    public void testTxnShareAcknowledgeRefreshesMetadataAfterSourceLeaderChanges() {
+        TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
+        doInitTransactionsWithTransactionV2();
+        transactionManager.beginTransaction();
+        TransactionalRequestResult result = transactionManager.sendShareAcknowledgementsToTransaction(
+            shareAcknowledgements(tip), new ShareGroupMetadata(consumerGroupId, memberId, generationId));
+        runUntil(() -> !client.requests().isEmpty());
+        respondToNextTxnShareAcknowledgeRequest(Errors.NOT_LEADER_OR_FOLLOWER);
+        client.poll(0, time.milliseconds());
+        assertTrue(metadata.updateRequested());
+        assertFalse(result.isCompleted());
+        assertFalse(transactionManager.hasError());
+        prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.NONE);
+        runUntil(result::isCompleted);
+        assertTrue(result.isSuccessful());
+    }
+
+    @Test
     public void testTxnShareAcknowledgeCompletesWhenPartitionErrorsAreNone() {
         TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
 
@@ -4366,11 +4400,12 @@ public class TransactionManagerTest {
         doInitTransactionsWith2PCEnabled(true);
         runUntil(transactionManager::hasProducerId);
 
-        // Expect a bumped epoch in the response.
         assertTrue(transactionManager.hasProducerId());
         assertFalse(transactionManager.hasOngoingTransaction());
+        assertTrue(transactionManager.isPrepared());
         assertEquals(ongoingProducerId, transactionManager.producerIdAndEpoch().producerId);
-        assertEquals(bumpedOngoingEpoch, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals((short) (bumpedOngoingEpoch - 1), transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(transactionManager.producerIdAndEpoch(), transactionManager.preparedTransactionState());
     }
 
     @Test

@@ -33,6 +33,18 @@ import static org.apache.kafka.server.share.fetch.InFlightState.EMPTY_MEMBER_ID;
  * are expected.
  */
 public class InFlightBatch {
+    public boolean hasPendingTransactionalRecords() {
+        if (offsetState == null) {
+            return batchState.state() == RecordState.TX_PENDING;
+        }
+        for (InFlightState state : offsetState.values()) {
+            if (state.state() == RecordState.TX_PENDING) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // The timer is used to schedule the acquisition lock timeout task for the batch.
     private final Timer timer;
     // The time is used to get the current time in milliseconds.
@@ -259,6 +271,10 @@ public class InFlightBatch {
 
     public boolean revertBatchStagedTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch) {
         return inFlightState().revertStagedTxnAcknowledge(txnOwnerId, txnOwnerEpoch);
+    }
+
+    public InFlightState applyPersistedTxnState(long txnOwnerId, short txnOwnerEpoch, RecordState state) {
+        return inFlightState().applyPersistedTxnState(txnOwnerId, txnOwnerEpoch, state);
     }
 
     // Visible for testing.

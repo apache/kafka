@@ -791,8 +791,7 @@ public class SharePartitionManager implements AutoCloseable {
             CompletableFuture<Void> initializationFuture = sharePartition.maybeInitialize();
             if (initializationFuture.isDone() && !initializationFuture.isCompletedExceptionally()
                 && sharePartition.hasPendingTransactionalRecords()) {
-                sharePartition = reinitializePendingTransactionalSharePartition(sharePartitionKey);
-                initializationFuture = sharePartition.maybeInitialize();
+                initializationFuture = sharePartition.refreshTransactionalState();
             }
             final boolean initialized = initializationFuture.isDone();
             final SharePartition initializedSharePartition = sharePartition;
@@ -830,12 +829,6 @@ public class SharePartitionManager implements AutoCloseable {
         // The request will be added irrespective of whether the share partition is initialized or not.
         // Once the share partition is initialized, the delayed share fetch will be completed.
         addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, logReader, metadataProvider, fencedSharePartitionHandler(), sharePartitions, shareGroupMetrics, time, remoteFetchMaxWaitMs), delayedShareFetchWatchKeys);
-    }
-
-    private SharePartition reinitializePendingTransactionalSharePartition(SharePartitionKey sharePartitionKey) {
-        log.debug("Reinitializing share partition with pending transactional state: {}", sharePartitionKey);
-        removeSharePartitionFromCache(sharePartitionKey, partitionCache, metadataProvider, delayedRequestNotifier);
-        return getOrCreateSharePartition(sharePartitionKey);
     }
 
     private CompletableFuture<SharePartition> initializeSharePartitionForTransactionalAcknowledge(

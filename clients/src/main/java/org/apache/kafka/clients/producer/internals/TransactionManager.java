@@ -31,11 +31,13 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -53,7 +55,6 @@ import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
@@ -2201,8 +2202,9 @@ public class TransactionManager {
                     result.done();
                 }
             } else if (error.exception() instanceof RetriableException) {
-                // Covers COORDINATOR_NOT_AVAILABLE, NOT_COORDINATOR and REQUEST_TIMED_OUT, whose
-                // exceptions all extend RetriableException.
+                if (error.exception() instanceof InvalidMetadataException || error == Errors.UNKNOWN_TOPIC_ID) {
+                    metadata.requestUpdate(false);
+                }
                 reenqueue();
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));

@@ -366,6 +366,12 @@ public class InFlightState {
      * Returns null if the state is not TX_PENDING or the transaction owner identity does not match.
      */
     public InFlightState applyTxnMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result, boolean dlqSupportEnabled) {
+        RecordState nextState = result == TransactionResult.ABORT ? RecordState.AVAILABLE :
+            stagedDeliveryState == -1 ? fallbackDeliveryState(dlqSupportEnabled) : RecordState.forId(stagedDeliveryState);
+        return applyPersistedTxnState(txnOwnerId, txnOwnerEpoch, nextState);
+    }
+
+    public InFlightState applyPersistedTxnState(long txnOwnerId, short txnOwnerEpoch, RecordState nextState) {
         if (state != RecordState.TX_PENDING) {
             return null;
         }
@@ -373,16 +379,8 @@ public class InFlightState {
             return null;
         }
         try {
-            if (result == TransactionResult.COMMIT) {
-                RecordState nextState = stagedDeliveryState == -1
-                    ? fallbackDeliveryState(dlqSupportEnabled)
-                    : RecordState.forId(stagedDeliveryState);
-                state = state.validateTransition(nextState);
-                memberId = EMPTY_MEMBER_ID;
-            } else {
-                state = state.validateTransition(RecordState.AVAILABLE);
-                memberId = EMPTY_MEMBER_ID;
-            }
+            state = state.validateTransition(nextState);
+            memberId = EMPTY_MEMBER_ID;
             stagedTxnOwnerId = -1L;
             stagedTxnOwnerEpoch = -1;
             stagedAckType = -1;

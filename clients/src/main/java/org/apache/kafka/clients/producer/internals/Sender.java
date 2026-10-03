@@ -500,6 +500,7 @@ public class Sender implements Runnable {
             } else if (targetTopicPartition != null) {
                 log.trace("Leader not known for {}, will retry {} after refreshing metadata.", targetTopicPartition, requestBuilder.apiKey());
                 maybeFindCoordinatorAndRetry(nextRequestHandler);
+                client.poll(retryBackoffMs, time.milliseconds());
                 return true;
             } else {
                 log.trace("No nodes available to send requests, will poll and retry when until a node is ready.");

@@ -244,6 +244,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.SHARE_FETCH => handleShareFetchRequest(request).exceptionally(handleError)
         case ApiKeys.SHARE_ACKNOWLEDGE => handleShareAcknowledgeRequest(request).exceptionally(handleError)
         case ApiKeys.TXN_SHARE_ACKNOWLEDGE => handleTxnShareAcknowledgeRequest(request, requestLocal).exceptionally(handleError)
+        case ApiKeys.VALIDATE_SHARE_GROUP_MEMBER => handleValidateShareGroupMemberRequest(request).exceptionally(handleError)
         case ApiKeys.INITIALIZE_SHARE_GROUP_STATE => handleInitializeShareGroupStateRequest(request).exceptionally(handleError)
         case ApiKeys.READ_SHARE_GROUP_STATE => handleReadShareGroupStateRequest(request).exceptionally(handleError)
         case ApiKeys.WRITE_SHARE_GROUP_STATE => handleWriteShareGroupStateRequest(request).exceptionally(handleError)
@@ -1874,13 +1875,6 @@ class KafkaApis(val requestChannel: RequestChannel,
               markerTransactionVersion
             ).whenComplete { (affectedSharePartitions, exception) =>
               val markerError = if (exception == null) {
-                if (affectedSharePartitions != null && !affectedSharePartitions.isEmpty) {
-                  try {
-                    sharePartitionManager.invalidateSharePartitions(affectedSharePartitions)
-                  } catch {
-                    case t: Throwable => error(s"Failed to invalidate share partition caches for transaction marker on $partition", t)
-                  }
-                }
                 Errors.NONE
               } else {
                 Errors.forException(exception) match {
@@ -3873,7 +3867,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         shareCoordinator.partitionFor(SharePartitionKey.getInstance(groupId, tip))))
     }
 
-    groupCoordinator.validateShareGroupMember(request.context, groupId, memberId, memberEpoch).thenCompose[Unit] { memberError =>
+    groupCoordinator.validateShareGroupMember(request.context, groupId, memberId, memberEpoch)
+      .thenCompose[Errors] { localError =>
+        if (localError == Errors.NOT_COORDINATOR) {
+          addPartitionsToTxnManager.validateShareGroupMember(groupId, memberId, memberEpoch, groupCoordinator.partitionFor(groupId))
+        } else {
+          CompletableFuture.completedFuture(localError)
+        }
+      }.thenCompose[Unit] { memberError =>
       if (memberError != Errors.NONE) {
         requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, memberError.exception))
         CompletableFuture.completedFuture[Unit](())
@@ -3915,6 +3916,25 @@ class KafkaApis(val requestChannel: RequestChannel,
       .exceptionally { exception =>
         requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
         null.asInstanceOf[Unit]
+      }
+  }
+
+  def handleValidateShareGroupMemberRequest(request: Request): CompletableFuture[Unit] = {
+    val validationRequest = request.body(classOf[ValidateShareGroupMemberRequest])
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, validationRequest.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+      return CompletableFuture.completedFuture[Unit](())
+    }
+    if (!isTransactionalShareAcknowledgeEnabled) {
+      requestHelper.sendMaybeThrottle(request, validationRequest.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception))
+      return CompletableFuture.completedFuture[Unit](())
+    }
+    val data = validationRequest.data
+    groupCoordinator.validateShareGroupMember(request.context, data.groupId, data.memberId, data.memberEpoch)
+      .handle[Unit] { (result, exception) =>
+        val error = if (exception == null) result else Errors.forException(exception)
+        requestHelper.sendMaybeThrottle(request,
+          new ValidateShareGroupMemberResponse(new ValidateShareGroupMemberResponseData().setErrorCode(error.code)))
       }
   }
 

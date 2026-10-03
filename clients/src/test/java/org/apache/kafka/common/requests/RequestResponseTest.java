@@ -251,6 +251,8 @@ import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
+import org.apache.kafka.common.message.ValidateShareGroupMemberRequestData;
+import org.apache.kafka.common.message.ValidateShareGroupMemberResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
@@ -1151,6 +1153,8 @@ public class RequestResponseTest {
             case SHARE_FETCH: return createShareFetchRequest(version);
             case SHARE_ACKNOWLEDGE: return createShareAcknowledgeRequest(version);
             case TXN_SHARE_ACKNOWLEDGE: return createTxnShareAcknowledgeRequest(version);
+            case VALIDATE_SHARE_GROUP_MEMBER: return new ValidateShareGroupMemberRequest.Builder(
+                new ValidateShareGroupMemberRequestData().setGroupId("share").setMemberId("member").setMemberEpoch(4)).build(version);
             case ADD_RAFT_VOTER: return createAddRaftVoterRequest(version);
             case REMOVE_RAFT_VOTER: return createRemoveRaftVoterRequest(version);
             case UPDATE_RAFT_VOTER: return createUpdateRaftVoterRequest(version);
@@ -1249,6 +1253,8 @@ public class RequestResponseTest {
             case SHARE_FETCH: return createShareFetchResponse();
             case SHARE_ACKNOWLEDGE: return createShareAcknowledgeResponse();
             case TXN_SHARE_ACKNOWLEDGE: return createTxnShareAcknowledgeResponse();
+            case VALIDATE_SHARE_GROUP_MEMBER: return new ValidateShareGroupMemberResponse(
+                new ValidateShareGroupMemberResponseData().setErrorCode(Errors.STALE_MEMBER_EPOCH.code()));
             case ADD_RAFT_VOTER: return createAddRaftVoterResponse();
             case REMOVE_RAFT_VOTER: return createRemoveRaftVoterResponse();
             case UPDATE_RAFT_VOTER: return createUpdateRaftVoterResponse();
