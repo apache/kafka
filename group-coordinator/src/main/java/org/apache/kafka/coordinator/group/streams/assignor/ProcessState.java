@@ -134,9 +134,6 @@ public class ProcessState {
         return newTaskCount;
     }
 
-    /**
-     * The member with the fewest tasks.
-     */
     String leastLoadedMember() {
         return leastLoadedEntry().getKey();
     }
@@ -187,7 +184,6 @@ public class ProcessState {
         }
         Map.Entry<String, Integer> member = leastLoadedEntry();
         if (member != null) {
-            // The entry now lags behind and is requeued with its new task count when it is next read.
             return addTaskInternal(member.getKey(), taskId, isActive, isStateful);
         } else {
             throw new TaskAssignorException("No members available to assign task " + taskId);

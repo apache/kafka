@@ -344,7 +344,9 @@ public class StickyTaskAssignor implements TaskAssignor {
                 // The stateful active task quota is only checked in steps 1 and 2, so it needs no update here.
                 maybeUpdateActiveTasksPerMember(localState, newTaskCount);
                 maybeUpdateTotalTasksPerMember(localState, newTaskCount);
-                recordStatefulActiveOwner(localState, task, processWithLeastLoad, stateful);
+                if (stateful) {
+                    localState.statefulActiveTaskToProcess.put(task, processWithLeastLoad);
+                }
             } else {
                 throw new TaskAssignorException(String.format("No member available to assign active task %s.", task));
             }
@@ -364,22 +366,10 @@ public class StickyTaskAssignor implements TaskAssignor {
         if (stateful) {
             // Nothing else is assigned yet, so the member's task count is its stateful active task count.
             maybeUpdateStatefulActiveTasksPerMember(localState, newTaskCount);
+            localState.statefulActiveTaskToProcess.put(task, processState);
         }
         maybeUpdateActiveTasksPerMember(localState, newTaskCount);
         maybeUpdateTotalTasksPerMember(localState, newTaskCount);
-        recordStatefulActiveOwner(localState, task, processState, stateful);
-    }
-
-    /** Remembers which process owns a stateful active task, so that the standby pass finds the owner without a scan. */
-    private static void recordStatefulActiveOwner(
-        final LocalState localState,
-        final TaskId task,
-        final ProcessState processState,
-        final boolean stateful
-    ) {
-        if (stateful) {
-            localState.statefulActiveTaskToProcess.put(task, processState);
-        }
     }
 
     private static void maybeUpdateStatefulActiveTasksPerMember(final LocalState localState, final int statefulActiveTasksNo) {
@@ -459,8 +449,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         double candidateMemberLoad = Double.MAX_VALUE;
         for (final Member member : members) {
             final ProcessState processState = localState.processIdToState.get(member.processId);
-            // A process that already owns a standby task (either as active or standby) cannot take it again, nor can a
-            // process that is not allowed
+            // A process that already owns a standby task (either as active or standby) cannot take it again
             if (standbyTaskId.isPresent() && processState.hasTask(standbyTaskId.get()) || !allowed.test(processState)) {
                 continue;
             }
@@ -522,7 +511,6 @@ public class StickyTaskAssignor implements TaskAssignor {
         return null;
     }
 
-    /** Whether {@code task} had an active or standby member before, the only members a sticky pick can go back to. */
     private static boolean hasPrevMember(final LocalState localState, final TaskId task) {
         final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
         return localState.activeTaskToPrevMember.get(task) != null || prevStandbyMembers != null && !prevStandbyMembers.isEmpty();
@@ -666,7 +654,6 @@ public class StickyTaskAssignor implements TaskAssignor {
                 break;
             }
 
-            // least loaded process of the candidate groups. It has a member with room, so the lookup cannot return null.
             final ProcessState processWithLeastLoad = leastLoaded(localState, candidates);
             placeRackAwareStandby(localState, picker, processWithLeastLoad, leastLoadedMemberWithRoom(localState, processWithLeastLoad), task, placed);
         }
@@ -681,7 +668,6 @@ public class StickyTaskAssignor implements TaskAssignor {
         final TaskId task,
         final List<ProcessState> placed
     ) {
-        // The queue of the group catches up with the new load once the process reaches its head.
         maybeUpdateTotalTasksPerMember(localState, process.addTask(memberId, task, false, true));
         picker.markUsed(localState.processIdToGroup.get(process.processId()));
         placed.add(process);
