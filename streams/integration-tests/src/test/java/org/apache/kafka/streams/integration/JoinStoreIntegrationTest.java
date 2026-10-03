@@ -40,6 +40,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -55,6 +56,7 @@ import java.util.stream.Stream;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.StoreQueryParameters.fromNameAndType;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -68,11 +70,11 @@ public class JoinStoreIntegrationTest {
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
-        STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
+        BASE_STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        BASE_STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        BASE_STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        BASE_STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        BASE_STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
 
         ADMIN_CONFIG.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
     }
@@ -84,28 +86,33 @@ public class JoinStoreIntegrationTest {
 
     private static final String APP_ID = "join-store-integration-test";
     private static final Long COMMIT_INTERVAL = 100L;
-    static final Properties STREAMS_CONFIG = new Properties();
+    private static final Properties BASE_STREAMS_CONFIG = new Properties();
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
     static final String INPUT_TOPIC_LEFT = "inputTopicLeft";
     static final String OUTPUT_TOPIC = "outputTopic";
     static final Properties ADMIN_CONFIG = new Properties();
+    private Properties streamsConfig;
+    private String appId;
 
     @BeforeEach
-    public void prepareTopology() throws InterruptedException {
+    public void prepareTopology(final TestInfo testInfo) throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC_LEFT, INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        appId = APP_ID + "-" + safeUniqueTestName(testInfo);
+        streamsConfig = new Properties();
+        streamsConfig.putAll(BASE_STREAMS_CONFIG);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
     }
 
     @AfterEach
     public void cleanup() throws InterruptedException, IOException {
         CLUSTER.deleteAllTopics();
-        IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void providingAJoinStoreNameShouldNotMakeTheJoinResultQueryable(final boolean withHeaders) throws InterruptedException {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-no-store-access");
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, Integer> left = builder.stream(INPUT_TOPIC_LEFT, Consumed.with(Serdes.String(), Serdes.Integer()));
@@ -118,8 +125,8 @@ public class JoinStoreIntegrationTest {
             JoinWindows.of(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
 
-        StreamsTestUtils.maybeSetDslStoreFormatHeaders(STREAMS_CONFIG, withHeaders);
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), streamsConfig)) {
             kafkaStreams.setStateListener((newState, oldState) -> {
                 if (newState == KafkaStreams.State.RUNNING) {
                     latch.countDown();
@@ -142,7 +149,6 @@ public class JoinStoreIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void streamJoinChangelogTopicShouldBeConfiguredWithDeleteOnlyCleanupPolicy(final boolean withHeaders) throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-changelog-cleanup-policy");
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, Integer> left = builder.stream(INPUT_TOPIC_LEFT, Consumed.with(Serdes.String(), Serdes.Integer()));
@@ -155,9 +161,9 @@ public class JoinStoreIntegrationTest {
             JoinWindows.of(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
 
-        StreamsTestUtils.maybeSetDslStoreFormatHeaders(STREAMS_CONFIG, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), streamsConfig);
             final Admin admin = Admin.create(ADMIN_CONFIG)) {
             kafkaStreams.setStateListener((newState, oldState) -> {
                 if (newState == KafkaStreams.State.RUNNING) {
@@ -169,8 +175,8 @@ public class JoinStoreIntegrationTest {
             latch.await();
 
             final Collection<ConfigResource> changelogTopics = Stream.of(
-                    "join-store-integration-test-changelog-cleanup-policy-join-store-this-join-store-changelog",
-                    "join-store-integration-test-changelog-cleanup-policy-join-store-other-join-store-changelog"
+                    appId + "-join-store-this-join-store-changelog",
+                    appId + "-join-store-other-join-store-changelog"
                 )
                 .map(name -> new ConfigResource(Type.TOPIC, name))
                 .collect(Collectors.toList());
