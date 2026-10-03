@@ -39,6 +39,7 @@ import java.util.function.LongFunction;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -75,6 +76,21 @@ public class ByteUtilsTest {
         byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
         assertThrows(IndexOutOfBoundsException.class, () -> ByteUtils.increment(Bytes.wrap(input)));
     }
+
+    @Test
+    public void testIncrementWithoutOverflow() {
+        byte[] input = new byte[]{(byte) 0xAB, (byte) 0xCD, (byte) 0xFF};
+        byte[] expected = new byte[]{(byte) 0xAB, (byte) 0xCE, (byte) 0x00};
+        Bytes output = ByteUtils.incrementWithoutOverflow(Bytes.wrap(input));
+        assertArrayEquals(expected, output.get());
+    }
+
+    @Test
+    public void testIncrementWithoutOverflowReturnsNullOnOverflow() {
+        byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        assertNull(ByteUtils.incrementWithoutOverflow(Bytes.wrap(input)));
+    }
+
     @Test
     public void testIncrementWithSubmap() {
         final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
