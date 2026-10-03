@@ -1971,7 +1971,7 @@ public class DistributedHerderTest {
             () -> cb.get(0, TimeUnit.SECONDS),
             "Should not be able to handle request to stop connector when not leader"
         );
-        assertEquals(e.getCause(), taskConfigsWriteException);
+        assertEquals(taskConfigsWriteException, e.getCause());
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }

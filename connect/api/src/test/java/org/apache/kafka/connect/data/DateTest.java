@@ -70,8 +70,8 @@ public class DateTest {
 
     @Test
     public void testToLogical() {
-        assertEquals(EPOCH.getTime(), Date.toLogical(Date.SCHEMA, 0));
-        assertEquals(EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime(), Date.toLogical(Date.SCHEMA, 10000));
+        assertEquals(Date.toLogical(Date.SCHEMA, 0), EPOCH.getTime());
+        assertEquals(Date.toLogical(Date.SCHEMA, 10000), EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime());
     }
 
     @Test
