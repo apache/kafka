@@ -21,13 +21,31 @@ import com.typesafe.scalalogging.Logger
 import org.apache.kafka.server.logger.Log4jControllerRegistration
 import org.slf4j.{LoggerFactory, Marker, MarkerFactory}
 
+import java.util.concurrent.ConcurrentHashMap
+
 private object Logging {
   private val FatalMarker: Marker = MarkerFactory.getMarker("FATAL")
+  private val loggerCache = new ConcurrentHashMap[String, Logger]()
+
+  /**
+   * Logger wrappers are immutable, so instances with the same logger name can share one.
+   * The cache is keyed by name to preserve the behavior of loggerName overrides.
+   */
+  def loggerFor(name: String): Logger = {
+    val cached = loggerCache.get(name)
+    if (cached != null) {
+      cached
+    } else {
+      val created = Logger(LoggerFactory.getLogger(name))
+      val previous = loggerCache.putIfAbsent(name, created)
+      if (previous == null) created else previous
+    }
+  }
 }
 
 trait Logging {
 
-  protected lazy val logger: Logger = Logger(LoggerFactory.getLogger(loggerName))
+  protected lazy val logger: Logger = Logging.loggerFor(loggerName)
 
   protected var logIdent: String = _
 

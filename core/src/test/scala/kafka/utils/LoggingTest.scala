@@ -21,7 +21,7 @@ import java.lang.management.ManagementFactory
 
 import javax.management.ObjectName
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertSame, assertTrue}
 
 class LoggingTest extends Logging {
 
@@ -57,5 +57,17 @@ class LoggingTest extends Logging {
     val logging = new TestLogging
 
     assertEquals(logging.getClass.getName, logging.log.underlying.getName)
+  }
+
+  @Test
+  def testLoggerIsSharedByInstancesWithTheSameName(): Unit = {
+    class TestLogging extends Logging {
+      // Expose logger
+      def log = logger
+    }
+    val first = new TestLogging
+    val second = new TestLogging
+
+    assertSame(first.log, second.log)
   }
 }
