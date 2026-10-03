@@ -22,7 +22,7 @@ import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.server._
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
-import org.apache.kafka.common.Endpoint
+import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.{ProduceRequestData, SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
@@ -1123,6 +1123,28 @@ class SocketServerTest {
     overrideServer.shutdown()
     assertFalse(overrideServer.testableAcceptor.isOpen)
     overrideServer.testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
+  }
+
+  @Test
+  def testChannelBuilderRemovedOnProcessorClose(): Unit = {
+    shutdownServerAndMetrics(server)
+    // sslServerProps configures a single SSL listener with one processor.
+    val sslConfig = KafkaConfig.fromProps(sslServerProps)
+    val sslServer = new SocketServer(sslConfig, new Metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
+    try {
+      sslServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
+      val acceptor = sslServer.dataPlaneAcceptor("SSL").get
+      val channelBuilder = acceptor.processors(0).reconfigurableChannelBuilder.get
+      val dynamicConfig: DynamicBrokerConfig = JTestUtils.fieldValue(sslConfig, classOf[KafkaConfig], "dynamicConfig")
+      val reconfigurables: util.Collection[Reconfigurable] = JTestUtils.fieldValue(dynamicConfig, classOf[DynamicBrokerConfig], "reconfigurables")
+      assertTrue(reconfigurables.contains(channelBuilder))
+
+      acceptor.removeProcessors(1)
+      assertTrue(acceptor.processors.isEmpty)
+      assertFalse(reconfigurables.contains(channelBuilder))
+    } finally {
+      shutdownServerAndMetrics(sslServer)
+    }
   }
 
   @Test
