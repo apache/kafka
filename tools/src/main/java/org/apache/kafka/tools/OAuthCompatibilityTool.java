@@ -216,7 +216,8 @@ public class OAuthCompatibilityTool {
 
         private ArgsHandler() {
             this.parser = ArgumentParsers
-                .newArgumentParser("oauth-compatibility-tool")
+                .newFor("oauth-compatibility-tool")
+                .build()
                 .defaultHelp(true)
                 .description(DESCRIPTION);
         }
