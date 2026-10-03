@@ -32,7 +32,7 @@ import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -106,12 +106,12 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
             return handleError(key, error);
         }
 
-        Map<CoordinatorKey, ProducerIdAndEpoch> completed = Collections.singletonMap(key, new ProducerIdAndEpoch(
+        Map<CoordinatorKey, ProducerIdAndEpoch> completed = Map.of(key, new ProducerIdAndEpoch(
             response.data().producerId(),
             response.data().producerEpoch()
         ));
 
-        return new ApiResult<>(completed, Collections.emptyMap(), Collections.emptyList());
+        return new ApiResult<>(completed, Map.of(), List.of());
     }
 
     private ApiResult<CoordinatorKey, ProducerIdAndEpoch> handleError(
@@ -146,7 +146,7 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
                 // the key so that we retry the `FindCoordinator` request
                 log.debug("InitProducerId request for transactionalId `{}` returned error {}. Will attempt " +
                         "to find the coordinator again and retry", transactionalIdKey.idValue, error);
-                return ApiResult.unmapped(Collections.singletonList(transactionalIdKey));
+                return ApiResult.unmapped(List.of(transactionalIdKey));
 
             // We intentionally omit cases for PRODUCER_FENCED, TRANSACTIONAL_ID_NOT_FOUND, and INVALID_PRODUCER_EPOCH
             // since those errors should never happen when our InitProducerIdRequest doesn't include a producer epoch or ID

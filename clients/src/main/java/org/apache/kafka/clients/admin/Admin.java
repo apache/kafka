@@ -86,9 +86,9 @@ import java.util.Set;
  *   int partitions = 12;
  *   short replicationFactor = 3;
  *   // Create a compacted topic
- *   CreateTopicsResult result = admin.createTopics(Collections.singleton(
+ *   CreateTopicsResult result = admin.createTopics(Set.of(
  *     new NewTopic(topicName, partitions, replicationFactor)
- *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT))));
+ *       .configs(Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT))));
  *
  *   // Call values() to get the result for a specific topic
  *   KafkaFuture<Void> future = result.values().get(topicName);

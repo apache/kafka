@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -73,7 +72,7 @@ public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Co
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> newFuture(
         String groupId
     ) {
-        return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
+        return AdminApiFuture.forKeys(Set.of(CoordinatorKey.byGroupId(groupId)));
     }
 
     private void validateKeys(Set<CoordinatorKey> groupIds) {

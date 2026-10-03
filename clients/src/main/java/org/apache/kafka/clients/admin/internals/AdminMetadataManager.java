@@ -33,9 +33,9 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Manages the metadata for KafkaAdminClient.
@@ -264,9 +264,9 @@ public class AdminMetadataManager {
             log.trace("Clearing cached controller node {}.", cluster.controller());
             this.cluster = new Cluster(cluster.clusterResource().clusterId(),
                 cluster.nodes(),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet(),
+                Set.of(),
+                Set.of(),
+                Set.of(),
                 null);
         }
     }

@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.server.authorizer.internals.CidrUtils;
 
 import java.io.Closeable;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
@@ -189,7 +188,7 @@ public interface Authorizer extends Configurable, Closeable {
 
         // Check a hard-coded name to ensure that super users are granted
         // access regardless of DENY ACLs.
-        if (authorize(requestContext, Collections.singletonList(new Action(
+        if (authorize(requestContext, List.of(new Action(
                 op, new ResourcePattern(resourceType, "hardcode", PatternType.LITERAL),
                 0, true, false)))
                 .get(0) == AuthorizationResult.ALLOWED) {

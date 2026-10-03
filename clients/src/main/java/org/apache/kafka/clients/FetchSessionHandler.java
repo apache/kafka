@@ -286,11 +286,11 @@ public class FetchSessionHandler {
                 if (canUseTopicIds) {
                     sessionTopicNames = topicNames;
                 } else {
-                    sessionTopicNames = Collections.emptyMap();
+                    sessionTopicNames = Map.of();
                 }
                 Map<TopicPartition, PartitionData> toSend =
                         Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
-                return new FetchRequestData(toSend, Collections.emptyList(), Collections.emptyList(), toSend, nextMetadata, canUseTopicIds);
+                return new FetchRequestData(toSend, List.of(), List.of(), toSend, nextMetadata, canUseTopicIds);
             }
 
             List<TopicIdPartition> added = new ArrayList<>();
@@ -350,7 +350,7 @@ public class FetchSessionHandler {
             if (canUseTopicIds) {
                 sessionTopicNames = topicNames;
             } else {
-                sessionTopicNames = Collections.emptyMap();
+                sessionTopicNames = Map.of();
             }
 
             if (log.isDebugEnabled()) {

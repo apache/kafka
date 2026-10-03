@@ -22,8 +22,8 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.ApiException;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
 
 @InterfaceAudience.Public
 public class AclDeleteResult {
@@ -31,7 +31,7 @@ public class AclDeleteResult {
     private final Collection<AclBindingDeleteResult> aclBindingDeleteResults;
 
     public AclDeleteResult(ApiException exception) {
-        this(Collections.emptySet(), exception);
+        this(Set.of(), exception);
     }
 
     public AclDeleteResult(Collection<AclBindingDeleteResult> deleteResults) {

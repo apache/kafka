@@ -264,7 +264,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         AutoCommitState autocommit = autoCommitState.get();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result;
         if (requestState.offsets.isEmpty()) {
-            result = CompletableFuture.completedFuture(Collections.emptyMap());
+            result = CompletableFuture.completedFuture(Map.of());
         } else {
             autocommit.setInflightCommitStatus(true);
             OffsetCommitRequestState request = pendingRequests.addOffsetCommitRequest(requestState);
@@ -532,7 +532,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final Set<TopicPartition> partitions,
         final long deadlineMs) {
         if (partitions.isEmpty()) {
-            return CompletableFuture.completedFuture(new OffsetFetchResult(Collections.emptyMap(), Collections.emptyMap()));
+            return CompletableFuture.completedFuture(new OffsetFetchResult(Map.of(), Map.of()));
         }
         CompletableFuture<OffsetFetchResult> result = new CompletableFuture<>();
         OffsetFetchRequestState request = createOffsetFetchRequest(partitions, deadlineMs);

@@ -47,7 +47,6 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -275,7 +274,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
                 final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
                 for (DescribedGroupMember groupMember : members) {
-                    Set<TopicPartition> partitions = Collections.emptySet();
+                    Set<TopicPartition> partitions = Set.of();
                     if (groupMember.memberAssignment().length > 0) {
                         final Assignment assignment = ConsumerProtocol.
                             deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));

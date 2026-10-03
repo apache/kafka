@@ -33,7 +33,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -122,10 +121,10 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         // When the OffsetFetchRequest fails with NoBatchedOffsetFetchRequestException, we completely disable
         // the batching end-to-end, including the FindCoordinatorRequest.
         if (lookupStrategy.batch()) {
-            return Collections.singletonList(new RequestAndKeys<>(buildBatchedRequest(groupIds), groupIds));
+            return List.of(new RequestAndKeys<>(buildBatchedRequest(groupIds), groupIds));
         } else {
             return groupIds.stream().map(groupId -> {
-                Set<CoordinatorKey> keys = Collections.singleton(groupId);
+                Set<CoordinatorKey> keys = Set.of(groupId);
                 return new RequestAndKeys<>(buildBatchedRequest(keys), keys);
             }).collect(Collectors.toList());
         }

@@ -36,7 +36,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -136,7 +135,7 @@ public class DescribeProducersHandler extends AdminApiHandler.Batched<TopicParti
                 failed.put(topicPartition, new InvalidTopicException(
                     "Failed to fetch metadata for partition " + topicPartition
                         + " due to invalid topic error: " + apiError.messageWithFallback(),
-                    Collections.singleton(topicPartition.topic())));
+                    Set.of(topicPartition.topic())));
                 break;
 
             case TOPIC_AUTHORIZATION_FAILED:
@@ -144,7 +143,7 @@ public class DescribeProducersHandler extends AdminApiHandler.Batched<TopicParti
                     topicPartition, apiError.exception());
                 failed.put(topicPartition, new TopicAuthorizationException("Failed to describe " +
                     "active producers for partition " + topicPartition + " due to authorization failure on topic" +
-                    " `" + topicPartition.topic() + "`", Collections.singleton(topicPartition.topic())));
+                    " `" + topicPartition.topic() + "`", Set.of(topicPartition.topic())));
                 break;
 
             default:
