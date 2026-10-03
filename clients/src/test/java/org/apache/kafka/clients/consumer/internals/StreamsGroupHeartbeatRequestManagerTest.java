@@ -271,6 +271,23 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testInitialHeartbeatIntervalUsesRequestTimeout() {
+        int requestTimeoutMs = 1000;
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(true);
+
+        ConsumerConfig testConfig =
+            new ConsumerConfig(config.originals(Map.of(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs)));
+        StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager(testConfig);
+
+        assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+    }
+
+    @Test
     public void testNoHeartbeatIfCoordinatorUnknown() {
         try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
@@ -2729,6 +2746,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager() {
+        return createStreamsGroupHeartbeatRequestManager(config);
+    }
+
+    private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager(ConsumerConfig config) {
         return new StreamsGroupHeartbeatRequestManager(
             LOG_CONTEXT,
             time,

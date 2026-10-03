@@ -114,7 +114,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
+        int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, requestTimeoutMs, retryBackoffMs,
                 retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.pollTimer = time.timer(maxPollIntervalMs);
         this.metricsManager = metricsManager;
@@ -270,8 +271,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         //   re-authentication failure).
         // - The member is FENCED (or STALE with the poll timer already reset) and waiting for the
         //   application thread to run assignment-release callbacks before rejoining.
-        // Return retryBackoffMs rather than the heartbeat interval, since the interval remains 0 until
-        // the first heartbeat response is received, which would also lead to busy-spinning.
+        // Wait a retry backoff to keep the application thread responsive without busy-spinning.
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
             return heartbeatRequestState.retryBackoffMs();
         }
