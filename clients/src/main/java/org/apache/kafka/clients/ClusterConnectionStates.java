@@ -174,6 +174,33 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Returns true if the connection for the given node is stale relative to the supplied host:
+     * either the cached host differs, or its resolved addresses no longer include the bound IP.
+     *
+     * @param id the id of the node
+     * @param currentHost the latest known host for the node (e.g. from metadata)
+     * @throws UnknownHostException if re-resolution fails
+     */
+    public boolean isConnectionStale(String id, String currentHost) throws UnknownHostException {
+        NodeConnectionState state = nodeState.get(id);
+        if (state == null || state.lastAttemptedAddress == null) {
+            return false;
+        }
+        if (!state.host.equals(currentHost)) {
+            log.info("Cached host {} for node {} differs from current host {}",
+                    state.host, id, currentHost);
+            return true;
+        }
+        List<InetAddress> resolved = ClientUtils.resolve(currentHost, hostResolver);
+        boolean stale = !resolved.contains(state.lastAttemptedAddress);
+        if (stale) {
+            log.info("Bound address {} for node {} is no longer in the resolved set for host {}: {}",
+                    state.lastAttemptedAddress, id, currentHost, resolved);
+        }
+        return stale;
+    }
+
+    /**
      * Enter the disconnected state for the given node.
      * @param id the connection we have disconnected
      * @param now the current time in ms

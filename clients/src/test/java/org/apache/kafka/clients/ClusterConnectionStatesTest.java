@@ -329,6 +329,34 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
+    public void testIsConnectionStaleWhenHostChanges() throws UnknownHostException {
+        setupMultipleIPs();
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
+        connectionStates.currentAddress(nodeId1);
+
+        assertTrue(connectionStates.isConnectionStale(nodeId1, "different.host"));
+    }
+
+    @Test
+    public void testIsConnectionStaleWhenDnsResolutionChanges() throws UnknownHostException {
+        setupMultipleIPs();
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
+        connectionStates.currentAddress(nodeId1);
+
+        multipleIPHostResolver.changeAddresses();
+        assertTrue(connectionStates.isConnectionStale(nodeId1, hostTwoIps));
+    }
+
+    @Test
+    public void testIsConnectionStaleReturnsFalseWhenAddressUnchanged() throws UnknownHostException {
+        setupMultipleIPs();
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
+        connectionStates.currentAddress(nodeId1);
+
+        assertFalse(connectionStates.isConnectionStale(nodeId1, hostTwoIps));
+    }
+
+    @Test
     public void testIsPreparingConnection() {
         assertFalse(connectionStates.isPreparingConnection(nodeId1));
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
