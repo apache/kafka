@@ -92,6 +92,23 @@ public class StreamsAssignorBenchmark {
     }
 
     /**
+     * The rack.aware.assignment.tags of the group, highest priority first. Each process takes the values of every key
+     * round-robin; 2 clusters and 3 zones are coprime counts, so every combination of the two occurs.
+     */
+    public enum RackAwareTags {
+        NONE(List.of(), Map.of()),
+        CLUSTER_AND_ZONE(List.of("cluster", "zone"), Map.of("cluster", 2, "zone", 3));
+
+        private final List<String> tagKeys;
+        private final Map<String, Integer> valuesPerTagKey;
+
+        RackAwareTags(List<String> tagKeys, Map<String, Integer> valuesPerTagKey) {
+            this.tagKeys = tagKeys;
+            this.valuesPerTagKey = valuesPerTagKey;
+        }
+    }
+
+    /**
      * The number of members reporting a task on top of the one owning it, under OWNED_AND_DORMANT.
      */
     private static final int DORMANT_REPLICAS = 1;
@@ -108,7 +125,7 @@ public class StreamsAssignorBenchmark {
     @Param({"10", "100"})
     private int subtopologyCount;
 
-    @Param({"0", "1"})
+    @Param({"0", "1", "2"})
     private int standbyReplicas;
 
     @Param({"1", "50"})
@@ -119,6 +136,9 @@ public class StreamsAssignorBenchmark {
 
     @Param({"NONE", "OWNED_AND_DORMANT"})
     private ReportedOffsets reportedOffsets;
+
+    @Param({"NONE", "CLUSTER_AND_ZONE"})
+    private RackAwareTags rackAwareTags;
 
     private TaskAssignor taskAssignor;
 
@@ -143,7 +163,9 @@ public class StreamsAssignorBenchmark {
         taskAssignor = createAssignor();
 
         Map<String, StreamsGroupMember> members = createMembers();
-        this.assignmentConfigs = AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(standbyReplicas);
+        this.assignmentConfigs = AssignmentConfigsImpl.DEFAULT
+            .withNumStandbyReplicas(standbyReplicas)
+            .withRackAwareAssignmentTags(rackAwareTags.tagKeys);
 
         List<String> memberIds = new ArrayList<>(members.keySet());
         Collections.sort(memberIds);
@@ -175,7 +197,8 @@ public class StreamsAssignorBenchmark {
 
         return StreamsAssignorBenchmarkUtils.createStreamsMembers(
             numberOfMembers,
-            membersPerProcess
+            membersPerProcess,
+            rackAwareTags.valuesPerTagKey
         );
     }
 
@@ -199,7 +222,7 @@ public class StreamsAssignorBenchmark {
                 Optional.empty(),
                 Optional.empty(),
                 groupSpec.memberMetadata(memberId).processId(),
-                Map.of(),
+                groupSpec.memberMetadata(memberId).clientTags(),
                 memberAssignment.activeTasks(),
                 memberAssignment.standbyTasks(),
                 // Warm-up tasks are not assigned by the assignor; they are decided during reconciliation.
@@ -209,11 +232,12 @@ public class StreamsAssignorBenchmark {
             ));
         }
 
+        // The new member takes the tags the last member has in the full assignment.
         updatedMemberSpec.put("newMember", new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
             "process-newMember",
-            Map.of(),
+            StreamsAssignorBenchmarkUtils.createClientTags((memberCount - 1) / membersPerProcess, rackAwareTags.valuesPerTagKey),
             Map.of(),
             Map.of(),
             Map.of(),
