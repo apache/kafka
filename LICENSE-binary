@@ -307,9 +307,9 @@ BSD 2-Clause
 ---------------------------------------
 BSD 3-Clause
 
-- jline-native-3.30.16, see: licenses/jline-BSD-3-clause
-- jline-reader-3.30.16, see: licenses/jline-BSD-3-clause
-- jline-terminal-3.30.16, see: licenses/jline-BSD-3-clause
+- jline-native-4.2.1, see: licenses/jline-BSD-3-clause
+- jline-reader-4.2.1, see: licenses/jline-BSD-3-clause
+- jline-terminal-4.2.1, see: licenses/jline-BSD-3-clause
 - protobuf-java-3.25.5, see: licenses/protobuf-java-BSD-3-clause
 - jakarta.activation-2.0.1, see: licenses/jakarta-BSD-3-clause
 
