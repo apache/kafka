@@ -137,7 +137,7 @@ Default topic configuration options used by brokers may be updated without broke
   * `log.segment.delete.delay.ms`
   * `unclean.leader.election.enable`
   * `min.insync.replicas`
-  * `max.message.bytes`
+  * `message.max.bytes`
   * `compression.type`
   * `log.preallocate`
   * `log.message.timestamp.type`
@@ -192,7 +192,6 @@ In Kafka version 1.1.x, the listener used by the inter-broker listener may not b
 In addition to all the security configs of new listeners, the following configs may be updated dynamically at per-broker level: 
 
   * `listeners`
-  * `advertised.listeners`
   * `listener.security.protocol.map`
 
 Inter-broker listener must be configured using the static broker configuration `inter.broker.listener.name` or `security.inter.broker.protocol`. 
