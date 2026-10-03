@@ -208,19 +208,6 @@ public class DynamicBrokerConfig {
         );
     }
 
-    public static class DynamicLogConfig {
-        /**
-         * The broker configurations pertaining to logs that are reconfigurable. This set contains
-         * the names you would use when setting a static or dynamic broker configuration (not topic
-         * configuration).
-         */
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Stream.of(
-                ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values(),
-                Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
-            .flatMap(Collection::stream)
-            .collect(Collectors.toUnmodifiableSet());
-    }
-
     public static class DynamicListenerConfig {
         /**
          * The set of configurations which the DynamicListenerConfig object listens for. Many of
@@ -285,11 +272,6 @@ public class DynamicBrokerConfig {
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
-    }
-
-    public static class DynamicReplicationConfig {
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
     }
 
     public static class DynamicQuotaConfig {
