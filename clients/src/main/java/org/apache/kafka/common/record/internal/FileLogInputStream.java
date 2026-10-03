@@ -165,6 +165,11 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
+        public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
+            return loadFullBatch().skipKeyValueIterator(bufferSupplier, maxRecordBodySize);
+        }
+
+        @Override
         public boolean isValid() {
             return loadFullBatch().isValid();
         }

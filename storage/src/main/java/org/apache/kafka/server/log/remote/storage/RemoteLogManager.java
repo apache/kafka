@@ -657,9 +657,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 RecordBatch batch = remoteLogInputStream.nextBatch();
                 if (batch == null) break;
                 if (batch.maxTimestamp() >= timestamp && batch.lastOffset() >= startingOffset) {
-                    try (CloseableIterator<Record> recordStreamingIterator = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
-                        while (recordStreamingIterator.hasNext()) {
-                            Record record = recordStreamingIterator.next();
+                    try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
+                        while (iterator.hasNext()) {
+                            Record record = iterator.next();
                             if (record.timestamp() >= timestamp && record.offset() >= startingOffset)
                                 return Optional.of(new FileRecords.TimestampAndOffset(record.timestamp(), record.offset(), maybeLeaderEpoch(batch.partitionLeaderEpoch())));
                         }

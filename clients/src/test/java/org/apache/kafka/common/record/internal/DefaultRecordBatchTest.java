@@ -60,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -429,7 +430,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
 
         try (BufferSupplier bufferSupplier = BufferSupplier.create();
-             CloseableIterator<Record> skipKeyValueIterator = batch.skipKeyValueIterator(bufferSupplier)) {
+             CloseableIterator<Record> skipKeyValueIterator = batch.skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH)) {
 
             if (CompressionType.NONE == compressionType) {
                 // assert that for uncompressed data stream record iterator is not used
@@ -465,7 +466,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
 
         try (BufferSupplier bufferSupplier = spy(BufferSupplier.create());
-             CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier)) {
+             CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH)) {
 
             // Consume through the iterator
             Utils.toList(streamingIterator);
@@ -525,7 +526,7 @@ public class DefaultRecordBatchTest {
              final InputStream chunkedStream = new ChunkedBytesStream(zstdStream, bufferSupplier, 16 * 1024, false)
         ) {
             doReturn(chunkedStream).when(batch).recordInputStream(any());
-            try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier)) {
+            try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH)) {
                 assertNotNull(streamingIterator);
                 Utils.toList(streamingIterator);
                 // verify the number of read() calls to zstd JNI stream. Each read() call is a JNI call.
@@ -653,6 +654,17 @@ public class DefaultRecordBatchTest {
         InvalidRecordException ex = assertThrows(InvalidRecordException.class, () -> batch.offsetOfMaxTimestamp(100));
         assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
             "expected the configured-maximum guard, got: " + ex.getMessage());
+    }
+
+    // the lookup must not decode record bodies it never reads
+    @Test
+    public void testOffsetOfMaxTimestampSkipsKeyAndValue() {
+        DefaultRecordBatch batch = spy(recordBatchWithValueSize(1000));
+
+        assertEquals(Optional.of(0L), batch.offsetOfMaxTimestamp(10_000));
+
+        verify(batch).skipKeyValueIterator(any(), eq(10_000));
+        verify(batch, never()).streamingIterator(any(), anyInt());
     }
 
     private static DefaultRecordBatch recordBatchWithValueSize(int valueSize) {

@@ -351,7 +351,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         for (RecordBatch batch : batchesFrom(startingPosition)) {
             if (batch.maxTimestamp() >= targetTimestamp) {
                 // We found a message
-                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
                     while (iterator.hasNext()) {
                         Record record = iterator.next();
                         long timestamp = record.timestamp();
