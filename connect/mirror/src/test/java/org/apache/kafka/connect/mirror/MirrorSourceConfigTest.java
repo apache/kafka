@@ -151,6 +151,25 @@ public class MirrorSourceConfigTest {
     }
 
     @Test
+    public void testOffsetValidationEnabled() {
+        MirrorSourceConfig defaultConfig = new MirrorSourceConfig(makeProps());
+        assertFalse(defaultConfig.offsetValidationEnabled(), "offset.validation.enabled should default to false");
+
+        MirrorSourceConfig enabledConfig = new MirrorSourceConfig(makeProps("offset.validation.enabled", "true"));
+        assertTrue(enabledConfig.offsetValidationEnabled(), "offset.validation.enabled should be settable to true");
+
+        assertTrue(
+                MirrorSourceConfig.CONNECTOR_CONFIG_DEF.names().contains(MirrorSourceConfig.OFFSET_VALIDATION_ENABLED),
+                MirrorSourceConfig.OFFSET_VALIDATION_ENABLED + " should be defined for connector ConfigDef"
+        );
+
+        Map<String, String> taskProps = enabledConfig.taskConfigForTopicPartitions(
+                List.of(new TopicPartition("topic1", 0)), 0);
+        MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(taskProps);
+        assertTrue(taskConfig.offsetValidationEnabled(), "offset.validation.enabled should propagate to task config");
+    }
+
+    @Test
     public void testAdminConfigsForOffsetSyncsTopic() {
         Map<String, String> connectorProps = makeProps(
                 "source.admin.request.timeout.ms", "1",
