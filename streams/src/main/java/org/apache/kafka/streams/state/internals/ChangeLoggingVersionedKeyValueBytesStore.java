@@ -47,6 +47,14 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
     }
 
     @Override
+    public long put(final Bytes key, final byte[] value, final long timestamp, final Headers headers) {
+        final Headers nonNullHeaders = headers != null ? headers : new RecordHeaders();
+        final long validTo = inner.put(key, value, timestamp, nonNullHeaders);
+        log(key, value, timestamp, nonNullHeaders);
+        return validTo;
+    }
+
+    @Override
     public byte[] get(final Bytes key, final long asOfTimestamp) {
         return inner.get(key, asOfTimestamp);
     }
