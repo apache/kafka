@@ -173,16 +173,16 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testMaximumTimeToWait() {
-        final int defaultHeartbeatIntervalMs = 1000;
+        final long heartbeatMaximumTimeToWaitMs = 1000;
         // Initial value before runOnce has been called
         assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
 
         when(requestManagers.entries()).thenReturn(List.of(heartbeatRequestManager));
-        when(heartbeatRequestManager.maximumTimeToWait(time.milliseconds())).thenReturn((long) defaultHeartbeatIntervalMs);
+        when(heartbeatRequestManager.maximumTimeToWait(time.milliseconds())).thenReturn(heartbeatMaximumTimeToWaitMs);
 
         consumerNetworkThread.runOnce();
-        // After runOnce has been called, it takes the default heartbeat interval from the heartbeat request manager
-        assertEquals(defaultHeartbeatIntervalMs, consumerNetworkThread.maximumTimeToWait());
+        // After polling, the network thread uses the heartbeat manager's maximum wait.
+        assertEquals(heartbeatMaximumTimeToWaitMs, consumerNetworkThread.maximumTimeToWait());
     }
 
     @Test

@@ -108,6 +108,31 @@ public class ShareHeartbeatRequestManagerTest
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
     }
 
+    @Test
+    public void testInitialHeartbeatIntervalUsesRequestTimeout() {
+        int requestTimeoutMs = 5000;
+        ConsumerConfig config = new ConsumerConfig(config().originals(
+            Map.of(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs)));
+        mockJoiningMemberData();
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        try (Metrics metrics = new Metrics(time)) {
+            ShareHeartbeatRequestManager manager = new ShareHeartbeatRequestManager(
+                logContext,
+                time,
+                config,
+                coordinatorRequestManager,
+                subscriptions,
+                membershipManager,
+                backgroundEventHandler,
+                metrics);
+
+            assertEquals(0, manager.maximumTimeToWait(time.milliseconds()));
+            NetworkClientDelegate.PollResult result = manager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+            assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+        }
+    }
+
     @Override
     protected void recreateHeartbeatRequestManager() {
         heartbeatRequestManager = createHeartbeatRequestManager(
@@ -140,8 +165,6 @@ public class ShareHeartbeatRequestManagerTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.SHARE_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
         createHeartbeatStateAndRequestManager();
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         String topic = "topic1";
         Set<String> set = Set.of(topic);
         when(subscriptions.subscription()).thenReturn(set);
@@ -149,6 +172,8 @@ public class ShareHeartbeatRequestManagerTest
 
         // Create a ShareGroupHeartbeatRequest and verify the payload
         mockJoiningMemberData();
+        // A joining member must send its first heartbeat without waiting for the heartbeat timer to expire.
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
@@ -211,11 +236,7 @@ public class ShareHeartbeatRequestManagerTest
     public void testHeartbeatState() {
         mockJoiningMemberData();
 
-        heartbeatState = new ShareHeartbeatRequestManager.HeartbeatState(
-                subscriptions,
-                membershipManager);
-
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        createHeartbeatStateAndRequestManager();
 
         // The initial ShareGroupHeartbeatRequest sets most fields to their initial empty values
         ShareGroupHeartbeatRequestData data = heartbeatState.buildRequestData();

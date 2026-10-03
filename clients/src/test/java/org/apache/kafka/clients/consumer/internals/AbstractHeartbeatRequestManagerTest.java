@@ -58,7 +58,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -106,19 +105,6 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
     protected abstract void verifyHeartbeatStateReset();
 
     protected abstract String metricGroupName();
-
-    protected void createHeartbeatRequestStateWithZeroHeartbeatInterval() {
-        heartbeatRequestState = spy(new HeartbeatRequestState(
-            logContext,
-            time,
-            0,
-            DEFAULT_RETRY_BACKOFF_MS,
-            DEFAULT_RETRY_BACKOFF_MAX_MS,
-            DEFAULT_HEARTBEAT_JITTER_MS)
-        );
-
-        recreateHeartbeatRequestManager();
-    }
 
     @Test
     public void testTimerNotDue() {
@@ -318,8 +304,12 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size());
 
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
-        assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
+        // The test fixture initializes the heartbeat timer to 1000 ms (DEFAULT_HEARTBEAT_INTERVAL_MS).
+        // Because the member does not yet require an immediate heartbeat, maximumTimeToWait() returns the smaller
+        // of the heartbeat delay (1000 ms) and half the remaining poll timeout (5000 ms).
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
+        // A joining member must send its first heartbeat without waiting for the heartbeat timer to expire.
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
 
@@ -331,18 +321,17 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testSkippingHeartbeat(final boolean shouldSkipHeartbeat) {
-        // The initial heartbeatInterval is set to 0
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
-
         // Mocking notInGroup
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(shouldSkipHeartbeat);
 
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-
         if (!shouldSkipHeartbeat) {
+            // Request an immediate heartbeat, regardless of the heartbeat timer.
+            when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+            NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
             assertEquals(1, result.unsentRequests.size());
-            assertEquals(0, result.timeUntilNextPollMs);
+            assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result.timeUntilNextPollMs);
         } else {
+            NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
             assertEquals(0, result.unsentRequests.size());
             assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
         }
@@ -350,18 +339,17 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
     /**
      * When the consumer uses manual partition assignment (assign()) instead of subscribe(), the
-     * member stays in UNSUBSCRIBED state indefinitely. Because heartbeats are skipped in that
-     * state and heartbeatIntervalMs initialises to 0, maximumTimeToWait used to return 0, causing
-     * a busy-loop in pollForFetches. Verify that maximumTimeToWait returns Long.MAX_VALUE whenever
-     * the member is in UNSUBSCRIBED state so the application thread can block for the full poll
-     * timeout.
+     * member stays in UNSUBSCRIBED state indefinitely. Heartbeats are skipped in that state.
+     * Verify that maximumTimeToWait returns Long.MAX_VALUE in that state so the application
+     * thread can block for the full poll timeout, while a joining member with a known coordinator
+     * can send immediately even before the initial heartbeat interval expires.
      */
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testMaximumTimeToWaitWhenHeartbeatShouldBeSkipped(final boolean isUnsubscribed) {
-        // Start with zero heartbeat interval (simulates the initial state before any HB response)
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
         when(membershipManager.state()).thenReturn(isUnsubscribed ? MemberState.UNSUBSCRIBED : MemberState.JOINING);
+        // The implementation of shouldHeartbeatNow return true when MemberState is ACKNOWLEDGING, LEAVING, and JOINING.
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(!isUnsubscribed);
 
         long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
 
@@ -371,7 +359,7 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
                     "(e.g., manual assignment) to prevent a busy loop");
         } else {
             assertEquals(0, result,
-                "maximumTimeToWait should return 0 when heartbeat interval timer has already expired");
+                "maximumTimeToWait should return 0 when a joining member can send its first heartbeat");
         }
     }
 
@@ -395,15 +383,13 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
     }
 
     /**
-     * While bootstrap DNS resolution is still in progress the coordinator is unknown,
-     * and a member that wants to join has a zero heartbeat interval, since the interval is only
-     * learned from the first heartbeat response. maximumTimeToWait() must wait a retry backoff
-     * rather than the (zero) heartbeat interval; returning 0 busy-spins the application and
-     * network threads.
+     * While bootstrap DNS resolution is still in progress the coordinator is unknown. A joining
+     * member wants to heartbeat immediately regardless of its initial interval, but cannot send
+     * until the coordinator is known. maximumTimeToWait() must return a retry backoff instead of
+     * the zero wait from the immediate-heartbeat path.
      */
     @Test
     public void testMaximumTimeToWaitWhenJoiningAndCoordinatorUnknownDoesNotSpin() {
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
@@ -424,7 +410,6 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
     @Test
     public void testMaximumTimeToWaitWhenFencedWaitsRetryBackoff() {
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
         when(membershipManager.state()).thenReturn(MemberState.FENCED);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
 
@@ -465,8 +450,7 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
     @Test
     public void testNetworkTimeout() {
-        // The initial heartbeatInterval is set to 0
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
         // Mimic network timeout
@@ -486,7 +470,7 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
     @Test
     public void testDisconnect() {
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
         // Mimic disconnect
