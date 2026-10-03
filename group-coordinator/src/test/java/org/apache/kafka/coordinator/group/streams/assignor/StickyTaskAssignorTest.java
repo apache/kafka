@@ -1546,6 +1546,44 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
+    public void shouldAssignTaskToMemberWithLocalStateWhenAnotherMemberOfSameProcessIsAtQuota() {
+        final Map<String, Map<Integer, Long>> taskOffsets = Map.of("test-subtopology", Map.of(2, 100L));
+        // Equal offsets preserve insertion order, so the member already at quota is considered first.
+        final Map<String, MemberMetadataAndStateImpl> members = new LinkedHashMap<>();
+
+        // Both members of process1 report local state for task 2.
+        members.put("member1_1", new MemberMetadataAndStateImpl(
+            Optional.empty(),
+            Optional.empty(),
+            "process1",
+            Map.of(),
+            Map.of("test-subtopology", Set.of(0)),
+            Map.of(),
+            Map.of(),
+            taskOffsets,
+            Map.of()));
+        members.put("member1_2", createMemberMetadataWithOffsets("process1", taskOffsets));
+        
+        // Member of process2 have no local state for task 2.
+        members.put("member2_1", createMemberMetadata("process2", Map.of("test-subtopology", Set.of(1)), Map.of(), Map.of()));
+        members.put("member2_2", createMemberMetadata("process2"));
+        members.put("member2_3", createMemberMetadata("process2"));
+
+        // Three tasks and five members give a quota of one. After retaining tasks 0 and 1, process2 has
+        // lower load (1/3) than process1 (1/2), so falling back to load balancing would always lose local state.
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member1_2"));
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1_1"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2_1"));
+        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member2_2"));
+        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member2_3"));
+    }
+
+    @Test
     public void shouldRankCurrentOwnersAheadOfReportedTaskOffsetsAndMostCaughtUpFirst() {
         // All previous-ownership signals compete at once. member3 reports the largest possible offset sums for
         // tasks 0 and 1, but loses both: the current active owner keeps task 0 and the current standby is promoted
