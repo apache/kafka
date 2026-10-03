@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.utils.internals.ByteUtils;
@@ -73,7 +74,7 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         final int headersSize = ByteUtils.readVarint(buffer);
 
         final byte[] rawHeaders = readBytes(buffer, headersSize);
-        final Headers headers = HeadersDeserializer.deserialize(rawHeaders);
+        final Headers headers = (headersSize == 0) ? new RecordHeaders() : new LazyHeaders(rawHeaders);
         final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
         final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp);
         final byte[] rawValue = readBytes(buffer, buffer.remaining());
