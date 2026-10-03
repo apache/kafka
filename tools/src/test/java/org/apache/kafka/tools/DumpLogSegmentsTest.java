@@ -150,6 +150,7 @@ public class DumpLogSegmentsTest {
     private final String indexFilePath = new File(logDir, segmentName + ".index").getAbsolutePath();
     private final String timeIndexFilePath = new File(logDir, segmentName + ".timeindex").getAbsolutePath();
     private final MockTime time = new MockTime(0, 0);
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private UnifiedLog log;
 
     @AfterEach
@@ -157,6 +158,7 @@ public class DumpLogSegmentsTest {
         if (log != null) {
             Utils.closeQuietly(log, "UnifiedLog");
         }
+        brokerTopicStats.close();
     }
 
     private UnifiedLog createTestLog() throws Exception {
@@ -178,7 +180,7 @@ public class DumpLogSegmentsTest {
             0L,
             0L,
             logTime.scheduler,
-            new BrokerTopicStats(),
+            brokerTopicStats,
             logTime,
             5 * 60 * 1000,
             new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
