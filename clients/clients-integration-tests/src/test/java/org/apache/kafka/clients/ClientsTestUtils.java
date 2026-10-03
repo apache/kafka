@@ -17,10 +17,11 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -434,7 +435,8 @@ public class ClientsTestUtils {
         ) throws InterruptedException {
             var listener = new TestConsumerReassignmentListener();
             try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
-                consumer.subscribe(List.of(TOPIC), listener);
+                consumer.setRebalanceListener(listener);
+                consumer.subscribe(List.of(TOPIC));
                 // the initial subscription should cause a callback execution
                 awaitRebalance(consumer, listener);
                 assertEquals(1, listener.callsToAssigned);
@@ -531,17 +533,17 @@ public class ClientsTestUtils {
         }
     }
 
-    public static class TestConsumerReassignmentListener implements ConsumerRebalanceListener {
+    public static class TestConsumerReassignmentListener implements RebalanceListener {
         public int callsToAssigned = 0;
         public int callsToRevoked = 0;
 
         @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
             callsToAssigned += 1;
         }
 
         @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
             callsToRevoked += 1;
         }
     }
