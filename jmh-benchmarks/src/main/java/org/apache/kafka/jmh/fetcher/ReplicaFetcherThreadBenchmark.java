@@ -26,7 +26,6 @@ import kafka.server.OffsetTruncationState;
 import kafka.server.RemoteLeaderEndPoint;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
-import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
 
 import org.apache.kafka.clients.FetchSessionHandler;
@@ -54,6 +53,7 @@ import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.network.BrokerEndPoint;
 import org.apache.kafka.server.partition.AlterPartitionManager;
 import org.apache.kafka.server.quota.QuotaFactory;
@@ -63,9 +63,11 @@ import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogAppendInfo;
+import org.apache.kafka.storage.internals.log.LogCleaner;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogManager;
+import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
@@ -127,23 +129,26 @@ public class ReplicaFetcherThreadBenchmark {
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(config.logDirs().size());
         List<File> logDirs = config.logDirs().stream().map(File::new).toList();
-        logManager = new LogManagerBuilder().
-            setLogDirs(logDirs).
-            setInitialOfflineDirs(List.of()).
-            setConfigRepository(new MockConfigRepository()).
-            setInitialDefaultConfig(logConfig).
-            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
-            setRecoveryThreadsPerDataDir(1).
-            setFlushCheckMs(1000L).
-            setFlushRecoveryOffsetCheckpointMs(10000L).
-            setFlushStartOffsetCheckpointMs(10000L).
-            setRetentionCheckMs(1000L).
-            setProducerStateManagerConfig(60000, false).
-            setScheduler(scheduler).
-            setBrokerTopicStats(brokerTopicStats).
-            setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).
-            build();
+        logManager = new LogManager(logDirs,
+            List.of(),
+            new MockConfigRepository(),
+            logConfig,
+            new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false),
+            1,
+            1000L,
+            10000L,
+            10000L,
+            1000L,
+            15 * 60 * 1000,
+            new ProducerStateManagerConfig(60000, false),
+            600000,
+            scheduler,
+            brokerTopicStats,
+            logDirFailureChannel,
+            Time.SYSTEM,
+            false,
+            ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT,
+            LogCleaner::new);
 
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         replicaManager = new ReplicaManagerBuilder().
