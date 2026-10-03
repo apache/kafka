@@ -108,6 +108,44 @@ public class MirrorSourceConfigTest {
     }
 
     @Test
+    public void testOffsetValidationIsDisabledByDefault() {
+        MirrorSourceConfig config = new MirrorSourceConfig(makeProps());
+        assertFalse(config.offsetValidationEnabled(),
+                "offset validation should be opt-in so that upgrades do not change failure semantics");
+        assertEquals("earliest", config.sourceConsumerConfig("test").get("auto.offset.reset"),
+                "the replication consumer should keep the historical MirrorMaker 2 default");
+    }
+
+    @Test
+    public void testOffsetValidationEnabledDisablesAutoOffsetReset() {
+        MirrorSourceConfig config = new MirrorSourceConfig(
+                makeProps(MirrorSourceConfig.OFFSET_VALIDATION_ENABLED, "true"));
+        assertTrue(config.offsetValidationEnabled());
+        assertEquals("none", config.sourceConsumerConfig("test").get("auto.offset.reset"),
+                "auto.offset.reset must be none so the consumer surfaces out-of-range offsets");
+    }
+
+    @Test
+    public void testOffsetValidationTakesPrecedenceOverExplicitAutoOffsetReset() {
+        // Offset validation cannot work with any other reset policy, so it wins over a user-supplied
+        // value rather than silently producing a configuration that never detects data loss.
+        MirrorSourceConfig config = new MirrorSourceConfig(makeProps(
+                MirrorSourceConfig.OFFSET_VALIDATION_ENABLED, "true",
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "auto.offset.reset", "latest"));
+        assertEquals("none", config.sourceConsumerConfig("test").get("auto.offset.reset"));
+    }
+
+    @Test
+    public void testOffsetValidationDoesNotAffectOtherConsumerConfigs() {
+        MirrorSourceConfig config = new MirrorSourceConfig(makeProps(
+                MirrorSourceConfig.OFFSET_VALIDATION_ENABLED, "true",
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "max.poll.records", "42"));
+        Map<String, Object> consumerConfig = config.sourceConsumerConfig("test");
+        assertEquals("42", consumerConfig.get("max.poll.records"));
+        assertEquals("false", consumerConfig.get("enable.auto.commit"));
+    }
+
+    @Test
     public void testOffsetSyncsTopic() {
         // Invalid location
         Map<String, String> connectorProps = makeProps("offset-syncs.topic.location", "something");

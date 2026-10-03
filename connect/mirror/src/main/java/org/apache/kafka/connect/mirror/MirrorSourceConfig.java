@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 public class MirrorSourceConfig extends MirrorConnectorConfig {
@@ -97,6 +98,16 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
             "but may result in excessive record duplication (consumer reprocessing) during a failover. " +
             "Partition Count * offset.lag.max = Approximate duplicated record count (Actual value can be lower or even higher depending on timing and consumer lag)";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
+
+    public static final String OFFSET_VALIDATION_ENABLED = "offset.validation.enabled";
+    private static final String OFFSET_VALIDATION_ENABLED_DOC =
+            "Whether MirrorSourceTask should fail fast when the offset it wants to replicate from is no "
+            + "longer available on the source cluster. When enabled, the replication consumer is configured "
+            + "with auto.offset.reset=none and the task throws a DataLossException if source records were "
+            + "removed by the retention policy before they could be replicated, or a TopicResetException if "
+            + "the source topic was deleted and recreated. When disabled (the default), MirrorMaker 2 keeps "
+            + "its historical behaviour of silently resuming from the earliest available offset.";
+    public static final boolean OFFSET_VALIDATION_ENABLED_DEFAULT = false;
 
     public static final String HEARTBEATS_REPLICATION_ENABLED = "heartbeats.replication" + ENABLED_SUFFIX;
     private static final String HEARTBEATS_REPLICATION_ENABLED_DOC = "Whether to replicate the heartbeats topics even when the topic filter does not include them." +
@@ -213,6 +224,21 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
+    boolean offsetValidationEnabled() {
+        return getBoolean(OFFSET_VALIDATION_ENABLED);
+    }
+
+    @Override
+    Map<String, Object> sourceConsumerConfig(String role) {
+        Map<String, Object> config = super.sourceConsumerConfig(role);
+        if (offsetValidationEnabled()) {
+            // Overriding the MirrorMaker 2 default of "earliest" is what lets the consumer surface an
+            // OffsetOutOfRangeException instead of silently rewinding to the start of the log.
+            config.put(AUTO_OFFSET_RESET_CONFIG, "none");
+        }
+        return config;
+    }
+
     boolean emitOffsetSyncsEnabled() {
         return getBoolean(EMIT_OFFSET_SYNCS_ENABLED);
     }
@@ -320,6 +346,12 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         OFFSET_LAG_MAX_DEFAULT,
                         ConfigDef.Importance.LOW,
                         OFFSET_LAG_MAX_DOC)
+                .define(
+                        OFFSET_VALIDATION_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        OFFSET_VALIDATION_ENABLED_DEFAULT,
+                        ConfigDef.Importance.MEDIUM,
+                        OFFSET_VALIDATION_ENABLED_DOC)
                 .define(
                         OFFSET_SYNCS_TOPIC_LOCATION,
                         ConfigDef.Type.STRING,
