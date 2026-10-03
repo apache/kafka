@@ -474,13 +474,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
                         ProducerConfig.BATCH_SIZE_CONFIG, batchSize, ChunkedRecordAccumulator.CHUNK_SIZE);
             }
-            // The chunked path does not support compression yet (TODO: KAFKA-20579)
-            if (useIncremental && compression.type() != CompressionType.NONE) {
-                throw new ConfigException("The " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL
-                        + " " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG
-                        + " does not support compression yet. " + ProducerConfig.COMPRESSION_TYPE_CONFIG
-                        + " must be set to none.");
-            }
             if (useIncremental) {
                 this.accumulator = new ChunkedRecordAccumulator(logContext,
                         batchSize,
