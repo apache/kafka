@@ -93,6 +93,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -632,6 +633,196 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp0, 3);
         assertEquals(3, transactionManager.sequenceNumber(tp0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBrokerDeduplicationWindowIsTrackedPerPartition(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
+        initializeIdempotentProducerId(producerId, epoch);
+
+        List<ProducerBatch> batches = new ArrayList<>();
+        for (int i = 0; i < TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER; i++) {
+            assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+            batches.add(writeIdempotentBatchWithValue(transactionManager, tp0, String.valueOf(i)));
+        }
+        // Four batches have been sent after the oldest one, so one more could make the broker forget it.
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // The window is tracked per partition, so a full window on tp0 says nothing about tp1.
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp1));
+
+        // Completing the oldest batch, as happens when responses arrive in order, makes room for another batch.
+        completeIdempotentBatch(batches.get(0), 500L);
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        batches.add(writeIdempotentBatchWithValue(transactionManager, tp0, "5"));
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBatchesCompletedAheadOfOldestInflightBatchStayInBrokerDeduplicationWindow(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
+        initializeIdempotentProducerId(producerId, epoch);
+
+        List<ProducerBatch> batches = new ArrayList<>();
+        for (int i = 0; i < TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER; i++) {
+            batches.add(writeIdempotentBatchWithValue(transactionManager, tp0, String.valueOf(i)));
+        }
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // Completing every batch except the oldest, as a new leader does while the oldest is still in flight to
+        // the previous one, does not make room: those batches were still appended after the oldest one, so the
+        // broker would forget it if one more were sent.
+        for (int i = 1; i < batches.size(); i++) {
+            completeIdempotentBatch(batches.get(i), 500L + i);
+        }
+        assertEquals(0, transactionManager.firstInFlightSequence(tp0));
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // Once the oldest batch completes nothing is in flight anymore, and the window is empty again.
+        completeIdempotentBatch(batches.get(0), 500L);
+        assertFalse(transactionManager.hasInflightBatches(tp0));
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // Batches that completed ahead of the oldest one only count while a batch older than them is in flight.
+        List<ProducerBatch> nextBatches = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            nextBatches.add(writeIdempotentBatchWithValue(transactionManager, tp0, String.valueOf(10 + i)));
+        }
+        completeIdempotentBatch(nextBatches.get(2), 600L);
+        completeIdempotentBatch(nextBatches.get(0), 601L);
+        // Only the third batch is ahead of the second, which is now the oldest in flight.
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        nextBatches.add(writeIdempotentBatchWithValue(transactionManager, tp0, "13"));
+        nextBatches.add(writeIdempotentBatchWithValue(transactionManager, tp0, "14"));
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        nextBatches.add(writeIdempotentBatchWithValue(transactionManager, tp0, "15"));
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testSplitBatchKeepsBatchesCompletedAheadOfItInBrokerDeduplicationWindow(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
+        initializeIdempotentProducerId(producerId, epoch);
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp0);
+
+        // A batch with two records at sequence 0, followed by batches at sequences 2 and 3.
+        ProducerBatch bigBatch = writeBatchWithValues(transactionManager, tp0, false, "0", "1");
+        assertEquals(2, bigBatch.recordCount);
+        ProducerBatch second = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        ProducerBatch third = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
+        assertEquals(2, second.baseSequence());
+        assertEquals(3, third.baseSequence());
+
+        // The second batch is acknowledged while the first is still in flight. The first is then rejected as too
+        // large and split, which re-adds the split batches with the sequences of the records they hold.
+        completeIdempotentBatch(second, 500L);
+        transactionManager.removeInFlightBatch(bigBatch);
+        for (int sequence = 0; sequence < bigBatch.recordCount; sequence++) {
+            ProducerBatch splitBatch = batchWithValue(tp0, String.valueOf(sequence));
+            splitBatch.setProducerState(transactionManager.producerIdAndEpoch(), sequence, false);
+            transactionManager.addInFlightBatch(splitBatch);
+            splitBatch.close();
+        }
+
+        // The batches at sequences 1, 2 and 3 were all sent after the split batch at sequence 0, so only one more
+        // batch fits in the window, even though the second batch completed before the split.
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        writeIdempotentBatchWithValue(transactionManager, tp0, "4");
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFatallyFailedBatchShiftsBatchesCompletedAheadOfOldestInflightBatch(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.of(transactionalId), transactionV2Enabled);
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        // Five batches, of which batch 2 holds two records, so the batches have sequences 0, 1, 2, 4 and 5.
+        List<ProducerBatch> batches = new ArrayList<>();
+        batches.add(writeTransactionalBatchWithValue(transactionManager, tp0, "0"));
+        batches.add(writeTransactionalBatchWithValue(transactionManager, tp0, "1"));
+        batches.add(writeBatchWithValues(transactionManager, tp0, true, "2", "3"));
+        batches.add(writeTransactionalBatchWithValue(transactionManager, tp0, "4"));
+        batches.add(writeTransactionalBatchWithValue(transactionManager, tp0, "5"));
+        assertEquals(2, batches.get(2).recordCount);
+        assertEquals(4, batches.get(3).baseSequence());
+        assertEquals(5, batches.get(4).baseSequence());
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // Batches 1 and 4 complete while batch 0 is still in flight.
+        completeIdempotentBatch(batches.get(1), 501L);
+        completeIdempotentBatch(batches.get(4), 505L);
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // Batch 2 fails fatally and the sequences after it are moved down by its two records. Batch 4 was appended
+        // after batch 0 and keeps taking up room in the window at its new sequence, batch 1 is unaffected, and the
+        // failed batch itself no longer counts.
+        transactionManager.handleFailedBatch(batches.get(2), new TimeoutException(), true);
+        assertEquals(0, transactionManager.firstInFlightSequence(tp0));
+        assertEquals(2, batches.get(3).baseSequence());
+        assertEquals(4, transactionManager.sequenceNumber(tp0));
+
+        // Batches 1, 3 and 4 are ahead of batch 0, so exactly one more batch fits in the window.
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        writeTransactionalBatchWithValue(transactionManager, tp0, "6");
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testEpochBumpForgetsBatchesCompletedAheadOfOldestInflightBatch(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
+        initializeIdempotentProducerId(producerId, epoch);
+
+        ProducerBatch b0 = writeIdempotentBatchWithValue(transactionManager, tp0, "0");
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        completeIdempotentBatch(b2, 502L);
+
+        // The epoch is bumped and the in-flight batches are resent from sequence 0 under the new epoch. The broker's
+        // state for the partition starts over with them, so batch 2 no longer takes up room in its window.
+        transactionManager.requestIdempotentEpochBumpForPartition(tp0);
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+        assertEquals((short) (epoch + 1), b0.producerEpoch());
+        assertEquals(0, b0.baseSequence());
+        assertEquals(1, b1.baseSequence());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+
+        // Only batch 1 is ahead of batch 0, so three more batches fit in the window.
+        for (int i = 0; i < TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER - 2; i++) {
+            assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+            writeIdempotentBatchWithValue(transactionManager, tp0, String.valueOf(10 + i));
+        }
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+    }
+
+    private ProducerBatch writeBatchWithValues(TransactionManager manager,
+                                               TopicPartition tp,
+                                               boolean isTransactional,
+                                               String... values) {
+        manager.maybeUpdateProducerIdAndEpoch(tp);
+        long now = time.milliseconds();
+        ProducerBatch batch = new ProducerBatch(tp, MemoryRecords.builder(ByteBuffer.allocate(1024),
+                Compression.NONE, TimestampType.CREATE_TIME, 0L), now);
+        for (String value : values) {
+            batch.tryAppend(now, new byte[0], value.getBytes(), new Header[0], null, now);
+        }
+        batch.setProducerState(manager.producerIdAndEpoch(), manager.sequenceNumber(tp), isTransactional);
+        manager.incrementSequenceNumber(tp, batch.recordCount);
+        manager.addInFlightBatch(batch);
+        batch.close();
+        return batch;
+    }
+
+    private void completeIdempotentBatch(ProducerBatch batch, long baseOffset) {
+        long appendTime = time.milliseconds();
+        batch.complete(baseOffset, appendTime);
+        transactionManager.handleCompletedBatch(batch,
+                new ProduceResponse.PartitionResponse(Errors.NONE, baseOffset, appendTime, 0L));
     }
 
     @ParameterizedTest
