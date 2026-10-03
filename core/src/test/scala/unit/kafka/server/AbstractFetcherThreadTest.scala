@@ -30,16 +30,13 @@ import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
-import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.server.log.remote.storage.RetriableRemoteStorageException
 import org.apache.kafka.server.{PartitionFetchState, ReplicaState}
 import org.apache.kafka.server.util.ServerTestUtils
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Set}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
@@ -304,9 +301,9 @@ class AbstractFetcherThreadTest {
 
     fetcher.doWork()
 
-    // Not data has been fetched and the follower is still truncating
+    // No data has been fetched since the leader replied with an unknown leader epoch
     assertEquals(0, replicaState.logEndOffset)
-    assertEquals(Some(ReplicaState.TRUNCATING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(Some(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
 
     // Bump the epoch on the leader
     fetcher.mockLeader.leaderPartitionState(partition).leaderEpoch += 1
@@ -400,21 +397,21 @@ class AbstractFetcherThreadTest {
   def testTruncateToHighWatermarkIfLeaderEpochInfoNotAvailable(): Unit = {
     val highWatermark = 2L
     val partition = new TopicPartition("topic", 0)
-    val mockLeaderEndPoint = new MockLeaderEndPoint(version = version) {
-      override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset]  =
-        throw new UnsupportedOperationException
-    }
+
+    val mockLeaderEndPoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
     val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine) {
-        override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
-          assertEquals(highWatermark, truncationState.offset)
-          assertTrue(truncationState.truncationCompleted)
-          super.truncate(topicPartition, truncationState)
-        }
-
-        override def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = Optional.empty
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
+        assertEquals(highWatermark, offset)
+        super.truncate(topicPartition, offset)
       }
 
+      override def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = Optional.empty
+    }
+
+    // The replica has records above the high watermark which may not have been committed. Since
+    // latestEpoch() returns no epoch, the fetch request carries no last fetched epoch, so the leader
+    // cannot report a diverging epoch and those records are truncated beforehand.
     val replicaLog = Seq(
       mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
       mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
@@ -425,10 +422,13 @@ class AbstractFetcherThreadTest {
     fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), highWatermark, leaderEpoch = 5)))
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
+    assertEquals(Some(ReplicaState.TRUNCATING), fetcher.fetchState(partition).map(_.state))
+
     fetcher.doWork()
 
     assertEquals(highWatermark, replicaState.logEndOffset)
     assertEquals(highWatermark, fetcher.fetchState(partition).get.fetchOffset)
+    assertEquals(Some(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
     assertTrue(fetcher.fetchState(partition).get.isReadyForFetch)
   }
 
@@ -440,9 +440,9 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
-      override def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = {
+      override def maybeTruncate(): Unit = {
         removePartitions(Set(partition))
-        super.truncateToHighWatermark(partitions)
+        super.maybeTruncate()
       }
 
       override def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = Optional.empty
@@ -472,15 +472,17 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
         truncations += 1
-        super.truncate(topicPartition, truncationState)
+        super.truncate(topicPartition, offset)
       }
     }
 
-    val replicaState = PartitionState(leaderEpoch = 5)
+    // The replica has a batch with an epoch unknown to the leader, so the first fetch diverges
+    val replicaLog = Seq(mkBatch(baseOffset = 0, leaderEpoch = 2, new SimpleRecord("x".getBytes)))
+    val replicaState = PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 0L)
     fetcher.setReplicaState(partition, replicaState)
-    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = 5)), forceTruncation = true)
+    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 1L, leaderEpoch = 5)))
 
     val leaderLog = Seq(
       mkBatch(baseOffset = 0, leaderEpoch = 1, new SimpleRecord("a".getBytes)),
@@ -491,11 +493,10 @@ class AbstractFetcherThreadTest {
     fetcher.mockLeader.setLeaderState(partition, leaderState)
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
-    // Do one round of truncation
+    // Do one round of truncation based on the diverging epoch in the fetch response
     fetcher.doWork()
 
-    // We only fetch one record at a time with mock fetcher
-    assertEquals(1, replicaState.logEndOffset)
+    assertEquals(0, replicaState.logEndOffset)
     assertEquals(1, truncations)
 
     // Add partitions again with the same epoch
@@ -504,9 +505,9 @@ class AbstractFetcherThreadTest {
     // Verify we did not truncate
     fetcher.doWork()
 
-    // No truncations occurred and we have fetched another record
+    // No truncations occurred and we have fetched a record (we only fetch one record at a time with mock fetcher)
     assertEquals(1, truncations)
-    assertEquals(2, replicaState.logEndOffset)
+    assertEquals(1, replicaState.logEndOffset)
   }
 
   @Test
@@ -516,9 +517,9 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
         truncations += 1
-        super.truncate(topicPartition, truncationState)
+        super.truncate(topicPartition, offset)
       }
     }
     val replicaLog = Seq(
@@ -804,149 +805,6 @@ class AbstractFetcherThreadTest {
     assertEquals(2L, replicaState.logEndOffset)
   }
 
-  @ParameterizedTest
-  @ValueSource(ints = Array(0, 1))
-  def testParameterizedLeaderEpochChangeDuringFetchEpochsFromLeader(leaderEpochOnLeader: Int): Unit = {
-    // When leaderEpochOnLeader = 1:
-    // The leader is on the new epoch when the OffsetsForLeaderEpoch with old epoch is sent, so it
-    // returns the fence error. Validate that response is ignored if the leader epoch changes on
-    // the follower while OffsetsForLeaderEpoch request is in flight, but able to truncate and fetch
-    // in the next of round of "doWork"
-
-    // When leaderEpochOnLeader = 0:
-    // The leader is on the old epoch when the OffsetsForLeaderEpoch with old epoch is sent
-    // and returns the valid response. Validate that response is ignored if the leader epoch changes
-    // on the follower while OffsetsForLeaderEpoch request is in flight, but able to truncate and
-    // fetch once the leader is on the newer epoch (same as follower)
-
-    val partition = new TopicPartition("topic", 1)
-    val initialLeaderEpochOnFollower = 0
-    val nextLeaderEpochOnFollower = initialLeaderEpochOnFollower + 1
-
-    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version) {
-      var fetchEpochsFromLeaderOnce = false
-
-      override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = {
-        val fetchedEpochs = super.fetchEpochEndOffsets(partitions)
-        if (!fetchEpochsFromLeaderOnce) {
-          responseCallback.apply()
-          fetchEpochsFromLeaderOnce = true
-        }
-        fetchedEpochs
-      }
-    }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
-    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
-
-    def changeLeaderEpochWhileFetchEpoch(): Unit = {
-      fetcher.removePartitions(Set(partition))
-      fetcher.setReplicaState(partition, PartitionState(leaderEpoch = nextLeaderEpochOnFollower))
-      fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = nextLeaderEpochOnFollower)), forceTruncation = true)
-    }
-
-    fetcher.setReplicaState(partition, PartitionState(leaderEpoch = initialLeaderEpochOnFollower))
-    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = initialLeaderEpochOnFollower)), forceTruncation = true)
-
-    val leaderLog = Seq(
-      mkBatch(baseOffset = 0, leaderEpoch = initialLeaderEpochOnFollower, new SimpleRecord("c".getBytes)))
-    val leaderState = PartitionState(leaderLog, leaderEpochOnLeader, highWatermark = 0L)
-    fetcher.mockLeader.setLeaderState(partition, leaderState)
-    fetcher.mockLeader.setResponseCallback(changeLeaderEpochWhileFetchEpoch)
-    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
-
-    // first round of truncation
-    fetcher.doWork()
-
-    // Since leader epoch changed, fetch epochs response is ignored due to partition being in
-    // truncating state with the updated leader epoch
-    assertEquals(Option(ReplicaState.TRUNCATING), fetcher.fetchState(partition).map(_.state))
-    assertEquals(Option(nextLeaderEpochOnFollower), fetcher.fetchState(partition).map(_.currentLeaderEpoch))
-
-    if (leaderEpochOnLeader < nextLeaderEpochOnFollower) {
-      fetcher.mockLeader.setLeaderState(
-        partition, PartitionState(leaderLog, nextLeaderEpochOnFollower, highWatermark = 0L))
-    }
-
-    // make sure the fetcher is now able to truncate and fetch
-    fetcher.doWork()
-    assertEquals(fetcher.mockLeader.leaderPartitionState(partition).log, fetcher.replicaPartitionState(partition).log)
-  }
-
-  @Test
-  def testTruncateToEpochEndOffsetsDuringRemovePartitions(): Unit = {
-    val partition = new TopicPartition("topic", 0)
-    val leaderEpochOnLeader = 0
-    val initialLeaderEpochOnFollower = 0
-    val nextLeaderEpochOnFollower = initialLeaderEpochOnFollower + 1
-
-    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version) {
-      override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset]= {
-        val fetchedEpochs = super.fetchEpochEndOffsets(partitions)
-        responseCallback.apply()
-        fetchedEpochs
-      }
-    }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
-    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
-
-    def changeLeaderEpochDuringFetchEpoch(): Unit = {
-      // leader epoch changes while fetching epochs from leader
-      // at the same time, the replica fetcher manager removes the partition
-      fetcher.removePartitions(Set(partition))
-      fetcher.setReplicaState(partition, PartitionState(leaderEpoch = nextLeaderEpochOnFollower))
-    }
-
-    fetcher.setReplicaState(partition, PartitionState(leaderEpoch = initialLeaderEpochOnFollower))
-    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = initialLeaderEpochOnFollower)))
-
-    val leaderLog = Seq(
-      mkBatch(baseOffset = 0, leaderEpoch = initialLeaderEpochOnFollower, new SimpleRecord("c".getBytes)))
-    val leaderState = PartitionState(leaderLog, leaderEpochOnLeader, highWatermark = 0L)
-    fetcher.mockLeader.setLeaderState(partition, leaderState)
-    fetcher.mockLeader.setResponseCallback(changeLeaderEpochDuringFetchEpoch)
-    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
-
-    // first round of work
-    fetcher.doWork()
-
-    // since the partition was removed before the fetched endOffsets were filtered against the leader epoch,
-    // we do not expect the partition to be in Truncating state
-    assertEquals(None, fetcher.fetchState(partition).map(_.state))
-    assertEquals(None, fetcher.fetchState(partition).map(_.currentLeaderEpoch))
-
-    fetcher.mockLeader.setLeaderState(
-      partition, PartitionState(leaderLog, nextLeaderEpochOnFollower, highWatermark = 0L))
-
-    // make sure the fetcher is able to continue work
-    fetcher.doWork()
-    assertEquals(ArrayBuffer.empty, fetcher.replicaPartitionState(partition).log)
-  }
-
-  @Test
-  def testTruncationThrowsExceptionIfLeaderReturnsPartitionsNotRequestedInFetchEpochs(): Unit = {
-    val partition = new TopicPartition("topic", 0)
-    val mockLeaderEndPoint = new MockLeaderEndPoint(version = version) {
-      override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = {
-        val unrequestedTp = new TopicPartition("topic2", 0)
-        super.fetchEpochEndOffsets(partitions).asScala + (unrequestedTp -> new EpochEndOffset()
-          .setPartition(unrequestedTp.partition)
-          .setErrorCode(Errors.NONE.code)
-          .setLeaderEpoch(0)
-          .setEndOffset(0))
-      }.asJava
-    }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
-    val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine)
-
-    fetcher.setReplicaState(partition, PartitionState(leaderEpoch = 0))
-    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = 0)), forceTruncation = true)
-    fetcher.mockLeader.setLeaderState(partition, PartitionState(leaderEpoch = 0))
-    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
-
-    // first round of truncation should throw an exception
-    assertThrows(classOf[IllegalStateException], () => fetcher.doWork())
-  }
-
   @Test
   def testFetcherThreadHandlingPartitionFailureDuringAppending(): Unit = {
     val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
@@ -965,7 +823,14 @@ class AbstractFetcherThreadTest {
         }
       }
     }
-    verifyFetcherThreadHandlingPartitionFailure(fetcherForAppend)
+    verifyFetcherThreadHandlingPartitionFailure(
+      fetcherForAppend,
+      replicaState = () => PartitionState(leaderEpoch = 0),
+      leaderState = () => PartitionState(leaderEpoch = 0),
+      initOffset = 0L,
+      leaderEpoch = 0,
+      // the replica log is empty, so it has no leader epoch and starts in the truncating state
+      stateWhenAddedBack = ReplicaState.TRUNCATING)
   }
 
   @Test
@@ -973,26 +838,48 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcherForTruncation = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, failedPartitions = failedPartitions) {
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
         if (topicPartition == partition1)
           throw new Exception()
         else {
-          super.truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState)
+          super.truncate(topicPartition, offset)
         }
       }
     }
-    verifyFetcherThreadHandlingPartitionFailure(fetcherForTruncation)
+    // The replica has a batch with an epoch unknown to the leader, so the first fetch returns a
+    // diverging epoch and triggers truncation.
+    verifyFetcherThreadHandlingPartitionFailure(
+      fetcherForTruncation,
+      replicaState = () => PartitionState(
+        Seq(mkBatch(baseOffset = 0, leaderEpoch = 1, new SimpleRecord("x".getBytes))),
+        leaderEpoch = 2,
+        highWatermark = 0L),
+      leaderState = () => PartitionState(
+        Seq(
+          mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
+          mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes))),
+        leaderEpoch = 2,
+        highWatermark = 2L),
+      initOffset = 1L,
+      leaderEpoch = 2,
+      // the replica log has a leader epoch, so divergence is detected from the fetch response
+      stateWhenAddedBack = ReplicaState.FETCHING)
   }
 
-  private def verifyFetcherThreadHandlingPartitionFailure(fetcher: MockFetcherThread): Unit = {
+  private def verifyFetcherThreadHandlingPartitionFailure(fetcher: MockFetcherThread,
+                                                          replicaState: () => PartitionState,
+                                                          leaderState: () => PartitionState,
+                                                          initOffset: Long,
+                                                          leaderEpoch: Int,
+                                                          stateWhenAddedBack: ReplicaState): Unit = {
 
-    fetcher.setReplicaState(partition1, PartitionState(leaderEpoch = 0))
-    fetcher.addPartitions(Map(partition1 -> initialFetchState(topicIds.get(partition1.topic), 0L, leaderEpoch = 0)), forceTruncation = true)
-    fetcher.mockLeader.setLeaderState(partition1, PartitionState(leaderEpoch = 0))
+    fetcher.setReplicaState(partition1, replicaState())
+    fetcher.addPartitions(Map(partition1 -> initialFetchState(topicIds.get(partition1.topic), initOffset, leaderEpoch)), forceTruncation = true)
+    fetcher.mockLeader.setLeaderState(partition1, leaderState())
 
-    fetcher.setReplicaState(partition2, PartitionState(leaderEpoch = 0))
-    fetcher.addPartitions(Map(partition2 -> initialFetchState(topicIds.get(partition2.topic), 0L, leaderEpoch = 0)), forceTruncation = true)
-    fetcher.mockLeader.setLeaderState(partition2, PartitionState(leaderEpoch = 0))
+    fetcher.setReplicaState(partition2, replicaState())
+    fetcher.addPartitions(Map(partition2 -> initialFetchState(topicIds.get(partition2.topic), initOffset, leaderEpoch)), forceTruncation = true)
+    fetcher.mockLeader.setLeaderState(partition2, leaderState())
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     // processing data fails for partition1
@@ -1010,10 +897,10 @@ class AbstractFetcherThreadTest {
     // simulate a leader change
     fetcher.removePartitions(Set(partition1))
     failedPartitions.removeAll(Set(partition1))
-    fetcher.addPartitions(Map(partition1 -> initialFetchState(topicIds.get(partition1.topic), 0L, leaderEpoch = 1)), forceTruncation = true)
+    fetcher.addPartitions(Map(partition1 -> initialFetchState(topicIds.get(partition1.topic), initOffset, leaderEpoch + 1)), forceTruncation = true)
 
     // partition1 added back
-    assertEquals(Some(ReplicaState.TRUNCATING), fetcher.fetchState(partition1).map(_.state))
+    assertEquals(Some(stateWhenAddedBack), fetcher.fetchState(partition1).map(_.state))
     assertFalse(failedPartitions.contains(partition1))
 
   }
@@ -1073,9 +960,9 @@ class AbstractFetcherThreadTest {
         super.processPartitionData(topicPartition, fetchOffset, partitionLeaderEpoch, partitionData)
       }
 
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+      override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
         truncateCalls += 1
-        super.truncate(topicPartition, truncationState)
+        super.truncate(topicPartition, offset)
       }
     }
 
