@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerScopeClaimUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
@@ -220,9 +221,12 @@ public class BrokerJwtValidator implements JwtValidator {
         Object scopeRaw = getClaim(() -> claims.getClaimValue(scopeClaimName), scopeClaimName);
         Collection<String> scopeRawCollection;
 
-        if (scopeRaw instanceof String)
-            scopeRawCollection = List.of((String) scopeRaw);
-        else if (scopeRaw instanceof Collection)
+        if (scopeRaw instanceof String) {
+            String scopeRawString = (String) scopeRaw;
+            scopeRawCollection = scopeRawString.trim().isEmpty()
+                ? List.of()
+                : OAuthBearerScopeClaimUtils.parseSpaceDelimitedScopeClaim(scopeRawString);
+        } else if (scopeRaw instanceof Collection)
             scopeRawCollection = (Collection<String>) scopeRaw;
         else
             scopeRawCollection = Set.of();

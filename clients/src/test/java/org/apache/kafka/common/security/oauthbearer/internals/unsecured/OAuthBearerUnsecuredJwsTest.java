@@ -22,8 +22,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Base64.Encoder;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -83,6 +85,75 @@ public class OAuthBearerUnsecuredJwsTest {
     }
 
     @Test
+    public void validStringScopeCompactSerialization() {
+        String subject = "foo";
+        long issuedAt = 100;
+        long expirationTime = issuedAt + 60 * 60;
+        String scope = "email profile phone address";
+        String validCompactSerialization = compactSerializationWithStringScope(subject, issuedAt, expirationTime, scope);
+        OAuthBearerUnsecuredJws jws = new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope");
+
+        assertEquals(scope, jws.claims().get("scope"));
+        assertEquals(Set.of("email", "profile", "phone", "address"), jws.scope());
+    }
+
+    @Test
+    public void validStringScopeCompactSerializationWithExtraSpaces() {
+        String subject = "foo";
+        long issuedAt = 100;
+        long expirationTime = issuedAt + 60 * 60;
+        String validCompactSerialization = compactSerializationWithStringScope(
+            subject,
+            issuedAt,
+            expirationTime,
+            "   email   profile   phone   "
+        );
+        OAuthBearerUnsecuredJws jws = new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope");
+
+        assertEquals(Set.of("email", "profile", "phone"), jws.scope());
+    }
+
+    @Test
+    public void validStringScopeCompactSerializationWithCustomScopeClaimName() {
+        String subject = "foo";
+        long issuedAt = 100;
+        long expirationTime = issuedAt + 60 * 60;
+        String validCompactSerialization = compactSerializationWithStringScope(
+            subject,
+            issuedAt,
+            expirationTime,
+            "scp",
+            "email profile phone"
+        );
+        OAuthBearerUnsecuredJws jws = new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scp");
+
+        assertEquals("scp", jws.scopeClaimName());
+        assertEquals(Set.of("email", "profile", "phone"), jws.scope());
+    }
+
+    @Test
+    public void validStringScopeCompactSerializationReturnsUnmodifiableScope() {
+        String subject = "foo";
+        long issuedAt = 100;
+        long expirationTime = issuedAt + 60 * 60;
+        String validCompactSerialization = compactSerializationWithStringScope(subject, issuedAt, expirationTime, "email profile");
+        OAuthBearerUnsecuredJws jws = new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope");
+
+        assertThrows(UnsupportedOperationException.class, () -> jws.scope().add("phone"));
+    }
+
+    @Test
+    public void blankStringScopeCompactSerialization() {
+        String subject = "foo";
+        long issuedAt = 100;
+        long expirationTime = issuedAt + 60 * 60;
+        String validCompactSerialization = compactSerializationWithStringScope(subject, issuedAt, expirationTime, "   ");
+        OAuthBearerUnsecuredJws jws = new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope");
+
+        assertEquals(Collections.emptySet(), jws.scope());
+    }
+
+    @Test
     public void missingPrincipal() {
         String subject = null;
         long issuedAt = 100;
@@ -105,6 +176,24 @@ public class OAuthBearerUnsecuredJwsTest {
     }
 
     private static String compactSerialization(String subject, Long issuedAt, Long expirationTime, List<String> scope) {
+        return compactSerializationFromScopeJson(subject, issuedAt, expirationTime, scope != null ? scopeJson(scope) : null);
+    }
+
+    private static String compactSerializationWithStringScope(String subject, Long issuedAt, Long expirationTime, String scope) {
+        return compactSerializationWithStringScope(subject, issuedAt, expirationTime, "scope", scope);
+    }
+
+    private static String compactSerializationWithStringScope(
+        String subject,
+        Long issuedAt,
+        Long expirationTime,
+        String scopeClaimName,
+        String scope
+    ) {
+        return compactSerializationFromScopeJson(subject, issuedAt, expirationTime, scope != null ? stringScopeJson(scopeClaimName, scope) : null);
+    }
+
+    private static String compactSerializationFromScopeJson(String subject, Long issuedAt, Long expirationTime, String scopeJson) {
         Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String algorithm = "none";
         String headerJson = "{\"alg\":\"" + algorithm + "\"}";
@@ -112,7 +201,6 @@ public class OAuthBearerUnsecuredJwsTest {
         String subjectJson = subject != null ? "\"sub\":\"" + subject + "\"" : null;
         String issuedAtJson = issuedAt != null ? "\"iat\":" + issuedAt : null;
         String expirationTimeJson = expirationTime != null ? "\"exp\":" + expirationTime : null;
-        String scopeJson = scope != null ? scopeJson(scope) : null;
         String claimsJson = claimsJson(subjectJson, issuedAtJson, expirationTimeJson, scopeJson);
         String encodedClaims = encoder.encodeToString(claimsJson.getBytes(StandardCharsets.UTF_8));
         return encodedHeader + "." + encodedClaims + ".";
@@ -142,6 +230,14 @@ public class OAuthBearerUnsecuredJwsTest {
         }
         scopeJsonBuilder.append(']');
         return scopeJsonBuilder.toString();
+    }
+
+    private static String stringScopeJson(String scope) {
+        return stringScopeJson("scope", scope);
+    }
+
+    private static String stringScopeJson(String scopeClaimName, String scope) {
+        return "\"" + escape(scopeClaimName) + "\":\"" + escape(scope) + "\"";
     }
 
     private static void appendCommaJsonText(StringBuilder sb, String claimName, Number claimValue) {
