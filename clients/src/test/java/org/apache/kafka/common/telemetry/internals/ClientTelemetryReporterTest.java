@@ -54,7 +54,10 @@ import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -76,6 +79,8 @@ import static org.mockito.ArgumentMatchers.anyByte;
 
 public class ClientTelemetryReporterTest {
 
+    private static final int TELEMETRY_MAX_BYTES = 1024 * 1024;
+
     private MockTime time;
     private ClientTelemetryReporter clientTelemetryReporter;
     private Map<String, Object> configs;
@@ -91,7 +96,7 @@ public class ClientTelemetryReporterTest {
         metricsContext = new KafkaMetricsContext("test");
         uuid = Uuid.randomUuid();
         subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(uuid, 1234, 20000,
-            Collections.emptyList(), true, null);
+            TELEMETRY_MAX_BYTES, Collections.emptyList(), true, null);
     }
 
     @Test
@@ -346,7 +351,7 @@ public class ClientTelemetryReporterTest {
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, Collections.singletonList(compressionType), true, null);
+            uuid, 1234, 20000, TELEMETRY_MAX_BYTES, Collections.singletonList(compressionType), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
@@ -371,7 +376,7 @@ public class ClientTelemetryReporterTest {
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, Collections.singletonList(CompressionType.GZIP), true, null);
+            uuid, 1234, 20000, TELEMETRY_MAX_BYTES, Collections.singletonList(CompressionType.GZIP), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         Compression.Builder<? extends Compression> failingCompression = compressionFailingWithIOException();
@@ -403,7 +408,7 @@ public class ClientTelemetryReporterTest {
 
         // Set up subscription with multiple compression types: GZIP -> LZ4 -> SNAPPY
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, List.of(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), true, null);
+            uuid, 1234, 20000, TELEMETRY_MAX_BYTES, List.of(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         try (MockedStatic<Compression> mockedCompression = Mockito.mockStatic(Compression.class, new CallsRealMethods())) {
@@ -480,7 +485,7 @@ public class ClientTelemetryReporterTest {
 
         // Set up subscription with ZSTD compression type
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, List.of(CompressionType.ZSTD, CompressionType.LZ4), true, null);
+            uuid, 1234, 20000, TELEMETRY_MAX_BYTES, List.of(CompressionType.ZSTD, CompressionType.LZ4), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         try (MockedStatic<Compression> mockedCompression = Mockito.mockStatic(Compression.class, new CallsRealMethods())) {
@@ -520,6 +525,147 @@ public class ClientTelemetryReporterTest {
         }
     }
 
+    @Test
+    public void testCreateRequestPushWithinTelemetryMaxBytes() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+        clientTelemetryReporter.metricsCollector(collectorEmittingSingleMetric());
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+        ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
+            uuid, 1234, 20000, TELEMETRY_MAX_BYTES, List.of(CompressionType.NONE), true, ClientTelemetryUtils.SELECTOR_ALL_METRICS);
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
+        assertTrue(requestOptional.isPresent());
+        PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
+        assertTrue(request.data().metrics().limit() > 0);
+        assertTrue(request.data().metrics().limit() <= TELEMETRY_MAX_BYTES);
+        assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+    }
+
+    @Test
+    public void testCreateRequestPushSkippedWhenExceedingTelemetryMaxBytes() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+        clientTelemetryReporter.metricsCollector(collectorEmittingSingleMetric());
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+        // A single byte cannot hold any payload, hence the push must be skipped.
+        ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
+            uuid, 1234, 20000, 1, List.of(CompressionType.NONE), true, ClientTelemetryUtils.SELECTOR_ALL_METRICS);
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
+        assertFalse(requestOptional.isPresent());
+        // The subscription is re-fetched and the next attempt is deferred by the push interval.
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(20000, telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testCreateRequestTerminatingPushSkippedWhenExceedingTelemetryMaxBytes() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+        clientTelemetryReporter.metricsCollector(collectorEmittingSingleMetric());
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+        ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
+            uuid, 1234, 20000, 1, List.of(CompressionType.NONE), true, ClientTelemetryUtils.SELECTOR_ALL_METRICS);
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+
+        Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
+        assertFalse(requestOptional.isPresent());
+        // A terminating push cannot be retried, so the state is left for close() to finish and telemetry stays enabled.
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testCreateRequestPushSkippedWhenUncompressedPayloadExceedsTelemetryMaxBytes() throws IOException {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+        clientTelemetryReporter.metricsCollector(collectorEmitting(compressibleMetrics(50)));
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        telemetrySender.updateSubscriptionResult(gzipSubscription(TELEMETRY_MAX_BYTES), time.milliseconds());
+
+        // Measure the payload the reporter actually builds, rather than assuming a layout.
+        Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
+        assertTrue(requestOptional.isPresent());
+        PushTelemetryRequest request = assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+        ByteBuffer compressed = request.data().metrics();
+        int compressedSize = compressed.remaining();
+        int uncompressedSize = ClientTelemetryUtils.decompress(
+            compressed.duplicate(), CompressionType.GZIP, Integer.MAX_VALUE).remaining();
+        assertTrue(compressedSize < uncompressedSize, "the payload must compress for this test to be meaningful");
+
+        /*
+         With a limit between the two sizes the compressed request would reach the broker, which
+         would then reject it once decompressed, so checking only the compressed size would keep
+         sending a payload that can never be accepted.
+        */
+        int maxBytes = (compressedSize + uncompressedSize) / 2;
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        telemetrySender.updateSubscriptionResult(gzipSubscription(maxBytes), time.milliseconds());
+
+        assertFalse(telemetrySender.createRequest().isPresent());
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    private ClientTelemetryReporter.ClientTelemetrySubscription gzipSubscription(int telemetryMaxBytes) {
+        return new ClientTelemetryReporter.ClientTelemetrySubscription(uuid, 1234, 20000, telemetryMaxBytes,
+            List.of(CompressionType.GZIP), true, ClientTelemetryUtils.SELECTOR_ALL_METRICS);
+    }
+
+    /**
+     * Builds metrics that share a repetitive structure, so that the assembled payload compresses to
+     * well below its serialized size.
+     */
+    private static List<SinglePointMetric> compressibleMetrics(int count) {
+        Instant now = Instant.now();
+        List<SinglePointMetric> metrics = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            metrics.add(SinglePointMetric.gauge(new MetricKey("test.metric." + i), 1.0, now, Collections.emptySet()));
+        }
+        return metrics;
+    }
+
+    /**
+     * Builds a collector that emits a single metric, so that the assembled payload is never empty.
+     */
+    private static KafkaMetricsCollector collectorEmittingSingleMetric() {
+        return collectorEmitting(List.of(
+            SinglePointMetric.gauge(new MetricKey("test.metric"), 1.0, Instant.now(), Collections.emptySet())));
+    }
+
+    /**
+     * Builds a collector that emits the given metrics on every collection.
+     */
+    private static KafkaMetricsCollector collectorEmitting(List<SinglePointMetric> metrics) {
+        KafkaMetricsCollector collector = Mockito.mock(KafkaMetricsCollector.class);
+        Mockito.doAnswer(invocation -> {
+            MetricsEmitter emitter = invocation.getArgument(0);
+            metrics.forEach(emitter::emitMetric);
+            return null;
+        }).when(collector).collect(any());
+        return collector;
+    }
+
     /**
      * Builds a {@link Compression.Builder} whose stream raises an {@link IOException} while writing the
      * payload, so that {@link ClientTelemetryUtils#compress} surfaces a recoverable compression failure.
@@ -547,6 +693,7 @@ public class ClientTelemetryReporterTest {
                 .setSubscriptionId(5678)
                 .setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id))
                 .setPushIntervalMs(20000)
+                .setTelemetryMaxBytes(TELEMETRY_MAX_BYTES)
                 .setRequestedMetrics(Collections.singletonList("*")));
 
         telemetrySender.handleResponse(response);
@@ -558,7 +705,27 @@ public class ClientTelemetryReporterTest {
         assertEquals(5678, subscription.subscriptionId());
         assertEquals(Collections.singletonList(CompressionType.GZIP), subscription.acceptedCompressionTypes());
         assertEquals(20000, subscription.pushIntervalMs());
+        assertEquals(TELEMETRY_MAX_BYTES, subscription.telemetryMaxBytes());
         assertEquals(ClientTelemetryUtils.SELECTOR_ALL_METRICS, subscription.selector());
+    }
+
+    @Test
+    public void testHandleResponseGetSubscriptionsWithInvalidTelemetryMaxBytes() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        GetTelemetrySubscriptionsResponse response = new GetTelemetrySubscriptionsResponse(
+            new GetTelemetrySubscriptionsResponseData()
+                .setClientInstanceId(Uuid.randomUuid())
+                .setSubscriptionId(5678)
+                .setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id))
+                .setPushIntervalMs(20000)
+                .setTelemetryMaxBytes(0)
+                .setRequestedMetrics(Collections.singletonList("*")));
+
+        telemetrySender.handleResponse(response);
+        // An unusable limit is not enforced, so that telemetry keeps working against such a broker.
+        assertEquals(Integer.MAX_VALUE, telemetrySender.subscription().telemetryMaxBytes());
     }
 
     @Test
