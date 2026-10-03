@@ -318,7 +318,10 @@ public class OAuthBearerLoginModule implements LoginModule {
             callbackHandler.handle(new Callback[] {tokenCallback});
         } catch (IOException | UnsupportedCallbackException e) {
             log.error(e.getMessage(), e);
-            throw new LoginException("An internal error occurred while retrieving token from callback handler");
+            LoginException le = new LoginException(
+                    "An internal error occurred while retrieving token from callback handler: " + e.getMessage());
+            le.initCause(e);
+            throw le;
         }
 
         tokenRequiringCommit = tokenCallback.token();
