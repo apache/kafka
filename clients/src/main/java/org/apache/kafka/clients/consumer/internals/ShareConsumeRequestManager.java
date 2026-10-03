@@ -1279,13 +1279,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     /**
-     * Update the cache leader for a partition in a share session, only if the new leader epoch is newer than the
-     * currently cached epoch. This mirrors the rules applied by {@link Metadata#updateLastSeenEpochIfNewer(TopicPartition, int)}.
-     * A stale entry is never overwritten by an older epoch.
+     * Update the cache leader for a partition in a share session, only if the new leader epoch as least as large as the
+     * currently cached epoch. A stale entry is never overwritten by an older epoch.
+     * This mirrors the rules applied by Metadata#updateLatestMetadata(MetadataResponse.PartitionMetadata, boolean, Uuid, Uuid).
+     * <p>
+     * The broker has explicitly told us it is no longer the leader, so we trust the redirect even if the epoch did
+     * not advance. Without this, the share consumer would keep sending ShareFetch requests to the old leader indefinitely.
      */
     private void maybeUpdateLeaderCache(TopicIdPartition tip, int leaderId, int leaderEpoch) {
         LeaderIdAndEpoch oldLeader = shareSessionLeaderMap.get(tip);
-        if ((oldLeader == null) || (leaderEpoch > oldLeader.epoch)) {
+        if ((oldLeader == null) || (leaderEpoch >= oldLeader.epoch)) {
             shareSessionLeaderMap.put(tip, new LeaderIdAndEpoch(leaderId, leaderEpoch));
         }
     }
