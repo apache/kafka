@@ -47,6 +47,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
@@ -61,6 +62,7 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -156,7 +158,7 @@ public class FineGrainedAutoResetIntegrationTest {
     private final String topicZTestMessage = "topic-Z test";
 
     @BeforeEach
-    public void setUp() throws Exception {
+    public void setUp(final TestInfo testInfo) throws Exception {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -165,7 +167,7 @@ public class FineGrainedAutoResetIntegrationTest {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-                "testAutoOffsetId",
+                safeUniqueTestName(testInfo),
                 CLUSTER.bootstrapServers(),
                 STRING_SERDE_CLASSNAME,
                 STRING_SERDE_CLASSNAME,
@@ -250,7 +252,7 @@ public class FineGrainedAutoResetIntegrationTest {
     private void commitInvalidOffsets() {
         final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(TestUtils.consumerConfig(
             CLUSTER.bootstrapServers(),
-            "commit_invalid_offset_app", // Having a separate application id to avoid waiting for last test poll interval timeout.
+            streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
             StringDeserializer.class,
             StringDeserializer.class));
 

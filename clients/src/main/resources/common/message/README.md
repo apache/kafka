@@ -157,6 +157,22 @@ fields are serialized in a more efficient way that saves space.  The new
 serialization types start with compact.  For example COMPACT_STRING is a more
 efficient form of STRING.
 
+Header Versions
+---------------
+Every request and response is preceded by a versioned header (carrying fields
+like the API key, version, and correlation ID).  Every request and response
+schema with valid versions must have a top-level "headerVersions" property that
+maps its versions to header versions -- for example, {"0-1": "1", "2+": "2"}
+means versions 0-1 use header version 1, and version 2 and up use header
+version 2.
+
+The ranges must start at 0, stay contiguous and non-overlapping, and end with
+an open-ended range; header versions must never decrease as the message version
+rises.
+A flexible message version must map to header version 2 or later (requests)
+or 1 or later (responses).  ApiVersionsResponse is the exception -- it always
+maps to header version 0, so that older brokers can parse it.
+
 Serializing Messages
 --------------------
 The Message#write method writes out a message to a buffer.  The fields that are

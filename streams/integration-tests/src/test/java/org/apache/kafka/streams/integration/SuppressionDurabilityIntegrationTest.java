@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -217,7 +218,7 @@ public class SuppressionDurabilityIntegrationTest {
             // get restored properly. (i.e., we shouldn't see those first events again)
 
             // restart the driver
-            driver.close();
+            driver.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
             assertEquals(KafkaStreams.State.NOT_RUNNING, driver.state());
             driver = getStartedStreams(streamsConfig, builder, false);
 

@@ -45,6 +45,7 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -892,11 +893,10 @@ public class ConnectWorkerIntegrationTest {
 
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(DistributedHerder.class)) {
             connect.restartTask(CONNECTOR_NAME, 0);
-            TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
-                    logCaptureAppender.getEvents().stream().anyMatch(e ->
+            TestUtils.waitForCondition(() -> logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
                         // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
-                        e.getMessage().contains("worker poll timeout has expired") &&
-                        e.getMessage().contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
+                        m.contains("worker poll timeout has expired") &&
+                        m.contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
                     ),
                 "Coordinator did not poll for rebalance.timeout.ms");
             // This clean up ensures that the test ends quickly as o/w we will wait for task#stop.

@@ -1022,12 +1022,11 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
             streams.close();
-            try {
-                streams.start();
-                fail("Should have throw IllegalStateException");
-            } catch (final IllegalStateException expected) {
-                // this is ok
-            }
+            assertThrows(
+                IllegalStateException.class,
+                streams::start,
+                "should not allow restarting after close"
+            );
         }
     }
 
@@ -1040,12 +1039,11 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            try {
-                streams.setGlobalStateRestoreListener(null);
-                fail("Should throw an IllegalStateException");
-            } catch (final IllegalStateException e) {
-                // expected
-            }
+            assertThrows(
+                IllegalStateException.class,
+                () -> streams.setGlobalStateRestoreListener(null),
+                "should not allow setting the global state restore listener after start"
+            );
         }
     }
 
@@ -1090,12 +1088,11 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            try {
-                streams.setStateListener(null);
-                fail("Should throw IllegalStateException");
-            } catch (final IllegalStateException e) {
-                // expected
-            }
+            assertThrows(
+                IllegalStateException.class,
+                () -> streams.setStateListener(null),
+                "should not allow setting the state listener after start"
+            );
         }
     }
 
@@ -1128,12 +1125,12 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.RUNNING,
                 "Streams never started.");
 
-            try {
-                streams.cleanUp();
-                fail("Should have thrown IllegalStateException");
-            } catch (final IllegalStateException expected) {
-                assertEquals("Cannot clean up while running.", expected.getMessage());
-            }
+            final IllegalStateException expected = assertThrows(
+                IllegalStateException.class,
+                streams::cleanUp,
+                "should not allow cleanup while running"
+            );
+            assertEquals("Cannot clean up while running.", expected.getMessage());
         }
     }
 

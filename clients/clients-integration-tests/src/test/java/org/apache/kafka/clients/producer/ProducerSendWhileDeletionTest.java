@@ -100,7 +100,7 @@ public class ProducerSendWhileDeletionTest {
                 0, List.of(0, 1),
                 1, List.of(0, 1)
             );
-            admin.createTopics(List.of(new NewTopic(topic, topicAssignment)));
+            cluster.createTopicWithAssignment(topic, topicAssignment);
 
             // Change leader to 1 for both the partitions to increase leader epoch from 0 -> 1
             var reassignment = Map.of(
@@ -204,7 +204,7 @@ public class ProducerSendWhileDeletionTest {
              var producer = createProducer()
         ) {
             // Create topic with leader as 0 for the 1 partition.
-            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0)))));
+            cluster.createTopicWithAssignment(topic, Map.of(0, List.of(0)));
             assertLeader(partition0, 0);
 
             var topicDetails = topicMetadata();

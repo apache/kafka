@@ -46,7 +46,6 @@ import com.yammer.metrics.core.Meter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -121,10 +120,10 @@ public class ProduceRequestTest {
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("key".getBytes(), "value".getBytes()));
         ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
-            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(List.of(
                 new ProduceRequestData.TopicProduceData()
                     .setTopicId(topicId)
-                    .setPartitionData(Collections.singletonList(
+                    .setPartitionData(List.of(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
                             .setRecords(records))))
@@ -156,10 +155,10 @@ public class ProduceRequestTest {
         memoryRecords.buffer().array()[DefaultRecordBatch.RECORD_BATCH_OVERHEAD + lz4ChecksumOffset] = 0;
 
         ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
-            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(List.of(
                 new ProduceRequestData.TopicProduceData()
                     .setTopicId(topicId)
-                    .setPartitionData(Collections.singletonList(
+                    .setPartitionData(List.of(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(partition)
                             .setRecords(memoryRecords))))
@@ -202,10 +201,10 @@ public class ProduceRequestTest {
 
         // v7 uses topic name rather than topic ID
         ProduceRequestData data = new ProduceRequestData()
-            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(List.of(
                 new ProduceRequestData.TopicProduceData()
                     .setName(TOPIC)
-                    .setPartitionData(Collections.singletonList(
+                    .setPartitionData(List.of(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
                             .setRecords(memoryRecords))))
@@ -272,10 +271,10 @@ public class ProduceRequestTest {
                                              MemoryRecords records, long expectedOffset, Errors expectedError) throws IOException, ExecutionException, InterruptedException {
         Uuid topicId = getTopicId();
         ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
-            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(List.of(
                 new ProduceRequestData.TopicProduceData()
                     .setTopicId(topicId)
-                    .setPartitionData(Collections.singletonList(
+                    .setPartitionData(List.of(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(partition)
                             .setRecords(records))))
@@ -312,10 +311,10 @@ public class ProduceRequestTest {
         MemoryRecords records = builder.build();
 
         ProduceResponse response = sendProduceRequest(leaderId, ProduceRequest.builder(new ProduceRequestData()
-            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(List.of(
                 new ProduceRequestData.TopicProduceData()
                     .setTopicId(topicId)
-                    .setPartitionData(Collections.singletonList(
+                    .setPartitionData(List.of(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
                             .setRecords(records))))

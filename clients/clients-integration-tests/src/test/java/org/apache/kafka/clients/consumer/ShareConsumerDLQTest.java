@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -501,16 +500,11 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // so a single record's DLQ copy cleanly fits under the limit but two together clearly don't.
         int payloadSize = dlqMaxMessageBytes - 2_000;
 
-        try (Admin admin = createAdminClient()) {
-            admin.createTopics(Set.of(
-                new NewTopic(sourceTopic, 1, (short) 1)
-                    .configs(Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(sourceMaxMessageBytes))),
-                new NewTopic(dlqTopic, 1, (short) 1)
-                    .configs(Map.of(
-                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
-                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(dlqMaxMessageBytes)))
-            )).all().get();
-        }
+        cluster.createTopic(sourceTopic, 1, (short) 1,
+            Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(sourceMaxMessageBytes)));
+        cluster.createTopic(dlqTopic, 1, (short) 1, Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(dlqMaxMessageBytes)));
 
         alterShareAutoOffsetReset(groupId, "earliest");
         alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
@@ -634,15 +628,10 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // plus batch/record framing overhead.
         int highDlqMaxMessageBytes = 500_000;
 
-        try (Admin admin = createAdminClient()) {
-            admin.createTopics(Set.of(
-                new NewTopic(sourceTopic, 1, (short) 1),
-                new NewTopic(dlqTopic, 1, (short) 1)
-                    .configs(Map.of(
-                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
-                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(lowDlqMaxMessageBytes)))
-            )).all().get();
-        }
+        cluster.createTopic(sourceTopic, 1, (short) 1);
+        cluster.createTopic(dlqTopic, 1, (short) 1, Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(lowDlqMaxMessageBytes)));
 
         alterShareAutoOffsetReset(groupId, "earliest");
         alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
@@ -678,14 +667,9 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // comfortably above the decompressed payload size up front - simpler than altering the first
         // topic's config and waiting for it to propagate.
         String dlqTopic2 = "dlq.decompress-cap-2";
-        try (Admin admin = createAdminClient()) {
-            admin.createTopics(Set.of(
-                new NewTopic(dlqTopic2, 1, (short) 1)
-                    .configs(Map.of(
-                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
-                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(highDlqMaxMessageBytes)))
-            )).all().get();
-        }
+        cluster.createTopic(dlqTopic2, 1, (short) 1, Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(highDlqMaxMessageBytes)));
         alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic2);
 
         try (Producer<byte[], byte[]> producer = createProducer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
@@ -972,13 +956,8 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     }
 
     private void createDlqTopic(String topicName, int numPartitions) {
-        assertDoesNotThrow(() -> {
-            try (Admin admin = createAdminClient()) {
-                NewTopic newTopic = new NewTopic(topicName, numPartitions, (short) 1)
-                    .configs(Map.of(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true"));
-                admin.createTopics(Set.of(newTopic)).all().get();
-            }
-        }, "Failed to create DLQ topic");
+        assertDoesNotThrow(() -> cluster.createTopic(topicName, numPartitions, (short) 1,
+            Map.of(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true")), "Failed to create DLQ topic");
     }
 
     // Creates a single-partition source topic with tiered storage enabled and one log segment per record (via
@@ -987,18 +966,15 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     // storage; the total retention (`retentionMs`) is kept generous so the remote segments are not deleted while
     // the test is still running.
     private void createRemoteStorageSourceTopic(String topic, long retentionMs, long localRetentionMs) {
-        assertDoesNotThrow(() -> {
-            try (Admin admin = createAdminClient()) {
-                Map<String, String> configs = Map.of(
-                    TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
-                    TopicConfig.RETENTION_MS_CONFIG, Long.toString(retentionMs),
-                    TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, Long.toString(localRetentionMs),
-                    // Roll a segment for every record so each inactive segment can be offloaded then deleted locally.
-                    TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1",
-                    TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "12");
-                admin.createTopics(Set.of(new NewTopic(topic, 1, (short) 1).configs(configs))).all().get();
-            }
-        }, "Failed to create remote-storage source topic");
+        Map<String, String> configs = Map.of(
+            TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
+            TopicConfig.RETENTION_MS_CONFIG, Long.toString(retentionMs),
+            TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, Long.toString(localRetentionMs),
+            // Roll a segment for every record so each inactive segment can be offloaded then deleted locally.
+            TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1",
+            TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "12");
+        assertDoesNotThrow(() -> cluster.createTopic(topic, 1, (short) 1, configs),
+            "Failed to create remote-storage source topic");
     }
 
     // The earliest offset still held in local storage. Offsets below this have been removed locally (e.g. after

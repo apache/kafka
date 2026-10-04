@@ -42,6 +42,7 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -148,7 +149,7 @@ public class KTableSourceTest {
                 );
             inputTopic.pipeInput(null, "value");
 
-            assertTrue(appender.getMessages("WARN").contains(
+            assertTrue(appender.getMessages(Level.WARN).contains(
                 "Skipping record due to null key. topic=[topic] partition=[0] offset=[0]"));
         }
     }
@@ -173,7 +174,7 @@ public class KTableSourceTest {
             inputTopic.pipeInput("key", "value", 10L);
             inputTopic.pipeInput("key", "value", 5L);
 
-            assertTrue(appender.getMessages("WARN").contains(
+            assertTrue(appender.getMessages(Level.WARN).contains(
                 "Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1]."));
         }
     }
