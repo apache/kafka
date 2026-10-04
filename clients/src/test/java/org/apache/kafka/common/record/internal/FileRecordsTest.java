@@ -84,6 +84,69 @@ public class FileRecordsTest {
         this.fileRecords.close();
     }
 
+    /**
+     * A buffer with more room than the records left from the given position is filled only up to
+     * their end, so that the bytes which follow them in the file are not read. Those bytes exist
+     * whenever the records are a slice of a larger file, or the segment was preallocated.
+     */
+    @Test
+    public void testReadIntoStopsAtTheEndOfTheRecords() throws Exception {
+        // The bytes which follow a slice are usually more records rather than zeros, in which case
+        // reading past it stays silent instead of failing, so cover both.
+        int firstBatchSize = fileRecords.batches().iterator().next().sizeInBytes();
+        ByteBuffer sliced = ByteBuffer.allocate(1024);
+        fileRecords.slice(0, firstBatchSize).readInto(sliced, 0);
+        assertEquals(firstBatchSize, sliced.remaining());
+
+        // A slice which does not start at the beginning of the file reads from its own start.
+        FileRecords tail = fileRecords.slice(firstBatchSize, fileRecords.sizeInBytes() - firstBatchSize);
+        sliced.clear();
+        tail.readInto(sliced, 0);
+        assertEquals(fileRecords.sizeInBytes() - firstBatchSize, sliced.remaining());
+        assertEquals(values.length - 1, recordCount(MemoryRecords.readableRecords(sliced)));
+
+        try (FileRecords preallocated = FileRecords.open(tempFile(), false, 1024, true)) {
+            append(preallocated, values);
+            int sizeInBytes = preallocated.sizeInBytes();
+            // The file is longer than the records, otherwise this proves nothing.
+            assertTrue(preallocated.file().length() > sizeInBytes);
+
+            ByteBuffer buffer = ByteBuffer.allocate(1024);
+            preallocated.readInto(buffer, 0);
+            assertEquals(sizeInBytes, buffer.remaining());
+            // The bytes past the records would be read as a corrupt batch header, so check that
+            // what was read is exactly the records that were appended.
+            assertEquals(values.length, recordCount(MemoryRecords.readableRecords(buffer)));
+
+            FileRecords slice = preallocated.slice(0, sizeInBytes - 1);
+            buffer.clear();
+            slice.readInto(buffer, 0);
+            assertEquals(sizeInBytes - 1, buffer.remaining());
+
+            // A buffer which already holds bytes is filled from its position onwards.
+            ByteBuffer partiallyFilled = ByteBuffer.allocate(1024);
+            partiallyFilled.put(new byte[] {1, 2, 3});
+            preallocated.readInto(partiallyFilled, 0);
+            assertEquals(3 + sizeInBytes, partiallyFilled.remaining());
+
+            // Reading from the end of the records yields nothing rather than what follows them.
+            buffer.clear();
+            preallocated.readInto(buffer, sizeInBytes);
+            assertEquals(0, buffer.remaining());
+
+            buffer.clear();
+            assertThrows(IllegalArgumentException.class, () -> preallocated.readInto(buffer, -1));
+            assertThrows(IllegalArgumentException.class, () -> preallocated.readInto(buffer, sizeInBytes + 1));
+        }
+    }
+
+    private int recordCount(Records records) {
+        int count = 0;
+        for (RecordBatch batch : records.batches())
+            count += batch.countOrNull();
+        return count;
+    }
+
     @Test
     public void testAppendProtectsFromOverflow() throws Exception {
         File fileMock = mock(File.class);
