@@ -144,6 +144,12 @@ Default topic configuration options used by brokers may be updated without broke
 
 
 
+### Updating Disabled Compression Types
+
+The `compression.disabled.types` broker configuration may be updated dynamically at cluster-default level. It prevents new client writes that use a listed compression type, including records the broker would recompress with that type. Existing records using a disabled type can still be read and replicated. This is a broker-only restriction and cannot be overridden by a topic configuration.
+
+
+
 ### Updating Log Cleaner Configs
 
 Log cleaner configs may be updated dynamically at cluster-default level used by all brokers. The changes take effect on the next iteration of log cleaning. One or more of these configs may be updated: 

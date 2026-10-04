@@ -135,6 +135,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, logCleanupPolicy());
         logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas());
         logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType());
+        logProps.put(LogConfig.INTERNAL_COMPRESSION_DISABLED_TYPES_CONFIG, disabledCompressionTypes());
         logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, gzipCompressionLevel());
         logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, lz4CompressionLevel());
         logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel());
@@ -801,6 +802,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public Integer maxDecompressedMessageBytes() {
         return getInt(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG);
+    }
+
+    public List<String> disabledCompressionTypes() {
+        return getList(ServerConfigs.COMPRESSION_DISABLED_TYPES_CONFIG);
     }
 
     public int getNumReplicaAlterLogDirsThreads() {
