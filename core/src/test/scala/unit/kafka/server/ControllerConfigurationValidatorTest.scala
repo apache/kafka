@@ -177,6 +177,34 @@ class ControllerConfigurationValidatorTest {
   }
 
   @Test
+  def testUnchangedMatchClientMetricsConfig(): Unit = {
+    // A pre-existing match pattern that is invalid under RE2/J must not be rejected just
+    // because an unrelated config on the same resource is being changed.
+    val oldConfig = new util.TreeMap[String, String]()
+    oldConfig.put(ClientMetricsConfigs.MATCH_CONFIG, "client_id=(a)\\1")
+
+    val newConfig = new util.TreeMap[String, String]()
+    newConfig.put(ClientMetricsConfigs.MATCH_CONFIG, "client_id=(a)\\1")
+    newConfig.put(ClientMetricsConfigs.INTERVAL_MS_CONFIG, "60000")
+
+    validator.validate(new ConfigResource(CLIENT_METRICS, "subscription-1"), newConfig, oldConfig)
+  }
+
+  @Test
+  def testChangedMatchClientMetricsConfig(): Unit = {
+    // Changing an already-persisted match pattern to a different, illegal one is a
+    // genuine change, so it must still be rejected.
+    val oldConfig = new util.TreeMap[String, String]()
+    oldConfig.put(ClientMetricsConfigs.MATCH_CONFIG, "client_id=(a)\\1")
+
+    val newConfig = new util.TreeMap[String, String]()
+    newConfig.put(ClientMetricsConfigs.MATCH_CONFIG, "client_software_version=(\\d+)\\.\\1")
+
+    assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
+      new ConfigResource(CLIENT_METRICS, "subscription-1"), newConfig, oldConfig))
+  }
+
+  @Test
   def testValidGroupConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
     config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")

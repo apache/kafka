@@ -17,9 +17,9 @@
 package org.apache.kafka.server.metrics;
 
 /**
- * A compiled client-metrics match pattern. Patterns are normally compiled with RE2/J. A pattern
- * that predates RE2/J validation and relies on java.util.regex-only syntax (e.g. backreferences
- * or lookaround) is compiled with the legacy engine instead, for backwards compatibility.
+ * A compiled client-metrics match pattern, backed by RE2/J. java.util.regex is supported only as
+ * a deprecated, temporary fallback for patterns that predate RE2/J validation. See
+ * {@link #ofLegacy}.
  * <p>
  * RE2/J's {@code Pattern} and {@code java.util.regex.Pattern} share no common supertype, so this
  * interface gives both a uniform shape wherever a compiled match pattern is stored or evaluated.
