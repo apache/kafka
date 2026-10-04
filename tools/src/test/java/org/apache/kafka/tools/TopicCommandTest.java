@@ -621,9 +621,7 @@ public class TopicCommandTest {
     public void testListTopicsWithExcludeInternal(ClusterInstance clusterInstance) {
         String topic1 = "kafka.testTopic1";
         String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
-        int partition = 2;
-        short replicationFactor = 2;
-        clusterInstance.createTopic(topic1, partition, replicationFactor);
+        clusterInstance.createTopic(topic1, 2, (short) 2);
 
         String output = captureListTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--list", "--exclude-internal"));
         assertTrue(output.contains(topic1), "Expected topic name " + topic1 + " to be present in output: " + output);
@@ -633,9 +631,7 @@ public class TopicCommandTest {
     @ClusterTest(brokers = 3)
     public void testAlterPartitionCount(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
-        int partition = 2;
-        short replicationFactor = 2;
-        clusterInstance.createTopic(testTopicName, partition, replicationFactor);
+        clusterInstance.createTopic(testTopicName, 2, (short) 2);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName, "--partitions", "3"));
@@ -657,9 +653,7 @@ public class TopicCommandTest {
     @ClusterTemplate("generate")
     public void testAlterAssignment(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
-        int partition = 2;
-        short replicationFactor = 2;
-        clusterInstance.createTopic(testTopicName, partition, replicationFactor);
+        clusterInstance.createTopic(testTopicName, 2, (short) 2);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
@@ -686,9 +680,7 @@ public class TopicCommandTest {
     @ClusterTest(brokers = 3)
     public void testAlterAssignmentWithMoreAssignmentThanPartitions(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
-        int partition = 2;
-        short replicationFactor = 2;
-        clusterInstance.createTopic(testTopicName, partition, replicationFactor);
+        clusterInstance.createTopic(testTopicName, 2, (short) 2);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             assertThrows(ExecutionException.class,
@@ -702,9 +694,7 @@ public class TopicCommandTest {
     @ClusterTemplate("generate")
     public void testAlterAssignmentWithMorePartitionsThanAssignment(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
-        int partition = 2;
-        short replicationFactor = 2;
-        clusterInstance.createTopic(testTopicName, partition, replicationFactor);
+        clusterInstance.createTopic(testTopicName, 2, (short) 2);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             assertThrows(ExecutionException.class,
@@ -948,9 +938,7 @@ public class TopicCommandTest {
     @ClusterTemplate("generate")
     public void testDescribe(ClusterInstance clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
-        int partition = 2;
-        short replicationFactor = 2;
-        clusterInstance.createTopic(testTopicName, partition, replicationFactor);
+        clusterInstance.createTopic(testTopicName, 2, (short) 2);
 
         String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName));
         String[] rows = output.split(System.lineSeparator());
@@ -1005,10 +993,8 @@ public class TopicCommandTest {
     @ClusterTest(brokers = 3)
     public void testDescribeUnavailablePartitions(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
-        int partitions = 3;
-        short replicationFactor = 1;
 
-        clusterInstance.createTopic(testTopicName, partitions, replicationFactor);
+        clusterInstance.createTopic(testTopicName, 3, (short) 1);
 
         // check which partition is on broker 0 which we'll kill
         clusterInstance.shutdownBroker(0);
@@ -1029,9 +1015,7 @@ public class TopicCommandTest {
     @ClusterTest(brokers = 3)
     public void testDescribeUnderReplicatedPartitions(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
-        int partitions = 1;
-        short replicationFactor = 3;
-        clusterInstance.createTopic(testTopicName, partitions, replicationFactor);
+        clusterInstance.createTopic(testTopicName, 1, (short) 3);
 
         clusterInstance.shutdownBroker(0);
         Assertions.assertEquals(2, clusterInstance.aliveBrokers().size());
@@ -1056,9 +1040,7 @@ public class TopicCommandTest {
         String testTopicName = TestUtils.randomString(10);
         Map<String, String> topicConfig = new HashMap<>();
         topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3");
-        int partitions = 1;
-        short replicationFactor = 3;
-        clusterInstance.createTopic(testTopicName, partitions, replicationFactor, topicConfig);
+        clusterInstance.createTopic(testTopicName, 1, (short) 3, topicConfig);
 
         clusterInstance.shutdownBroker(0);
         assertEquals(2, clusterInstance.aliveBrokers().size());
@@ -1152,10 +1134,7 @@ public class TopicCommandTest {
         Map<String, String> topicConfig = new HashMap<>();
         topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4");
 
-        int partitions = 1;
-        short replicationFactor = 6;
-
-        clusterInstance.createTopic(testTopicName, partitions, replicationFactor, topicConfig);
+        clusterInstance.createTopic(testTopicName, 1, (short) 6, topicConfig);
 
         clusterInstance.shutdownBroker(0);
         clusterInstance.shutdownBroker(1);
@@ -1240,10 +1219,7 @@ public class TopicCommandTest {
         Map<String, String> topicConfig = new HashMap<>();
         topicConfig.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "1000");
 
-        int partitions = 2;
-        short replicationFactor = 2;
-
-        clusterInstance.createTopic(testTopicName, partitions, replicationFactor, topicConfig);
+        clusterInstance.createTopic(testTopicName, 2, (short) 2, topicConfig);
 
         String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe"));
         assertTrue(output.contains(config), String.format("Describe output should have contained %s", config));
@@ -1295,9 +1271,7 @@ public class TopicCommandTest {
     @ClusterTest(brokers = 3)
     public void testCreateWithTopicNameCollision(ClusterInstance clusterInstance) throws Exception {
         String topic = "foo_bar";
-        int partitions = 1;
-        short replicationFactor = 3;
-        clusterInstance.createTopic(topic, partitions, replicationFactor);
+        clusterInstance.createTopic(topic, 1, (short) 3);
 
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {

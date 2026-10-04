@@ -328,7 +328,7 @@ class RemoteTopicCrudTest {
     @ClusterTest
     void testEnableRemoteLogOnExistingTopic() throws Exception {
         try (var admin = cluster.admin()) {
-            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, Map.of());
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor);
 
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
             configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
