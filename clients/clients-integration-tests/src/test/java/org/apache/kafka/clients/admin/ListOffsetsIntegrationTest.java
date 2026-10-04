@@ -130,14 +130,14 @@ public class ListOffsetsIntegrationTest {
 
     @ClusterTest
     public void testThreeRecordsInOneBatchHavingDifferentCompressionTypeWithServer() throws InterruptedException, ExecutionException {
-        createTopicWithConfig(CUSTOM_CONFIG_TOPIC, Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, CompressionType.LZ4.name));
+        clusterInstance.createTopic(CUSTOM_CONFIG_TOPIC, PARTITION, REPLICAS, Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, CompressionType.LZ4.name));
         produceMessagesInOneBatch(CompressionType.NONE.name, CUSTOM_CONFIG_TOPIC);
         verifyListOffsets(CUSTOM_CONFIG_TOPIC, 1);
     }
 
     @ClusterTest
     public void testThreeRecordsInSeparateBatchHavingDifferentCompressionTypeWithServer() throws InterruptedException, ExecutionException {
-        createTopicWithConfig(CUSTOM_CONFIG_TOPIC, Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, CompressionType.LZ4.name));
+        clusterInstance.createTopic(CUSTOM_CONFIG_TOPIC, PARTITION, REPLICAS, Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, CompressionType.LZ4.name));
         produceMessagesInOneBatch(CompressionType.NONE.name, CUSTOM_CONFIG_TOPIC);
         verifyListOffsets(CUSTOM_CONFIG_TOPIC, 1);
     }
@@ -288,10 +288,6 @@ public class ListOffsetsIntegrationTest {
     }
 
     private void setUpForLogAppendTimeCase() {
-        createTopicWithConfig(CUSTOM_CONFIG_TOPIC, Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"));
-    }
-
-    private void createTopicWithConfig(String topic, Map<String, String> props) {
-        clusterInstance.createTopic(topic, PARTITION, REPLICAS, props);
+        clusterInstance.createTopic(CUSTOM_CONFIG_TOPIC, PARTITION, REPLICAS, Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"));
     }
 }
