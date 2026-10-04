@@ -91,7 +91,7 @@ public class RemoteLogMetadataSerde {
         } else if (remoteLogMetadata instanceof RemoteLogSegmentMetadataSnapshot snapshot) {
             return segmentSnapshotTransform.toApiMessageAndVersion(snapshot);
         } else {
-            throw new IllegalArgumentException("RemoteLogMetadataTransform for given RemoteStorageMetadata class: " + remoteLogMetadata.getClass()
+            throw new IllegalArgumentException("RemoteLogMetadataTransform for given RemoteLogMetadata class: " + remoteLogMetadata.getClass()
                     + " does not exist.");
         }
     }
