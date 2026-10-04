@@ -131,6 +131,11 @@ The following checks are performed on our PRs:
 With the merge queue, our PR title and body will become the commit subject and message.
 This linting step will help to ensure that we have nice looking commits.
 
+The linter wraps plain top-level prose at 72 columns. Markdown blocks and
+paragraphs containing inline Markdown or explicit line breaks retain their
+original source formatting. Reviewers trailers retain their indented continuation
+lines. PR descriptions are only updated when formatting changes the body.
+
 ### Stale PRs
 
 This one is straightforward. Using the "actions/stale" GitHub Action, we automatically
