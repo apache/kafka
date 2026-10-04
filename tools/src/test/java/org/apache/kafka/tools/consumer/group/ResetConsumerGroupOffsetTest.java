@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -160,10 +159,9 @@ public class ResetConsumerGroupOffsetTest {
         String group = "new.group";
         String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":0");
 
-        try (Admin admin = cluster.admin(); ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0), 1, List.of(1)))));
-            cluster.waitTopicCreation(topic, 2);
+        cluster.createTopicWithAssignment(topic, Map.of(0, List.of(0), 1, List.of(1)));
 
+        try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
             cluster.shutdownBroker(1);
 
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
@@ -341,7 +339,7 @@ public class ResetConsumerGroupOffsetTest {
         String[] args = buildArgsForGroup(cluster, group, "--topic", topic, "--by-duration", "PT1M", "--execute");
 
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(Set.of(new NewTopic(topic, 1, (short) 1))).all().get();
+            cluster.createTopic(topic, 1, (short) 1);
             resetAndAssertOffsets(cluster, args, 0, false, List.of(topic));
             admin.deleteTopics(Set.of(topic)).all().get();
         }
@@ -471,7 +469,7 @@ public class ResetConsumerGroupOffsetTest {
 
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-                admin.createTopics(Set.of(new NewTopic(topic, 2, (short) 1))).all().get();
+                cluster.createTopic(topic, 2, (short) 1);
 
                 produceConsumeAndShutdown(cluster, topic, group, 2, groupProtocol);
                 Map<TopicPartition, Long> priorCommittedOffsets = committedOffsets(cluster, topic, group);
@@ -500,8 +498,8 @@ public class ResetConsumerGroupOffsetTest {
 
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-                admin.createTopics(List.of(new NewTopic(topic1, 1, (short) 1),
-                        new NewTopic(topic2, 1, (short) 1))).all().get();
+                cluster.createTopic(topic1, 1, (short) 1);
+                cluster.createTopic(topic2, 1, (short) 1);
 
                 produceConsumeAndShutdown(cluster, topic1, group, 1, groupProtocol);
                 produceConsumeAndShutdown(cluster, topic2, group, 1, groupProtocol);
@@ -535,8 +533,8 @@ public class ResetConsumerGroupOffsetTest {
 
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-                admin.createTopics(List.of(new NewTopic(topic1, 2, (short) 1),
-                        new NewTopic(topic2, 2, (short) 1))).all().get();
+                cluster.createTopic(topic1, 2, (short) 1);
+                cluster.createTopic(topic2, 2, (short) 1);
 
                 produceConsumeAndShutdown(cluster, topic1, group, 2, groupProtocol);
                 produceConsumeAndShutdown(cluster, topic2, group, 2, groupProtocol);
@@ -579,7 +577,7 @@ public class ResetConsumerGroupOffsetTest {
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
 
-                admin.createTopics(Set.of(new NewTopic(topic, 2, (short) 1))).all().get();
+                cluster.createTopic(topic, 2, (short) 1);
                 produceConsumeAndShutdown(cluster, topic, group, 2, groupProtocol);
 
                 Map<String, Map<TopicPartition, OffsetAndMetadata>> exportedOffsets = service.resetOffsets();
@@ -624,8 +622,8 @@ public class ResetConsumerGroupOffsetTest {
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
 
-                admin.createTopics(List.of(new NewTopic(topic1, 2, (short) 1),
-                        new NewTopic(topic2, 2, (short) 1))).all().get();
+                cluster.createTopic(topic1, 2, (short) 1);
+                cluster.createTopic(topic2, 2, (short) 1);
 
                 produceConsumeAndShutdown(cluster, topic1, group1, 1, groupProtocol);
                 produceConsumeAndShutdown(cluster, topic2, group2, 1, groupProtocol);
@@ -687,10 +685,9 @@ public class ResetConsumerGroupOffsetTest {
         String[] args = buildArgsForGroup(cluster, group, "--topic", topic + ":0,1,2",
                 "--to-earliest", "--execute");
 
-        try (Admin admin = cluster.admin();
-             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+        try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
 
-            admin.createTopics(Set.of(new NewTopic(topic, 3, (short) 1))).all().get();
+            cluster.createTopic(topic, 3, (short) 1);
             produceConsumeAndShutdown(cluster, topic, group, 2, GroupProtocol.CLASSIC);
             assertDoesNotThrow(() -> resetOffsets(service));
             // shutdown a broker to make some partitions missing leader
@@ -706,10 +703,9 @@ public class ResetConsumerGroupOffsetTest {
         String[] args = buildArgsForGroup(cluster, group, "--topic", topic + ":2,3",
                 "--to-earliest", "--execute");
 
-        try (Admin admin = cluster.admin();
-             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+        try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
 
-            admin.createTopics(Set.of(new NewTopic(topic, 1, (short) 1))).all().get();
+            cluster.createTopic(topic, 1, (short) 1);
             produceConsumeAndShutdown(cluster, topic, group, 2, GroupProtocol.CLASSIC);
             assertThrows(UnknownTopicOrPartitionException.class, () -> resetOffsets(service));
         }

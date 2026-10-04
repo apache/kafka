@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -86,11 +85,7 @@ public class ConsumerGroupCommandAuthorizationTest {
     public void testDescribeGroupCliWithGroupDescribe(ClusterInstance clusterInstance) throws Exception {
         addAndVerifyAcls(Set.of(createAcl(CREATE, CLIENT_PRINCIPAL)), OFFSETS_TOPIC_RESOURCE, clusterInstance);
 
-        NewTopic offsetTopic = new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
-        try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(offsetTopic)).all().get();
-            clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
-        }
+        clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
 
         addAndVerifyAcls(Set.of(createAcl(DESCRIBE, CLIENT_PRINCIPAL)), GROUP_RESOURCE, clusterInstance);
 
