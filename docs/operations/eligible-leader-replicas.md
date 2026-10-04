@@ -28,7 +28,7 @@ type: docs
 
 ## Overview
 
-Starting from Apache Kafka 4.0, Eligible Leader Replicas ([KIP-966 Part 1](https://cwiki.apache.org/confluence/x/mpOzDw)) is available for the users to an improvement to Kafka replication (ELR is enabled by default on new clusters starting 4.1). As the "strict min ISR" rule has been generally applied, which means the high watermark for the data partition can't advance if the size of the ISR is smaller than the min ISR(`min.insync.replicas`), it makes some replicas that are not in the ISR safe to become the leader. The KRaft controller stores such replicas in the PartitionRecord field called `Eligible Leader Replicas`. During the leader election, the controller will select the leaders with the following order:
+Starting from Apache Kafka 4.0, Eligible Leader Replicas ([KIP-966 Part 1](https://cwiki.apache.org/confluence/x/mpOzDw)) is available for the users to an improvement to Kafka replication (ELR is enabled by default on new clusters starting 4.1). As the "strict min ISR" rule has been generally applied, which means the high watermark for the data partition can't advance if the size of the ISR is smaller than the effective min ISR (`min(min.insync.replicas, replica count)`), it makes some replicas that are not in the ISR safe to become the leader. The KRaft controller stores such replicas in the PartitionRecord field called `Eligible Leader Replicas`. During the leader election, the controller will select the leaders with the following order:
 
   * If ISR is not empty, select one of them.
   * If ELR is not empty, select one that is not fenced.
