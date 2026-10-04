@@ -259,14 +259,28 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // The joining request with a consumer group member 2 is accepted.
-    val memberId2 = consumerGroupHeartbeat(
+    val memberId2 = Uuid.randomUuid.toString
+    var consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
       groupId = groupId,
-      memberId = Uuid.randomUuid.toString,
+      memberId = memberId2,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("foo"),
       topicPartitions = List.empty,
       expectedError = Errors.NONE
-    ).memberId
+    )
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = consumerGroupHeartbeatResponse.memberEpoch,
+          expectedError = Errors.NONE
+        )
+        consumerGroupHeartbeatResponse.memberEpoch > 1
+      }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
+    }
 
     // The group has become a consumer group.
     assertEquals(
