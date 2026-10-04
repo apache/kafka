@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.DelayedActionQueue;
 import org.apache.kafka.server.common.DirectoryEventHandler;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.partition.AlterPartitionManager;
 import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers;
 import org.apache.kafka.server.util.Scheduler;
@@ -47,6 +48,7 @@ public class ReplicaManagerBuilder {
     private LogDirFailureChannel logDirFailureChannel = null;
     private AlterPartitionManager alterPartitionManager = null;
     private BrokerTopicStats brokerTopicStats = null;
+    private Option<RemoteLogManager> remoteLogManager = Option.empty();
 
     public ReplicaManagerBuilder setConfig(KafkaConfig config) {
         this.config = config;
@@ -70,6 +72,11 @@ public class ReplicaManagerBuilder {
 
     public ReplicaManagerBuilder setLogManager(LogManager logManager) {
         this.logManager = logManager;
+        return this;
+    }
+
+    public ReplicaManagerBuilder setRemoteLogManager(RemoteLogManager remoteLogManager) {
+        this.remoteLogManager = Option.apply(remoteLogManager);
         return this;
     }
 
@@ -114,7 +121,7 @@ public class ReplicaManagerBuilder {
                              time,
                              scheduler,
                              logManager,
-                             Option.empty(),
+                             remoteLogManager,
                              quotaManagers,
                              metadataCache,
                              logDirFailureChannel,

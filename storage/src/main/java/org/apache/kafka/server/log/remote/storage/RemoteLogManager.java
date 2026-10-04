@@ -498,8 +498,34 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             // background thread and might emit metrics. So, removing the metrics after marking this node as follower.
             followerPartitions.forEach((tp, __) -> removeRemoteTopicPartitionMetrics(tp));
 
+            filterPartitions(partitionsBecomeLeader)
+                    .forEach(partition -> warnIfLeaderEpochCacheMissesRemoteRange(partition.unifiedLog().get()));
             leaderPartitions.forEach(this::doHandleLeaderPartition);
         }
+    }
+
+    private void warnIfLeaderEpochCacheMissesRemoteRange(UnifiedLog log) {
+        if (isLeaderEpochCacheMissingRemoteEntries(log)) {
+            LOGGER.warn("The leader epoch cache of {} does not cover the remote log range [{}, {}), its earliest entry is {}. " +
+                            "Remote log segments of the missing epochs cannot be read through this replica and may be " +
+                            "deleted as unreferenced.",
+                    log.topicPartition(), log.logStartOffset(), log.localLogStartOffset(),
+                    log.leaderEpochCache().earliestEntry().orElse(null));
+        }
+    }
+
+    /**
+     * Returns true if the log has a remote range [logStartOffset, localLogStartOffset) whose leader epochs are
+     * missing from the leader epoch cache, which happens when the remote log aux state was lost (KAFKA-17249).
+     */
+    // Visible for testing
+    static boolean isLeaderEpochCacheMissingRemoteEntries(UnifiedLog log) {
+        long logStartOffset = log.logStartOffset();
+        if (logStartOffset >= log.localLogStartOffset()) {
+            return false;
+        }
+        Optional<EpochEntry> earliestEntry = log.leaderEpochCache().earliestEntry();
+        return earliestEntry.isEmpty() || earliestEntry.get().startOffset() > logStartOffset;
     }
 
     public void stopLeaderCopyRLMTasks(Set<TopicPartitionLog> partitions) {
