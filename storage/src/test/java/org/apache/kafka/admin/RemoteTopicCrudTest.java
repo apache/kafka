@@ -55,7 +55,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
@@ -95,7 +94,7 @@ class RemoteTopicCrudTest {
     }
 
     @ClusterTest
-    void testCreateRemoteTopicWithValidRetentionTime() throws InterruptedException {
+    void testCreateRemoteTopicWithValidRetentionTime() {
         var topicConfig = Map.of(
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
             TopicConfig.RETENTION_MS_CONFIG, "60000",
@@ -343,7 +342,7 @@ class RemoteTopicCrudTest {
     @ClusterTest(serverProperties = {
         @ClusterConfigProperty(key = RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, value = "false")
     })
-    void testEnableRemoteLogWhenSystemRemoteStorageIsDisabled() throws ExecutionException, InterruptedException {
+    void testEnableRemoteLogWhenSystemRemoteStorageIsDisabled() {
         try (var admin = cluster.admin()) {
             var topicConfig = Map.of(
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"

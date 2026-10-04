@@ -287,11 +287,11 @@ public class ListOffsetsIntegrationTest {
         return adminClient.listOffsets(Map.of(tp, offsetSpec), new ListOffsetsOptions()).all().get().get(tp);
     }
 
-    private void setUpForLogAppendTimeCase() throws InterruptedException {
+    private void setUpForLogAppendTimeCase() {
         createTopicWithConfig(CUSTOM_CONFIG_TOPIC, Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"));
     }
 
-    private void createTopicWithConfig(String topic, Map<String, String> props) throws InterruptedException {
+    private void createTopicWithConfig(String topic, Map<String, String> props) {
         clusterInstance.createTopic(topic, PARTITION, REPLICAS, props);
     }
 }

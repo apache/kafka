@@ -107,7 +107,7 @@ public class ProducerFailureHandlingTest {
      * With ack == 1 the future metadata will throw ExecutionException caused by RecordTooLargeException
      */
     @ClusterTest
-    public void testTooLargeRecordWithAckOne(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testTooLargeRecordWithAckOne(ClusterInstance clusterInstance) {
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
@@ -156,7 +156,7 @@ public class ProducerFailureHandlingTest {
      * With incorrect broker-list the future metadata should return ExecutionException caused by TimeoutException
      */
     @ClusterTest
-    public void testWrongBrokerList(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testWrongBrokerList(ClusterInstance clusterInstance) {
         clusterInstance.createTopic(topic1, 1, (short) 1);
         // producer with incorrect broker list
         Map<String, Object> producerConfig = new HashMap<>(producerConfig(1));
@@ -174,7 +174,7 @@ public class ProducerFailureHandlingTest {
      * when partition is higher than the upper bound of partitions.
      */
     @ClusterTest
-    public void testInvalidPartition(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testInvalidPartition(ClusterInstance clusterInstance) {
         // create topic with a single partition
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 

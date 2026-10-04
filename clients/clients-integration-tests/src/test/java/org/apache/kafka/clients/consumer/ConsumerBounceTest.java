@@ -127,7 +127,7 @@ public class ConsumerBounceTest {
     }
 
     @BeforeEach
-    void setUp() throws InterruptedException {
+    void setUp() {
         clusterInstance.createTopic(topic, numPartitions, numReplica);
     }
 

@@ -72,7 +72,7 @@ public class PlaintextConsumerAssignTest {
     }
 
     @BeforeEach
-    public void setup() throws InterruptedException {
+    public void setup() {
         clusterInstance.createTopic(topic, 2, (short) BROKER_COUNT);
     }
 

@@ -637,7 +637,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest
-    public void testUpdateInvalidTopicConfigs() throws ExecutionException, InterruptedException {
+    public void testUpdateInvalidTopicConfigs() {
         List<String> alterOpts = List.of("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "topics", "--alter");
         try (Admin client = cluster.admin()) {
             cluster.createTopic("test-config-topic", 1, (short) 1);

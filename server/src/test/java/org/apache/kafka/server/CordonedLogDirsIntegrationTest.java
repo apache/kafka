@@ -494,11 +494,11 @@ public class CordonedLogDirsIntegrationTest {
         }, 10_000, "Unable to set the " + CORDONED_LOG_DIRS_CONFIG + " configuration on " + cr + ".");
     }
 
-    private void createTopic(String name) throws InterruptedException {
+    private void createTopic(String name) {
         createTopic(name, (short) clusterInstance.brokers().size());
     }
 
-    private void createTopic(String name, short replicationFactor) throws InterruptedException {
+    private void createTopic(String name, short replicationFactor) {
         clusterInstance.createTopic(name, 1, replicationFactor);
     }
 

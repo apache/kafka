@@ -1184,7 +1184,7 @@ public class TransactionsTestHelper {
     public static void createTopicsWithConfig(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws InterruptedException {
+    ) {
         clusterInstance.createTopic(TOPIC1, NUM_PARTITIONS, BROKER_COUNT, topicConfig);
         clusterInstance.createTopic(TOPIC2, NUM_PARTITIONS, BROKER_COUNT, topicConfig);
     }

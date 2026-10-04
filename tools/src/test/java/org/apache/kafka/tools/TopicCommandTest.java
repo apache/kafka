@@ -592,7 +592,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testListTopics(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testListTopics(ClusterInstance clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
         clusterInstance.createTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor);
 
@@ -601,7 +601,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testListTopicsWithIncludeList(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testListTopicsWithIncludeList(ClusterInstance clusterInstance) {
         String topic1 = "kafka.testTopic1";
         String topic2 = "kafka.testTopic2";
         String topic3 = "oooof.testTopic1";
@@ -618,7 +618,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testListTopicsWithExcludeInternal(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testListTopicsWithExcludeInternal(ClusterInstance clusterInstance) {
         String topic1 = "kafka.testTopic1";
         String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
         int partition = 2;
@@ -946,7 +946,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribe(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testDescribe(ClusterInstance clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
         int partition = 2;
         short replicationFactor = 2;
@@ -959,7 +959,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeWithDescribeTopicPartitionsApi(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testDescribeWithDescribeTopicPartitionsApi(ClusterInstance clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
 
         clusterInstance.createTopic(testTopicName, 20, (short) 2);
@@ -1234,7 +1234,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testDescribeReportOverriddenConfigs(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testDescribeReportOverriddenConfigs(ClusterInstance clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
         String config = "file.delete.delay.ms=1000";
         Map<String, String> topicConfig = new HashMap<>();
@@ -1250,7 +1250,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testDescribeAndListTopicsWithoutInternalTopics(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testDescribeAndListTopicsWithoutInternalTopics(ClusterInstance clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
         clusterInstance.createTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor);
 

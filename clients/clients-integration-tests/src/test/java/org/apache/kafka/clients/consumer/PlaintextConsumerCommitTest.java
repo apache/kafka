@@ -83,7 +83,7 @@ public class PlaintextConsumerCommitTest {
     }
 
     @BeforeEach
-    public void setup() throws InterruptedException {
+    public void setup() {
         cluster.createTopic(topic, 2, (short) BROKER_COUNT);
     }
 
@@ -580,7 +580,7 @@ public class PlaintextConsumerCommitTest {
 
     // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
     @ClusterTest
-    public void testCommitAsyncCompletedBeforeConsumerCloses() throws InterruptedException {
+    public void testCommitAsyncCompletedBeforeConsumerCloses() {
         // This is testing the contract that asynchronous offset commit are completed before the consumer
         // is closed, even when no commit sync is performed as part of the close (due to auto-commit
         // disabled, or simply because there are no consumed offsets).
