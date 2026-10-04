@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server;
 
+import org.apache.kafka.clients.admin.AddRaftVoterOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
@@ -31,11 +32,14 @@ import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.QuorumInfo;
+import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -46,6 +50,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -67,12 +72,14 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG;
@@ -202,6 +209,119 @@ public class BootstrapControllersIntegrationTest {
             DescribeMetadataQuorumResult result = admin.describeMetadataQuorum();
             assertTrue(clusterInstance.controllerIds().contains(
                     result.quorumInfo().get(1, TimeUnit.MINUTES).leaderId()));
+        }
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
+    public void testAddRemoveRaftVoterByControllers(ClusterInstance clusterInstance) throws Exception {
+        testAddRemoveRaftVoter(clusterInstance, false);
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
+    public void testAddRemoveRaftVoter(ClusterInstance clusterInstance) throws Exception {
+        testAddRemoveRaftVoter(clusterInstance, true);
+    }
+
+    private void testAddRemoveRaftVoter(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+            Set<Integer> initialVoters = voterIds(admin.describeMetadataQuorum().quorumInfo().get());
+            AtomicInteger voterIdToBeAddedAndRemoved = new AtomicInteger();
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+                QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+                voterIdToBeAddedAndRemoved.set(quorumInfo.observers().stream()
+                    .map(QuorumInfo.ReplicaState::replicaId)
+                    .filter(clusterInstance.controllerIds()::contains)
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("Expected at least one controller observer in quorum info " + quorumInfo)));
+            });
+
+            Set<Integer> votersAfterAdd = new HashSet<>(initialVoters);
+            votersAfterAdd.add(voterIdToBeAddedAndRemoved.get());
+            admin.addRaftVoter(voterIdToBeAddedAndRemoved.get()).all().get();
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> assertEquals(votersAfterAdd,
+                voterIds(admin.describeMetadataQuorum().quorumInfo().get())));
+
+            admin.removeRaftVoter(voterIdToBeAddedAndRemoved.get()).all().get();
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+                QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+                assertEquals(initialVoters, voterIds(quorumInfo));
+                assertTrue(quorumInfo.observers().stream().anyMatch(o -> o.replicaId() == voterIdToBeAddedAndRemoved.get()),
+                    "Controller " + voterIdToBeAddedAndRemoved.get() + " has not yet transitioned back to observer state");
+            });
+        }
+    }
+
+    private static Set<Integer> voterIds(QuorumInfo quorumInfo) {
+        return quorumInfo.voters().stream()
+            .map(QuorumInfo.ReplicaState::replicaId)
+            .collect(Collectors.toSet());
+    }
+
+    @ClusterTest(controllers = 2, standalone = true)
+    public void testAddRaftVoterIncorrectEndpointByControllers(ClusterInstance clusterInstance) throws Exception {
+        testAddRaftVoterWithIncorrectEndpoint(clusterInstance, true);
+    }
+
+    @ClusterTest(controllers = 2, standalone = true)
+    public void testAddRaftVoterIncorrectEndpoint(ClusterInstance clusterInstance) throws Exception {
+        testAddRaftVoterWithIncorrectEndpoint(clusterInstance, false);
+    }
+
+    private void testAddRaftVoterWithIncorrectEndpoint(
+        ClusterInstance clusterInstance,
+        boolean usingBootstrapControllers
+    ) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+            QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+            QuorumInfo.ReplicaState observer = quorumInfo.observers().stream()
+                .filter(replicaState -> clusterInstance.controllerIds().contains(replicaState.replicaId()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Expected at least one controller observer in quorum info " + quorumInfo));
+            RaftVoterEndpoint wrongEndpoint = new RaftVoterEndpoint("CONTROLLER", "bar", 8000);
+            TestUtils.assertFutureThrowsWithMessageContaining(
+                TimeoutException.class,
+                admin.addRaftVoter(
+                    observer.replicaId(),
+                    new AddRaftVoterOptions().setEndpoints(Set.of(wrongEndpoint))
+                ).all(),
+                "API_VERSIONS returned an error BROKER_NOT_AVAILABLE"
+            );
+        }
+    }
+
+    @ClusterTest(controllers = 2, standalone = true)
+    public void testAddRaftVoterWithIncorrectDirectoryIdByControllers(ClusterInstance clusterInstance) throws Exception {
+        testAddRaftVoterWithIncorrectDirectoryId(clusterInstance, true);
+    }
+
+    @ClusterTest(controllers = 2, standalone = true)
+    public void testAddRaftVoterWithIncorrectDirectoryId(ClusterInstance clusterInstance) throws Exception {
+        testAddRaftVoterWithIncorrectDirectoryId(clusterInstance, false);
+    }
+
+    private void testAddRaftVoterWithIncorrectDirectoryId(
+        ClusterInstance clusterInstance,
+        boolean usingBootstrapControllers
+    ) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+            QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+            QuorumInfo.ReplicaState observer = quorumInfo.observers().stream()
+                .filter(replicaState -> clusterInstance.controllerIds().contains(replicaState.replicaId()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Expected at least one controller observer in quorum info " + quorumInfo));
+            Uuid incorrectDirectoryId = Uuid.randomUuid();
+            // The directory ID is part of the voter identity. Even though the derived endpoint belongs
+            // to the correct observer, the requested ReplicaKey uses a different directory ID. Since
+            // ReplicaKey(nodeId, wrongDirectoryId) has never fetched, it is treated as lagging behind.
+            TestUtils.assertFutureThrows(
+                TimeoutException.class,
+                admin.addRaftVoter(
+                    observer.replicaId(),
+                    new AddRaftVoterOptions().setVoterDirectoryId(Optional.of(incorrectDirectoryId))
+                ).all(),
+                "Aborted add voter operation for ReplicaKey(id=" + observer.replicaId() +
+                    ", directoryId=" + incorrectDirectoryId + ") since it is lagging behind"
+            );
         }
     }
 
