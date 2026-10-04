@@ -81,6 +81,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -358,6 +359,33 @@ public class LogManagerTest {
         File logFile = new File(logDir, NAME + "-0");
         assertTrue(logFile.exists());
         log.appendAsLeader(LogTestUtils.singletonRecords("test".getBytes()), 0);
+    }
+
+    /**
+     * An IOException while opening a new log, after its partition directory was created, must take the log dir
+     * offline and surface as a KafkaStorageException, like a failure to create the directory itself does.
+     * Otherwise the partition is left without a log and the controller never moves its leadership (KAFKA-13468).
+     */
+    @Test
+    public void testCreateLogFailureAfterDirectoryCreationTakesLogDirOffline() throws Exception {
+        logManager.shutdown();
+        LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(1);
+        logManager = LogTestUtils.createLogManager(List.of(logDir), LOG_CONFIG, new MockConfigRepository(),
+                new CleanerConfig(false), time, 1, false, Optional.empty(), false, INITIAL_TASK_DELAY_MS, logDirFailureChannel);
+        logManager.startup(Set.of());
+        String liveLogDir = logManager.liveLogDirs().iterator().next().getAbsolutePath();
+
+        TopicPartition topicPartition = new TopicPartition(NAME, 0);
+        // A directory in place of the first segment file makes opening the log fail with an IOException,
+        // while creating the partition directory still succeeds.
+        File partitionDir = new File(liveLogDir, UnifiedLog.logDirName(topicPartition));
+        assertTrue(LogFileUtils.logFile(partitionDir, 0L).mkdirs());
+
+        KafkaStorageException e = assertThrows(KafkaStorageException.class,
+                () -> logManager.getOrCreateLog(topicPartition, true, false, Optional.empty()));
+        assertInstanceOf(IOException.class, e.getCause());
+        assertTrue(logDirFailureChannel.hasOfflineLogDir(liveLogDir));
+        assertEquals(Optional.empty(), logManager.getLog(topicPartition));
     }
 
     @Test

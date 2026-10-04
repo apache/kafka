@@ -1337,23 +1337,33 @@ public class LogManager {
         }
 
         LogConfig config = fetchLogConfig(topicPartition.topic());
-        UnifiedLog newLog = UnifiedLog.create(
-                logDir,
-                config,
-                0L,
-                0L,
-                scheduler,
-                brokerTopicStats,
-                time,
-                maxTransactionTimeoutMs,
-                producerStateManagerConfig,
-                producerIdExpirationCheckIntervalMs,
-                logDirFailureChannel,
-                true,
-                topicId,
-                new ConcurrentHashMap<>(),
-                remoteStorageSystemEnable,
-                LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
+        UnifiedLog newLog;
+        try {
+            newLog = UnifiedLog.create(
+                    logDir,
+                    config,
+                    0L,
+                    0L,
+                    scheduler,
+                    brokerTopicStats,
+                    time,
+                    maxTransactionTimeoutMs,
+                    producerStateManagerConfig,
+                    producerIdExpirationCheckIntervalMs,
+                    logDirFailureChannel,
+                    true,
+                    topicId,
+                    new ConcurrentHashMap<>(),
+                    remoteStorageSystemEnable,
+                    LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
+        } catch (IOException e) {
+            // Treat it like a failure to create the partition directory: take the log dir offline so that
+            // leadership moves to another replica, instead of leaving the partition without a usable log.
+            String logDirPath = logDir.getParentFile().getAbsolutePath();
+            String msg = "Error while creating log for " + topicPartition + " in dir " + logDirPath;
+            logDirFailureChannel.maybeAddOfflineLogDir(logDirPath, msg, e);
+            throw new KafkaStorageException(msg, e);
+        }
 
         if (isFuture) {
             futureLogs.put(topicPartition, newLog);
