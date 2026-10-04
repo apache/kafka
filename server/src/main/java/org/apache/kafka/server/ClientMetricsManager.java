@@ -204,10 +204,12 @@ public class ClientMetricsManager implements AutoCloseable {
             log.debug("Error validating push telemetry request from client [{}]", clientInstanceId, exception);
             clientInstance.lastKnownError(Errors.forException(exception));
             return request.getErrorResponse(0, exception);
-        } finally {
-            // Update the client instance with the latest push request parameters.
-            clientInstance.terminating(request.data().terminating());
         }
+
+        // Update the client instance with the latest push request parameters only
+        // after successful validation. Setting terminating on validation failure would
+        // permanently lock out the client instance from future requests.
+        clientInstance.terminating(request.data().terminating());
 
         // Push the metrics to the external client receiver plugin.
         ByteBuffer metrics = request.data().metrics();

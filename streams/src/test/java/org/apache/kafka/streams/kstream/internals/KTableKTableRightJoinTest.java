@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -58,7 +59,7 @@ public class KTableKTableRightJoinTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableRightJoin.class)) {
             join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
-            assertTrue(appender.getMessages("WARN").contains(
+            assertTrue(appender.getMessages(Level.WARN).contains(
                 "Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]"));
         }
     }

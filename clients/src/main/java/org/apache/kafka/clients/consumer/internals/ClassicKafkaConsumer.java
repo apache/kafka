@@ -198,7 +198,9 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.isolationLevel = fetchConfig.isolationLevel;
 
             ApiVersions apiVersions = new ApiVersions();
+            Uuid clientInstanceId = Uuid.randomUuid();
             this.client = createConsumerNetworkClient(config,
+                    clientInstanceId,
                     metrics,
                     logContext,
                     apiVersions,
