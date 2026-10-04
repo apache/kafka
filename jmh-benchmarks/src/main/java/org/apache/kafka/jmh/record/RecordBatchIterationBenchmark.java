@@ -22,7 +22,6 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -79,7 +78,7 @@ public class RecordBatchIterationBenchmark extends BaseRecordBatchBenchmark {
     public void measureSkipIteratorForVariableBatchSize(Blackhole bh) {
         for (int i = 0; i < batchCount; ++i) {
             for (MutableRecordBatch batch : MemoryRecords.readableRecords(batchBuffers[i].duplicate()).batches()) {
-                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(requestLocal.bufferSupplier(), Records.SOFT_MAX_ARRAY_LENGTH)) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(requestLocal.bufferSupplier())) {
                     while (iterator.hasNext())
                         bh.consume(iterator.next());
                 }

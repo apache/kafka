@@ -60,7 +60,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -430,7 +429,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
 
         try (BufferSupplier bufferSupplier = BufferSupplier.create();
-             CloseableIterator<Record> skipKeyValueIterator = batch.skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH)) {
+             CloseableIterator<Record> skipKeyValueIterator = batch.skipKeyValueIterator(bufferSupplier)) {
 
             if (CompressionType.NONE == compressionType) {
                 // assert that for uncompressed data stream record iterator is not used
@@ -466,7 +465,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
 
         try (BufferSupplier bufferSupplier = spy(BufferSupplier.create());
-             CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH)) {
+             CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier)) {
 
             // Consume through the iterator
             Utils.toList(streamingIterator);
@@ -526,7 +525,7 @@ public class DefaultRecordBatchTest {
              final InputStream chunkedStream = new ChunkedBytesStream(zstdStream, bufferSupplier, 16 * 1024, false)
         ) {
             doReturn(chunkedStream).when(batch).recordInputStream(any());
-            try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH)) {
+            try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier)) {
                 assertNotNull(streamingIterator);
                 Utils.toList(streamingIterator);
                 // verify the number of read() calls to zstd JNI stream. Each read() call is a JNI call.
@@ -633,27 +632,10 @@ public class DefaultRecordBatchTest {
                 "expected the configured-maximum guard, got: " + ex.getMessage());
         }
 
-        try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 10_000)) {
-            assertNotNull(iterator.next());
+        // the skip iterator never allocates the record body, so it has no limit
+        try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+            assertEquals(1000, iterator.next().valueSize());
         }
-        try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 100)) {
-            InvalidRecordException ex = assertThrows(InvalidRecordException.class, iterator::next);
-            assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
-                "expected the configured-maximum guard, got: " + ex.getMessage());
-        }
-    }
-
-    // offsetOfMaxTimestamp decompresses the batch on the broker when it resolves ListOffsets MAX_TIMESTAMP to an
-    // exact offset, so it honours the same per-record limit as the compressed iterators.
-    @Test
-    public void testOffsetOfMaxTimestampEnforcesConfiguredMaxRecordBodySize() {
-        DefaultRecordBatch batch = recordBatchWithValueSize(1000);
-
-        assertEquals(Optional.of(0L), batch.offsetOfMaxTimestamp(10_000));
-
-        InvalidRecordException ex = assertThrows(InvalidRecordException.class, () -> batch.offsetOfMaxTimestamp(100));
-        assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
-            "expected the configured-maximum guard, got: " + ex.getMessage());
     }
 
     // the lookup must not decode record bodies it never reads
@@ -661,9 +643,9 @@ public class DefaultRecordBatchTest {
     public void testOffsetOfMaxTimestampSkipsKeyAndValue() {
         DefaultRecordBatch batch = spy(recordBatchWithValueSize(1000));
 
-        assertEquals(Optional.of(0L), batch.offsetOfMaxTimestamp(10_000));
+        assertEquals(Optional.of(0L), batch.offsetOfMaxTimestamp());
 
-        verify(batch).skipKeyValueIterator(any(), eq(10_000));
+        verify(batch).skipKeyValueIterator(any());
         verify(batch, never()).streamingIterator(any(), anyInt());
     }
 

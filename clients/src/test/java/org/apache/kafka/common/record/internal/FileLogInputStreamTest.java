@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record.internal;
 
-import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.Utils;
@@ -281,7 +280,7 @@ public class FileLogInputStreamTest {
             // legacy uncompressed batches hold one record each, so walk every batch in the file
             int index = 0;
             for (FileChannelRecordBatch batch : fileRecords.batches()) {
-                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH)) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
                     while (iterator.hasNext()) {
                         Record record = iterator.next();
                         SimpleRecord expected = records[index];
@@ -303,26 +302,6 @@ public class FileLogInputStreamTest {
                 }
             }
             assertEquals(records.length, index);
-        }
-    }
-
-    @Test
-    public void testSkipKeyValueIteratorEnforcesConfiguredMaxRecordBodySize() throws IOException {
-        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(MemoryRecords.withRecords(MAGIC_VALUE_V2, 0L, Compression.gzip().build(), CREATE_TIME,
-                new SimpleRecord(10L, "key".getBytes(), new byte[1000])));
-            fileRecords.flush();
-
-            FileChannelRecordBatch batch = new FileLogInputStream(fileRecords, 0, fileRecords.sizeInBytes()).nextBatch();
-            assertNotNull(batch);
-
-            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 10_000)) {
-                assertEquals(0L, iterator.next().offset());
-            }
-            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 100)) {
-                InvalidRecordException e = assertThrows(InvalidRecordException.class, iterator::next);
-                assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
-            }
         }
     }
 

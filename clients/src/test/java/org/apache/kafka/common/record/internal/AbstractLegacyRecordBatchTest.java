@@ -336,7 +336,7 @@ public class AbstractLegacyRecordBatchTest {
             List<Record> expected = Utils.toList(batch.iterator());
             assertEquals(simpleRecords.length, expected.size());
 
-            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH)) {
+            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
                 for (Record full : expected) {
                     assertTrue(iterator.hasNext());
                     Record partial = assertInstanceOf(PartialLegacyRecord.class, iterator.next());
@@ -375,7 +375,7 @@ public class AbstractLegacyRecordBatchTest {
             batch.setLastOffset(0L);
 
             long offset = 0L;
-            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH)) {
+            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
                 while (iterator.hasNext())
                     assertEquals(offset++, iterator.next().offset());
             }
@@ -395,7 +395,7 @@ public class AbstractLegacyRecordBatchTest {
         batch.setLastOffset(1L);
 
         assertThrows(InvalidRecordException.class,
-            () -> batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH));
+            () -> batch.skipKeyValueIterator(BufferSupplier.NO_CACHING));
     }
 
     // an uncompressed legacy batch is its own record, and its key and value are slices of the batch buffer
@@ -406,7 +406,7 @@ public class AbstractLegacyRecordBatchTest {
                     new SimpleRecord(1L, "a".getBytes(), "1".getBytes()));
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
 
-            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH)) {
+            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
                 Record record = iterator.next();
                 assertEquals(5L, record.offset());
                 assertEquals(ByteBuffer.wrap("a".getBytes()), record.key());
@@ -423,24 +423,8 @@ public class AbstractLegacyRecordBatchTest {
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1)) {
             ByteBufferLegacyRecordBatch batch = poisonedCompressedLegacyBatch(magic, Integer.MAX_VALUE);
             InvalidRecordException ex = assertThrows(InvalidRecordException.class,
-                () -> batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH));
+                () -> batch.skipKeyValueIterator(BufferSupplier.NO_CACHING));
             assertTrue(ex.getMessage().contains("no inner records"), ex.getMessage());
-        }
-    }
-
-    // a record larger than the limit is still readable, since its body is skipped rather than allocated
-    @Test
-    public void testSkipKeyValueIteratorIgnoresMaxRecordBodySize() {
-        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-            Compression.gzip().build(), TimestampType.CREATE_TIME,
-            new SimpleRecord(1L, "key".getBytes(), new byte[1000]));
-        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
-
-        try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 100)) {
-            Record record = iterator.next();
-            assertEquals(0L, record.offset());
-            assertEquals(1L, record.timestamp());
-            assertEquals(1000, record.valueSize());
         }
     }
 

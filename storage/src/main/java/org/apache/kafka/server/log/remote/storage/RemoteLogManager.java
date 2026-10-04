@@ -643,8 +643,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return remoteLogMetadataManagerPlugin.get().nextSegmentWithTxnIndex(tpId, epochForOffset, offset);
     }
 
-    Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset,
-                                                             int maxRecordBodySize) throws RemoteStorageException, IOException {
+    Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset)
+            throws RemoteStorageException, IOException {
         int startPos = indexCache.lookupTimestamp(rlsMetadata, timestamp, startingOffset);
 
         InputStream remoteSegInputStream = null;
@@ -657,7 +657,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 RecordBatch batch = remoteLogInputStream.nextBatch();
                 if (batch == null) break;
                 if (batch.maxTimestamp() >= timestamp && batch.lastOffset() >= startingOffset) {
-                    try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
+                    try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
                         while (iterator.hasNext()) {
                             Record record = iterator.next();
                             if (record.timestamp() >= timestamp && record.offset() >= startingOffset)
@@ -731,7 +731,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             throw new KafkaException("UnifiedLog does not exist for topic partition: " + tp);
         }
         UnifiedLog unifiedLog = unifiedLogOptional.get();
-        int maxRecordBodySize = unifiedLog.config().maxDecompressedMessageBytes();
 
         // Get the respective epoch in which the starting-offset exists.
         OptionalInt maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
@@ -752,12 +751,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     List<LogSegment> segmentsCopy = unifiedLog.logSegments();
                     if (segmentsCopy.isEmpty() || rlsMetadata.startOffset() < segmentsCopy.get(0).baseOffset()) {
                         // search in remote-log
-                        return lookupTimestamp(rlsMetadata, timestamp, startingOffset, maxRecordBodySize);
+                        return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
                     } else {
                         // search in local-log
                         for (LogSegment segment : segmentsCopy) {
                             if (segment.largestTimestamp() >= timestamp) {
-                                return segment.findOffsetByTimestamp(timestamp, startingOffset, maxRecordBodySize);
+                                return segment.findOffsetByTimestamp(timestamp, startingOffset);
                             }
                         }
                     }

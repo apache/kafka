@@ -279,13 +279,13 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
+    public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
             return new PartialDeepRecordsIterator(this, bufferSupplier);
 
         // an uncompressed batch is its own record and its key and value are slices of the underlying buffer,
         // so there is nothing to skip
-        return iterator(bufferSupplier, maxRecordBodySize);
+        return iterator(bufferSupplier);
     }
 
     static void writeHeader(ByteBuffer buffer, long offset, int size) {
