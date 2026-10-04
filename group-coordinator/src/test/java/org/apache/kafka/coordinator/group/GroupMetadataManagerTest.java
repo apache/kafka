@@ -25238,6 +25238,64 @@ public class GroupMetadataManagerTest {
             result.response().data().taskOffsetIntervalMs());
     }
 
+    private static Stream<CoordinatorRecord> consumerGroupReplayValues() {
+        String groupId = "group-id";
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
+            .setSubscribedTopicNames(List.of("foo"))
+            .setMemberEpoch(10)
+            .build();
+        return Stream.of(
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, member),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 10, 0),
+            CoordinatorRecord.record(
+                new ConsumerGroupPartitionMetadataKey().setGroupId(groupId),
+                new ApiMessageAndVersion(new ConsumerGroupPartitionMetadataValue(), (short) 0)
+            ),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, "member-id", Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 10, 12345L),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member),
+            GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+                groupId, "foo.*", new ResolvedRegularExpression(Set.of("foo"), 1, 12345L))
+        );
+    }
+
+    private static Stream<CoordinatorRecord> consumerGroupReplayTombstones() {
+        return consumerGroupReplayValues().map(record -> CoordinatorRecord.tombstone(record.key()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("consumerGroupReplayValues")
+    public void testReplayConsumerGroupValueAfterClassicGroup(CoordinatorRecord record) {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord("group-id",
+            new GroupMetadataValue().setProtocolType("consumer").setGeneration(1)));
+        ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
+        assertFalse(classicGroup.isSimpleGroup());
+        context.commit();
+
+        // The loader may have read the classic record before compaction removed the
+        // upgrade tombstone. Each consumer value must be able to recreate the group.
+        context.replay(record);
+        assertEquals(Group.GroupType.CONSUMER, context.groupMetadataManager.group("group-id").type());
+
+        // Replacing the group during replay must also respect snapshot rollback.
+        context.rollback();
+        assertSame(classicGroup, context.groupMetadataManager.group("group-id"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("consumerGroupReplayTombstones")
+    public void testReplayConsumerGroupTombstoneAfterClassicGroup(CoordinatorRecord record) {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord("group-id",
+            new GroupMetadataValue().setProtocolType("consumer").setGeneration(1)));
+        ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
+
+        context.replay(record);
+        assertSame(classicGroup, context.groupMetadataManager.group("group-id"));
+        assertEquals(1, classicGroup.generationId());
+    }
+
     @Test
     public void testReplayConsumerGroupMemberMetadata() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
