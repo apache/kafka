@@ -216,7 +216,7 @@ public class DynamicBrokerConfig {
          */
         public static final Set<String> RECONFIGURABLE_CONFIGS = Stream.of(
                 ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values(),
-                Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
+                Set.of(ServerConfigs.COMPRESSION_DISABLED_TYPES_CONFIG, ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
             .flatMap(Collection::stream)
             .collect(Collectors.toUnmodifiableSet());
     }

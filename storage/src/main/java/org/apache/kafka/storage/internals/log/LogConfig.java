@@ -151,6 +151,8 @@ public class LogConfig extends AbstractConfig {
 
     public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
     public static final String INTERNAL_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
+    public static final String INTERNAL_COMPRESSION_DISABLED_TYPES_CONFIG = "internal.compression.disabled.types";
+    public static final String INTERNAL_COMPRESSION_DISABLED_TYPES_DOC = "The compression types disabled for new client writes.";
 
     public static final ConfigDef SERVER_CONFIG_DEF = new ConfigDef()
             .define(ServerLogConfigs.NUM_PARTITIONS_CONFIG, INT, ServerLogConfigs.NUM_PARTITIONS_DEFAULT, atLeast(1), MEDIUM, ServerLogConfigs.NUM_PARTITIONS_DOC)
@@ -263,7 +265,10 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, LONG, RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_BYTES, atLeast(RemoteLogManagerConfig.MAX_LOG_REMOTE_COPY_LAG_BYTES), MEDIUM, TopicConfig.REMOTE_COPY_LAG_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
                 .define(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, BOOLEAN, DEFAULT_ERRORS_DEADLETTERQUEUE_GROUP_ENABLE, MEDIUM, TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_DOC)
-                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
+                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC)
+                .defineInternal(INTERNAL_COMPRESSION_DISABLED_TYPES_CONFIG, LIST, List.of(),
+                        ValidList.in(CompressionType.GZIP.name, CompressionType.SNAPPY.name, CompressionType.LZ4.name, CompressionType.ZSTD.name),
+                        MEDIUM, INTERNAL_COMPRESSION_DISABLED_TYPES_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -293,6 +298,7 @@ public class LogConfig extends AbstractConfig {
     public final int minInSyncReplicas;
     public final BrokerCompressionType compressionType;
     public final Optional<Compression> compression;
+    public final Set<CompressionType> disabledCompressionTypes;
     public final boolean preallocate;
     public final boolean errorsDeadletterqueueGroupEnable;
 
@@ -347,6 +353,9 @@ public class LogConfig extends AbstractConfig {
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
         this.compressionType = BrokerCompressionType.forName(getString(TopicConfig.COMPRESSION_TYPE_CONFIG));
         this.compression = getCompression();
+        this.disabledCompressionTypes = getList(INTERNAL_COMPRESSION_DISABLED_TYPES_CONFIG).stream()
+                .map(CompressionType::forName)
+                .collect(Collectors.toUnmodifiableSet());
         this.preallocate = getBoolean(TopicConfig.PREALLOCATE_CONFIG);
         this.messageTimestampType = TimestampType.forName(getString(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG));
         this.messageTimestampBeforeMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
