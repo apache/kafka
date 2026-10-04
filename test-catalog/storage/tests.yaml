@@ -58,7 +58,7 @@ org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataCacheTest:
 org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataFormatterTest:
 - testFormat
 org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataSerdeTest:
-- testInvalidRemoteStorageMetadata
+- testInvalidRemoteLogMetadata
 - testRemoteLogSegmentMetadataSerde
 - testRemoteLogSegmentMetadataUpdateSerde
 - testRemotePartitionDeleteMetadataSerde
