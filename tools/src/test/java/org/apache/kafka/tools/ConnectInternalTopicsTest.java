@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -139,7 +138,7 @@ public class ConnectInternalTopicsTest {
     @ClusterTest(brokers = 3)
     void testCreateMissingTopics(ClusterInstance cluster) throws Exception {
         try (var adminClient = cluster.admin()) {
-            adminClient.createTopics(Collections.singleton(
+            adminClient.createTopics(Set.of(
                     new NewTopic(CONFIG_TOPIC_NAME, 1, (short) 1)
                             .configs(Map.of("retention.ms", "1000"))
             ));
@@ -181,20 +180,20 @@ public class ConnectInternalTopicsTest {
 
     private static void assertTopicConfig(Admin admin, String topic, String configKey, String expectedValue) throws Exception {
         var resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
-        var describeResult = admin.describeConfigs(Collections.singleton(resource));
+        var describeResult = admin.describeConfigs(Set.of(resource));
         var config = describeResult.all().get().get(resource);
         assertEquals(expectedValue, config.get(configKey).value());
     }
 
     private static void assertTopicReplicationFactor(Admin admin, String topic, short expectedReplicationFactor) throws Exception {
-        var topicDescriptionFuture = admin.describeTopics(Collections.singleton(topic)).topicNameValues().get(topic);
+        var topicDescriptionFuture = admin.describeTopics(Set.of(topic)).topicNameValues().get(topic);
         var topicDescription = topicDescriptionFuture.get();
         var replicationFactor = topicDescription.partitions().get(0).replicas().size();
         assertEquals(expectedReplicationFactor, replicationFactor);
     }
 
     private static void assertTopicPartitions(Admin admin, String topic, int expectedPartitions) throws Exception {
-        var topicDescriptionFuture = admin.describeTopics(Collections.singleton(topic)).topicNameValues().get(topic);
+        var topicDescriptionFuture = admin.describeTopics(Set.of(topic)).topicNameValues().get(topic);
         var topicDescription = topicDescriptionFuture.get();
         var partitions = topicDescription.partitions().size();
         assertEquals(expectedPartitions, partitions);

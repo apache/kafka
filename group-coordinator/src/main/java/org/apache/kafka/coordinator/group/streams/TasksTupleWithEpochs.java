@@ -69,6 +69,24 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
     }
 
     /**
+     * @return the active tasks without their assignment epochs.
+     */
+    public Map<String, Set<Integer>> activeTasks() {
+        Map<String, Set<Integer>> activeTasks = new HashMap<>();
+        for (Map.Entry<String, Map<Integer, Integer>> entry : activeTasksWithEpochs.entrySet()) {
+            activeTasks.put(entry.getKey(), new HashSet<>(entry.getValue().keySet()));
+        }
+        return activeTasks;
+    }
+
+    /**
+     * @return standby and warm-up tasks merged, since warm-up tasks are executed as standby tasks on the client.
+     */
+    public Map<String, Set<Integer>> standbyAndWarmupTasks() {
+        return mergeTasks(standbyTasks, warmupTasks);
+    }
+
+    /**
      * Merges this task tuple with another task tuple.
      * For overlapping active tasks, epochs from the other tuple take precedence.
      *

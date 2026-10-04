@@ -739,6 +739,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    @Deprecated(since = "4.1", forRemoval = true)
     @SuppressWarnings("removal")
     public synchronized ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
@@ -1369,6 +1370,17 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public UnregisterControllerResult unregisterController(int controllerId, UnregisterControllerOptions options) {
+        if (usingRaftController) {
+            return new UnregisterControllerResult(KafkaFuture.completedFuture(null));
+        } else {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            future.completeExceptionally(new UnsupportedVersionException(""));
+            return new UnregisterControllerResult(future);
+        }
+    }
+
+    @Override
     public DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
@@ -1430,7 +1442,8 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    @SuppressWarnings({"deprecation", "removal"})
+    @Deprecated(since = "4.1", forRemoval = true)
+    @SuppressWarnings({"removal"})
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
         KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
         future.complete(clientMetricsConfigs.keySet().stream().map(ClientMetricsResourceListing::new).collect(Collectors.toList()));

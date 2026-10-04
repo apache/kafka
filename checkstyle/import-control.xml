@@ -28,7 +28,6 @@
   <allow pkg="org.slf4j" />
   <allow pkg="org.junit" />
   <allow pkg="org.opentest4j" />
-  <allow pkg="org.hamcrest" />
   <allow pkg="org.mockito" />
   <allow pkg="java.security" />
   <allow pkg="javax.net.ssl" />
@@ -257,6 +256,13 @@
     <!-- This is required to make AlterConfigPolicyTest work. -->
     <allow pkg="org.apache.kafka.server.policy" />
 
+    <subpackage name="authorizer">
+      <allow pkg="org.apache.kafka.server.authorizer" />
+      <subpackage name="internals">
+        <allow pkg="org.apache.commons.net.util" />
+      </subpackage>
+    </subpackage>
+
     <subpackage name="telemetry">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
     </subpackage>
@@ -451,6 +457,7 @@
     <allow pkg="org.apache.kafka" />
     <allow pkg="org.bouncycastle" />
     <allow pkg="org.rocksdb" />
+    <allow class="org.apache.logging.log4j.Level" />
   </subpackage>
 
   <subpackage name="raft">
@@ -503,6 +510,7 @@
     <!-- for testing -->
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.network" />
+    <allow class="org.apache.logging.log4j.Level" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />

@@ -93,11 +93,8 @@ public class ShareInFlightBatch<K, V> {
         acknowledgements.addGap(offset);
     }
 
-    public void merge(ShareInFlightBatch<K, V> other) {
-        inFlightRecords.putAll(other.inFlightRecords);
-        if (other.checkForRenewAcknowledgements) {
-            checkForRenewAcknowledgements = true;
-        }
+    boolean isInFlight(long offset) {
+        return inFlightRecords.containsKey(offset);
     }
 
     List<ConsumerRecord<K, V>> getInFlightRecords() {

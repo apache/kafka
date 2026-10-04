@@ -177,8 +177,6 @@ public abstract class AbstractFetch implements Closeable {
             final Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
             final FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
 
-            boolean needsWakeup = true;
-
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicPartition partition = entry.getKey();
@@ -225,13 +223,7 @@ public abstract class AbstractFetch implements Closeable {
                         metricAggregator,
                         fetchOffset);
                 fetchBuffer.add(completedFetch);
-                needsWakeup = false;
             }
-
-            // "Wake" the fetch buffer on any response, even if it's empty, to allow the consumer to not block
-            // indefinitely waiting on the fetch buffer to get data.
-            if (needsWakeup)
-                fetchBuffer.wakeup();
 
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
                 List<Node> leaderNodes = new ArrayList<>();
@@ -298,6 +290,11 @@ public abstract class AbstractFetch implements Closeable {
     private void removePendingFetchRequest(Node fetchTarget, int sessionId) {
         log.debug("Removing pending request for fetch session: {} for node: {}", sessionId, fetchTarget);
         nodesWithPendingFetchRequests.remove(fetchTarget.id());
+
+        // Wake the buffer whenever a node stops having a request in flight, whatever the outcome was: data, an
+        // empty response, a fetch session error, or a failure. This ensures the caller is not left waiting on a
+        // wakeup that only a completed request could have delivered.
+        fetchBuffer.wakeup();
     }
 
     /**
@@ -391,7 +388,7 @@ public abstract class AbstractFetch implements Closeable {
         }
     }
 
-    protected Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests() {
+    protected FetchRequestPreparationResult prepareCloseFetchSessionRequests() {
         final Cluster cluster = metadata.fetch();
         Map<Node, FetchSessionHandler.Builder> fetchable = new HashMap<>();
 
@@ -411,14 +408,16 @@ public abstract class AbstractFetch implements Closeable {
             fetchable.put(fetchTarget, sessionHandler.newBuilder());
         });
 
-        return convert(fetchable);
+        // Closing is a one-shot operation, not part of the steady-state polling loop, so always waking the
+        // buffer here is safe even if this ends up empty.
+        return new FetchRequestPreparationResult(convert(fetchable), true);
     }
 
     /**
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
-    protected Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
+    protected FetchRequestPreparationResult prepareFetchRequests() {
         // Update metrics in case there was an assignment change
         metricsManager.maybeUpdateAssignment(subscriptions);
 
@@ -433,9 +432,14 @@ public abstract class AbstractFetch implements Closeable {
         List<TopicPartition> unbuffered = fetchablePartitions(buffered);
 
         if (unbuffered.isEmpty()) {
-            // If there are no partitions that don't already have data locally buffered, there's no need to issue
-            // any fetch requests at the present time.
-            return Collections.emptyMap();
+            // If every currently fetchable partition already has buffered data, there is no need to issue
+            // additional fetch requests. This is a safe point to wake the buffer immediately because progress
+            // can be made by consuming the buffered data. If no partitions are fetchable at all (for example,
+            // no assignment yet, invalid positions, or paused), the state will not change until some external
+            // event occurs, so an immediate wakeup would only busy-loop the caller rather than allowing it
+            // to remain parked until bounded by other mechanisms (such as heartbeat interval or poll timeout).
+            boolean canWakeBufferIfNoFetchRequestsToSend = subscriptions.hasFetchablePartitions(tp -> true);
+            return new FetchRequestPreparationResult(Map.of(), canWakeBufferIfNoFetchRequestsToSend);
         }
 
         Set<Integer> bufferedNodes = bufferedNodes(buffered, currentTimeMs);
@@ -484,7 +488,48 @@ public abstract class AbstractFetch implements Closeable {
             }
         }
 
-        return convert(fetchable);
+        // If every fetchable-but-unbuffered partition was skipped (for example, due to reconnect backoff,
+        // an in-flight request, or its node already hosting buffered partitions), the state will only
+        // change over time. An immediate wakeup would therefore just busy-loop the caller instead of
+        // respecting its normal backoff. This case is only relevant when fetchable partitions exist but
+        // the resulting request map is empty; otherwise the caller ignores this flag.
+        return new FetchRequestPreparationResult(convert(fetchable), false);
+    }
+
+    /**
+     * The result of preparing fetch requests via {@link #prepareFetchRequests()} or
+     * {@link #prepareCloseFetchSessionRequests()}.
+     */
+    protected static final class FetchRequestPreparationResult {
+
+        private final Map<Node, FetchSessionHandler.FetchRequestData> requests;
+        private final boolean canWakeBufferIfNoFetchRequestsToSend;
+
+        FetchRequestPreparationResult(
+                Map<Node, FetchSessionHandler.FetchRequestData> requests,
+                boolean canWakeBufferIfNoFetchRequestsToSend
+        ) {
+            this.requests = requests;
+            this.canWakeBufferIfNoFetchRequestsToSend = canWakeBufferIfNoFetchRequestsToSend;
+        }
+
+        /**
+         * {@link Map} of {@link Node nodes} to the {@link FetchSessionHandler.FetchRequestData} to send them,
+         * empty if there is nothing to fetch right now.
+         */
+        Map<Node, FetchSessionHandler.FetchRequestData> requests() {
+            return requests;
+        }
+
+        /**
+         * Whether, if {@link #requests()} is empty, this is a safe point to wake up the {@link FetchBuffer}
+         * immediately, as opposed to a state that will only change once some other event happens (for example, a
+         * metadata update, reconnect backoff expiration, or an in-flight response arriving). Ignored when
+         * {@link #requests()} is non-empty.
+         */
+        boolean canWakeBufferIfNoFetchRequestsToSend() {
+            return canWakeBufferIfNoFetchRequestsToSend;
+        }
     }
 
     /**

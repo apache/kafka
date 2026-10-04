@@ -275,7 +275,7 @@ public class TransactionManager {
      * <ul>
      *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions(boolean)}</li>
      *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
-     *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
+     *     <li>{@link Producer#commitTransaction()} calls {@link #beginCommit()}</li>
      *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort()}
      *     </li>
      *     <li>{@link Producer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} calls

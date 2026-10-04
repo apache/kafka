@@ -48,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -252,5 +253,21 @@ public class SessionToHeadersStoreAdapterTest {
     @Test
     public void shouldReturnNullFromRawAggregationValueForNull() {
         assertNull(Utils.rawAggregation(null));
+    }
+
+    @Test
+    public void shouldReportRetentionPeriodOfUnderlyingStore() {
+        final long retentionMs = 60_000L;
+        @SuppressWarnings("unchecked")
+        final SessionStore<Bytes, byte[]> retentionAwareStore =
+            mock(SessionStore.class, withSettings().extraInterfaces(WithRetentionPeriod.class));
+        when(retentionAwareStore.persistent()).thenReturn(true);
+        when(((WithRetentionPeriod) retentionAwareStore).retentionPeriod()).thenReturn(retentionMs);
+
+        // typed as StateStore so this compiles, and fails, when the adapter does not expose it
+        final StateStore store = new SessionToHeadersStoreAdapter(retentionAwareStore);
+
+        assertInstanceOf(WithRetentionPeriod.class, store);
+        assertEquals(retentionMs, ((WithRetentionPeriod) store).retentionPeriod());
     }
 }

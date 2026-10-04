@@ -153,11 +153,6 @@ public class LeaveGroupResponse extends AbstractResponse {
     }
 
     @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
-
-    @Override
     public boolean equals(Object other) {
         return other instanceof LeaveGroupResponse &&
                    ((LeaveGroupResponse) other).data.equals(this.data);

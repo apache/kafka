@@ -55,7 +55,7 @@ public abstract class KafkaTopicBasedBackingStore {
                 if (existing.isEmpty()) {
                     String msg = String.format("Topic '%s' specified via the '%s' property is missing." +
                                     " The config '%s' is set to '%s', so automatic creation of internal topics is disabled." +
-                                    " Either enable automatic creation or create the topics manually before starting the worker.",
+                                    " Either enable automatic creation or create the topics manually.",
                             topic, getTopicConfig(), DistributedConfig.INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG, config.internalTopicsCreationEnabled());
                     throw new ConnectException(msg);
                 }

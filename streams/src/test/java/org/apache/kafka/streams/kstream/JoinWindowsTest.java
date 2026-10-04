@@ -25,11 +25,8 @@ import static java.time.Duration.ofSeconds;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class JoinWindowsTest {
 
@@ -57,7 +54,7 @@ public class JoinWindowsTest {
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(ANY_OTHER_SIZE))
             .before(ofSeconds(ANY_SIZE));
 
-        assertThat(joinWindows.gracePeriodMs(), equalTo(ANY_OTHER_SIZE));
+        assertEquals(ANY_OTHER_SIZE, joinWindows.gracePeriodMs());
     }
 
     @Test
@@ -65,7 +62,7 @@ public class JoinWindowsTest {
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(ANY_OTHER_SIZE))
             .after(ofSeconds(ANY_SIZE));
 
-        assertThat(joinWindows.gracePeriodMs(), equalTo(ANY_OTHER_SIZE));
+        assertEquals(ANY_OTHER_SIZE, joinWindows.gracePeriodMs());
     }
 
     @Test
@@ -84,23 +81,21 @@ public class JoinWindowsTest {
     @Test
     public void endTimeShouldNotBeBeforeStart() {
         final JoinWindows windowSpec = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(ANY_SIZE));
-        try {
-            windowSpec.after(ofMillis(-ANY_SIZE - 1));
-            fail("window end time should not be before window start time");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> windowSpec.after(ofMillis(-ANY_SIZE - 1)),
+            "should not allow window end time before window start time"
+        );
     }
 
     @Test
     public void startTimeShouldNotBeAfterEnd() {
         final JoinWindows windowSpec = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(ANY_SIZE));
-        try {
-            windowSpec.before(ofMillis(-ANY_SIZE - 1));
-            fail("window start time should not be after window end time");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> windowSpec.before(ofMillis(-ANY_SIZE - 1)),
+            "should not allow window start time after window end time"
+        );
     }
 
     @SuppressWarnings("deprecation")
@@ -115,12 +110,11 @@ public class JoinWindowsTest {
     public void gracePeriodShouldEnforceBoundaries() {
         JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3L), ofMillis(0L));
 
-        try {
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3L), ofMillis(-1L));
-            fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3L), ofMillis(-1L)),
+            "should not accept a negative grace period"
+        );
     }
 
     @SuppressWarnings("deprecation")

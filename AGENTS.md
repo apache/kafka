@@ -100,7 +100,7 @@ Module-scoped build:
 ./gradlew clients:test --tests RequestResponseTest
 
 # Single test method
-./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
+./gradlew clients:clients-integration-tests:test --tests org.apache.kafka.clients.producer.ProducerFailureHandlingTest.testCannotSendToInternalTopic
 
 # Coverage (whole project or one module)
 ./gradlew reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false

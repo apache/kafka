@@ -38,8 +38,6 @@ import java.util.List;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -149,9 +147,11 @@ public class CompositeReadOnlySessionStoreTest {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("a", "b"));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
-            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L)),
+            results);
     }
 
     @Test
@@ -162,9 +162,11 @@ public class CompositeReadOnlySessionStoreTest {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch(null, "b"));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
-            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L)),
+            results);
     }
 
     @Test
@@ -175,9 +177,11 @@ public class CompositeReadOnlySessionStoreTest {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("a", null));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
-            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L)),
+            results);
     }
 
     @Test
@@ -188,9 +192,11 @@ public class CompositeReadOnlySessionStoreTest {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch(null, null));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
-            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L)),
+            results);
     }
 
     @Test

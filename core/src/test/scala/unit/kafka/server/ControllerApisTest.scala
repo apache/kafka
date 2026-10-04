@@ -436,6 +436,15 @@ class ControllerApisTest {
   }
 
   @Test
+  def testUnauthorizedHandleUnregisterController(): Unit = {
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleUnregisterController(buildRequest(new UnregisterControllerRequest.Builder(
+        new UnregisterControllerRequestData()).build(0)))
+    })
+  }
+
+  @Test
   def testClose(): Unit = {
     controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller]))
     controllerApis.close()

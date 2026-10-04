@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
@@ -31,6 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -146,9 +148,9 @@ public class ExampleConnectIntegrationTest {
                 "Connector tasks were not assigned a partition each.");
 
         // produce some messages into source topic partitions
-        for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-            connect.kafka().produce("test-topic", i % NUM_TOPIC_PARTITIONS, "key", "simple-message-value-" + i);
-        }
+        connect.kafka().produce(IntStream.range(0, NUM_RECORDS_PRODUCED)
+                .mapToObj(i -> new ProducerRecord<>("test-topic", i % NUM_TOPIC_PARTITIONS, "key".getBytes(), ("simple-message-value-" + i).getBytes()))
+                .toList());
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
         assertEquals(NUM_RECORDS_PRODUCED,

@@ -18,10 +18,11 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Utils;
@@ -140,10 +141,11 @@ public class ConsumerPerformance {
         SimpleDateFormat dateFormat = options.dateFormat();
 
         ConsumerPerfRebListener listener = new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound);
+        consumer.setRebalanceListener(listener);
         if (options.topic().isPresent()) {
-            consumer.subscribe(options.topic().get(), listener);
+            consumer.subscribe(options.topic().get());
         } else {
-            consumer.subscribe(options.include().get(), listener);
+            consumer.subscribe(options.include().get());
         }
 
         // now start the benchmark
@@ -228,7 +230,7 @@ public class ConsumerPerformance {
             fetchTimeMs, intervalMbPerSec, intervalRecordsPerSec);
     }
 
-    public static class ConsumerPerfRebListener implements ConsumerRebalanceListener {
+    public static class ConsumerPerfRebListener implements RebalanceListener {
         private final AtomicLong joinTimeMs;
         private final AtomicLong joinTimeMsInSingleRound;
         private final Collection<TopicPartition> assignedPartitions;
@@ -242,7 +244,7 @@ public class ConsumerPerformance {
         }
 
         @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
             assignedPartitions.removeAll(partitions);
             if (assignedPartitions.isEmpty()) {
                 joinStartMs = System.currentTimeMillis();
@@ -250,7 +252,7 @@ public class ConsumerPerformance {
         }
 
         @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
             if (assignedPartitions.isEmpty()) {
                 long elapsedMs = System.currentTimeMillis() - joinStartMs;
                 joinTimeMs.addAndGet(elapsedMs);

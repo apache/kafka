@@ -272,6 +272,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metrics.reporters(),
                     Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = new ShareConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
+            ClientUtils.maybeBootstrapMetadataSynchronously(config,
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG), this.metadata);
 
             this.shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();
@@ -282,12 +284,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new ShareFetchBuffer(logContext);
+            Uuid clientInstanceId = Uuid.randomUuid();
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
                     time,
                     logContext,
                     metadata,
                     config,
                     apiVersions,
+                    clientInstanceId,
                     metrics,
                     shareFetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),

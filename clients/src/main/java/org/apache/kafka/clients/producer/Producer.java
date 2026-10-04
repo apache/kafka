@@ -120,7 +120,7 @@ public interface Producer<K, V> extends Closeable {
     Map<MetricName, ? extends Metric> metrics();
 
     /**
-     * See {@link KafkaProducer#clientInstanceId(Duration)}}
+     * See {@link KafkaProducer#clientInstanceId(Duration)}
      */
     Uuid clientInstanceId(Duration timeout);
 

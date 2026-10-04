@@ -96,9 +96,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 @Timeout(600)
@@ -110,14 +109,20 @@ public class PositionRestartIntegrationTest {
     private static final long SEED = new Random().nextLong();
     private static final int NUM_BROKERS = 3;
     public static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
-    private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
-    private static final Position INPUT_POSITION = Position.emptyPosition();
     private static final String STORE_NAME = "kv-store";
     private static final long RECORD_TIME = System.currentTimeMillis();
     private static final long WINDOW_START =
         (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    // The cluster and the position it produces must be per-instance, not static. Subclasses (e.g. the
+    // transactional variant) inherit this class's @BeforeAll/@AfterAll, so a static cluster would be
+    // shared across both test classes: whichever ran second would find an already-closed
+    // KafkaClusterTestKit, whose executor service cannot be restarted. Under PER_CLASS lifecycle each
+    // test class gets its own instance, and therefore its own cluster.
+    private final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private final Position inputPosition = Position.emptyPosition();
+    private int port = 0;
     private KafkaStreams kafkaStreams;
 
     public enum StoresToTest {
@@ -281,16 +286,16 @@ public class PositionRestartIntegrationTest {
     }
 
     @BeforeAll
-    public static void before()
+    public void before()
         throws InterruptedException, IOException, ExecutionException, TimeoutException {
 
-        CLUSTER.start();
-        CLUSTER.deleteAllTopics();
+        cluster.start();
+        cluster.deleteAllTopics();
         final int partitions = 2;
-        CLUSTER.createTopic(INPUT_TOPIC_NAME, partitions, 1);
+        cluster.createTopic(INPUT_TOPIC_NAME, partitions, 1);
 
         final Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
 
@@ -314,8 +319,8 @@ public class PositionRestartIntegrationTest {
 
             for (final Future<RecordMetadata> future : futures) {
                 final RecordMetadata recordMetadata = future.get(1, TimeUnit.MINUTES);
-                assertThat(recordMetadata.hasOffset(), is(true));
-                INPUT_POSITION.withComponent(
+                assertTrue(recordMetadata.hasOffset());
+                inputPosition.withComponent(
                     recordMetadata.topic(),
                     recordMetadata.partition(),
                     recordMetadata.offset()
@@ -323,12 +328,12 @@ public class PositionRestartIntegrationTest {
             }
         }
 
-        assertThat(INPUT_POSITION, equalTo(
+        assertEquals(
             Position
                 .emptyPosition()
                 .withComponent(INPUT_TOPIC_NAME, 0, 1L)
-                .withComponent(INPUT_TOPIC_NAME, 1, 1L)
-        ));
+                .withComponent(INPUT_TOPIC_NAME, 1, 1L),
+            inputPosition);
     }
 
     public static StreamsBuilder getStreamBuilder(final boolean cache,
@@ -366,8 +371,8 @@ public class PositionRestartIntegrationTest {
     }
 
     @AfterAll
-    public static void after() {
-        CLUSTER.stop();
+    public void after() {
+        cluster.stop();
     }
 
     @ParameterizedTest
@@ -405,12 +410,12 @@ public class PositionRestartIntegrationTest {
             inStore(STORE_NAME)
                 .withQuery(query)
                 .withPartitions(Set.of(0, 1))
-                .withPositionBound(PositionBound.at(INPUT_POSITION));
+                .withPositionBound(PositionBound.at(inputPosition));
 
         final StateQueryResult<?> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        assertThat(result.getPosition(), is(INPUT_POSITION));
+        assertEquals(inputPosition, result.getPosition());
     }
 
     private static void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
@@ -668,7 +673,7 @@ public class PositionRestartIntegrationTest {
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());

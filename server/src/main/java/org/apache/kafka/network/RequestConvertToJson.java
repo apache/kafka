@@ -187,6 +187,8 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestDataJsonConverter;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseDataJsonConverter;
 import org.apache.kafka.common.message.UnregisterBrokerRequestDataJsonConverter;
 import org.apache.kafka.common.message.UnregisterBrokerResponseDataJsonConverter;
+import org.apache.kafka.common.message.UnregisterControllerRequestDataJsonConverter;
+import org.apache.kafka.common.message.UnregisterControllerResponseDataJsonConverter;
 import org.apache.kafka.common.message.UpdateFeaturesRequestDataJsonConverter;
 import org.apache.kafka.common.message.UpdateFeaturesResponseDataJsonConverter;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestDataJsonConverter;
@@ -372,6 +374,8 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerRequest;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
+import org.apache.kafka.common.requests.UnregisterControllerRequest;
+import org.apache.kafka.common.requests.UnregisterControllerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.requests.UpdateRaftVoterRequest;
@@ -564,6 +568,8 @@ public class RequestConvertToJson {
                 TxnOffsetCommitRequestDataJsonConverter.write(((TxnOffsetCommitRequest) request).data(), request.version());
             case UNREGISTER_BROKER ->
                 UnregisterBrokerRequestDataJsonConverter.write(((UnregisterBrokerRequest) request).data(), request.version());
+            case UNREGISTER_CONTROLLER ->
+                UnregisterControllerRequestDataJsonConverter.write(((UnregisterControllerRequest) request).data(), request.version());
             case UPDATE_FEATURES ->
                 UpdateFeaturesRequestDataJsonConverter.write(((UpdateFeaturesRequest) request).data(), request.version());
             case UPDATE_RAFT_VOTER ->
@@ -743,6 +749,8 @@ public class RequestConvertToJson {
                 TxnOffsetCommitResponseDataJsonConverter.write(((TxnOffsetCommitResponse) response).data(), version);
             case UNREGISTER_BROKER ->
                 UnregisterBrokerResponseDataJsonConverter.write(((UnregisterBrokerResponse) response).data(), version);
+            case UNREGISTER_CONTROLLER ->
+                UnregisterControllerResponseDataJsonConverter.write(((UnregisterControllerResponse) response).data(), version);
             case UPDATE_FEATURES ->
                 UpdateFeaturesResponseDataJsonConverter.write(((UpdateFeaturesResponse) response).data(), version);
             case UPDATE_RAFT_VOTER ->
