@@ -860,8 +860,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val nonExistingTopics = new util.HashSet[String](topics)
       nonExistingTopics.removeAll(existingTopics)
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
-        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request.session, request.header.clientId)
-        autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, request.context)
+        autoTopicCreationManager.createTopics(nonExistingTopics, request.context)
       } else {
         nonExistingTopics.stream().map(topic => {
           val error = try {
@@ -1290,8 +1289,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val topicMetadata = metadataCache.getTopicMetadata(internalTopics, request.context.listenerName, false, false).asScala
 
       if (topicMetadata.headOption.isEmpty) {
-        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request.session, request.header.clientId)
-        autoTopicCreationManager.createTopics(internalTopics, controllerMutationQuota)
+        autoTopicCreationManager.createTopics(internalTopics)
         (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
       } else {
         if (topicMetadata.head.errorCode != Errors.NONE.code) {
