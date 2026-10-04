@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryRequest.Builder;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.server.metrics.ClientMatchPattern;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils;
@@ -170,6 +171,22 @@ public class ClientMetricsManagerTest {
         Properties properties = new Properties();
         properties.put("random", "random");
         assertThrows(InvalidRequestException.class, () -> clientMetricsManager.updateSubscription("sub-1", properties));
+    }
+
+    @Test
+    public void testUpdateSubscriptionAcceptsLegacyPattern() {
+        // A backreference is valid java.util.regex syntax but unsupported by RE2/J.
+        // updateSubscription must still accept such a pre-existing pattern.
+        Properties properties = new Properties();
+        properties.put(ClientMetricsConfigs.MATCH_CONFIG, "client_software_version=(\\d+)\\.\\1");
+
+        clientMetricsManager.updateSubscription("sub-1", properties);
+
+        ClientMetricsManager.SubscriptionInfo subscriptionInfo = clientMetricsManager.subscriptionInfo("sub-1");
+        assertNotNull(subscriptionInfo);
+        ClientMatchPattern versionPattern = subscriptionInfo.matchPattern().get(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION);
+        assertTrue(versionPattern.matches("12.12"));
+        assertFalse(versionPattern.matches("12.13"));
     }
 
     @Test
