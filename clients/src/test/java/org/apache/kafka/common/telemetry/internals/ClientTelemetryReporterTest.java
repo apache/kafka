@@ -707,6 +707,69 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
+    public void testTerminatingPushPending() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertFalse(telemetrySender.isTerminatingPushPending());
+
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
+        // A regular push is not a terminating push
+        assertFalse(telemetrySender.isTerminatingPushPending());
+
+        telemetrySender.initiateClose();
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.isTerminatingPushPending());
+
+        // A response to the earlier regular push does not complete the terminating push
+        telemetrySender.handleResponse(new PushTelemetryResponse(new PushTelemetryResponseData()));
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.isTerminatingPushPending());
+
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS));
+        assertTrue(telemetrySender.isTerminatingPushPending());
+
+        telemetrySender.handleResponse(new PushTelemetryResponse(new PushTelemetryResponseData()));
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS, telemetrySender.state());
+        assertFalse(telemetrySender.isTerminatingPushPending());
+
+        telemetrySender.close();
+        assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state());
+        assertFalse(telemetrySender.isTerminatingPushPending());
+    }
+
+    @Test
+    public void testTerminatingPushPendingAfterFailedPush() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS));
+        assertTrue(telemetrySender.isTerminatingPushPending());
+
+        // A failed terminating push is not retried, so there is nothing left to wait for
+        telemetrySender.handleFailedPushTelemetryRequest(new TimeoutException("Timeout"));
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS, telemetrySender.state());
+        assertFalse(telemetrySender.isTerminatingPushPending());
+    }
+
+    @Test
+    public void testTerminatingPushPendingWhenPushCannotBeCreated() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+        assertTrue(telemetrySender.isTerminatingPushPending());
+
+        // The reporter has not bee initialized, so there is no metrics collector and the push cannot be built
+        assertTrue(telemetrySender.createRequest().isEmpty());
+        assertFalse(telemetrySender.isTerminatingPushPending());
+    }
+
+    @Test
     public void testHandleResponsePushTelemetryErrorResponse() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
