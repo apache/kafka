@@ -4476,7 +4476,14 @@ public class GroupMetadataManager {
             inflightOffloadedAssignorEpochs.put(group.groupId(), groupEpoch);
             executor.schedule(
                 targetAssignmentUpdateKey,
-                buildTargetAssignment::get,
+                () -> {
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return buildTargetAssignment.get();
+                },
                 (result, exception) -> handleOffloadedConsumerTargetAssignmentResult(
                     group.groupId(),
                     groupEpoch,
@@ -4677,7 +4684,14 @@ public class GroupMetadataManager {
             inflightOffloadedAssignorEpochs.put(group.groupId(), groupEpoch);
             executor.schedule(
                 targetAssignmentUpdateKey,
-                buildTargetAssignment::get,
+                () -> {
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return buildTargetAssignment.get();
+                },
                 (result, exception) -> handleOffloadedShareTargetAssignmentResult(
                     group.groupId(),
                     groupEpoch,
@@ -4930,7 +4944,14 @@ public class GroupMetadataManager {
             inflightOffloadedAssignorEpochs.put(group.groupId(), groupEpoch);
             executor.schedule(
                 targetAssignmentUpdateKey,
-                buildTargetAssignment::get,
+                () -> {
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return buildTargetAssignment.get();
+                },
                 (result, exception) -> handleOffloadedStreamsTargetAssignmentResult(
                     group.groupId(),
                     groupEpoch,
