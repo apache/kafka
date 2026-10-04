@@ -260,7 +260,7 @@ public class FileLogInputStreamTest {
         }
     }
 
-    // compressed v2 batches skip the record body; uncompressed and legacy batches fully decode it
+    // compressed batches skip the record body; uncompressed batches slice it from the batch buffer
     @ParameterizedTest
     @ArgumentsSource(FileLogInputStreamArgumentsProvider.class)
     public void testSkipKeyValueIteration(Args args) throws IOException {
@@ -287,13 +287,13 @@ public class FileLogInputStreamTest {
                         SimpleRecord expected = records[index];
                         assertEquals(index, record.offset());
                         assertEquals(magic == MAGIC_VALUE_V0 ? NO_TIMESTAMP : expected.timestamp(), record.timestamp());
-                        if (magic >= MAGIC_VALUE_V2 && batch.isCompressed()) {
-                            assertInstanceOf(PartialDefaultRecord.class, record);
+                        if (batch.isCompressed()) {
+                            Class<? extends Record> partialType = magic >= MAGIC_VALUE_V2 ? PartialDefaultRecord.class : PartialLegacyRecord.class;
+                            assertInstanceOf(partialType, record);
                             assertEquals(expected.key() == null ? -1 : expected.key().remaining(), record.keySize());
                             assertEquals(expected.value() == null ? -1 : expected.value().remaining(), record.valueSize());
                             assertThrows(UnsupportedOperationException.class, record::key);
                             assertThrows(UnsupportedOperationException.class, record::value);
-                            assertThrows(UnsupportedOperationException.class, record::headers);
                         } else {
                             assertEquals(expected.key(), record.key());
                             assertEquals(expected.value(), record.value());

@@ -280,7 +280,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
-        // the older message format versions do not implement a partial read, so we return the normal iterator
+        if (isCompressed())
+            return new PartialDeepRecordsIterator(this, bufferSupplier);
+
+        // an uncompressed batch is its own record and its key and value are slices of the underlying buffer,
+        // so there is nothing to skip
         return iterator(bufferSupplier, maxRecordBodySize);
     }
 
@@ -339,6 +343,94 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
     }
 
+    private static InputStream wrapperInputStream(LegacyRecord wrapperRecord, BufferSupplier bufferSupplier) {
+        byte wrapperMagic = wrapperRecord.magic();
+        if (wrapperMagic != RecordBatch.MAGIC_VALUE_V0 && wrapperMagic != RecordBatch.MAGIC_VALUE_V1)
+            throw new InvalidRecordException("Invalid wrapper magic found in legacy deep record iterator " + wrapperMagic);
+
+        CompressionType compressionType = wrapperRecord.compressionType();
+        if (compressionType == CompressionType.ZSTD)
+            throw new InvalidRecordException("Invalid wrapper compressionType found in legacy deep record iterator " + wrapperMagic);
+        ByteBuffer wrapperValue = wrapperRecord.value();
+        if (wrapperValue == null)
+            throw new InvalidRecordException("Found invalid compressed record set with null value (magic = " +
+                    wrapperMagic + ")");
+
+        return Compression.of(compressionType).build().wrapForInput(wrapperValue, wrapperMagic, bufferSupplier);
+    }
+
+    private static long absoluteBaseOffset(byte wrapperMagic, long lastOffsetFromWrapper, long lastInnerOffset) {
+        if (wrapperMagic != RecordBatch.MAGIC_VALUE_V1)
+            return -1;
+
+        // The outer offset may be 0 if this is produce data from certain versions of librdkafka.
+        if (lastOffsetFromWrapper == 0)
+            return 0;
+
+        if (lastOffsetFromWrapper < lastInnerOffset)
+            throw new InvalidRecordException("Found invalid wrapper offset in compressed v1 message set, " +
+                    "wrapper offset '" + lastOffsetFromWrapper + "' is less than the last inner message " +
+                    "offset '" + lastInnerOffset + "' and it is not zero.");
+        return lastOffsetFromWrapper - lastInnerOffset;
+    }
+
+    /**
+     * The same iteration as {@link DeepRecordsIterator}, except that the key and value of the inner records
+     * are skipped rather than read, so no buffer sized by a record is allocated.
+     */
+    private static class PartialDeepRecordsIterator extends AbstractIterator<Record> implements CloseableIterator<Record> {
+        private final ArrayDeque<PartialLegacyRecord> innerRecords = new ArrayDeque<>();
+        private final long absoluteBaseOffset;
+        private final byte wrapperMagic;
+
+        private PartialDeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, BufferSupplier bufferSupplier) {
+            LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
+            this.wrapperMagic = wrapperRecord.magic();
+            InputStream stream = wrapperInputStream(wrapperRecord, bufferSupplier);
+            ByteBuffer scratch = ByteBuffer.allocate(PartialLegacyRecord.SCRATCH_BUFFER_SIZE);
+
+            // as in DeepRecordsIterator, the relative offsets require reading all the inner records first
+            try {
+                while (true) {
+                    PartialLegacyRecord innerRecord = PartialLegacyRecord.readFrom(stream, scratch,
+                            wrapperRecord.timestamp(), wrapperRecord.timestampType());
+                    if (innerRecord == null)
+                        break;
+                    innerRecords.addLast(innerRecord);
+                }
+
+                if (innerRecords.isEmpty())
+                    throw new InvalidRecordException("Found invalid compressed record set with no inner records");
+
+                this.absoluteBaseOffset = absoluteBaseOffset(wrapperMagic, wrapperEntry.lastOffset(), innerRecords.getLast().offset());
+            } catch (IOException e) {
+                throw new KafkaException(e);
+            } finally {
+                Utils.closeQuietly(stream, "records iterator stream");
+            }
+        }
+
+        @Override
+        protected Record makeNext() {
+            if (innerRecords.isEmpty())
+                return allDone();
+
+            PartialLegacyRecord record = innerRecords.remove();
+
+            // Convert offset to absolute offset if needed.
+            if (wrapperMagic == RecordBatch.MAGIC_VALUE_V1)
+                record = record.withOffset(absoluteBaseOffset + record.offset());
+
+            if (record.isCompressed())
+                throw new InvalidRecordException("Inner messages must not be compressed");
+
+            return record;
+        }
+
+        @Override
+        public void close() {}
+    }
+
     private static class DeepRecordsIterator extends AbstractIterator<Record> implements CloseableIterator<Record> {
         private final ArrayDeque<AbstractLegacyRecordBatch> innerEntries;
         private final long absoluteBaseOffset;
@@ -351,18 +443,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                                     int maxRecordBodySize) {
             LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
             this.wrapperMagic = wrapperRecord.magic();
-            if (wrapperMagic != RecordBatch.MAGIC_VALUE_V0 && wrapperMagic != RecordBatch.MAGIC_VALUE_V1)
-                throw new InvalidRecordException("Invalid wrapper magic found in legacy deep record iterator " + wrapperMagic);
-
-            CompressionType compressionType = wrapperRecord.compressionType();
-            if (compressionType == CompressionType.ZSTD)
-                throw new InvalidRecordException("Invalid wrapper compressionType found in legacy deep record iterator " + wrapperMagic);
-            ByteBuffer wrapperValue = wrapperRecord.value();
-            if (wrapperValue == null)
-                throw new InvalidRecordException("Found invalid compressed record set with null value (magic = " +
-                        wrapperMagic + ")");
-
-            InputStream stream = Compression.of(compressionType).build().wrapForInput(wrapperValue, wrapperRecord.magic(), bufferSupplier);
+            InputStream stream = wrapperInputStream(wrapperRecord, bufferSupplier);
             LogInputStream<AbstractLegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize, maxRecordBodySize);
 
             long lastOffsetFromWrapper = wrapperEntry.lastOffset();
@@ -399,21 +480,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                 if (innerEntries.isEmpty())
                     throw new InvalidRecordException("Found invalid compressed record set with no inner records");
 
-                if (wrapperMagic == RecordBatch.MAGIC_VALUE_V1) {
-                    if (lastOffsetFromWrapper == 0) {
-                        // The outer offset may be 0 if this is produce data from certain versions of librdkafka.
-                        this.absoluteBaseOffset = 0;
-                    } else {
-                        long lastInnerOffset = innerEntries.getLast().offset();
-                        if (lastOffsetFromWrapper < lastInnerOffset)
-                            throw new InvalidRecordException("Found invalid wrapper offset in compressed v1 message set, " +
-                                    "wrapper offset '" + lastOffsetFromWrapper + "' is less than the last inner message " +
-                                    "offset '" + lastInnerOffset + "' and it is not zero.");
-                        this.absoluteBaseOffset = lastOffsetFromWrapper - lastInnerOffset;
-                    }
-                } else {
-                    this.absoluteBaseOffset = -1;
-                }
+                this.absoluteBaseOffset = absoluteBaseOffset(wrapperMagic, lastOffsetFromWrapper, innerEntries.getLast().offset());
             } catch (IOException e) {
                 throw new KafkaException(e);
             } finally {
