@@ -3880,11 +3880,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new Thread {
         override def run : Unit = {
           consumer.subscribe(util.Set.of(topic))
+          var started = false
           try {
             while (consumerThreadRunning.get()) {
               consumer.poll(JDuration.ofSeconds(5))
-              if (!consumer.assignment.isEmpty && startLatch.getCount > 0L)
+              if (!started && !consumer.assignment.isEmpty) {
                 startLatch.countDown()
+                started = true
+              }
               try {
                 consumer.commitSync()
               } catch {
