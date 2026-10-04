@@ -272,7 +272,7 @@ public class ConsumerBounceTest {
         consumer.subscribe(List.of(newTopic));
         consumer.poll(Duration.ZERO);
         // Schedule topic creation after 2 seconds
-        executor.schedule(() -> assertDoesNotThrow(() -> clusterInstance.createTopic(newTopic, numPartitions, numReplica)),
+        executor.schedule(() -> clusterInstance.createTopic(newTopic, numPartitions, numReplica),
                 2, TimeUnit.SECONDS);
 
         // Start first poller

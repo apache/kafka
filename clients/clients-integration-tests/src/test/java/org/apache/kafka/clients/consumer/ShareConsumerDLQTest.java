@@ -52,7 +52,6 @@ import java.util.Set;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -956,8 +955,8 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     }
 
     private void createDlqTopic(String topicName, int numPartitions) {
-        assertDoesNotThrow(() -> cluster.createTopic(topicName, numPartitions, (short) 1,
-            Map.of(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true")), "Failed to create DLQ topic");
+        cluster.createTopic(topicName, numPartitions, (short) 1,
+            Map.of(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true"));
     }
 
     // Creates a single-partition source topic with tiered storage enabled and one log segment per record (via
@@ -973,8 +972,7 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             // Roll a segment for every record so each inactive segment can be offloaded then deleted locally.
             TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1",
             TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "12");
-        assertDoesNotThrow(() -> cluster.createTopic(topic, 1, (short) 1, configs),
-            "Failed to create remote-storage source topic");
+        cluster.createTopic(topic, 1, (short) 1, configs);
     }
 
     // The earliest offset still held in local storage. Offsets below this have been removed locally (e.g. after

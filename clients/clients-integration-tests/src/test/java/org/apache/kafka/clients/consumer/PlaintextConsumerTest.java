@@ -560,7 +560,6 @@ public class PlaintextConsumerTest {
 
             // Test seek compressed message
             var tp2 = new TopicPartition(TOPIC, 1);
-            cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
             sendCompressedMessages(totalRecords, tp2);
             consumer.assign(List.of(tp2));
 

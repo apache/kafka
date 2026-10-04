@@ -1173,7 +1173,7 @@ public class DescribeConsumerGroupTest {
     }
 
     private void createTopic(String topic, int numPartitions) {
-        Assertions.assertDoesNotThrow(() -> clusterInstance.createTopic(topic, numPartitions, (short) 1));
+        clusterInstance.createTopic(topic, numPartitions, (short) 1);
     }
 
     private void deleteConsumerGroups(Collection<String> groupIds) {

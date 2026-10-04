@@ -329,26 +329,36 @@ public interface ClusterInstance {
         ), "Failed to hard-delete the delete directory");
     }
 
-    default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
+    default void createTopic(String topicName, int partitions, short replicas) {
         createTopic(topicName, partitions, replicas, Map.of());
     }
 
-    default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
+    default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) {
         try (Admin admin = admin()) {
-            admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
+            admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props))).all().get();
             waitTopicCreation(topicName, partitions);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Failed to create topic " + topicName, e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("Failed to create topic " + topicName, e);
         }
     }
 
-    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) throws InterruptedException {
+    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) {
         createTopicWithAssignment(topicName, replicaAssignment, Map.of());
     }
 
-    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> props) throws InterruptedException {
+    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> props) {
         try (Admin admin = admin()) {
-            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment).configs(props)));
+            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment).configs(props))).all().get();
             int partitions = replicaAssignment.size();
             waitTopicCreation(topicName, partitions);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Failed to create topic " + topicName, e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("Failed to create topic " + topicName, e);
         }
     }
 

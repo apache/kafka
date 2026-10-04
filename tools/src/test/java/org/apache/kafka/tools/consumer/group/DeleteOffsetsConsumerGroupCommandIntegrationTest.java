@@ -259,7 +259,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     }
 
     private void createTopic(String topic) {
-        Assertions.assertDoesNotThrow(() -> clusterInstance.createTopic(topic, 1, (short) 1));
+        clusterInstance.createTopic(topic, 1, (short) 1);
     }
 
     private void removeTopic(String topic) {
