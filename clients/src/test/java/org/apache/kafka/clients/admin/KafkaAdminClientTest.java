@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.ClientInstanceIdCapture;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
@@ -1848,5 +1849,12 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
 
         KafkaException e = assertThrows(KafkaException.class, () -> Admin.create(configs));
         assertInstanceOf(ConfigException.class, e.getCause());
+    }
+
+    @Test
+    public void testClientInstanceIdIsPassedToTheNetworkClient() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        ClientInstanceIdCapture.assertGenerated(() -> Admin.create(configs));
     }
 }

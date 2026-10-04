@@ -21,6 +21,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegateInstanceIdCapture;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
@@ -476,5 +477,14 @@ public class KafkaShareConsumerTest {
 
         KafkaException e = assertThrows(KafkaException.class, () -> new KafkaShareConsumer<>(configs));
         assertInstanceOf(ConfigException.class, e.getCause());
+    }
+
+    @Test
+    public void testClientInstanceIdIsPassedToTheNetworkClient() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group");
+        NetworkClientDelegateInstanceIdCapture.assertGenerated(
+            () -> new KafkaShareConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 }

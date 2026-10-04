@@ -21,15 +21,18 @@ import unittest
 
 import pytest
 import test.constants as constants
+from common import detect_compose_command
 
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
     FIXTURES_DIR="."
-    MODE="jvm"
     CONTAINER_RUNTIME="docker"
+    COMPOSE_COMMAND=None
 
     def compose_command(self):
-        return [f"{self.CONTAINER_RUNTIME}-compose"]
+        if self.COMPOSE_COMMAND is None:
+            return detect_compose_command(self.CONTAINER_RUNTIME)
+        return self.COMPOSE_COMMAND
 
     def resume_container(self):
         subprocess.run([self.CONTAINER_RUNTIME, "start", constants.BROKER_CONTAINER])
@@ -195,13 +198,11 @@ class DockerSanityTest(unittest.TestCase):
         except Exception as e:
             print(constants.FILE_INPUT_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
-        # SASL is not supported on native image due to missing reflection config (KAFKA-19584)
-        if self.MODE == "jvm":
-            try:
-                total_errors.extend(self.secure_flow('localhost:9095', constants.SASL_CLIENT_CONFIG, constants.SASL_FLOW_TESTS, constants.SASL_ERROR_PREFIX, constants.SASL_TOPIC))
-            except Exception as e:
-                print(constants.SASL_ERROR_PREFIX, str(e))
-                total_errors.append(str(e))
+        try:
+            total_errors.extend(self.secure_flow('localhost:9095', constants.SASL_CLIENT_CONFIG, constants.SASL_FLOW_TESTS, constants.SASL_ERROR_PREFIX, constants.SASL_TOPIC))
+        except Exception as e:
+            print(constants.SASL_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
         try:
             total_errors.extend(self.broker_restart_flow())
         except Exception as e:
@@ -226,11 +227,11 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
-def run_tests(image, mode, fixtures_dir, container_runtime="docker"):
+def run_tests(image, mode, fixtures_dir, container_runtime="docker", compose_command=None):
     DockerSanityTest.IMAGE = image
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
-    DockerSanityTest.MODE = mode
     DockerSanityTest.CONTAINER_RUNTIME = container_runtime
+    DockerSanityTest.COMPOSE_COMMAND = compose_command or detect_compose_command(container_runtime)
 
     cur_directory = os.path.dirname(os.path.realpath(__file__))
     report_path = f"{cur_directory}/report_{mode}.html"

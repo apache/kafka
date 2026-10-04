@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FetchResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -81,6 +82,13 @@ import java.util.function.BiConsumer;
  * <p>Routing is transparent: the proxy rewrites {@code Metadata}/{@code FindCoordinator} responses so every
  * advertised address points back at itself, so a single-broker embedded cluster needs no special config
  * (its own ephemeral port is discovered from {@code bootstrapServers()}).
+ *
+ * <p><b>Single broker only.</b> Because every advertised broker and coordinator address is rewritten to this
+ * one proxy — which forwards to a single upstream broker — the proxy supports exactly one broker. A
+ * multi-broker bootstrap would silently funnel every partition and coordinator to the first broker, producing
+ * {@code NOT_LEADER_OR_FOLLOWER}/{@code NOT_COORDINATOR} retry loops, so {@link #inFrontOf(String)} rejects a
+ * bootstrap that lists more than one server. Front a single-broker {@code EmbeddedKafkaCluster}, or pass one
+ * broker's address (e.g. {@code cluster.bootstrapServers().split(",")[0]}).
  *
  * <p>Determinism: {@code once()}/{@code onCall(n)}/{@code times(n)} are deterministic and safe for
  * assertions; {@code withProbability(p)} is chaos-mode only. The proxy never closes sockets unless a
@@ -140,13 +148,27 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
     private volatile int proxyPort;
 
     private KafkaProtocolFaultProxy(final String targetBootstrap) {
-        final String hostPort = targetBootstrap.split(",")[0].trim();
+        final String[] servers = targetBootstrap.split(",");
+        // Routing rewrites all addresses to this proxy (one upstream broker), so a multi-broker bootstrap
+        // would funnel every partition and coordinator to the first broker
+        // causing NOT_LEADER / NOT_COORDINATOR loops.
+        if (servers.length > 1) {
+            throw new IllegalArgumentException(
+                    "KafkaProtocolFaultProxy proxies a single broker, but the bootstrap '" + targetBootstrap
+                    + "' lists " + servers.length + " servers");
+        }
+        final String hostPort = servers[0].trim();
         final int idx = hostPort.lastIndexOf(':');
         this.targetHost = hostPort.substring(0, idx);
         this.targetPort = Integer.parseInt(hostPort.substring(idx + 1));
     }
 
-    /** Create and start a proxy in front of the given broker bootstrap address. */
+    /**
+     * Create and start a proxy in front of the given broker bootstrap address.
+     *
+     * @param targetBootstrap a single broker's {@code host:port} — the proxy supports one broker only
+     * @throws IllegalArgumentException if {@code targetBootstrap} lists more than one server
+     */
     public static KafkaProtocolFaultProxy inFrontOf(final String targetBootstrap) {
         final KafkaProtocolFaultProxy proxy = new KafkaProtocolFaultProxy(targetBootstrap);
         try {
@@ -372,7 +394,7 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
             final AbstractResponse response = AbstractResponse.parseResponse(ByteBuffer.wrap(frame), reqHeader);
 
             if (routing) {
-                applyRouting(response);
+                applyRouting(response, version);
             }
             if (fired != null && fired.action() == FaultRule.Action.INJECT_ERROR) {
                 ERROR_SETTERS.get(apiKey).accept(response, fired.error());
@@ -391,13 +413,18 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
         }
     }
 
-    private void applyRouting(final AbstractResponse response) {
+    private void applyRouting(final AbstractResponse response, final short version) {
         if (response instanceof MetadataResponse) {
             ((MetadataResponse) response).data().brokers().forEach(b -> b.setHost(proxyHost).setPort(proxyPort));
         } else if (response instanceof FindCoordinatorResponse) {
             final FindCoordinatorResponse fc = (FindCoordinatorResponse) response;
-            fc.data().setHost(proxyHost).setPort(proxyPort);
-            fc.data().coordinators().forEach(c -> c.setHost(proxyHost).setPort(proxyPort));
+            // v0-3 carry a single top-level host/port and v4+ only the (possibly empty) coordinators list;
+            // setting the top-level fields at v4+ makes re-serialization fail and the frame go out unrewritten
+            if (version < FindCoordinatorRequest.MIN_BATCHED_VERSION) {
+                fc.data().setHost(proxyHost).setPort(proxyPort);
+            } else {
+                fc.data().coordinators().forEach(c -> c.setHost(proxyHost).setPort(proxyPort));
+            }
         }
     }
 
