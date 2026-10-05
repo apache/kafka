@@ -341,7 +341,8 @@ public interface ClusterInstance {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Failed to create topic " + topicName, e);
         } catch (ExecutionException e) {
-            throw new RuntimeException("Failed to create topic " + topicName, e);
+            if (e.getCause() instanceof RuntimeException re) throw re;
+            throw new RuntimeException("Failed to create topic " + topicName, e.getCause());
         }
     }
 
@@ -358,7 +359,8 @@ public interface ClusterInstance {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Failed to create topic " + topicName, e);
         } catch (ExecutionException e) {
-            throw new RuntimeException("Failed to create topic " + topicName, e);
+            if (e.getCause() instanceof RuntimeException re) throw re;
+            throw new RuntimeException("Failed to create topic " + topicName, e.getCause());
         }
     }
 
