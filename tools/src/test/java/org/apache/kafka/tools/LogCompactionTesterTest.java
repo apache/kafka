@@ -40,36 +40,38 @@ public class LogCompactionTesterTest {
 
     @Test
     public void testConsumeMessagesDoesNotStopAtEmptyPollBeforeEndOffset() throws Exception {
-        MockConsumer<String, String> consumer = createConsumer(15L);
-        consumer.schedulePollTask(() -> {
-            consumer.rebalance(List.of(TP));
-            addRecords(consumer, 0, 5);
-        });
-        // Offsets 5 to 9 were removed by compaction. The position moves past them, but poll() returns no records.
-        consumer.schedulePollTask(() -> consumer.seek(TP, 10));
-        consumer.schedulePollTask(() -> addRecords(consumer, 10, 15));
+        try (MockConsumer<String, String> consumer = createConsumer(15L)) {
+            consumer.schedulePollTask(() -> {
+                consumer.rebalance(List.of(TP));
+                addRecords(consumer, 0, 5);
+            });
+            // Offsets 5 to 9 were removed by compaction. The position moves past them, but poll() returns no records.
+            consumer.schedulePollTask(() -> consumer.seek(TP, 10));
+            consumer.schedulePollTask(() -> addRecords(consumer, 10, 15));
 
-        Path consumedFile = LogCompactionTester.consumeMessages(consumer, Set.of(TOPIC));
-        try {
-            assertEquals(10, Files.readAllLines(consumedFile).size());
-            assertEquals(15L, consumer.position(TP));
-        } finally {
-            Files.deleteIfExists(consumedFile);
+            Path consumedFile = LogCompactionTester.consumeMessages(consumer, Set.of(TOPIC));
+            try {
+                assertEquals(10, Files.readAllLines(consumedFile).size());
+                assertEquals(15L, consumer.position(TP));
+            } finally {
+                Files.deleteIfExists(consumedFile);
+            }
         }
     }
 
     @Test
     public void testConsumeMessagesFailsWhenNoProgress() {
-        MockConsumer<String, String> consumer = createConsumer(20L);
-        consumer.schedulePollTask(() -> {
-            consumer.rebalance(List.of(TP));
-            addRecords(consumer, 0, 15);
-        });
-        // The next poll returns no records and moves no position: offsets 15..19 never arrive.
+        try (MockConsumer<String, String> consumer = createConsumer(20L)) {
+            consumer.schedulePollTask(() -> {
+                consumer.rebalance(List.of(TP));
+                addRecords(consumer, 0, 15);
+            });
+            // The next poll returns no records and moves no position: offsets 15..19 never arrive.
 
-        RuntimeException e = assertThrows(RuntimeException.class,
-            () -> LogCompactionTester.consumeMessages(consumer, Set.of(TOPIC)));
-        assertTrue(e.getMessage().startsWith("No progress"), e.getMessage());
+            RuntimeException e = assertThrows(RuntimeException.class,
+                () -> LogCompactionTester.consumeMessages(consumer, Set.of(TOPIC)));
+            assertTrue(e.getMessage().startsWith("No progress"), e.getMessage());
+        }
     }
 
     private static MockConsumer<String, String> createConsumer(long endOffset) {
