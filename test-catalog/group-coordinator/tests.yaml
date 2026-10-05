@@ -1260,6 +1260,8 @@ org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilderTest:
 - testAssignment
 - testEmpty
 org.apache.kafka.coordinator.group.modern.TopicIdsTest:
+- testCachedTopicResolverId
+- testCachedTopicResolverName
 - testContains
 - testContainsAll
 - testContainsAllOneTopicConversionFails

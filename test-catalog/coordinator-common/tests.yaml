@@ -170,6 +170,8 @@ org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDeltaTest:
 org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImageTest:
 - testEqualsAndHashcode
 - testKRaftCoordinatorMetadataImage
+- testTopicIdAndTopicName
+- testTopicIdAndTopicNameOfEmptyImage
 org.apache.kafka.coordinator.common.runtime.KafkaMetricHistogramTest:
 - testStats
 org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessorTest:
