@@ -37,7 +37,7 @@ import org.apache.kafka.network.{SocketServerConfigs, SocketServer => JSocketSer
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.DirectoryEventHandler
-import org.apache.kafka.server.config.{DynamicReplicationConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.quota.QuotaFactory
@@ -1109,7 +1109,6 @@ class DynamicBrokerConfigTest {
     val config = KafkaConfig.fromProps(props)
 
     config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicReplicationConfig())
 
     assertEquals(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT,
       config.followerFetchLastTieredOffsetEnable)
