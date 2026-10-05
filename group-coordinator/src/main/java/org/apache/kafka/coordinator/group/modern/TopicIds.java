@@ -122,12 +122,30 @@ public class TopicIds implements Set<Uuid> {
 
         @Override
         public String name(Uuid id) {
-            return topicNames.computeIfAbsent(id, __ -> image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null));
+            // Uses get and put rather than computeIfAbsent, whose lambda would capture the id and
+            // be allocated on every call, cache hits included.
+            String name = topicNames.get(id);
+            if (name == null) {
+                name = image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
+                if (name != null) {
+                    topicNames.put(id, name);
+                }
+            }
+            return name;
         }
 
         @Override
         public Uuid id(String name) {
-            return topicIds.computeIfAbsent(name, __ -> image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null));
+            // Uses get and put rather than computeIfAbsent, whose lambda would capture the name
+            // and be allocated on every call, cache hits included.
+            Uuid id = topicIds.get(name);
+            if (id == null) {
+                id = image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null);
+                if (id != null) {
+                    topicIds.put(name, id);
+                }
+            }
+            return id;
         }
 
         @Override
