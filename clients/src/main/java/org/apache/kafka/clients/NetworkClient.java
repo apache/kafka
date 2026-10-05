@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -32,6 +33,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CorrelationIdMismatchException;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
@@ -54,6 +56,8 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +78,13 @@ public class NetworkClient implements KafkaClient {
         ACTIVE,
         CLOSING,
         CLOSED
+    }
+
+    private enum ApiVersionsResponseOutcome {
+        MARK_READY,
+        RETRY,
+        DISCONNECT,
+        REBOOTSTRAP
     }
 
     private final Logger log;
@@ -121,7 +132,11 @@ public class NetworkClient implements KafkaClient {
 
     private final ApiVersions apiVersions;
 
-    private final ApiVersionNegotiator apiVersionNegotiator;
+    private final boolean discoverBrokerVersions;
+
+    private final boolean metadataClusterCheckEnable;
+
+    private final Map<String, ApiVersionsRequest.Builder> nodesNeedingApiVersionsFetch = new HashMap<>();
 
     private final List<ClientResponse> abortedSends = new LinkedList<>();
 
@@ -392,8 +407,8 @@ public class NetworkClient implements KafkaClient {
                 log, defaultRequestTimeoutMs, reconnectBackoffMs);
         this.rebootstrapTriggerMs = rebootstrapTriggerMs;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
-        this.apiVersionNegotiator = new ApiVersionNegotiator(discoverBrokerVersions, apiVersions,
-            metadataRecoveryStrategy, metadataClusterCheckEnable);
+        this.discoverBrokerVersions = discoverBrokerVersions;
+        this.metadataClusterCheckEnable = metadataClusterCheckEnable;
         this.bootstrapResolver = new BootstrapResolver(bootstrapConfiguration, time, log);
     }
 
@@ -497,7 +512,8 @@ public class NetworkClient implements KafkaClient {
         long now = time.milliseconds();
         cancelInFlightRequests(nodeId, now, null, false);
         connectionStates.remove(nodeId);
-        apiVersionNegotiator.onDisconnected(nodeId);
+        apiVersions.remove(nodeId);
+        nodesNeedingApiVersionsFetch.remove(nodeId);
     }
 
     /**
@@ -622,7 +638,7 @@ public class NetworkClient implements KafkaClient {
             // information itself.  It is also the case when discoverBrokerVersions is set to false.
             if (versionInfo == null) {
                 version = builder.latestAllowedVersion();
-                if (apiVersionNegotiator.isEnabled() && log.isTraceEnabled())
+                if (discoverBrokerVersions && log.isTraceEnabled())
                     log.trace("No version information found when sending {} with correlation id {} to node {}. " +
                             "Assuming version {}.", clientRequest.apiKey(), clientRequest.correlationId(), nodeId, version);
             } else {
@@ -950,7 +966,8 @@ public class NetworkClient implements KafkaClient {
                                       ChannelState disconnectState,
                                       boolean timedOut) {
         connectionStates.disconnected(nodeId, now);
-        apiVersionNegotiator.onDisconnected(nodeId);
+        apiVersions.remove(nodeId);
+        nodesNeedingApiVersionsFetch.remove(nodeId);
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
                 AuthenticationException exception = disconnectState.exception();
@@ -1089,10 +1106,23 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
+    private static ApiVersionsResponseOutcome determineApiVersionsAction(short requestVersion,
+                                                                         ApiVersionsResponse response,
+                                                                         MetadataRecoveryStrategy recoveryStrategy) {
+        short errorCode = response.data().errorCode();
+        if (errorCode == Errors.NONE.code())
+            return ApiVersionsResponseOutcome.MARK_READY;
+        if (recoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && errorCode == Errors.REBOOTSTRAP_REQUIRED.code())
+            return ApiVersionsResponseOutcome.REBOOTSTRAP;
+        if (requestVersion == 0 || errorCode != Errors.UNSUPPORTED_VERSION.code())
+            return ApiVersionsResponseOutcome.DISCONNECT;
+        return ApiVersionsResponseOutcome.RETRY;
+    }
+
     private void handleApiVersionsResponse(List<ClientResponse> responses,
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
-        switch (apiVersionNegotiator.handleResponse(node, req.request.version(), apiVersionsResponse)) {
+        switch (determineApiVersionsAction(req.request.version(), apiVersionsResponse, metadataRecoveryStrategy)) {
             case REBOOTSTRAP:
                 log.info("Rebootstrap requested by server due to cluster metadata mismatch for cluster {} and node {}.", this.metadataUpdater.clusterId(), node);
                 this.metadataUpdater.fetchNodes().forEach(nodeToClose -> {
@@ -1111,14 +1141,24 @@ public class NetworkClient implements KafkaClient {
                 this.selector.close(node);
                 processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
                 break;
-            case READY:
+            case MARK_READY:
+                apiVersions.update(node, new NodeApiVersions(
+                    apiVersionsResponse.data().apiKeys(),
+                    apiVersionsResponse.data().supportedFeatures(),
+                    apiVersionsResponse.data().finalizedFeatures(),
+                    apiVersionsResponse.data().finalizedFeaturesEpoch()));
                 this.connectionStates.ready(node);
                 log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, API versions: {}.",
                     node, apiVersionsResponse.data().finalizedFeaturesEpoch(), apiVersionsResponse.data().finalizedFeatures(),
                     apiVersionsResponse.data().supportedFeatures(), apiVersions.get(node));
                 break;
             case RETRY:
-                // The negotiator will offer the fallback request during this poll's send phase.
+                // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
+                // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
+                // If not provided, the client falls back to version 0.
+                ApiVersion apiVersion = apiVersionsResponse.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
+                short fallbackVersion = apiVersion == null ? 0 : apiVersion.maxVersion();
+                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(fallbackVersion));
                 break;
         }
     }
@@ -1151,8 +1191,8 @@ public class NetworkClient implements KafkaClient {
             // if SSL is enabled, the SSL handshake happens after the connection is established.
             // Therefore, it is still necessary to check isChannelReady before attempting to send on this
             // connection.
-            if (apiVersionNegotiator.isEnabled()) {
-                apiVersionNegotiator.onConnected(node);
+            if (discoverBrokerVersions) {
+                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder());
                 log.debug("Completed connection to node {}. Fetching API versions.", node);
             } else {
                 this.connectionStates.ready(node);
@@ -1162,21 +1202,37 @@ public class NetworkClient implements KafkaClient {
     }
 
     private void handleInitiateApiVersionRequests(long now) {
-        apiVersionNegotiator.maybeSendRequests((node, request) -> {
+        Iterator<Map.Entry<String, ApiVersionsRequest.Builder>> iterator = nodesNeedingApiVersionsFetch.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, ApiVersionsRequest.Builder> entry = iterator.next();
+            String node = entry.getKey();
             if (!selector.isChannelReady(node) || !inFlightRequests.canSendMore(node))
-                return false;
+                continue;
 
             log.debug("Initiating API versions fetch from node {}.", node);
             // We transition the connection to the CHECKING_API_VERSIONS state only when
             // the ApiVersionsRequest is queued up to be sent out. Without this, the client
             // could remain in the CHECKING_API_VERSIONS state forever if the channel does
             // not before ready.
-            this.connectionStates.checkingApiVersions(node);
-            apiVersionNegotiator.prepareRequest(node, request, metadataUpdater::clusterId);
+            connectionStates.checkingApiVersions(node);
+            ApiVersionsRequest.Builder request = entry.getValue();
+            prepareApiVersionsRequest(node, request);
             ClientRequest clientRequest = newClientRequest(node, request, now, true);
             doSend(clientRequest, true, now);
-            return true;
-        });
+            iterator.remove();
+        }
+    }
+
+    private void prepareApiVersionsRequest(String node, ApiVersionsRequest.Builder request) {
+        // Include cluster and node identity for broker-side checks when enabled (KIP-1242).
+        if (metadataRecoveryStrategy != MetadataRecoveryStrategy.NONE && metadataClusterCheckEnable) {
+            String clusterId = metadataUpdater.clusterId();
+            int nodeId = Integer.parseInt(node);
+            if (clusterId != null && nodeId >= 0) {
+                request.setClusterId(clusterId);
+                request.setNodeId(nodeId);
+            }
+        }
     }
 
     private void handleRebootstrap(List<ClientResponse> responses, long now) {
@@ -1293,7 +1349,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     public boolean discoverBrokerVersions() {
-        return apiVersionNegotiator.isEnabled();
+        return discoverBrokerVersions;
     }
 
     static class InFlightRequest {
