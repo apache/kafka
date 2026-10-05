@@ -1348,7 +1348,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     ).build()
 
     var response3: ConsumerGroupHeartbeatResponse = null
-    if (isConsumerAssignmentBatchingEnabled) {
+    if (isConsumerAssignmentBatchingEnabled || isConsumerAssignorOffloadEnabled) {
       TestUtils.waitUntilTrue(() => {
         response3 = connectAndReceive[ConsumerGroupHeartbeatResponse](request3)
         response3.data.errorCode == Errors.NONE.code &&
