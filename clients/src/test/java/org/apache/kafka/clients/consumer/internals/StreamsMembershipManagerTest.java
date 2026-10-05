@@ -1578,12 +1578,12 @@ public class StreamsMembershipManagerTest {
     }
 
     @Test
-    public void testIsLeavingGroupReturnsFalseForDynamicMemberWithRemainInGroupOperation() {
+    public void testIsLeavingGroupReturnsTrueForDynamicMemberWithRemainInGroupOperation() {
         setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
         joining();
         membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
         assertEquals(MemberState.LEAVING, membershipManager.state());
-        assertFalse(membershipManager.isLeavingGroup());
+        assertTrue(membershipManager.isLeavingGroup());
     }
 
     @Test
