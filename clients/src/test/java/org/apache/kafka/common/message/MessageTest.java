@@ -71,6 +71,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
@@ -861,20 +863,45 @@ public final class MessageTest {
     @Test
     public void testTaggedFieldsWrittenInAscendingTagOrder() {
         // KIP-482 requires tagged fields in strictly ascending tag order.
-        short version = 2;
-        SimpleExampleMessageData message = new SimpleExampleMessageData()
-            .setMyTaggedIntArray(List.of(1))
-            .setMyNullableString("a")
-            .setMyInt16((short) 1)
-            .setMyFloat64(1.0)
-            .setMyString("b")
-            .setMyBytes(new byte[] {0x1})
-            .setTaggedUuid(new Uuid(1L, 2L))
-            .setTaggedLong(1L)
-            .setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("c"))
-            .setTaggedLongFlexibleVersionSubset(1L);
-        message.unknownTaggedFields().add(new RawTaggedField(10, new byte[] {0x1}));
-        message.unknownTaggedFields().add(new RawTaggedField(15, new byte[0]));
+        // Setters for SimpleExampleMessage's known tagged fields, indexed by tag.
+        List<Consumer<SimpleExampleMessageData>> knownTagSetters = List.of(
+            m -> m.setMyTaggedIntArray(List.of(1)),
+            m -> m.setMyNullableString("a"),
+            m -> m.setMyInt16((short) 1),
+            m -> m.setMyFloat64(1.0),
+            m -> m.setMyString("b"),
+            m -> m.setMyBytes(new byte[] {0x1}),
+            m -> m.setTaggedUuid(new Uuid(1L, 2L)),
+            m -> m.setTaggedLong(1L),
+            m -> m.setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("c")),
+            m -> m.setTaggedLongFlexibleVersionSubset(1L));
+        for (int run = 0; run < 100; run++) {
+            long seed = System.nanoTime() + run;
+            Random random = new Random(seed);
+            short version = (short) (1 + random.nextInt(2));
+            // Tags 8 and 9 are only valid from version 2.
+            int numKnownTags = version == 1 ? 8 : knownTagSetters.size();
+            SimpleExampleMessageData message = new SimpleExampleMessageData();
+            List<Integer> expectedTags = new ArrayList<>();
+            for (int tag = 0; tag < numKnownTags; tag++) {
+                if (random.nextBoolean()) {
+                    knownTagSetters.get(tag).accept(message);
+                    expectedTags.add(tag);
+                }
+            }
+            // Unknown tags are the ones the schema does not define, so they are above all known tags.
+            int unknownTag = knownTagSetters.size() - 1;
+            int numUnknownTags = random.nextInt(5);
+            for (int i = 0; i < numUnknownTags; i++) {
+                unknownTag += 1 + random.nextInt(1000);
+                message.unknownTaggedFields().add(new RawTaggedField(unknownTag, new byte[random.nextInt(3)]));
+                expectedTags.add(unknownTag);
+            }
+            assertEquals(expectedTags, writtenTaggedFieldTags(message, version), "Failed with seed=" + seed);
+        }
+    }
+
+    private List<Integer> writtenTaggedFieldTags(SimpleExampleMessageData message, short version) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         ByteBuffer buf = ByteBuffer.allocate(message.size(cache, version));
         message.write(new ByteBufferAccessor(buf), cache, version);
@@ -890,7 +917,7 @@ public final class MessageTest {
             tags.add(accessor.readUnsignedVarint());
             accessor.readArray(accessor.readUnsignedVarint());
         }
-        assertEquals(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15), tags);
+        return tags;
     }
 
     private byte[] rawTaggedFieldsSection(int declaredCount, int... tagsAndSizes) {
