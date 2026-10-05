@@ -2269,7 +2269,7 @@ public class GroupMetadataManager {
         }
 
         // Check if assignment configurations have changed. A group with no recorded configs holds the defaults,
-        // so upgrading the broker does not rebalance every group that has nothing configured.
+        // so upgrading the broker only rebalances such a group if any effective config differs from its default.
         AssignmentConfigsImpl currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
         AssignmentConfigsImpl storedAssignmentConfigs = group.lastAssignmentConfigs();
         if (assignmentUpdate == AssignmentUpdate.NONE && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
@@ -6398,14 +6398,7 @@ public class GroupMetadataManager {
 
             // A record without configs (written before they were persisted) yields the defaults, so the next
             // heartbeat only rebalances the group if any effective config differs from its default.
-            Map<String, String> lastAssignmentConfigs = value.lastAssignmentConfigs() == null
-                ? Map.of()
-                : value.lastAssignmentConfigs().stream()
-                    .collect(Collectors.toMap(
-                        StreamsGroupMetadataValue.LastAssignmentConfig::key,
-                        StreamsGroupMetadataValue.LastAssignmentConfig::value
-                    ));
-            streamsGroup.setLastAssignmentConfigs(AssignmentConfigsImpl.fromMap(lastAssignmentConfigs));
+            streamsGroup.setLastAssignmentConfigs(AssignmentConfigsImpl.fromRecord(value.lastAssignmentConfigs()));
 
         } else {
             StreamsGroup streamsGroup;
