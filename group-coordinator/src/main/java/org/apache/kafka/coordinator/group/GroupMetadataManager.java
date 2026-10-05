@@ -2182,7 +2182,6 @@ public class GroupMetadataManager {
         // 1. Create or update the member.
         StreamsGroupMember.Builder updatedMemberBuilder = new StreamsGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
-            .maybeUpdateRackId(Optional.ofNullable(rackId))
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
             .maybeUpdateTopologyEpoch(topology != null ? OptionalInt.of(topology.epoch()) : OptionalInt.empty())
             .setClientId(clientId)
@@ -2193,10 +2192,13 @@ public class GroupMetadataManager {
         if (isJoining) {
             StreamsGroupMemberMetadataValue.Endpoint userEndpointMetadata = userEndpoint == null ? null :
                 new StreamsGroupMemberMetadataValue.Endpoint().setHost(userEndpoint.host()).setPort(userEndpoint.port());
-            updatedMemberBuilder.setUserEndpoint(userEndpointMetadata);
+            updatedMemberBuilder
+                .setUserEndpoint(userEndpointMetadata)
+                .setRackId(rackId);
         } else {
             updatedMemberBuilder
-                .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())));
+                .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())))
+                .maybeUpdateRackId(Optional.ofNullable(rackId));
         }
         StreamsGroupMember updatedMember = updatedMemberBuilder.build();
         
