@@ -67,6 +67,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
@@ -519,12 +520,50 @@ public class ConsumerHeartbeatRequestManagerTest
 
         if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation) {
             assertNoHeartbeat(heartbeatRequestManager);
+            verify(membershipManager).onHeartbeatRequestSkipped();
             verify(membershipManager, never()).onHeartbeatRequestGenerated();
         } else {
             assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
             verify(membershipManager).onHeartbeatRequestGenerated();
         }
 
+    }
+
+    @Test
+    public void testPollTimerExpirationShouldCompleteCloseWithRemainInGroup() {
+        ConsumerMembershipManager membershipManager = new ConsumerMembershipManager(
+            DEFAULT_GROUP_ID,
+            Optional.empty(),
+            Optional.empty(),
+            DEFAULT_MAX_POLL_INTERVAL_MS,
+            Optional.empty(),
+            subscriptions,
+            mock(CommitRequestManager.class),
+            mock(ConsumerMetadata.class),
+            logContext,
+            backgroundEventHandler,
+            time,
+            metrics,
+            false
+        );
+        ConsumerHeartbeatRequestManager heartbeatRequestManager = createHeartbeatRequestManager(
+            coordinatorRequestManager,
+            membershipManager,
+            new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS),
+            heartbeatRequestState,
+            backgroundEventHandler);
+        membershipManager.transitionToJoining();
+
+        // Process close after the poll timer expires, before the heartbeat manager handles the timeout.
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
+        CompletableFuture<Void> leaveGroup = membershipManager.leaveGroupOnClose(REMAIN_IN_GROUP);
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertFalse(leaveGroup.isDone());
+
+        assertNoHeartbeat(heartbeatRequestManager);
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        assertTrue(leaveGroup.isDone());
+        assertFalse(leaveGroup.isCompletedExceptionally());
     }
 
     @ParameterizedTest
@@ -596,10 +635,7 @@ public class ConsumerHeartbeatRequestManagerTest
     @ParameterizedTest
     @MethodSource("pollOnLeavingMatrix")
     public void testPollOnCloseGeneratesRequestIfNeeded(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
-        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation)
-            when(membershipManager.isLeavingGroup()).thenReturn(false);
-        else
-            when(membershipManager.isLeavingGroup()).thenReturn(true);
+        when(membershipManager.isLeavingGroup()).thenReturn(true);
         when(membershipManager.groupInstanceId()).thenReturn(groupInstanceId);
         when(membershipManager.leaveGroupOperation()).thenReturn(operation);
         String membership = groupInstanceId.isEmpty() ? "dynamic" : "static";
