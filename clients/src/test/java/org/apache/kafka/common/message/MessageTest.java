@@ -858,6 +858,41 @@ public final class MessageTest {
         verifyWriteSucceeds((short) 6, createTopics);
     }
 
+    @Test
+    public void testTaggedFieldsWrittenInAscendingTagOrder() {
+        // KIP-482 requires tagged fields in strictly ascending tag order.
+        short version = 2;
+        SimpleExampleMessageData message = new SimpleExampleMessageData()
+            .setMyTaggedIntArray(List.of(1))
+            .setMyNullableString("a")
+            .setMyInt16((short) 1)
+            .setMyFloat64(1.0)
+            .setMyString("b")
+            .setMyBytes(new byte[] {0x1})
+            .setTaggedUuid(new Uuid(1L, 2L))
+            .setTaggedLong(1L)
+            .setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("c"))
+            .setTaggedLongFlexibleVersionSubset(1L);
+        message.unknownTaggedFields().add(new RawTaggedField(10, new byte[] {0x1}));
+        message.unknownTaggedFields().add(new RawTaggedField(15, new byte[0]));
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        ByteBuffer buf = ByteBuffer.allocate(message.size(cache, version));
+        message.write(new ByteBufferAccessor(buf), cache, version);
+        buf.flip();
+
+        // The tagged-fields section comes last; a message with no tagged fields set has the same
+        // bytes before it, followed by a single zero byte for its empty section.
+        buf.position(new SimpleExampleMessageData().size(new ObjectSerializationCache(), version) - 1);
+        ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
+        int numTaggedFields = accessor.readUnsignedVarint();
+        List<Integer> tags = new ArrayList<>(numTaggedFields);
+        for (int i = 0; i < numTaggedFields; i++) {
+            tags.add(accessor.readUnsignedVarint());
+            accessor.readArray(accessor.readUnsignedVarint());
+        }
+        assertEquals(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15), tags);
+    }
+
     private byte[] rawTaggedFieldsSection(int declaredCount, int... tagsAndSizes) {
         ByteBuffer scratch = ByteBuffer.allocate(64);
         ByteUtils.writeUnsignedVarint(declaredCount, scratch);
