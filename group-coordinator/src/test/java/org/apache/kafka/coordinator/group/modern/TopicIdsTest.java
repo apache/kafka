@@ -248,17 +248,17 @@ public class TopicIdsTest {
         // A known topic is looked up in the image once, then served from the cache.
         assertEquals(fooUuid, resolver.id("foo"));
         assertEquals(fooUuid, resolver.id("foo"));
-        verify(metadataImage, times(1)).topicMetadata("foo");
+        verify(metadataImage, times(1)).topicId("foo");
 
         // An unknown topic is not cached, so it is looked up in the image every time.
         assertNull(resolver.id("bar"));
         assertNull(resolver.id("bar"));
-        verify(metadataImage, times(2)).topicMetadata("bar");
+        verify(metadataImage, times(2)).topicId("bar");
 
         // A cleared cache looks up the known topic in the image again.
         resolver.clear();
         assertEquals(fooUuid, resolver.id("foo"));
-        verify(metadataImage, times(2)).topicMetadata("foo");
+        verify(metadataImage, times(2)).topicId("foo");
     }
 
     @Test
@@ -275,16 +275,16 @@ public class TopicIdsTest {
         // A known topic is looked up in the image once, then served from the cache.
         assertEquals("foo", resolver.name(fooUuid));
         assertEquals("foo", resolver.name(fooUuid));
-        verify(metadataImage, times(1)).topicMetadata(fooUuid);
+        verify(metadataImage, times(1)).topicName(fooUuid);
 
         // An unknown topic is not cached, so it is looked up in the image every time.
         assertNull(resolver.name(barUuid));
         assertNull(resolver.name(barUuid));
-        verify(metadataImage, times(2)).topicMetadata(barUuid);
+        verify(metadataImage, times(2)).topicName(barUuid);
 
         // A cleared cache looks up the known topic in the image again.
         resolver.clear();
         assertEquals("foo", resolver.name(fooUuid));
-        verify(metadataImage, times(2)).topicMetadata(fooUuid);
+        verify(metadataImage, times(2)).topicName(fooUuid);
     }
 }

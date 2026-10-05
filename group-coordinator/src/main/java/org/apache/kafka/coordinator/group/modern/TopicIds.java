@@ -79,12 +79,12 @@ public class TopicIds implements Set<Uuid> {
 
         @Override
         public String name(Uuid id) {
-            return image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
+            return image.topicName(id);
         }
 
         @Override
         public Uuid id(String name) {
-            return image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null);
+            return image.topicId(name);
         }
 
         @Override
@@ -126,7 +126,7 @@ public class TopicIds implements Set<Uuid> {
             // be allocated on every call, cache hits included.
             String name = topicNames.get(id);
             if (name == null) {
-                name = image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
+                name = image.topicName(id);
                 if (name != null) {
                     topicNames.put(id, name);
                 }
@@ -140,7 +140,7 @@ public class TopicIds implements Set<Uuid> {
             // and be allocated on every call, cache hits included.
             Uuid id = topicIds.get(name);
             if (id == null) {
-                id = image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null);
+                id = image.topicId(name);
                 if (id != null) {
                     topicIds.put(name, id);
                 }
