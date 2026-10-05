@@ -59,8 +59,8 @@ public record AssignmentConfigsImpl(
      * @param configs The configs from the group metadata record, or null if the record has none.
      */
     public static AssignmentConfigsImpl fromRecord(List<StreamsGroupMetadataValue.LastAssignmentConfig> configs) {
-        // If a config is not present, we use its default value. This happens for records written before the configs
-        // were persisted, and for the rack-aware assignment tags when none are configured.
+        // If a config is not present, we use its default value. A record written before the configs were persisted has
+        // none, and a config added later is only written when it is not at its default.
         if (configs == null) {
             return DEFAULT;
         }
@@ -90,7 +90,8 @@ public record AssignmentConfigsImpl(
      * Converts the typed configs into the raw configs recorded for the group; the inverse of {@link #fromRecord(List)}.
      */
     public static Map<String, String> toMap(AssignmentConfigs assignmentConfigs) {
-        // The rack-aware assignment tags are only recorded when any are configured, matching what fromRecord expects.
+        // A config recorded from the start is always written; a config added later is only written when it is not at
+        // its default, matching what older versions write.
         Map<String, String> configs = new TreeMap<>();
         configs.put(NUM_STANDBY_REPLICAS_CONFIG, Integer.toString(assignmentConfigs.numStandbyReplicas()));
         if (!assignmentConfigs.rackAwareAssignmentTags().isEmpty()) {
