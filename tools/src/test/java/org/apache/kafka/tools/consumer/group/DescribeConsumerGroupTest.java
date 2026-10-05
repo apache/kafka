@@ -86,6 +86,8 @@ import static org.junit.jupiter.api.Assertions.fail;
         @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
         @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
         @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
+        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000"),
     }
 )
 public class DescribeConsumerGroupTest {
@@ -439,7 +441,7 @@ public class DescribeConsumerGroupTest {
                 }
                 // remove previous consumer groups, so we can have a clean cluster for next consumer group protocol test.
                 deleteConsumerGroups(groups);
-                deleteTopic(topic);
+                clusterInstance.deleteTopic(topic);
             }
         }
     }
@@ -1179,12 +1181,6 @@ public class DescribeConsumerGroupTest {
     private void deleteConsumerGroups(Collection<String> groupIds) {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             Assertions.assertDoesNotThrow(() -> admin.deleteConsumerGroups(groupIds).all().get());
-        }
-    }
-
-    private void deleteTopic(String topic) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.deleteTopics(List.of(topic)).topicNameValues().get(topic).get());
         }
     }
 

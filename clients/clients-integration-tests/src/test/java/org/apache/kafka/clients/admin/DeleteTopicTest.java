@@ -69,26 +69,17 @@ public class DeleteTopicTest {
     @ClusterTest
     public void testCreateAndDeleteTopic(ClusterInstance cluster) throws Exception {
         String testTopic = "test-topic";
-        try (Admin admin = cluster.admin()) {
-            // Create a test topic
-            cluster.createTopic(testTopic, 1, (short) 3);
+        // Create a test topic
+        cluster.createTopic(testTopic, 1, (short) 3);
 
-            // Delete topic
-            DeleteTopicsResult deleteResult = admin.deleteTopics(List.of(testTopic));
-            deleteResult.all().get();
-
-            // Wait for topic deletion
-            cluster.waitTopicDeletion(testTopic);
-        }
+        // Delete topic and wait for topic deletion
+        cluster.deleteTopic(testTopic);
     }
 
     @ClusterTest
     public void testDeleteTopicWithAllAliveReplicas(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
-            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
-            cluster.waitTopicDeletion(DEFAULT_TOPIC);
-        }
+        cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
+        cluster.deleteTopic(DEFAULT_TOPIC);
     }
 
     @ClusterTest
@@ -209,15 +200,12 @@ public class DeleteTopicTest {
 
     @ClusterTest
     public void testRecreateTopicAfterDeletion(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
-            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
-            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
-            cluster.waitTopicDeletion(DEFAULT_TOPIC);
-            // re-create topic on same replicas
-            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
-            waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic " + DEFAULT_TOPIC + " not created.");
-        }
+        cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
+        TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+        cluster.deleteTopic(DEFAULT_TOPIC);
+        // re-create topic on same replicas
+        cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
+        waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic " + DEFAULT_TOPIC + " not created.");
     }
 
     @ClusterTest
@@ -248,23 +236,20 @@ public class DeleteTopicTest {
         @ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "1048577")
     })
     public void testDeleteTopicWithCleaner(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
-            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
-            // for simplicity, we are validating cleaner offsets on a single broker
-            KafkaBroker server = cluster.brokers().values().stream().findFirst().orElseThrow();
-            TestUtils.waitForCondition(() -> server.logManager().getLog(topicPartition, false).isPresent(),
-                "Replicas for topic test not created.");
-            UnifiedLog log = server.logManager().getLog(topicPartition, false).get();
-            writeDups(100, 3, log);
-            // force roll the segment so that cleaner can work on it
-            server.logManager().getLog(topicPartition, false).get().roll(Optional.empty());
-            // wait for cleaner to clean
-            server.logManager().cleaner().awaitCleaned(topicPartition, 0, 60000);
-            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
+        cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
+        TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+        // for simplicity, we are validating cleaner offsets on a single broker
+        KafkaBroker server = cluster.brokers().values().stream().findFirst().orElseThrow();
+        TestUtils.waitForCondition(() -> server.logManager().getLog(topicPartition, false).isPresent(),
+            "Replicas for topic test not created.");
+        UnifiedLog log = server.logManager().getLog(topicPartition, false).get();
+        writeDups(100, 3, log);
+        // force roll the segment so that cleaner can work on it
+        server.logManager().getLog(topicPartition, false).get().roll(Optional.empty());
+        // wait for cleaner to clean
+        server.logManager().cleaner().awaitCleaned(topicPartition, 0, 60000);
 
-            cluster.waitTopicDeletion(DEFAULT_TOPIC);
-        }
+        cluster.deleteTopic(DEFAULT_TOPIC);
     }
 
     @ClusterTest
