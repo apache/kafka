@@ -57,7 +57,7 @@ public final class AssignorHelpers {
      * @param numMappings The expected number of mappings.
      * @return The newly created map.
      */
-    static <K, V> HashMap<K, V> newHashMap(int numMappings) {
+    public static <K, V> HashMap<K, V> newHashMap(int numMappings) {
         return new HashMap<>((int) (((numMappings + 1) / 0.75f) + 1));
     }
 
@@ -66,7 +66,7 @@ public final class AssignorHelpers {
      * @param numElements The expected number of elements.
      * @return The newly created set.
      */
-    static <K> HashSet<K> newHashSet(int numElements) {
+    public static <K> HashSet<K> newHashSet(int numElements) {
         return new HashSet<>((int) (((numElements + 1) / 0.75f) + 1));
     }
 }
