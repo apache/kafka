@@ -54,6 +54,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
@@ -89,7 +90,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -12267,8 +12267,13 @@ public class SharePartitionTest {
 
         sharePartition.close();
         // close must deregister the metrics so the registry no longer references the partition.
-        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT));
-        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT));
+        // yammerMetricValue() cannot be used here as it swallows a missing metric and returns 0,
+        // which would make this assertion pass even if close() failed to deregister anything -
+        // check the registry directly instead.
+        assertTrue(KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
+            .noneMatch(m -> m.getMBeanName().contains(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT)));
+        assertTrue(KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
+            .noneMatch(m -> m.getMBeanName().contains(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT)));
 
         // close must be idempotent - a second call should not throw even though the metrics are gone.
         assertDoesNotThrow(sharePartition::close);
@@ -12286,8 +12291,14 @@ public class SharePartitionTest {
         assertEquals(0, yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).intValue());
 
         sharePartition.close();
-        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT));
-        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT));
+        // close must deregister the metrics so the registry no longer references the partition.
+        // yammerMetricValue() cannot be used here as it swallows a missing metric and returns 0,
+        // which would make this assertion pass even if close() failed to deregister anything -
+        // check the registry directly instead.
+        assertTrue(KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
+            .noneMatch(m -> m.getMBeanName().contains(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT)));
+        assertTrue(KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
+            .noneMatch(m -> m.getMBeanName().contains(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT)));
     }
 
     private static class SharePartitionBuilder {

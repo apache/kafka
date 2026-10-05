@@ -28,11 +28,11 @@ type: docs
 
 ## Step 1: Get Kafka
 
-[Download](https://www.apache.org/dyn/closer.cgi?path=/kafka/4.2.0/kafka_2.13-4.2.0.tgz) the latest Kafka release and extract it: 
+[Download](https://www.apache.org/dyn/closer.cgi?path=/kafka/4.2.2/kafka_2.13-4.2.2.tgz) the latest Kafka release and extract it: 
     
     
-    $ tar -xzf kafka_2.13-4.2.0.tgz
-    $ cd kafka_2.13-4.2.0
+    $ tar -xzf kafka_2.13-4.2.2.tgz
+    $ cd kafka_2.13-4.2.2
 
 ## Step 2: Start the Kafka environment
 
@@ -64,24 +64,24 @@ Once the Kafka server has successfully launched, you will have a basic Kafka env
 Get the Docker image:
     
     
-    $ docker pull apache/kafka:4.2.0
+    $ docker pull apache/kafka:4.2.2
 
 Start the Kafka Docker container: 
     
     
-    $ docker run -p 9092:9092 apache/kafka:4.2.0
+    $ docker run -p 9092:9092 apache/kafka:4.2.2
 
 ### Using GraalVM Based Native Apache Kafka Docker Image
 
 Get the Docker image:
     
     
-    $ docker pull apache/kafka-native:4.2.0
+    $ docker pull apache/kafka-native:4.2.2
 
 Start the Kafka Docker container:
     
     
-    $ docker run -p 9092:9092 apache/kafka-native:4.2.0
+    $ docker run -p 9092:9092 apache/kafka-native:4.2.2
 
 ## Step 3: Create a topic to store your events
 
@@ -135,12 +135,12 @@ You probably have lots of data in existing systems like relational databases or 
 
 In this quickstart we'll see how to run Kafka Connect with simple connectors that import data from a file to a Kafka topic and export data from a Kafka topic to a file. 
 
-First, make sure to add `connect-file-4.2.0.jar` to the `plugin.path` property in the Connect worker's configuration. For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory. However, it's worth noting that for production deployments using absolute paths is always preferable. See [plugin.path](../../configuration/kafka-connect-configs/#connectconfigs_plugin.path) for a detailed description of how to set this config. 
+First, make sure to add `connect-file-4.2.2.jar` to the `plugin.path` property in the Connect worker's configuration. For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory. However, it's worth noting that for production deployments using absolute paths is always preferable. See [plugin.path](../../configuration/kafka-connect-configs/#connectconfigs_plugin.path) for a detailed description of how to set this config. 
 
 Edit the `config/connect-standalone.properties` file, add or change the `plugin.path` configuration property match the following, and save the file: 
     
     
-    $ echo "plugin.path=libs/connect-file-4.2.0.jar" >> config/connect-standalone.properties
+    $ echo "plugin.path=libs/connect-file-4.2.2.jar" >> config/connect-standalone.properties
 
 Then, start by creating some seed data to test with: 
     
