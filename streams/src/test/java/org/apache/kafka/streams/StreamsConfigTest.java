@@ -1438,8 +1438,10 @@ public class StreamsConfigTest {
         assertTrue(config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG).isEmpty());
     }
 
-    @Test
-    public void shouldThrowExceptionWhenClientTagsExceedTheLimit() {
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldThrowExceptionWhenClientTagsExceedTheLimit(final String protocol) {
+        props.put(GROUP_PROTOCOL_CONFIG, protocol);
         final int limit = StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + 1;
         for (int i = 0; i < limit; i++) {
             props.put(StreamsConfig.clientTagPrefix("k" + i), "v" + i);
@@ -1502,7 +1504,19 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldIgnoreRackAwareAssignmentTagsWithStreamsProtocol() {
+        props.put(GROUP_PROTOCOL_CONFIG, "streams");
+        props.put(StreamsConfig.clientTagPrefix("zone"), "seoul");
+        for (final String tags : List.of("cluster", "zone, ", "zone", "")) {
+            props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, tags);
+            final StreamsConfig config = new StreamsConfig(props);
+            assertEquals(Map.of("zone", "seoul"), config.getClientTags());
+        }
+    }
+
+    @Test
     public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithUnknownTags() {
+        props.put(GROUP_PROTOCOL_CONFIG, "classic");
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster");
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
@@ -1526,6 +1540,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithEmptyTag() {
+        props.put(GROUP_PROTOCOL_CONFIG, "classic");
         // AbstractConfig is supposed to take care of WS handling for LIST type
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone, ");
         props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
@@ -1536,8 +1551,10 @@ public class StreamsConfigTest {
         );
     }
 
-    @Test
-    public void shouldThrowExceptionWhenClientTagKeyExceedMaxLimit() {
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldThrowExceptionWhenClientTagKeyExceedMaxLimit(final String protocol) {
+        props.put(GROUP_PROTOCOL_CONFIG, protocol);
         final String key = String.join("", nCopies(MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + 1, "k"));
         props.put(StreamsConfig.clientTagPrefix(key), "eu-central-1a");
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
@@ -1552,8 +1569,10 @@ public class StreamsConfigTest {
         );
     }
 
-    @Test
-    public void shouldThrowExceptionWhenClientTagValueExceedMaxLimit() {
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldThrowExceptionWhenClientTagValueExceedMaxLimit(final String protocol) {
+        props.put(GROUP_PROTOCOL_CONFIG, protocol);
         final String value = String.join("", nCopies(MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + 1, "v"));
         props.put(StreamsConfig.clientTagPrefix("x"), value);
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
@@ -1567,8 +1586,10 @@ public class StreamsConfigTest {
         );
     }
 
-    @Test
-    public void shouldThrowExceptionWhenClientTagKeyIsEmpty() {
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldThrowExceptionWhenClientTagKeyIsEmpty(final String protocol) {
+        props.put(GROUP_PROTOCOL_CONFIG, protocol);
         props.put(StreamsConfig.clientTagPrefix(" "), "tagValue");
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
@@ -1577,9 +1598,11 @@ public class StreamsConfigTest {
         );
     }
 
-    @Test
-    public void shouldThrowExceptionWhenClientTagValueIsEmpty() {
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldThrowExceptionWhenClientTagValueIsEmpty(final String protocol) {
         final Map<String, Object> config = new HashMap<>();
+        config.put(GROUP_PROTOCOL_CONFIG, protocol);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app.id");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         config.put(StreamsConfig.clientTagPrefix("tagKey"), " ");

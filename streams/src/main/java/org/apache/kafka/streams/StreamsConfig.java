@@ -1746,25 +1746,28 @@ public class StreamsConfig extends AbstractConfig {
             );
         }
 
-        for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
-            // no need to call `trim()` because for LIST type `AbstractConfig` takes already care of this
-            if (rackAwareAssignmentTag.isEmpty()) {
-                throw new ConfigException(
-                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                    rackAwareAssignmentTags,
-                    "Contains invalid value []. Tag key cannot be empty."
-                );
-            }
-            if (!clientTags.containsKey(rackAwareAssignmentTag)) {
-                throw new ConfigException(
-                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                    rackAwareAssignmentTags,
-                    String.format(
-                        "Contains invalid value [%s] which doesn't have corresponding tag set via [%s] prefix.",
-                        rackAwareAssignmentTag,
-                        CLIENT_TAG_PREFIX
-                    )
-                );
+        // The streams protocol resolves assignment tags from broker and group configurations.
+        if (GroupProtocol.CLASSIC.name().equalsIgnoreCase(getString(GROUP_PROTOCOL_CONFIG))) {
+            for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
+                // no need to call `trim()` because for LIST type `AbstractConfig` takes already care of this
+                if (rackAwareAssignmentTag.isEmpty()) {
+                    throw new ConfigException(
+                        RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                        rackAwareAssignmentTags,
+                        "Contains invalid value []. Tag key cannot be empty."
+                    );
+                }
+                if (!clientTags.containsKey(rackAwareAssignmentTag)) {
+                    throw new ConfigException(
+                        RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                        rackAwareAssignmentTags,
+                        String.format(
+                            "Contains invalid value [%s] which doesn't have corresponding tag set via [%s] prefix.",
+                            rackAwareAssignmentTag,
+                            CLIENT_TAG_PREFIX
+                        )
+                    );
+                }
             }
         }
 
