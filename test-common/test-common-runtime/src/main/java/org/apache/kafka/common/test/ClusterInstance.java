@@ -356,12 +356,17 @@ public interface ClusterInstance {
      * Deletes a topic and waits for the deletion to complete.
      *
      * @param topicName The name of the topic to delete
-     * @throws InterruptedException If the operation is interrupted
      */
-    default void deleteTopic(String topicName) throws InterruptedException, ExecutionException {
+    default void deleteTopic(String topicName) {
         try (Admin admin = admin()) {
-            admin.deleteTopics(List.of(topicName));
+            admin.deleteTopics(List.of(topicName)).all().get();
             waitTopicDeletion(topicName);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Failed to delete topic " + topicName, e);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof RuntimeException re) throw re;
+            throw new RuntimeException("Failed to delete topic " + topicName, e.getCause());
         }
     }
 
