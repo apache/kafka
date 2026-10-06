@@ -23,6 +23,9 @@
   // Version 1 introduces DeliveryCompleteCount in the response (KIP-1226).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+",
       "about": "The group identifier." },

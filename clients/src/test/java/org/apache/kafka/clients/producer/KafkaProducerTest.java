@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.ClientInstanceIdCapture;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
@@ -727,10 +728,7 @@ public class KafkaProducerTest {
             });
 
             // Close producer should not complete until send succeeds
-            try {
-                future.get(100, TimeUnit.MILLISECONDS);
-                fail("Close completed without waiting for send");
-            } catch (java.util.concurrent.TimeoutException expected) { /* ignore */ }
+            assertThrows(java.util.concurrent.TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS), "Close completed without waiting for send");
 
             // Ensure send has started
             client.waitForRequests(1, 1000);
@@ -792,9 +790,9 @@ public class KafkaProducerTest {
                 new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
                 new StringSerializer(), new StringSerializer(), metadata, mockClient, null, new ApiVersions(), time) {
             @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata, Uuid clientInstanceId) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 0, 100_000));
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 0, 100_000), clientInstanceId);
             }
         };
     }
@@ -2016,14 +2014,15 @@ public class KafkaProducerTest {
         properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        Time time = new MockTime(1);
+        // No auto-tick: the sender thread would otherwise burn the max.block.ms budget
+        // that sendOffsetsToTransaction shares between the metadata refresh and TxnOffsetCommit.
+        Time time = new MockTime();
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
         ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
 
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
 
-        Node node = metadata.fetch().nodes().get(0);
         client.setNodeApiVersions(NodeApiVersions.create());
         NodeApiVersions nodeApiVersions = new NodeApiVersions(NodeApiVersions.create().allSupportedApiVersions().values(),
             Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
@@ -2038,8 +2037,6 @@ public class KafkaProducerTest {
         client.setNodeApiVersions(nodeApiVersions);
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
-
-        client.throttle(node, 5000);
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
@@ -3461,5 +3458,29 @@ public class KafkaProducerTest {
             assertThrows(BootstrapResolutionException.class,
                 () -> producer.sendOffsetsToTransaction(offsets, groupMetadata));
         }
+    }
+
+    @Test
+    public void testProducerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero() {
+        // Default bootstrap.resolve.timeout.ms=0 resolves DNS synchronously in the constructor;
+        // any failure surfaces as ConfigException (wrapped in KafkaException by the constructor's
+        // outer try/catch), so no producer instance is created.
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost
+        );
+
+        KafkaException e = assertThrows(KafkaException.class, () -> new KafkaProducer<>(configs));
+        assertInstanceOf(ConfigException.class, e.getCause());
+    }
+
+    @Test
+    public void testClientInstanceIdIsPassedToTheNetworkClient() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        ClientInstanceIdCapture.assertGenerated(
+            () -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()));
     }
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -166,11 +167,10 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             topics.add(m);
         }
 
-        Map<String, MemberAssignment> assignments = new HashMap<>((int) ((groupSpec.memberIds().size() / 0.75f) + 1));
-        int memberAssignmentInitialCapacity = (int) ((topics.size() / 0.75f) + 1);
+        Map<String, MemberAssignment> assignments = Utils.newHashMap(groupSpec.memberIds().size());
 
         for (String memberId : memberIds) {
-            Map<Uuid, Set<Integer>> assignment = new HashMap<>(memberAssignmentInitialCapacity);
+            Map<Uuid, Set<Integer>> assignment = Utils.newHashMap(topics.size());
             for (TopicMetadata topicMetadata : topics) {
                 topicMetadata.maybeComputeQuota();
                 addPartitionsToAssignment(topicMetadata, assignment);
@@ -211,11 +211,11 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             }
         }
 
-        Map<String, MemberAssignment> assignments = new HashMap<>((int) ((groupSpec.memberIds().size() / 0.75f) + 1));
+        Map<String, MemberAssignment> assignments = Utils.newHashMap(groupSpec.memberIds().size());
 
         for (String memberId : memberIds) {
             MemberSubscription subs = groupSpec.memberSubscription(memberId);
-            Map<Uuid, Set<Integer>> assignment = new HashMap<>((int) ((subs.subscribedTopicIds().size() / 0.75f) + 1));
+            Map<Uuid, Set<Integer>> assignment = Utils.newHashMap(subs.subscribedTopicIds().size());
             for (Uuid topicId : subs.subscribedTopicIds()) {
                 TopicMetadata metadata = topics.get(topicId);
                 metadata.maybeComputeQuota();

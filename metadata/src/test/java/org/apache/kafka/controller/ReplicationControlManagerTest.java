@@ -94,6 +94,7 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -238,7 +239,8 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setQuorumFeatures(new QuorumFeatures(0,
                     QuorumFeatures.defaultSupportedFeatureMap(true),
-                    List.of(0))).
+                    () -> Set.of(0))).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
             this.featureControl.replay(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
@@ -263,6 +265,7 @@ public class ReplicationControlManagerTest {
                 setFeatureControl(featureControl).
                 setStaticConfig(staticConfig).
                 setKafkaConfigSchema(FakeKafkaConfigSchema.INSTANCE).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 build();
             this.offsetControlManager = new OffsetControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
@@ -271,6 +274,7 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
+                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
                 setConfigurationControl(configurationControl).
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
@@ -608,7 +612,7 @@ public class ReplicationControlManagerTest {
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
                 () -> replicationControl.createTopics(requestContext, request, Set.of("foo", "bar", "baz"), false));
-        assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
+        assertEquals(error.getMessage(), "Too many partitions in request.");
     }
 
     @Test
@@ -625,9 +629,9 @@ public class ReplicationControlManagerTest {
                 .setAssignments(assignments));
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
-                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999)
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 9999, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
         );
-        assertEquals(error.getMessage(), "Excessively large number of partitions per request.");
+        assertEquals(error.getMessage(), "Too many partitions in request.");
     }
 
     @Test
@@ -640,9 +644,25 @@ public class ReplicationControlManagerTest {
 
         PolicyViolationException error = assertThrows(
                 PolicyViolationException.class,
-                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1)
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1, KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
         );
-        assertEquals("Excessively large number of partitions per request.", error.getMessage());
+        assertEquals("Too many partitions in request.", error.getMessage());
+    }
+
+    @Test
+    public void testBuilderRequiresPositiveMaxRecordsPerBatch() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        for (int invalidMaxRecordsPerBatch : new int[] {0, -1, -100}) {
+            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new ReplicationControlManager.Builder().
+                    setSnapshotRegistry(ctx.snapshotRegistry).
+                    setLogContext(ctx.logContext).
+                    setConfigurationControl(ctx.configurationControl).
+                    setClusterControl(ctx.clusterControl).
+                    setMaxRecordsPerBatch(invalidMaxRecordsPerBatch).
+                    build());
+            assertEquals("Max records per batch must be greater than zero", exception.getMessage());
+        }
     }
 
     @Test
@@ -1808,6 +1828,165 @@ public class ReplicationControlManagerTest {
                 build(),
             replicationControl.getPartition(
                 ((TopicRecord) result.records().get(0).message()).topicId(), 1));
+    }
+
+    @Test
+    public void testCreatePartitionsWithOverSizedBatch() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        int initialPartitions = 2;
+        request.topics().add(
+            new CreatableTopic().
+                setName("foo").
+                setNumPartitions(initialPartitions).
+                setReplicationFactor((short) 2)
+        );
+        request.topics().add(
+            new CreatableTopic().
+                setName("bar").
+                setNumPartitions(initialPartitions).
+                setReplicationFactor((short) 2)
+        );
+        request.topics().add(
+            new CreatableTopic().
+                setName("baz").
+                setNumPartitions(initialPartitions).
+                setReplicationFactor((short) 2)
+        );
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
+            createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request, Set.of(), false);
+        ctx.replay(createTopicResult.records());
+
+        ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_PARTITIONS);
+
+        // A single extremely large, existing topic should trip the error.
+        List<CreatePartitionsTopic> oneLargePartition = List.of(
+            new CreatePartitionsTopic().
+                setName("foo").
+                setCount(Integer.MAX_VALUE).
+                setAssignments(null)
+        );
+        Throwable t = assertThrows(
+                PolicyViolationException.class,
+                () -> replicationControl.createPartitions(requestContext, oneLargePartition)
+        );
+        assertEquals(
+            "Excessively large number of additional partitions per request.",
+            t.getMessage()
+        );
+
+        // Negative counts are ignored.
+        List<CreatePartitionsTopic> negativeOnly = List.of(
+            new CreatePartitionsTopic().
+                setName("foo").
+                setCount(Integer.MIN_VALUE).
+                setAssignments(null)
+        );
+        ControllerResult<List<CreatePartitionsTopicResult>> r1 =
+            replicationControl.createPartitions(requestContext, negativeOnly);
+        assertEquals(
+            List.of(
+                new CreatePartitionsTopicResult().
+                    setName("foo").
+                    setErrorCode(INVALID_PARTITIONS.code()).
+                    setErrorMessage("The topic foo currently has 2 partition(s); -2147483648 would not be an increase.")
+            ),
+            r1.response()
+        );
+
+        // Negative and positive counts do not sum together.
+        List<CreatePartitionsTopic> positiveAndNegative = List.of(
+            new CreatePartitionsTopic().
+                setName("foo").
+                setCount(3).
+                setAssignments(null),
+            new CreatePartitionsTopic().
+                setName("bar").
+                setCount(Integer.MIN_VALUE).
+                setAssignments(null),
+            new CreatePartitionsTopic().
+                setName("baz").
+                setCount(Integer.MAX_VALUE).
+                setAssignments(null)
+        );
+        assertThrows(
+            PolicyViolationException.class,
+            () -> replicationControl.createPartitions(requestContext, positiveAndNegative)
+        );
+
+        // Do not throw if additional partitions exactly equals KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT
+        List<CreatePartitionsTopic> exactlyAtLimit = List.of(
+            new CreatePartitionsTopic().
+                setName("foo").
+                setCount(initialPartitions + 1).
+                setAssignments(null),
+            new CreatePartitionsTopic().
+                setName("bar").
+                setCount(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT / 2 + initialPartitions - 1).
+                setAssignments(null),
+            new CreatePartitionsTopic().
+                setName("baz").
+                setCount(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT / 2 + initialPartitions).
+                setAssignments(null)
+        );
+        ControllerResult<List<CreatePartitionsTopicResult>> r2 =
+            replicationControl.createPartitions(requestContext, exactlyAtLimit);
+        assertEquals(
+            List.of(
+                new CreatePartitionsTopicResult().
+                    setName("foo").
+                    setErrorCode(NONE.code()),
+                new CreatePartitionsTopicResult().
+                    setName("bar").
+                    setErrorCode(NONE.code()),
+                new CreatePartitionsTopicResult().
+                    setName("baz").
+                    setErrorCode(NONE.code())
+            ),
+            r2.response()
+        );
+
+        // Topics which do not exist do not count towards the limit.
+        // Topics which attempt to reduce the number of partitions do not count towards the total.
+        List<CreatePartitionsTopic> errorResultsDontCount = List.of(
+            new CreatePartitionsTopic().
+                setName("foo").
+                setCount(initialPartitions + KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+                setAssignments(null),
+            new CreatePartitionsTopic().
+                setName("quux").
+                setCount(Integer.MAX_VALUE).
+                setAssignments(null),
+            new CreatePartitionsTopic().
+                setName("bar").
+                setCount(initialPartitions - 1).
+                setAssignments(
+                    List.of(
+                        new CreatePartitionsAssignment().setBrokerIds(List.of(1, 2))
+                    )
+                )
+        );
+        ControllerResult<List<CreatePartitionsTopicResult>> r3 =
+            replicationControl.createPartitions(requestContext, errorResultsDontCount);
+        assertEquals(
+            List.of(
+                new CreatePartitionsTopicResult().
+                    setName("foo").
+                    setErrorCode(NONE.code()),
+                new CreatePartitionsTopicResult().
+                    setName("quux").
+                    setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
+                    setErrorMessage(null),
+                new CreatePartitionsTopicResult().
+                    setName("bar").
+                    setErrorCode(INVALID_PARTITIONS.code()).
+                    setErrorMessage("The topic bar currently has 2 partition(s); 1 would not be an increase.")
+            ),
+            r3.response()
+        );
     }
 
     @Test

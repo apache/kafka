@@ -25,12 +25,6 @@ import java.util.Set;
 
 public class TaskAssignmentTestUtil {
 
-    public enum TaskRole {
-        ACTIVE,
-        STANDBY,
-        WARMUP
-    }
-
     @SafeVarargs
     public static TasksTuple mkTasksTuple(TaskRole taskRole, Map.Entry<String, Set<Integer>>... entries) {
         return switch (taskRole) {

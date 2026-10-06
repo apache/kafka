@@ -18,7 +18,6 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -100,9 +99,6 @@ public class EndToEndLatencyTest {
             return with(param, "0");
         }
     }
-
-    @Mock
-    KafkaConsumer<byte[], byte[]> consumer;
 
     @Mock
     ConsumerRecords<byte[], byte[]> records;
@@ -204,7 +200,7 @@ public class EndToEndLatencyTest {
     @Test
     public void shouldFailWhenConsumerRecordsIsEmpty() {
         when(records.isEmpty()).thenReturn(true);
-        assertThrows(RuntimeException.class, () -> EndToEndLatency.validate(consumer, new byte[0], records, null, null));
+        assertThrows(RuntimeException.class, () -> EndToEndLatency.validate(new byte[0], records, null, null));
     }
 
     @Test
@@ -216,7 +212,7 @@ public class EndToEndLatencyTest {
         when(records.iterator()).thenReturn(iterator);
         when(iterator.next()).thenReturn(record);
         when(record.value()).thenReturn(RECORD_VALUE_DIFFERENT);
-        assertThrows(RuntimeException.class, () -> EndToEndLatency.validate(consumer, RECORD_VALUE, records, null, null));
+        assertThrows(RuntimeException.class, () -> EndToEndLatency.validate(RECORD_VALUE, records, null, null));
     }
 
     @Test
@@ -231,7 +227,7 @@ public class EndToEndLatencyTest {
         when(record.key()).thenReturn(RECORD_KEY_DIFFERENT);
 
         assertThrows(RuntimeException.class, () ->
-                EndToEndLatency.validate(consumer, RECORD_VALUE, records,
+                EndToEndLatency.validate(RECORD_VALUE, records,
                         RECORD_KEY, null));
     }
 
@@ -258,7 +254,7 @@ public class EndToEndLatencyTest {
         List<Header> sentHeaders = List.of(sentHeader);
 
         assertThrows(RuntimeException.class, () ->
-                EndToEndLatency.validate(consumer, RECORD_VALUE, records, null, sentHeaders));
+                EndToEndLatency.validate(RECORD_VALUE, records, null, sentHeaders));
     }
 
     @Test
@@ -283,7 +279,7 @@ public class EndToEndLatencyTest {
         when(headerIterator.next()).thenReturn(receivedHeader);
 
         assertThrows(RuntimeException.class, () ->
-                EndToEndLatency.validate(consumer, RECORD_VALUE, records, null, sentHeaders));
+                EndToEndLatency.validate(RECORD_VALUE, records, null, sentHeaders));
     }
 
     @Test
@@ -296,7 +292,7 @@ public class EndToEndLatencyTest {
         when(iterator.next()).thenReturn(record);
         when(record.value()).thenReturn(RECORD_VALUE);
         when(records.count()).thenReturn(2);
-        assertThrows(RuntimeException.class, () -> EndToEndLatency.validate(consumer, RECORD_VALUE, records, null, null));
+        assertThrows(RuntimeException.class, () -> EndToEndLatency.validate(RECORD_VALUE, records, null, null));
     }
 
     @Test
@@ -322,7 +318,7 @@ public class EndToEndLatencyTest {
         when(headerIterator.hasNext()).thenReturn(true, true, false);
         when(headerIterator.next()).thenReturn(receivedHeader);
 
-        assertDoesNotThrow(() -> EndToEndLatency.validate(consumer, RECORD_VALUE, records, recordKey, sentHeaders));
+        assertDoesNotThrow(() -> EndToEndLatency.validate(RECORD_VALUE, records, recordKey, sentHeaders));
     }
 
     @Test

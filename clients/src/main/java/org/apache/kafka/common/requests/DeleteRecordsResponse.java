@@ -75,8 +75,4 @@ public class DeleteRecordsResponse extends AbstractResponse {
         return new DeleteRecordsResponse(new DeleteRecordsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
 }

@@ -28,7 +28,6 @@ import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.RaftLog;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -54,7 +53,6 @@ public final class KRaftControlRecordStateMachine {
 
     private final LogContext logContext;
     private final RaftLog log;
-    private final RecordSerde<?> serde;
     private final Logger logger;
     private final int maxBatchSizeBytes;
 
@@ -80,14 +78,12 @@ public final class KRaftControlRecordStateMachine {
      *
      * @param staticVoterSet the set of voter statically configured
      * @param log the on disk topic partition
-     * @param serde the record decoder for data records
      * @param maxBatchSizeBytes the maximum size of record batch
      * @param logContext the log context
      */
     public KRaftControlRecordStateMachine(
         VoterSet staticVoterSet,
         RaftLog log,
-        RecordSerde<?> serde,
         int maxBatchSizeBytes,
         LogContext logContext,
         KafkaRaftMetrics kafkaRaftMetrics,
@@ -96,7 +92,6 @@ public final class KRaftControlRecordStateMachine {
         this.logContext = logContext;
         this.log = log;
         this.voterSetHistory = new VoterSetHistory(staticVoterSet, logContext);
-        this.serde = serde;
         this.maxBatchSizeBytes = maxBatchSizeBytes;
         this.logger = logContext.logger(getClass());
         this.kafkaRaftMetrics = kafkaRaftMetrics;
@@ -237,7 +232,7 @@ public final class KRaftControlRecordStateMachine {
                 );
                 try (RecordsIterator<?> iterator = new RecordsIterator<>(
                         info.records,
-                        serde,
+                        RecordsDecodingStrategy.controlOnly(),
                         bufferSupplier,
                         maxBatchSizeBytes,
                         true, // Validate batch CRC
@@ -267,9 +262,8 @@ public final class KRaftControlRecordStateMachine {
 
             // Load the snapshot since the listener is at the start of the log or the log doesn't have the next entry.
             try (BufferSupplier bufferSupplier = BufferSupplier.create();
-                 SnapshotReader<?> reader = RecordsSnapshotReader.of(
+                 SnapshotReader<?> reader = RecordsSnapshotReader.ofControlOnly(
                     rawSnapshot,
-                    serde,
                     bufferSupplier,
                     maxBatchSizeBytes,
                     true, // Validate batch CRC

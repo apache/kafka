@@ -29,9 +29,8 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
@@ -60,21 +59,17 @@ public class ProcessorContextTest {
 
     @Test
     public void shouldNotAllowToScheduleZeroMillisecondPunctuation() {
-        try {
-            context.schedule(Duration.ofMillis(0L), null, null);
-            fail("Should have thrown IllegalArgumentException");
-        } catch (final IllegalArgumentException expected) {
-            assertThat(expected.getMessage(), equalTo("The minimum supported scheduling interval is 1 millisecond."));
-        }
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            () -> context.schedule(Duration.ofMillis(0L), null, null),
+            "Should have thrown IllegalArgumentException");
+        assertEquals("The minimum supported scheduling interval is 1 millisecond.", exception.getMessage());
     }
 
     @Test
     public void shouldNotAllowToScheduleSubMillisecondPunctuation() {
-        try {
-            context.schedule(Duration.ofNanos(999_999L), null, null);
-            fail("Should have thrown IllegalArgumentException");
-        } catch (final IllegalArgumentException expected) {
-            assertThat(expected.getMessage(), equalTo("The minimum supported scheduling interval is 1 millisecond."));
-        }
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            () -> context.schedule(Duration.ofNanos(999_999L), null, null),
+            "Should have thrown IllegalArgumentException");
+        assertEquals("The minimum supported scheduling interval is 1 millisecond.", exception.getMessage());
     }
 }

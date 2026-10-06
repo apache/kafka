@@ -27,6 +27,10 @@
   // caller). The request body shape is unchanged at version 3.
   "validVersions": "0-3",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "0-1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "GroupsNames", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The group names to delete." }

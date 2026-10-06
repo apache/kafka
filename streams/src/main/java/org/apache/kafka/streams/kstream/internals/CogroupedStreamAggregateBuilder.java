@@ -35,10 +35,10 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
@@ -261,7 +261,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             mergeProcessorName,
             keySerde,
             valueSerde,
-            Collections.singleton(mergeNode.nodeName()),
+            Set.of(mergeNode.nodeName()),
             queryableName,
             passThrough,
             mergeNode,

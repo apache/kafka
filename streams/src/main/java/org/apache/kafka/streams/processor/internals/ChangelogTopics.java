@@ -121,7 +121,7 @@ public class ChangelogTopics {
         if (preExistingChangelogPartitionsForTask.containsKey(taskId)) {
             return Collections.unmodifiableSet(preExistingChangelogPartitionsForTask.get(taskId));
         }
-        return Collections.emptySet();
+        return Set.of();
     }
 
     public Set<TopicPartition> preExistingSourceTopicBasedPartitions() {

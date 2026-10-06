@@ -44,6 +44,7 @@ import java.security.KeyStore;
 import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -274,12 +275,7 @@ public abstract class SslFactoryTest {
         Map<String, Object> sslConfig2 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        try {
-            sslFactory.validateReconfiguration(sslConfig2);
-            fail("Truststore configured dynamically for listener without previous truststore");
-        } catch (ConfigException e) {
-            // Expected exception
-        }
+        assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(sslConfig2), "Truststore configured dynamically for listener without previous truststore");
     }
 
     @Test
@@ -310,15 +306,10 @@ public abstract class SslFactoryTest {
         assertNotSame(sslContext, ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext(),
                 "SSL context not recreated");
 
-        sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
+        Map<String, Object> sslConfig2 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(newTrustStoreFile)
                 .build();
-        try {
-            sslFactory.validateReconfiguration(sslConfig);
-            fail("Keystore configured dynamically for listener without previous keystore");
-        } catch (ConfigException e) {
-            // Expected exception
-        }
+        assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(sslConfig2), "Keystore configured dynamically for listener without previous keystore");
     }
 
     @Test
@@ -362,6 +353,31 @@ public abstract class SslFactoryTest {
     }
 
     @Test
+    public void testPemReconfigurationWithInvalidKeyPreservesExistingFactory() throws Exception {
+        Properties props = new Properties();
+        props.putAll(sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(null)
+                .usePem(true)
+                .build());
+        TestSecurityConfig sslConfig = new TestSecurityConfig(props);
+
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
+        sslFactory.configure(sslConfig.values());
+        SslEngineFactory sslEngineFactory = sslFactory.sslEngineFactory();
+        assertNotNull(sslEngineFactory, "SslEngineFactory not created");
+
+        // Attempt reconfiguration with a PEM key that no KeyFactory can parse
+        String bogusKey = "-----BEGIN PRIVATE KEY-----\n"
+                + Base64.getEncoder().encodeToString("not a valid key".getBytes()) + "\n"
+                + "-----END PRIVATE KEY-----";
+        props.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, new Password(bogusKey));
+        TestSecurityConfig badConfig = new TestSecurityConfig(props);
+
+        assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(badConfig.values()));
+        assertSame(sslEngineFactory, sslFactory.sslEngineFactory());
+    }
+
+    @Test
     public void testKeyStoreTrustStoreValidation() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
@@ -389,12 +405,7 @@ public abstract class SslFactoryTest {
                 SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG)) {
             sslConfig1.put(key, sslConfig2.get(key));
         }
-        try {
-            sslFactory.configure(sslConfig1);
-            fail("Validation did not fail with untrusted truststore");
-        } catch (ConfigException e) {
-            // Expected exception
-        }
+        assertThrows(ConfigException.class, () -> sslFactory.configure(sslConfig1), "Validation did not fail with untrusted truststore");
     }
 
     @Test
@@ -425,12 +436,7 @@ public abstract class SslFactoryTest {
         // the new truststore, if certificate is not trusted by the existing truststore on the `SslFactory`.
         // This is to prevent both keystores and truststores to be modified simultaneously on an inter-broker
         // listener to stores that may not work with other brokers where the update hasn't yet been performed.
-        try {
-            sslFactory.validateReconfiguration(sslConfig2);
-            fail("ValidateReconfiguration did not fail as expected");
-        } catch (ConfigException e) {
-            // Expected exception
-        }
+        assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(sslConfig2), "ValidateReconfiguration did not fail as expected");
     }
 
     @Test

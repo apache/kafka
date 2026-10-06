@@ -21,6 +21,9 @@
   // Version 1 adds IncludeTopologyDescription (KIP-1331).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "GroupIds", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The ids of the groups to describe" },
