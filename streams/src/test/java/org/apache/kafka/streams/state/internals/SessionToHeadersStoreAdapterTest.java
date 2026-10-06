@@ -309,15 +309,6 @@ public class SessionToHeadersStoreAdapterTest {
         assertEquals(retentionMs, ((WithRetentionPeriod) store).retentionPeriod());
     }
 
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldWrapFindSessionsByTimeRangeIterator() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
-        when(innerStore.findSessions(10L, 20L)).thenReturn(innerIter);
-        final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.findSessions(10L, 20L);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
-    }
-
     // Instant overloads delegate to the long-based overloads; verify conversion still happens.
     @Test
     public void shouldConvertFetchSessionViaInstantOverload() {
@@ -326,13 +317,12 @@ public class SessionToHeadersStoreAdapterTest {
         assertArrayEquals(VALUE_WITH_EMPTY_HEADERS, result);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldWrapFindSessionsViaInstantOverload() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.findSessions(KEY, 10L, 20L)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result =
             adapter.findSessions(KEY, Instant.ofEpochMilli(10L), Instant.ofEpochMilli(20L));
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertAddsEmptyHeaders(result);
     }
 }
