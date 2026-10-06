@@ -470,12 +470,12 @@ public class EmbeddedKafkaCluster {
         }
     }
 
-    public void setGroupHeartbeatTimeout(final String groupId, final int heartbeatTimeoutMs) {
+    public void setGroupHeartbeatInterval(final String groupId, final int heartbeatIntervalMs) {
         try (final Admin adminClient = createAdminClient()) {
             adminClient.incrementalAlterConfigs(
                 Map.of(
                     new ConfigResource(ConfigResource.Type.GROUP, groupId),
-                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatTimeoutMs)), AlterConfigOp.OpType.SET))
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatIntervalMs)), AlterConfigOp.OpType.SET))
                 )
             ).all().get();
         } catch (final InterruptedException | ExecutionException e) {
@@ -502,6 +502,31 @@ public class EmbeddedKafkaCluster {
                 Map.of(
                     new ConfigResource(ConfigResource.Type.GROUP, groupId),
                     List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, String.valueOf(initialRebalanceDelayMs)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setGroupNumWarmupReplicas(final String groupId, final int numWarmupReplicas) {
+        setGroupConfig(groupId, GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, String.valueOf(numWarmupReplicas));
+    }
+
+    public void setGroupAcceptableRecoveryLag(final String groupId, final long acceptableRecoveryLag) {
+        setGroupConfig(groupId, GroupConfig.STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, String.valueOf(acceptableRecoveryLag));
+    }
+
+    public void setGroupTaskOffsetInterval(final String groupId, final int taskOffsetIntervalMs) {
+        setGroupConfig(groupId, GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, String.valueOf(taskOffsetIntervalMs));
+    }
+
+    private void setGroupConfig(final String groupId, final String name, final String value) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(name, value), AlterConfigOp.OpType.SET))
                 )
             ).all().get();
         } catch (final InterruptedException | ExecutionException e) {
