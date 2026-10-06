@@ -38,6 +38,7 @@ import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class CommonAssignorTests {
@@ -123,9 +124,14 @@ public class CommonAssignorTests {
         );
 
         for (String memberId : members.keySet()) {
-            // The assignment map from the assignor must be the same as the immutable assignment map
-            // that went in.
-            assertSame(membersWithAssignment.get(memberId).partitions(), secondAssignment.members().get(memberId).partitions());
+            if (rackAware) {
+                // With rack awareness, the assignment maps may be mutable cause of revoking non-matched partitions.
+                assertEquals(membersWithAssignment.get(memberId).partitions(), secondAssignment.members().get(memberId).partitions());
+            } else {
+                // The assignment map from the assignor must be the same as the immutable assignment map
+                // that went in.
+                assertSame(membersWithAssignment.get(memberId).partitions(), secondAssignment.members().get(memberId).partitions());
+            }
         }
     }
 
