@@ -5339,6 +5339,17 @@ org.apache.kafka.streams.state.internals.LogicalKeyValueSegmentsTest:
 - shouldNotCreateSegmentThatIsAlreadyExpired
 - shouldNotRetainFailedSegmentSoRecoveryStaysRecoverable
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
+org.apache.kafka.streams.state.internals.MappingKeyValueIteratorAdapterTest:
+- plainToHeadersShouldConvertValueOnNext
+- plainToHeadersWindowShouldConvertValueOnNext
+- shouldDelegateClose
+- shouldDelegateHasNext
+- shouldDelegatePeekNextKey
+- shouldPassThroughNullValue
+- shouldReturnNullWhenInnerReturnsNullEntry
+- timestampedToHeadersShouldConvertValueForSessionKeys
+- timestampedToHeadersShouldConvertValueOnNext
+- timestampedToHeadersWindowShouldConvertValueOnNext
 org.apache.kafka.streams.state.internals.MaybeTest:
 - shouldAnswerIsDefined
 - shouldReturnDefinedValue
@@ -5770,19 +5781,26 @@ org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapterTest:
 - shouldWrapReverseAllIterator
 - shouldWrapReverseRangeIterator
 org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapterTest:
+- all
+- backwardAll
+- backwardFetch
+- backwardFetchAll
+- backwardFetchAllWithInstantBounds
+- backwardFetchWithInstantBounds
+- fetch
+- fetchAll
+- fetchAllWithInstantBounds
+- fetchWithInstantBounds
+- keyRangeBackwardFetch
+- keyRangeBackwardFetchWithInstantBounds
+- keyRangeFetch
+- keyRangeFetchWithInstantBounds
 - shouldCollectExecutionInfoForWindowKeyQueryWhenRequested
 - shouldCollectExecutionInfoForWindowRangeQueryWhenRequested
 - shouldHandleWindowKeyQuerySuccessfully
 - shouldHandleWindowRangeQuerySuccessfully
 - shouldNotCollectExecutionInfoWhenNotRequested
 - shouldReportRetentionPeriodOfUnderlyingStore
-org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreIteratorAdapterTest:
-- shouldDelegateClose
-- shouldDelegatePeekNextKey
-- shouldImplementWindowStoreIteratorInterface
-- shouldPrependEmptyHeadersAndSentinelTimestampOnNext
-- shouldReturnNullValueWhenInnerValueIsNull
-- shouldReturnNullWhenInnerKeyValueIsNull
 org.apache.kafka.streams.state.internals.QueryableStoreProviderTest:
 - shouldFindGlobalStores
 - shouldResolveDefaultIsolationLevelAtQueryTime
@@ -7197,14 +7215,9 @@ org.apache.kafka.streams.state.internals.SessionStoreWithHeadersBuilderTest$Quer
 - shouldReturnIdenticalResultsForNativeAndAdapterBuiltStores
 org.apache.kafka.streams.state.internals.SessionStoreWithHeadersSerializerSideEffectTest:
 - shouldPropagateSerializerHeaderSideEffectToChangelog
-org.apache.kafka.streams.state.internals.SessionToHeadersIteratorAdapterTest:
-- shouldAddHeadersOnNext
-- shouldDelegateClose
-- shouldDelegateHasNext
-- shouldDelegatePeekNextKey
-- shouldHandleNullValueOnNext
 org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapterTest:
 - shouldAddExecutionInfoOnQuery
+- shouldConvertValueOnWindowRangeQuery
 - shouldDelegateClose
 - shouldDelegateInit
 - shouldDelegateIsOpen
@@ -7227,6 +7240,7 @@ org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapterTest:
 - shouldWrapFetchIterator
 - shouldWrapFetchWithKeyRangeIterator
 - shouldWrapFindSessionsIterator
+- shouldWrapFindSessionsWithEndTimeRangeIterator
 - shouldWrapFindSessionsWithKeyRangeIterator
 org.apache.kafka.streams.state.internals.StagedMergeIteratorTest:
 - shouldHandleAllTombstones
@@ -7619,6 +7633,20 @@ org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapterTest:
 - shouldWrapReverseAllIterator
 - shouldWrapReverseRangeIterator
 org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapterTest:
+- all
+- backwardAll
+- backwardFetch
+- backwardFetchAll
+- backwardFetchAllWithInstantBounds
+- backwardFetchWithInstantBounds
+- fetch
+- fetchAll
+- fetchAllWithInstantBounds
+- fetchWithInstantBounds
+- keyRangeBackwardFetch
+- keyRangeBackwardFetchWithInstantBounds
+- keyRangeFetch
+- keyRangeFetchWithInstantBounds
 - shouldCollectExecutionInfoForWindowKeyQueryWhenRequested
 - shouldCollectExecutionInfoForWindowRangeQueryWhenRequested
 - shouldHandleWindowKeyQuerySuccessfully
