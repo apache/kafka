@@ -77,8 +77,8 @@ public final class IntList {
     }
 
     /**
-     * Does not check that the index is below the size: at an index between the size and the
-     * capacity, it returns a stale element instead of throwing.
+     * Returns the element at the index. Does not check that the index is below the size: at an
+     * index between the size and the capacity, it returns a stale element instead of throwing.
      *
      * @param index The index, below the size.
      * @return The element at the index.
