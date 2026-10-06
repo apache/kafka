@@ -192,7 +192,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -240,6 +239,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.assignmentWithEpochsToString;
+import static org.apache.kafka.coordinator.group.Utils.newLinkedHashSet;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
@@ -9063,7 +9063,7 @@ public class GroupMetadataManager {
         Set<String> groupIds
     ) {
         List<CoordinatorRecord> records = new ArrayList<>(groupIds.size());
-        Set<String> eligible = new LinkedHashSet<>(groupIds.size());
+        Set<String> eligible = newLinkedHashSet(groupIds.size());
         for (String groupId : groupIds) {
             CoordinatorResult<Boolean, CoordinatorRecord> one =
                 markStoredDescriptionTopologyEpochUncertain(groupId, false);
