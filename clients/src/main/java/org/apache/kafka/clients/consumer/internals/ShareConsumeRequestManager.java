@@ -1334,9 +1334,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     /**
-     * Pass leadership information from broker redirects to the cluster metadata. The metadata only applied a redirect
+     * Pass leadership information from broker redirects to the cluster metadata. The metadata only applies a redirect
      * whose leader epoch is strictly newer than the one it holds and whose leader it knows, so it can refuse a
-     * redirect which the share session leader has already accepted. When that happens, the cache and the
+     * redirect which the share session leader cache has already accepted. When that happens, the cache and the
      * metadata disagree about the leader, and the metadata may not even know the new leader's endpoint. A metadata
      * refresh is requested so that the two converge, rather than waiting for the periodic refresh.
      */

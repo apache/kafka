@@ -3799,7 +3799,7 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         // The cache rejected the stale redirect, so the request manager has no disagreement with the metadata to
-        // resolve and does not request a refresh. (The share fetch collector requests a metadata refresh when it
+        // resolve and does not request a refresh. The share fetch collector requests a metadata refresh when it
         // sees the error.
         assertFalse(metadata.updateRequested());
         fetchRecords();
