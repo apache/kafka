@@ -90,8 +90,8 @@ public record AssignmentConfigsImpl(
      * Converts the typed configs into the raw configs recorded for the group; the inverse of {@link #fromRecord(List)}.
      */
     public static Map<String, String> toMap(AssignmentConfigs assignmentConfigs) {
-        // A config recorded from the start is always written; a config added later is only written when it is not at
-        // its default, matching what older versions write.
+        // Configs recorded in all broker versions that write LastAssignmentConfigs in streams group metadata are always included.
+        // Configs added in later versions are only written when not at the default, matching what older versions write.
         Map<String, String> configs = new TreeMap<>();
         configs.put(NUM_STANDBY_REPLICAS_CONFIG, Integer.toString(assignmentConfigs.numStandbyReplicas()));
         if (!assignmentConfigs.rackAwareAssignmentTags().isEmpty()) {
