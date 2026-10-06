@@ -51,11 +51,9 @@ class TxnPartitionEntry {
     // (either successfully or through a fatal failure).
     private SortedSet<ProducerBatch> inflightBatchesBySequence;
 
-    // Base sequences of batches that completed while an older batch was still in flight, which happens when
-    // responses come back out of order across a leader change. Together with `inflightBatchesBySequence` this
-    // tells how many batches have been sent after the oldest in-flight batch. The broker may have appended every
-    // one of them after that batch, so this bounds how far its deduplication window can have moved past it.
-    // Entries are dropped once every older batch has completed.
+    // Base sequences of batches that completed while an older batch was still in flight. The broker may have
+    // appended them after that older batch, so they still take up room in its deduplication window. Entries
+    // are dropped lazily in `numBatchesAheadOfOldestInflight` once no older batch is in flight.
     private final TreeSet<Integer> completedSequencesAheadOfOldestInflight;
 
     // We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
@@ -106,9 +104,7 @@ class TxnPartitionEntry {
     }
 
     /**
-     * Returns the number of batches that have been sent after the oldest in-flight batch, whether or not they have
-     * completed yet. The broker may have appended each of them after the oldest in-flight batch, so this bounds how
-     * far its deduplication window can have moved past that batch.
+     * Returns the number of batches sent after the oldest in-flight batch, completed or not.
      * <p>
      * As a side effect this forgets completed batches that are no longer ahead of any in-flight batch. That is done
      * here rather than when a batch is removed from the in-flight set, because a batch that is rejected as too large
@@ -176,10 +172,7 @@ class TxnPartitionEntry {
         }
         if (!inflightBatchesBySequence.isEmpty()
                 && batch.baseSequence() > inflightBatchesBySequence.first().baseSequence()) {
-            // The batch completed while an older one is still in flight, e.g. because a new leader acknowledged it
-            // while the older one is still in flight to the previous leader. Keep counting it until every older
-            // batch has completed, since the broker may have appended it after them. Entries that are no longer
-            // ahead of any in-flight batch are dropped in `numBatchesAheadOfOldestInflight`.
+            // Completed while an older batch is still in flight, see `completedSequencesAheadOfOldestInflight`.
             completedSequencesAheadOfOldestInflight.add(batch.baseSequence());
         }
     }
@@ -199,8 +192,8 @@ class TxnPartitionEntry {
         });
 
         // The failed batch was never appended, so it no longer occupies a sequence range, and the completed batches
-        // after it move down along with the in-flight ones. The failed batch itself was recorded as completed ahead
-        // of the oldest in-flight batch when it was removed from the in-flight set, so drop it first.
+        // after it move down along with the in-flight ones. The failed batch itself may have been recorded as
+        // completed ahead of the oldest in-flight batch when it was removed from the in-flight set, so drop it first.
         completedSequencesAheadOfOldestInflight.remove((int) baseSequence);
         TreeSet<Integer> adjustedSequences = new TreeSet<>();
         for (int completedSequence : completedSequencesAheadOfOldestInflight) {

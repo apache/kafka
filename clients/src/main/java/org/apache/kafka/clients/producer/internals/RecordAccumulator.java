@@ -1010,13 +1010,9 @@ public class RecordAccumulator {
                 if (shouldBackoff(first.hasLeaderChangedForTheOngoingRetry(), first, first.waitedTimeMs(now)))
                     continue;
 
-                // Don't assign a sequence to a new batch while doing so could push the partition's oldest in-flight
-                // batch out of the broker's deduplication window. `max.in.flight.requests.per.connection` does not
-                // bound this on its own: across a leader change a batch can still be in flight to the previous
-                // leader while later batches are drained to, and acknowledged by, the current leader. Once enough
-                // of them have been appended, the broker forgets the oldest batch and its retry fails with
-                // OUT_OF_ORDER_SEQUENCE. Retries are exempt because they already have a sequence and are already
-                // counted, and they are serialised below by the `firstInFlightSequence` check.
+                // Don't assign a sequence to a new batch while that could push the partition's oldest in-flight batch
+                // out of the broker's deduplication window. Retries already have a sequence and are already counted,
+                // so they are exempt; they are serialised below by the `firstInFlightSequence` check.
                 if (transactionManager != null && !first.hasSequence()
                         && transactionManager.wouldExceedBrokerDeduplicationWindow(tp)) {
                     continue;
