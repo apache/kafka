@@ -214,7 +214,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testFetchNormal() {
+    public void testShareFetchNormal() {
         buildRequestManager();
 
         assignFromSubscribed(Set.of(tp0));
@@ -228,7 +228,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testFetchWithAcquiredRecords() {
+    public void testShareFetchWithAcquiredRecords() {
         buildRequestManager();
 
         assignFromSubscribed(Set.of(tp0));
@@ -1798,7 +1798,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testFetchError() {
+    public void testShareFetchError() {
         buildRequestManager();
 
         assignFromSubscribed(Set.of(tp0));
@@ -2042,18 +2042,6 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(Set.of(topicName), e.unauthorizedTopics());
     }
 
-    @Test
-    public void testUnknownTopicIdError() {
-        buildRequestManager();
-        assignFromSubscribed(Set.of(tp0));
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.UNKNOWN_TOPIC_ID));
-        networkClientDelegate.poll(time.timer(0));
-        assertEmptyFetch("Should not return records on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
-    }
-
     @ParameterizedTest
     @MethodSource("handleFetchResponseErrorSupplier")
     public void testHandleFetchResponseError(Errors error,
@@ -2091,7 +2079,7 @@ public class ShareConsumeRequestManagerTest {
         return Stream.of(
                 Arguments.of(Errors.NOT_LEADER_OR_FOLLOWER, false, true),
                 Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false, true),
-                Arguments.of(Errors.UNKNOWN_TOPIC_ID, true, true),
+                Arguments.of(Errors.UNKNOWN_TOPIC_ID, false, true),
                 Arguments.of(Errors.INCONSISTENT_TOPIC_ID, false, true),
                 Arguments.of(Errors.FENCED_LEADER_EPOCH, false, true),
                 Arguments.of(Errors.UNKNOWN_LEADER_EPOCH, false, false)
@@ -2099,7 +2087,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testFetchDisconnected() {
+    public void testShareFetchDisconnected() {
         buildRequestManager();
 
         assignFromSubscribed(Set.of(tp0));
@@ -2111,7 +2099,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testFetchWithLastRecordMissingFromBatch() {
+    public void testShareFetchWithLastRecordMissingFromBatch() {
         buildRequestManager();
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
@@ -2367,11 +2355,11 @@ public class ShareConsumeRequestManagerTest {
 
     /**
      * Test the scenario that the metadata indicated a change in leadership between ShareFetch requests such
-     * as could occur when metadata is periodically updated.
+     * as could occur when metadata is periodically updated. The metadata holds a newer leader epoch, so the
+     * share consumer follows it without waiting for the former leader to redirect it.
      */
-    @ParameterizedTest
-    @EnumSource(value = Errors.class, names = {"FENCED_LEADER_EPOCH", "NOT_LEADER_OR_FOLLOWER"})
-    public void testWhenLeadershipChangeBetweenShareFetchRequests(Errors error) {
+    @Test
+    public void testWhenLeadershipChangeBetweenShareFetchRequests() {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
@@ -2418,25 +2406,39 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(startingClusterMetadata, metadata.fetch());
 
-        // Move the leadership of tp0 onto node 1
+        // Move the leadership of tp0 onto node 1 with a newer leader epoch
         metadata.updatePartitionLeadership(Map.of(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1))), List.of());
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
-        // Even though the partitions are on the same leader, records were fetched on the previous leader.
-        // Since we need to remove the partition from the previous leader, we still send those acknowledgement to the previous leader
-        // with the partition in the list of partitions to forget.
-        assertEquals(2, sendFetches());
+        // Both partitions are now fetched from node 1. A request is still sent to node 0 to remove tp0 from the share
+        // session on the previous leader. The acknowledgements for records fetched from the previous leader cannot be
+        // sent there any more, so they are failed with NOT_LEADER_OR_FOLLOWER without a round trip to the broker.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(2, pollResult.unsentRequests.size());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
-        assertTrue(completedAcknowledgements.isEmpty());
+        Map<Integer, ShareFetchRequestData> requestsByNode = new HashMap<>();
+        pollResult.unsentRequests.forEach(unsentRequest ->
+            requestsByNode.put(unsentRequest.node().get().id(), ((ShareFetchRequest.Builder) unsentRequest.requestBuilder()).data()));
+        assertEquals(Set.of(nodeId0.id(), nodeId1.id()), requestsByNode.keySet());
 
-        partitionData.clear();
-        partitionData.put(tip0,
-            new ShareFetchResponseData.PartitionData()
-                .setPartitionIndex(tip0.topicPartition().partition())
-                .setErrorCode(Errors.NONE.code())
-                .setAcknowledgeErrorCode(error.code()));
-        client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId0);
+        ShareFetchRequestData node0Request = requestsByNode.get(nodeId0.id());
+        assertTrue(node0Request.topics().isEmpty());
+        assertEquals(1, node0Request.forgottenTopicsData().size());
+        assertEquals(List.of(tip0.partition()), node0Request.forgottenTopicsData().get(0).partitions());
+
+        // tp1 is already in the share session on node 1, so the incremental request only adds tp0.
+        ShareFetchRequestData node1Request = requestsByNode.get(nodeId1.id());
+        assertEquals(1, node1Request.topics().size());
+        assertEquals(1, node1Request.topics().find(tip0.topicId()).partitions().size());
+        assertNotNull(node1Request.topics().find(tip0.topicId()).partitions().find(tip0.partition()));
+
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(acknowledgements, completedAcknowledgements.get(0).get(tip0));
+        assertInstanceOf(NotLeaderOrFollowerException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+
+        networkClientDelegate.addAll(pollResult.unsentRequests);
+        client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0), nodeId0);
         partitionData = buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE, Errors.NONE);
         partitionData.put(tip1,
             new ShareFetchResponseData.PartitionData()
@@ -2447,8 +2449,6 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId1);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
-        assertEquals(acknowledgements, completedAcknowledgements.get(0).get(tip0));
-        assertEquals(error.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
 
         partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
@@ -3056,7 +3056,7 @@ public class ShareConsumeRequestManagerTest {
      * and leadership moves to a still-present node, the next fetch is routed to the new leader.
      */
     @Test
-    public void testFetchRecoversWhenCachedLeaderNodeDisappearsFromMetadata() {
+    public void testShareFetchRecoversWhenCachedLeaderNodeDisappearsFromMetadata() {
         buildRequestManager();
 
         subscriptions.subscribeToShareGroup(Set.of(topicName));
@@ -3169,6 +3169,252 @@ public class ShareConsumeRequestManagerTest {
         assertInstanceOf(NetworkException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }
 
+    private MetadataResponse metadataResponseWithLeader(List<Node> nodes, Node leader, int leaderEpoch) {
+        MetadataResponse.PartitionMetadata tp0Metadata = new MetadataResponse.PartitionMetadata(
+                Errors.NONE, tp0, Optional.of(leader.id()), Optional.of(leaderEpoch),
+                nodes.stream().map(Node::id).collect(Collectors.toList()),
+                nodes.stream().map(Node::id).collect(Collectors.toList()), List.of());
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(
+                Errors.NONE, topicName, topicId, false, List.of(tp0Metadata),
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+        return RequestTestUtils.metadataResponse(nodes, "kafka-cluster", 1, List.of(topicMetadata));
+    }
+
+    /**
+     * The cached leader is only redirected by the broker if the broker is reachable. If the leader changes while the
+     * cached leader is unreachable, a metadata refresh is the only way to learn about the new leader. When the metadata
+     * holds a newer leader epoch than the cached leader, the cached leader must be replaced.
+     */
+    @Test
+    public void testShareFetchFollowsNewerLeaderEpochInMetadata() {
+        buildRequestManager();
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        // tp0's leader is node0.
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp0));
+
+        // Establish the share session on node0 and cache the leader (node0, validLeaderEpoch).
+        assertEquals(1, sendFetches());
+        client.prepareResponseFrom(
+                ShareFetchResponse.of(Errors.NONE, 0,
+                        buildPartitionDataMap(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE),
+                        List.of(), 0),
+                nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        fetchRecords();
+        assertEquals(nodeId0.id(), shareConsumeRequestManager.shareSessionNodeId(tip0));
+
+        // A metadata refresh shows that leadership moved to node1 with a newer epoch. Node0 is still in the cluster,
+        // so this is not the node-disappeared case.
+        metadata.updateWithCurrentRequestVersion(
+                metadataResponseWithLeader(List.of(nodeId0, nodeId1), nodeId1, validLeaderEpoch + 1), false, time.milliseconds());
+        assertEquals(nodeId1, metadata.fetch().leaderFor(tp0));
+
+        // The next poll fetches tp0 from node1, and also sends a request to node0 which removes tp0 from the
+        // share session on the former leader.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(nodeId1.id(), shareConsumeRequestManager.shareSessionNodeId(tip0));
+        assertEquals(2, pollResult.unsentRequests.size());
+        Map<Integer, ShareFetchRequestData> requestsByNode = new HashMap<>();
+        pollResult.unsentRequests.forEach(unsentRequest ->
+            requestsByNode.put(unsentRequest.node().get().id(), ((ShareFetchRequest.Builder) unsentRequest.requestBuilder()).data()));
+        assertEquals(Set.of(nodeId0.id(), nodeId1.id()), requestsByNode.keySet());
+
+        ShareFetchRequestData node1Request = requestsByNode.get(nodeId1.id());
+        assertEquals(1, node1Request.topics().size());
+        assertNotNull(node1Request.topics().find(tip0.topicId()));
+        assertNotNull(node1Request.topics().find(tip0.topicId()).partitions().find(tip0.partition()));
+
+        ShareFetchRequestData node0Request = requestsByNode.get(nodeId0.id());
+        assertTrue(node0Request.topics().isEmpty());
+        assertEquals(1, node0Request.forgottenTopicsData().size());
+        assertEquals(tip0.topicId(), node0Request.forgottenTopicsData().get(0).topicId());
+        assertEquals(List.of(tip0.partition()), node0Request.forgottenTopicsData().get(0).partitions());
+    }
+
+    /**
+     * Metadata accepts a refresh at an unchanged leader epoch, but the cached leader is only replaced from metadata
+     * when the epoch is strictly newer.
+     */
+    @Test
+    public void testShareFetchIgnoresMetadataLeaderChangeWithUnchangedEpoch() {
+        buildRequestManager();
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp0));
+
+        assertEquals(1, sendFetches());
+        client.prepareResponseFrom(
+                ShareFetchResponse.of(Errors.NONE, 0,
+                        buildPartitionDataMap(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE),
+                        List.of(), 0),
+                nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        fetchRecords();
+        assertEquals(nodeId0.id(), shareConsumeRequestManager.shareSessionNodeId(tip0));
+
+        // A metadata refresh names node1 as leader, but at the same leader epoch.
+        metadata.updateWithCurrentRequestVersion(
+                metadataResponseWithLeader(List.of(nodeId0, nodeId1), nodeId1, validLeaderEpoch), false, time.milliseconds());
+        assertEquals(nodeId1, metadata.fetch().leaderFor(tp0));
+
+        // The cached leader is unchanged, so the next fetch still goes only to node0.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(nodeId0.id(), shareConsumeRequestManager.shareSessionNodeId(tip0));
+        assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(nodeId0, pollResult.unsentRequests.get(0).node().get());
+    }
+
+    /**
+     * A ShareFetch partition error which says the cached leader is wrong, but which carries no new leader
+     * information, must request a metadata refresh in the request manager itself. The fetch collector also requests
+     * one, but that only happens when the application thread next polls, which could be much later.
+     */
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"NOT_LEADER_OR_FOLLOWER", "FENCED_LEADER_EPOCH", "UNKNOWN_TOPIC_OR_PARTITION", "UNKNOWN_TOPIC_ID"})
+    public void testShareFetchPartitionErrorWithoutLeaderInfoRequestsMetadataUpdate(Errors error) {
+        buildRequestManager();
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+        assertFalse(metadata.updateRequested());
+
+        assertEquals(1, sendFetches());
+        // The broker sets the current leader to -1/-1 when it does not know the new leader.
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = new LinkedHashMap<>();
+        partitionData.put(tip0,
+            new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(tip0.topicPartition().partition())
+                .setErrorCode(error.code())
+                .setCurrentLeader(new ShareFetchResponseData.LeaderIdAndEpoch().setLeaderId(-1).setLeaderEpoch(-1)));
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The refresh is requested before the fetch collector has seen the error.
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        assertTrue(metadata.updateRequested());
+    }
+
+    /**
+     * A ShareAcknowledge partition error which says the cached leader is wrong, but which carries no new leader
+     * information, must request a metadata refresh. Unlike ShareFetch, no fetch collector sees these errors, so
+     * without this the stale leader would persist until the periodic metadata refresh.
+     */
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"NOT_LEADER_OR_FOLLOWER", "FENCED_LEADER_EPOCH", "UNKNOWN_TOPIC_OR_PARTITION", "UNKNOWN_TOPIC_ID"})
+    public void testShareAcknowledgePartitionErrorWithoutLeaderInfoRequestsMetadataUpdate(Errors error) {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+        assertFalse(metadata.updateRequested());
+
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+        fetchRecords();
+
+        Acknowledgements acknowledgements = getAcknowledgements(1,
+                AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future =
+                shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
+                        calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+        assertFalse(metadata.updateRequested());
+
+        // The acknowledgements fail with no new leader information. The broker sets the current leader to -1/-1
+        // when it does not know the new leader.
+        client.prepareResponse(fullAcknowledgeResponse(tip0, error,
+                new ShareAcknowledgeResponseData.LeaderIdAndEpoch().setLeaderId(-1).setLeaderEpoch(-1), List.of()));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertTrue(metadata.updateRequested());
+        assertTrue(future.isDone());
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(error.exception().getClass(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException().getClass());
+    }
+
+    /**
+     * Records fetched from a node may still be buffered when that node disappears from the cluster metadata and
+     * its session handler is removed. When the application later acknowledges those records, the acknowledgements
+     * are queued for the vanished node. They can never be sent, so they must be failed rather than left pending forever.
+     */
+    @Test
+    public void testPiggybackAcksQueuedAfterNodeDisappearsAreFailed() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+
+        // Establish the share session on node 0 and fetch records.
+        assertEquals(1, sendFetches());
+        client.prepareResponseFrom(
+                ShareFetchResponse.of(Errors.NONE, 0,
+                        buildPartitionDataMap(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE),
+                        List.of(), 0),
+                nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        fetchRecords();
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()));
+
+        // Node 0 is fenced: it disappears from the metadata and leadership for tp0 fails over to node 1.
+        MetadataResponse.PartitionMetadata tp0Metadata = new MetadataResponse.PartitionMetadata(
+                Errors.NONE, tp0, Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1),
+                List.of(nodeId1.id()), List.of(nodeId1.id()), List.of());
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(
+                Errors.NONE, topicName, topicId, false, List.of(tp0Metadata),
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+        MetadataResponse metadataWithoutNode0 = RequestTestUtils.metadataResponse(
+                List.of(nodeId1), "kafka-cluster", 1, List.of(topicMetadata));
+        metadata.updateWithCurrentRequestVersion(metadataWithoutNode0, false, time.milliseconds());
+        assertNull(metadata.fetch().nodeById(0));
+
+        // The next poll re-routes the fetch to node 1 and removes the stale session handler for node 0.
+        assertEquals(1, sendFetches());
+        assertNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()));
+        assertEquals(0, completedAcknowledgements.size());
+
+        // The application now acknowledges the records it fetched from node 0. There is no session handler to
+        // send them on, and leadership has moved to node 1, so they must be failed with NOT_LEADER_OR_FOLLOWER.
+        Acknowledgements acknowledgements = getAcknowledgements(1,
+                AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
+
+        // Node 1 has a request in flight, so no new fetch is sent, but the orphaned acknowledgements must still fail.
+        assertEquals(0, sendFetches());
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(acknowledgements, completedAcknowledgements.get(0).get(tip0));
+        assertInstanceOf(NotLeaderOrFollowerException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+    }
+
     /**
      * An acknowledge request state is created for the node that led the partition at the time of the commit.
      * If that node then disappears from the cluster metadata before the request is sent, the acknowledgements must be failed with
@@ -3234,7 +3480,7 @@ public class ShareConsumeRequestManagerTest {
      * topic ID is forgotten from the share session and the new one is fetched.
      */
     @Test
-    public void testFetchResponseWithUnknownTopicIdRefreshesTopicIdOnRecreation() {
+    public void testShareFetchResponseWithUnknownTopicIdRefreshesTopicIdOnRecreation() {
         buildRequestManager();
 
         assignFromSubscribed(Set.of(tp0));
@@ -3274,7 +3520,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     /**
-     * As {@link #testFetchResponseWithUnknownTopicIdRefreshesTopicIdOnRecreation()} but the UNKNOWN_TOPIC_ID
+     * As {@link #testShareFetchResponseWithUnknownTopicIdRefreshesTopicIdOnRecreation()} but the UNKNOWN_TOPIC_ID
      * error arrives in a ShareAcknowledge response rather than a ShareFetch response.
      */
     @Test
