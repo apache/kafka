@@ -39,7 +39,7 @@ public class GroupAssignment {
     }
 
     /**
-     * @return The member assignments keyed by member ID. The map is unmodifiable.
+     * @return The member assignments keyed by member ID.
      */
     public Map<String, MemberAssignment> members() {
         return members;
