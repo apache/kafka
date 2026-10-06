@@ -248,17 +248,16 @@ public class TimestampedToHeadersStoreAdapterTest {
     public void shouldHandleKeyQuery() {
         adapter = createAdapter();
         final Bytes key = new Bytes("test-key".getBytes());
-        final byte[] timestampedValue = "test-value".getBytes();
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
-        final QueryResult<byte[]> mockResult = QueryResult.forResult(timestampedValue);
+        final QueryResult<byte[]> mockResult = QueryResult.forResult(TIMESTAMPED_VALUE);
         when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
         final QueryResult<byte[]> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
         assertTrue(result.isSuccess());
-        assertArrayEquals(convertToHeaderFormat(timestampedValue), result.getResult());
+        assertArrayEquals(convertToHeaderFormat(TIMESTAMPED_VALUE), result.getResult());
     }
 
     @Test
@@ -338,10 +337,9 @@ public class TimestampedToHeadersStoreAdapterTest {
     public void shouldCollectExecutionInfoForKeyQuery() {
         adapter = createAdapter();
         final Bytes key = new Bytes("test-key".getBytes());
-        final byte[] timestampedValue = "test-value".getBytes();
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
-        final QueryResult<byte[]> mockResult = QueryResult.forResult(timestampedValue);
+        final QueryResult<byte[]> mockResult = QueryResult.forResult(TIMESTAMPED_VALUE);
         when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
