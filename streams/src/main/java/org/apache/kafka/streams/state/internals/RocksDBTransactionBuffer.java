@@ -89,11 +89,6 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         return key.get().length;
     }
 
-    @Override
-    void stageToBackend(final Bytes key, final byte[] value) {
-        // no-op: prepareFlush builds the WriteBatch from the staged state
-    }
-
     private long entrySize(final Bytes key, final Optional<byte[]> value) {
         return estimateKeySize(key) + value.map(v -> v.length).orElse(0);
     }

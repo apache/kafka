@@ -61,9 +61,6 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
 
     // -- Abstract methods to be implemented by backend-specific subclasses --
 
-    /** Append the write to the backend-specific batch (e.g. WriteBatch for RocksDB). */
-    abstract void stageToBackend(K key, byte[] value);
-
     /** Create a base store iterator for the given range. Upper bound is inclusive. Forward direction. */
     abstract ManagedKeyValueIterator<K, byte[]> newBaseIterator(K from, K to);
 
@@ -111,7 +108,6 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
                 pendingWritesBytes -= estimateKeySize(key) + previous.map(v -> v.length).orElse(0);
             }
             pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
-            stageToBackend(key, value);
         } finally {
             snapshotLock.writeLock().unlock();
         }

@@ -56,11 +56,6 @@ class InMemoryTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     }
 
     @Override
-    void stageToBackend(final Bytes key, final byte[] value) {
-        // no-op — staging map is sufficient; no write-batch concept for in-memory
-    }
-
-    @Override
     ManagedKeyValueIterator<Bytes, byte[]> newBaseIterator(final Bytes from, final Bytes to) {
         return newBaseIterator(from, to, true, true);
     }
