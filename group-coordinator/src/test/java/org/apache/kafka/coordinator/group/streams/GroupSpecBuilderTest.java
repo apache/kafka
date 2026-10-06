@@ -235,7 +235,6 @@ public class GroupSpecBuilderTest {
             new GroupSpecImpl(
                 // members and taskOffsets
                 Map.of("member-1", createMemberMetadataAndState(member, memberTaskOffsets)),
-                // assignmentConfigs
                 AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)
             ),
             groupSpec
