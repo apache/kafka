@@ -56,11 +56,11 @@ public interface Consumer<K, V> extends Closeable {
     void subscribe(Collection<String> topics);
 
     /**
-     * @deprecated Since 4.4. Use {@link #setRebalanceListener(RebalanceListener)} followed by
+     * @deprecated Since 4.5. Use {@link #setRebalanceListener(RebalanceListener)} followed by
      *             {@link #subscribe(Collection)} instead.
      * @see KafkaConsumer#subscribe(Collection, ConsumerRebalanceListener)
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     @SuppressWarnings("removal")
     void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
 
@@ -70,11 +70,11 @@ public interface Consumer<K, V> extends Closeable {
     void assign(Collection<TopicPartition> partitions);
 
     /**
-     * @deprecated Since 4.4. Use {@link #setRebalanceListener(RebalanceListener)} followed by
+     * @deprecated Since 4.5. Use {@link #setRebalanceListener(RebalanceListener)} followed by
      *             {@link #subscribe(Pattern)} instead.
      * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     @SuppressWarnings("removal")
     void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
 
@@ -84,11 +84,11 @@ public interface Consumer<K, V> extends Closeable {
     void subscribe(Pattern pattern);
 
     /**
-     * @deprecated Since 4.4. Use {@link #setRebalanceListener(RebalanceListener)} followed by
+     * @deprecated Since 4.5. Use {@link #setRebalanceListener(RebalanceListener)} followed by
      *             {@link #subscribe(SubscriptionPattern)} instead.
      * @see KafkaConsumer#subscribe(SubscriptionPattern, ConsumerRebalanceListener)
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     @SuppressWarnings("removal")
     void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback);
 

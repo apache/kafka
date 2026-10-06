@@ -26,6 +26,14 @@ type: docs
 -->
 
 
+## Upgrading to 4.5.0
+
+### Upgrading Servers to 4.5.0 from any version 3.3.x through 4.4.0
+
+### Notable changes in 4.5.0
+
+  * The `ConsumerRebalanceListener` interface and the `Consumer#subscribe` overloads that accept it are deprecated and will be removed in Kafka 5.0. Implement `RebalanceListener` instead, whose callbacks receive a `RebalanceConsumer` exposing the operations that are safe to call during a rebalance, and register it with `Consumer#setRebalanceListener` before subscribing. For further details, please refer to [KIP-1306](https://cwiki.apache.org/confluence/spaces/KAFKA/pages/406623733/KIP-1306+Extend+ConsumerRebalanceListener+with+Consumer-Aware+methods).
+
 ## Upgrading to 4.4.0
 
 ### Upgrading Servers to 4.4.0 from any version 3.3.x through 4.3.0
@@ -61,7 +69,6 @@ type: docs
   * The `org.apache.kafka.automatic.config.providers` allowlist is now applied when dynamic broker configurations are validated and applied.
   * `group.consumer.assignors` now fails broker startup with a `ConfigException` when two configured assignors resolve to the same name, for example a built-in listed both by its name and by its class name, or a custom assignor reusing the name of another configured assignor. Such a configuration used to pass startup validation and fail later during group coordinator loading. For further details, please refer to [KAFKA-20843](https://issues.apache.org/jira/browse/KAFKA-20843).
   * `telemetry.max.bytes` now also bounds the size of a client's *decompressed* telemetry payload, not just its compressed wire size (this decompressed-size check was introduced in 4.3.1). A push whose decompressed size exceeds this limit is rejected with the retryable `TELEMETRY_TOO_LARGE` error, so the client retries at its normal push interval; previously this was misreported as `INVALID_RECORD`, which permanently disabled telemetry for that client instance. If clients hit this limit, for example after upgrading from 4.3.0, consider raising `telemetry.max.bytes`, since typical metric formats can decompress to many times their compressed size. For further details, please refer to [KAFKA-21076](https://issues.apache.org/jira/browse/KAFKA-21076).
-  * The `ConsumerRebalanceListener` interface and the `Consumer#subscribe` overloads that accept it are deprecated and will be removed in Kafka 5.0. Implement `RebalanceListener` instead, whose callbacks receive a `RebalanceConsumer` exposing the operations that are safe to call during a rebalance, and register it with `Consumer#setRebalanceListener` before subscribing. For further details, please refer to [KIP-1306](https://cwiki.apache.org/confluence/spaces/KAFKA/pages/406623733/KIP-1306+Extend+ConsumerRebalanceListener+with+Consumer-Aware+methods).
 
 ## Upgrading to 4.3.2
 

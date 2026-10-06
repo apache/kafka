@@ -717,10 +717,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
-     * @deprecated Since 4.4, to be removed in Kafka 5.0. Use {@link #subscribe(Collection)} with
+     * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link #subscribe(Collection)} with
      *             {@link Consumer#setRebalanceListener(RebalanceListener)}.
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
     @SuppressWarnings("removal")
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
@@ -777,10 +777,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
-     * @deprecated Since 4.4, to be removed in Kafka 5.0. Use {@link #subscribe(Pattern)} with
+     * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link #subscribe(Pattern)} with
      *             {@link Consumer#setRebalanceListener(RebalanceListener)}.
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
     @SuppressWarnings("removal")
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
@@ -833,10 +833,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalArgumentException If pattern is null or empty, or if the listener is null.
      * @throws IllegalStateException    If {@code subscribe()} is called previously with topics, or assign is called
      *                                  previously (without a subsequent call to {@link #unsubscribe()}).
-     * @deprecated Since 4.4, to be removed in Kafka 5.0. Use {@link #subscribe(SubscriptionPattern)} with
+     * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link #subscribe(SubscriptionPattern)} with
      *             {@link Consumer#setRebalanceListener(RebalanceListener)}.
      */
-    @Deprecated(since = "4.4", forRemoval = true)
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
     @SuppressWarnings("removal")
     public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
