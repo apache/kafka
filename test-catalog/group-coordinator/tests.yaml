@@ -1072,6 +1072,8 @@ org.apache.kafka.coordinator.group.UtilsTest:
 - testComputeTopicHashWithDifferentPartitionOrder
 - testComputeTopicHashWithDifferentRackOrder
 - testComputeTopicHashWithLeastSignificantBitsFirst
+- testHashCapacity
+- testHashCapacityCanHoldEntriesWithoutResizing
 - testNonExistingTopicName
 org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionTest:
 - testCollectionAccessorsAreUnmodifiable
@@ -1161,6 +1163,33 @@ org.apache.kafka.coordinator.group.assignor.UniformHomogeneousAssignmentBuilderT
 - testReassignmentWhenOneSubscriptionRemovedAfterInitialAssignmentWithTwoMembersTwoTopics
 - testReassignmentWhenPartitionsAreAddedForTwoMembersTwoTopics
 - testValidityAndBalanceForLargeSampleSet
+org.apache.kafka.coordinator.group.assignor.uniform2.util.IntListTest:
+- testAdd
+- testClear
+- testGet
+- testIndexOf
+- testNegativeCapacityThrows
+- testOf
+- testRemove
+- testRemoveOutOfRangeThrows
+- testSet
+- testSetOutOfRangeThrows
+- testSort
+- testSortIgnoresRemovedElements
+- testToArray
+- testToString
+- testTruncate
+- testTruncateOutOfRangeThrows
+org.apache.kafka.coordinator.group.assignor.uniform2.util.LongHeapTest:
+- testAgreesWithAPriorityQueue
+- testClear
+- testEmptyHeap
+- testHeapOfAFullArrayGrows
+- testHeapOfAnArrayPollsInOrder
+- testHeapOfAnArrayWithAnInvalidSizeThrows
+- testHeapOfZeroOrOneElementOfAnArray
+- testNegativeCapacityThrows
+- testPollsInOrder
 org.apache.kafka.coordinator.group.classic.ClassicGroupMemberTest:
 - testDescribe
 - testDescribeNoMetadata
