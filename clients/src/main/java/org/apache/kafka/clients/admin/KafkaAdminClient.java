@@ -4355,6 +4355,8 @@ public class KafkaAdminClient extends AdminClient {
         memFuture.whenComplete((members, ex) -> {
             if (ex != null) {
                 adminFuture.completeExceptionally(Collections.singletonMap(CoordinatorKey.byGroupId(groupId), ex));
+            } else if (members.isEmpty()) {
+                adminFuture.complete(Collections.singletonMap(CoordinatorKey.byGroupId(groupId), Collections.emptyMap()));
             } else {
                 RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
                 invokeDriver(handler, adminFuture, options.timeoutMs());

@@ -3014,18 +3014,13 @@ public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase 
 
     @Test
     public void testRemoveAllMembersFromEmptyGroup() throws Exception {
-        // KAFKA-14019: "removeAll" on a group with no members should be a successful no-op rather
-        // than failing while building an empty LeaveGroupRequest.
+        // "removeAll" on a group with no members should be a successful no-op
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            // 1. describeConsumerGroups returns a group with no members
             DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(GROUP_ID, List.of(), List.of());
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
-
-            // 2. coordinator lookup for the leaveGroup call; the LeaveGroup request itself must never be needed
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
                 GROUP_ID,
