@@ -1245,7 +1245,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(ClusterInstance clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
         clusterInstance.createTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor);
 

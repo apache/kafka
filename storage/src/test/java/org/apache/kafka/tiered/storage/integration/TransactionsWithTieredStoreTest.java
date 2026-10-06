@@ -181,22 +181,22 @@ public class TransactionsWithTieredStoreTest {
     }
 
     @ClusterTemplate("tieredStorageClusterConfig")
-    public void testInitTransactionsTimeout(ClusterInstance clusterInstance) throws Exception {
+    public void testInitTransactionsTimeout(ClusterInstance clusterInstance) {
         TransactionsTestHelper.testInitTransactionsTimeout(clusterInstance, topicConfig());
     }
 
     @ClusterTemplate("tieredStorageClusterConfig")
-    public void testSendOffsetsToTransactionTimeout(ClusterInstance clusterInstance) throws Exception {
+    public void testSendOffsetsToTransactionTimeout(ClusterInstance clusterInstance) {
         TransactionsTestHelper.testSendOffsetsToTransactionTimeout(clusterInstance, topicConfig());
     }
 
     @ClusterTemplate("tieredStorageClusterConfig")
-    public void testCommitTransactionTimeout(ClusterInstance clusterInstance) throws Exception {
+    public void testCommitTransactionTimeout(ClusterInstance clusterInstance) {
         TransactionsTestHelper.testCommitTransactionTimeout(clusterInstance, topicConfig());
     }
 
     @ClusterTemplate("tieredStorageClusterConfig")
-    public void testAbortTransactionTimeout(ClusterInstance clusterInstance) throws Exception {
+    public void testAbortTransactionTimeout(ClusterInstance clusterInstance) {
         TransactionsTestHelper.testAbortTransactionTimeout(clusterInstance, topicConfig());
     }
 
@@ -285,12 +285,12 @@ public class TransactionsWithTieredStoreTest {
     }
 
     @ClusterTemplate("tieredStorageClusterConfigTV1")
-    public void testEmptyAbortAfterCommitWithTV1(ClusterInstance clusterInstance) throws Exception {
+    public void testEmptyAbortAfterCommitWithTV1(ClusterInstance clusterInstance) {
         TransactionsTestHelper.testEmptyAbortAfterCommit(clusterInstance, topicConfig());
     }
 
     @ClusterTemplate("tieredStorageClusterConfigTV2")
-    public void testEmptyAbortAfterCommitWithTV2(ClusterInstance clusterInstance) throws Exception {
+    public void testEmptyAbortAfterCommitWithTV2(ClusterInstance clusterInstance) {
         TransactionsTestHelper.testEmptyAbortAfterCommit(clusterInstance, topicConfig());
     }
 

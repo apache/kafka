@@ -462,7 +462,7 @@ public class TransactionsTestHelper {
     public static void testInitTransactionsTimeout(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
         testTimeout(clusterInstance, false, Producer::initTransactions);
     }
@@ -471,7 +471,7 @@ public class TransactionsTestHelper {
     public static void testSendOffsetsToTransactionTimeout(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
         testTimeout(clusterInstance, true, producer ->
                 producer.sendOffsetsToTransaction(
@@ -482,7 +482,7 @@ public class TransactionsTestHelper {
     public static void testCommitTransactionTimeout(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
         testTimeout(clusterInstance, true, Producer::commitTransaction);
     }
@@ -490,7 +490,7 @@ public class TransactionsTestHelper {
     public static void testAbortTransactionTimeout(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
         testTimeout(clusterInstance, true, Producer::abortTransaction);
     }
@@ -981,7 +981,7 @@ public class TransactionsTestHelper {
     public static void testEmptyAbortAfterCommit(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
 
         try (var producer = createTransactionalProducer(clusterInstance, "transactional-producer")) {

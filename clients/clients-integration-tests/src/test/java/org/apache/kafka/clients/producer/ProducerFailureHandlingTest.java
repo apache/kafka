@@ -222,7 +222,7 @@ public class ProducerFailureHandlingTest {
     @ClusterTest(serverProperties = {
         @ClusterConfigProperty(key = AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "true")
     })
-    public void testCannotSendToInternalTopicWhenAutoCreateTrueAndTopicExists(ClusterInstance clusterInstance) throws Exception {
+    public void testCannotSendToInternalTopicWhenAutoCreateTrueAndTopicExists(ClusterInstance clusterInstance) {
         createInternalTopic(clusterInstance);
         assertSendToInternalTopicFails(clusterInstance, InvalidTopicException.class);
     }
@@ -232,7 +232,7 @@ public class ProducerFailureHandlingTest {
      * when auto.create.topics.enable=false and the internal topic already exists.
      */
     @ClusterTest
-    public void testCannotSendToInternalTopicWhenAutoCreateFalseAndTopicExists(ClusterInstance clusterInstance) throws Exception {
+    public void testCannotSendToInternalTopicWhenAutoCreateFalseAndTopicExists(ClusterInstance clusterInstance) {
         createInternalTopic(clusterInstance);
         assertSendToInternalTopicFails(clusterInstance, InvalidTopicException.class);
     }
@@ -329,7 +329,7 @@ public class ProducerFailureHandlingTest {
                 BUFFER_MEMORY_CONFIG, producerBufferSize);
     }
 
-    private void createInternalTopic(ClusterInstance clusterInstance) throws Exception {
+    private void createInternalTopic(ClusterInstance clusterInstance) {
         clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1, clusterInstance.brokers().get(0)
                 .groupCoordinator()
                 .groupMetadataTopicConfigs());

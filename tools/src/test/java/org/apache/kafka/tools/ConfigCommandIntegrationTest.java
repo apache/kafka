@@ -215,7 +215,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest
-    public void testAddConfigKeyValuesUsingCommand() throws Exception {
+    public void testAddConfigKeyValuesUsingCommand() {
         cluster.createTopic("topic", 1, (short) 1);
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
                 "--entity-type", "topics",
