@@ -342,6 +342,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private boolean processingPausedForUncommittedBytes = false;
     private long lastPurgeMs;
     private long lastPartitionAssignedMs = -1L;
     private int numIterations;
@@ -1295,8 +1296,17 @@ public class StreamThread extends Thread implements ProcessingThread {
 
                 checkStateUpdater();
 
-                log.debug("Processing tasks with {} iterations.", numIterations);
-                final int processed = taskManager.process(numIterations, time);
+                // maybeCommit() commits at the end of every iteration when the uncommitted bytes exceed the limit, so
+                // they only exceed it here when that commit was skipped (during a rebalance) or failed
+                final boolean processingPaused = maybePauseProcessingForUncommittedBytes();
+
+                final int processed;
+                if (processingPaused) {
+                    processed = 0;
+                } else {
+                    log.debug("Processing tasks with {} iterations.", numIterations);
+                    processed = taskManager.process(numIterations, time);
+                }
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
                 if (processed > 0) {
@@ -1318,7 +1328,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                           processed,
                           numIterations);
 
-                final int punctuated = taskManager.punctuate();
+                final int punctuated = processingPaused ? 0 : taskManager.punctuate();
                 totalPunctuatorsSinceLastSummary += punctuated;
                 final long punctuateLatency = advanceNowAndComputeLatency();
                 totalPunctuateLatency += punctuateLatency;
@@ -1898,6 +1908,26 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
 
         return committed;
+    }
+
+    /**
+     * Records and punctuators both write to the state stores, so while the uncommitted bytes exceed the limit, they must
+     * wait for a commit to succeed, or the uncommitted bytes grow without bound.
+     *
+     * @return true if processing and punctuation must not run
+     */
+    private boolean maybePauseProcessingForUncommittedBytes() {
+        final boolean paused = shouldCommitDueToUncommittedBytes();
+        if (paused != processingPausedForUncommittedBytes) {
+            processingPausedForUncommittedBytes = paused;
+            if (paused) {
+                log.info("Pausing processing until a commit succeeds, because state stores contain more than {} " +
+                             "uncommitted bytes and the last commit was skipped or failed.", maxUncommittedBytesPerThread);
+            } else {
+                log.info("Resuming processing, because the uncommitted state store bytes were committed.");
+            }
+        }
+        return paused;
     }
 
     private boolean shouldCommitDueToUncommittedBytes() {
