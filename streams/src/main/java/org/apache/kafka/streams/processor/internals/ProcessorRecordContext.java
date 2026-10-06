@@ -115,9 +115,9 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     }
 
     /**
-     * Returns the snapshot of the original source-record headers if one was captured,
-     * or falls back to {@link #headers()} if no snapshot was set (e.g., when the context
-     * was initialized from punctuation or synthetic events).
+     * Returns the source header snapshot when available, or {@link #headers()} otherwise.
+     * Punctuation and synthetic records have no snapshot. {@link #freeRawRecord()} also
+     * clears it when the source record is sent to a sink, along with the raw key and value.
      */
     public Headers sourceRawHeaders() {
         return sourceRawHeaders == null ? headers : sourceRawHeaders;

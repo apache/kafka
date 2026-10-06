@@ -18,6 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -26,6 +29,7 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
@@ -44,12 +48,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
@@ -245,6 +251,73 @@ public class GlobalStateTaskTest {
         maybeDeserialize(globalStateTask2, key, recordValue, false);
     }
 
+    @Test
+    public void shouldPreserveHeadersWhenGlobalStateDeserializationMutatesHeaders() {
+        final AtomicReference<Headers> capturedHeaders = new AtomicReference<>();
+        final DeserializationExceptionHandler exceptionHandler = new DeserializationExceptionHandler() {
+            @Override
+            public Response handleError(final ErrorHandlerContext handlerContext,
+                                        final ConsumerRecord<byte[], byte[]> record,
+                                        final Exception exception) {
+                capturedHeaders.set(handlerContext.headers());
+                return Response.resume();
+            }
+
+            @Override
+            public void configure(final Map<String, ?> configs) { }
+        };
+        final SourceNode<String, String> source = new SourceNode<>(
+            "source",
+            new StringDeserializer(),
+            new StringDeserializer()
+        ) {
+            @Override
+            String deserializeKey(final String topic, final Headers headers, final byte[] data) {
+                headers.remove("source-only");
+                throw new RuntimeException("deserialization failed");
+            }
+
+            @Override
+            String deserializeValue(final String topic, final Headers headers, final byte[] data) {
+                return null;
+            }
+        };
+        final ProcessorTopology topologyWithMutatingDeserializer = ProcessorTopologyFactories.with(
+            Collections.singletonList(source),
+            Map.of(topic1, source),
+            Collections.emptyList(),
+            Collections.singletonMap("t1-store", topic1)
+        );
+        final GlobalStateUpdateTask task = new GlobalStateUpdateTask(
+            logContext,
+            topologyWithMutatingDeserializer,
+            new NoOpProcessorContext(),
+            new GlobalStateManagerStub(Set.of("t1-store"), Collections.singletonMap(t1, 0L), testDirectory),
+            exceptionHandler,
+            null,
+            time,
+            flushInterval
+        );
+        final Headers sourceHeaders = new RecordHeaders(new Header[] {
+            new RecordHeader("source-only", "kept".getBytes(StandardCharsets.UTF_8))
+        });
+        task.initialize();
+        task.update(new ConsumerRecord<>(
+            topic1,
+            1,
+            1,
+            0L,
+            TimestampType.CREATE_TIME,
+            0,
+            0,
+            "key".getBytes(StandardCharsets.UTF_8),
+            "value".getBytes(StandardCharsets.UTF_8),
+            new RecordHeaders(sourceHeaders),
+            Optional.empty()
+        ));
+
+        assertEquals(sourceHeaders, capturedHeaders.get());
+    }
 
     @Test
     public void shouldDelegateApproximateNumUncommittedBytesToStateManager() {
