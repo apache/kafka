@@ -285,6 +285,21 @@ class StreamsGroupHeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
         assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+
+        // Keep the first heartbeat in flight; neither polling path should busy-spin or generate another request.
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertTrue(result.unsentRequests.isEmpty());
+        assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+        assertTrue(heartbeatRequestManager.maximumTimeToWait(time.milliseconds()) > 0,
+            "Should wait while the first heartbeat is in flight");
+
+        long elapsedMs = requestTimeoutMs / 2;
+        time.sleep(elapsedMs);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertTrue(result.unsentRequests.isEmpty());
+        assertEquals(requestTimeoutMs - elapsedMs, result.timeUntilNextPollMs);
+        assertTrue(heartbeatRequestManager.maximumTimeToWait(time.milliseconds()) > 0,
+            "Should wait while the first heartbeat is in flight");
     }
 
     @Test
